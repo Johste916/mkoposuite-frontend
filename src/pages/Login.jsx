@@ -18,12 +18,12 @@ const Login = () => {
         password,
       });
 
-      // Store token and user info in localStorage
+      // Store token and user info
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
 
-      // Redirect to dashboard
-      navigate('/dashboard');
+      // ✅ Redirect to root "/" (which shows SidebarLayout + Dashboard)
+      navigate('/');
     } catch (err) {
       console.error('Login error:', err.response?.data || err.message);
       setError('Invalid email or password');
@@ -33,12 +33,15 @@ const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
       <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-4 text-center">Login to MkopoSuite</h2>
-        {error && <p className="text-red-500 mb-4 text-center">{error}</p>}
+        <h2 className="text-2xl font-bold mb-4 text-center text-blue-600">Login to MkopoSuite</h2>
+
+        {error && (
+          <p className="text-red-500 mb-4 text-center font-medium">{error}</p>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block mb-1 text-sm font-medium">Email</label>
+            <label className="block mb-1 text-sm font-medium text-gray-700">Email</label>
             <input
               type="email"
               className="w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -50,7 +53,7 @@ const Login = () => {
           </div>
 
           <div className="mb-6">
-            <label className="block mb-1 text-sm font-medium">Password</label>
+            <label className="block mb-1 text-sm font-medium text-gray-700">Password</label>
             <input
               type="password"
               className="w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
