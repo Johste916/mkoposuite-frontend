@@ -1,3 +1,4 @@
+// src/pages/Login.jsx
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -18,12 +19,13 @@ const Login = () => {
         password,
       });
 
-      // Store token and user info
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      const { token, user } = response.data;
 
-      // ✅ Redirect to root "/" (which shows SidebarLayout + Dashboard)
-      navigate('/');
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      // 🔁 Use a delay to ensure token is set before navigating
+      setTimeout(() => navigate('/'), 100);
     } catch (err) {
       console.error('Login error:', err.response?.data || err.message);
       setError('Invalid email or password');
@@ -34,10 +36,7 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
       <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
         <h2 className="text-2xl font-bold mb-4 text-center text-blue-600">Login to MkopoSuite</h2>
-
-        {error && (
-          <p className="text-red-500 mb-4 text-center font-medium">{error}</p>
-        )}
+        {error && <p className="text-red-500 mb-4 text-center font-medium">{error}</p>}
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
