@@ -1,4 +1,3 @@
-// src/pages/Login.jsx
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -7,11 +6,13 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     try {
       const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/login`, {
@@ -24,18 +25,25 @@ const Login = () => {
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
 
-      // 🔁 Use a delay to ensure token is set before navigating
-      setTimeout(() => navigate('/'), 100);
+      // ✅ Wait shortly to ensure storage is ready before routing
+      setTimeout(() => {
+        navigate('/', { replace: true }); // replaces history
+      }, 100);
     } catch (err) {
       console.error('Login error:', err.response?.data || err.message);
       setError('Invalid email or password');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
       <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-4 text-center text-blue-600">Login to MkopoSuite</h2>
+        <h2 className="text-2xl font-bold mb-4 text-center text-blue-600">
+          Login to MkopoSuite
+        </h2>
+
         {error && <p className="text-red-500 mb-4 text-center font-medium">{error}</p>}
 
         <form onSubmit={handleSubmit}>
@@ -65,9 +73,12 @@ const Login = () => {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition duration-200"
+            disabled={loading}
+            className={`w-full text-white py-2 rounded transition duration-200 ${
+              loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
-            Login
+            {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
       </div>
