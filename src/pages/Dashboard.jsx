@@ -6,7 +6,7 @@ const Dashboard = () => {
   const [defaulters, setDefaulters] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem('token'); // Make sure token is stored on login
+  const token = localStorage.getItem('token'); // Ensure token is set during login
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -26,9 +26,15 @@ const Dashboard = () => {
         const res = await axios.get('/api/dashboard/defaulters', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setDefaulters(res.data);
+
+        if (Array.isArray(res.data)) {
+          setDefaulters(res.data);
+        } else {
+          console.error('Defaulters API did not return an array:', res.data);
+          setDefaulters([]);
+        }
       } catch (err) {
-        console.error('Defaulters error:', err.message);
+        console.error('Defaulters fetch error:', err.message);
         setDefaulters([]);
       }
     };
@@ -39,10 +45,12 @@ const Dashboard = () => {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
+
       {loading ? (
         <p>Loading dashboard data...</p>
       ) : (
         <>
+          {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="bg-white shadow-md p-4 rounded-md">
               <h2 className="text-gray-500">Total Borrowers</h2>
@@ -70,8 +78,9 @@ const Dashboard = () => {
             </div>
           </div>
 
+          {/* Defaulters Table */}
           <h2 className="text-xl font-semibold mb-2">Loan Defaulters</h2>
-          {defaulters.length === 0 ? (
+          {!Array.isArray(defaulters) || defaulters.length === 0 ? (
             <p className="text-gray-500">No defaulters found.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -91,7 +100,7 @@ const Dashboard = () => {
                       <td className="px-4 py-2">{d.phone}</td>
                       <td className="px-4 py-2">{d.email}</td>
                       <td className="px-4 py-2 text-red-600 font-semibold">
-                        TZS {d.overdueAmount?.toLocaleString()}
+                        TZS {d.overdueAmount?.toLocaleString() ?? '0'}
                       </td>
                     </tr>
                   ))}
