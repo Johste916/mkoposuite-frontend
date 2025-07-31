@@ -1,19 +1,16 @@
+// src/pages/Dashboard.jsx
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api';
 
 const Dashboard = () => {
   const [summary, setSummary] = useState(null);
   const [defaulters, setDefaulters] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem('token'); // Ensure token is set during login
-
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const res = await axios.get('/api/dashboard/summary', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const res = await api.get('/dashboard/summary');
         setSummary(res.data);
       } catch (err) {
         console.error('Dashboard summary error:', err.message);
@@ -23,10 +20,7 @@ const Dashboard = () => {
 
     const fetchDefaulters = async () => {
       try {
-        const res = await axios.get('/api/dashboard/defaulters', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
+        const res = await api.get('/dashboard/defaulters');
         if (Array.isArray(res.data)) {
           setDefaulters(res.data);
         } else {
@@ -39,8 +33,10 @@ const Dashboard = () => {
       }
     };
 
-    Promise.all([fetchSummary(), fetchDefaulters()]).finally(() => setLoading(false));
-  }, [token]);
+    Promise.all([fetchSummary(), fetchDefaulters()]).finally(() =>
+      setLoading(false)
+    );
+  }, []);
 
   return (
     <div className="p-6">
@@ -50,7 +46,6 @@ const Dashboard = () => {
         <p>Loading dashboard data...</p>
       ) : (
         <>
-          {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="bg-white shadow-md p-4 rounded-md">
               <h2 className="text-gray-500">Total Borrowers</h2>
@@ -78,9 +73,8 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Defaulters Table */}
           <h2 className="text-xl font-semibold mb-2">Loan Defaulters</h2>
-          {!Array.isArray(defaulters) || defaulters.length === 0 ? (
+          {defaulters.length === 0 ? (
             <p className="text-gray-500">No defaulters found.</p>
           ) : (
             <div className="overflow-x-auto">
