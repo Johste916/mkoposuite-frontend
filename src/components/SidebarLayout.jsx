@@ -11,10 +11,10 @@ const SidebarLayout = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  // Persist dark mode preference
   useEffect(() => {
     const storedDark = localStorage.getItem('darkMode');
     if (storedDark === 'true') setDarkMode(true);
+    console.log('🎨 SidebarLayout loaded');
   }, []);
 
   useEffect(() => {
@@ -26,6 +26,7 @@ const SidebarLayout = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     navigate('/login');
   };
 
