@@ -1,3 +1,4 @@
+// src/components/SidebarLayout.jsx
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
@@ -7,6 +8,8 @@ import {
 import { BsBank } from 'react-icons/bs';
 
 const SidebarLayout = () => {
+  console.log('🧠 SidebarLayout mounted'); // ✅ LOG: confirms layout loaded
+
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -14,7 +17,7 @@ const SidebarLayout = () => {
   useEffect(() => {
     const storedDark = localStorage.getItem('darkMode');
     if (storedDark === 'true') setDarkMode(true);
-    console.log('🎨 SidebarLayout loaded');
+    console.log('🎨 Dark mode status loaded:', storedDark);
   }, []);
 
   useEffect(() => {

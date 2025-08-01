@@ -1,6 +1,5 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 const NotFound = () => {
@@ -11,11 +10,13 @@ const NotFound = () => {
       <p className="mb-6 text-gray-600 max-w-md">
         Oops! The page you are looking for doesn’t exist or has been moved. Try going back to the dashboard.
       </p>
-      <Button asChild variant="default" size="lg">
-        <Link to="/dashboard" className="flex items-center gap-2">
-          <ArrowLeft size={20} /> Back to Dashboard
-        </Link>
-      </Button>
+
+      <Link to="/dashboard">
+        <button className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+          <ArrowLeft size={20} />
+          Back to Dashboard
+        </button>
+      </Link>
     </div>
   );
 };

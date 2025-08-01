@@ -7,10 +7,14 @@ const Dashboard = () => {
   const [defaulters, setDefaulters] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Debug: show when Dashboard mounts
   useEffect(() => {
+    console.log('📊 Dashboard mounted');
+
     const fetchSummary = async () => {
       try {
         const res = await api.get('/dashboard/summary');
+        console.log('📈 Summary response:', res.data); // ✅ Debug
         setSummary(res.data);
       } catch (err) {
         console.error('Dashboard summary error:', err.message);
@@ -21,6 +25,7 @@ const Dashboard = () => {
     const fetchDefaulters = async () => {
       try {
         const res = await api.get('/dashboard/defaulters');
+        console.log('🚨 Defaulters response:', res.data); // ✅ Debug
         if (Array.isArray(res.data)) {
           setDefaulters(res.data);
         } else {
@@ -43,7 +48,7 @@ const Dashboard = () => {
       <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
 
       {loading ? (
-        <p>Loading dashboard data...</p>
+        <p>🔄 Loading dashboard data...</p>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
