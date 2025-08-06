@@ -16,6 +16,7 @@ const Dashboard = () => {
   const [officers, setOfficers] = useState([]);
   const [branchId, setBranchId] = useState('');
   const [officerId, setOfficerId] = useState('');
+  const [timeRange, setTimeRange] = useState('');
 
   useEffect(() => {
     const fetchFilters = async () => {
@@ -37,7 +38,7 @@ const Dashboard = () => {
     const fetchSummary = async () => {
       try {
         const res = await api.get('/dashboard/summary', {
-          params: { branchId, officerId }
+          params: { branchId, officerId, timeRange }
         });
         setSummary(res.data);
       } catch (err) {
@@ -49,7 +50,7 @@ const Dashboard = () => {
     const fetchDefaulters = async () => {
       try {
         const res = await api.get('/dashboard/defaulters', {
-          params: { branchId }
+          params: { branchId, officerId, timeRange }
         });
         setDefaulters(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
@@ -61,7 +62,7 @@ const Dashboard = () => {
     Promise.all([fetchSummary(), fetchDefaulters()]).finally(() =>
       setLoading(false)
     );
-  }, [branchId, officerId]);
+  }, [branchId, officerId, timeRange]);
 
   return (
     <div className="p-6 space-y-6">
@@ -94,6 +95,20 @@ const Dashboard = () => {
             </option>
           ))}
         </select>
+
+        <select
+          value={timeRange}
+          onChange={e => setTimeRange(e.target.value)}
+          className="border rounded px-3 py-2"
+        >
+          <option value="">All Time</option>
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="quarter">This Quarter</option>
+          <option value="semiAnnual">Semi-Annual</option>
+          <option value="annual">Annual</option>
+        </select>
       </div>
 
       {loading ? (
@@ -111,6 +126,11 @@ const Dashboard = () => {
               title="Total Loans"
               value={summary?.totalLoans}
               icon={<CreditCard className="w-6 h-6 text-green-600" />}
+            />
+            <SummaryCard
+              title="Disbursed Loans"
+              value={`TZS ${summary?.totalDisbursed?.toLocaleString()}`}
+              icon={<CreditCard className="w-6 h-6 text-indigo-600" />}
             />
             <SummaryCard
               title="Total Paid"
