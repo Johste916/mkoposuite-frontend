@@ -4,7 +4,13 @@ import {
   CreditCard,
   DollarSign,
   AlertTriangle,
-  ClipboardList
+  ClipboardList,
+  CheckCircle,
+  ThumbsDown,
+  Clock,
+  CheckSquare,
+  Info,
+  BarChart2
 } from 'lucide-react';
 import api from '../api';
 
@@ -117,52 +123,41 @@ const Dashboard = () => {
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <SummaryCard
-              title="Total Borrowers"
-              value={summary?.totalBorrowers}
-              icon={<Users className="w-6 h-6 text-blue-600" />}
-            />
-            <SummaryCard
-              title="Total Loans"
-              value={summary?.totalLoans}
-              icon={<CreditCard className="w-6 h-6 text-green-600" />}
-            />
-            <SummaryCard
-              title="Disbursed Loans"
-              value={`TZS ${summary?.totalDisbursed?.toLocaleString()}`}
-              icon={<CreditCard className="w-6 h-6 text-indigo-600" />}
-            />
-            <SummaryCard
-              title="Total Paid"
-              value={`TZS ${summary?.totalPaid?.toLocaleString()}`}
-              icon={<DollarSign className="w-6 h-6 text-purple-600" />}
-            />
-            <SummaryCard
-              title="Total Repaid"
-              value={`TZS ${summary?.totalRepaid?.toLocaleString()}`}
-              icon={<DollarSign className="w-6 h-6 text-emerald-600" />}
-            />
-            <SummaryCard
-              title="Expected Repayments"
-              value={`TZS ${summary?.totalExpectedRepayments?.toLocaleString()}`}
-              icon={<ClipboardList className="w-6 h-6 text-orange-600" />}
-            />
-            <SummaryCard
-              title="Total Deposits"
-              value={`TZS ${summary?.totalDeposits?.toLocaleString()}`}
-              icon={<DollarSign className="w-6 h-6 text-teal-600" />}
-            />
-            <SummaryCard
-              title="Total Withdrawals"
-              value={`TZS ${summary?.totalWithdrawals?.toLocaleString()}`}
-              icon={<DollarSign className="w-6 h-6 text-red-600" />}
-            />
-            <SummaryCard
-              title="Net Savings"
-              value={`TZS ${summary?.netSavings?.toLocaleString()}`}
-              icon={<DollarSign className="w-6 h-6 text-yellow-600" />}
-            />
+            <SummaryCard title="Total Borrowers" value={summary?.totalBorrowers} icon={<Users className="w-6 h-6 text-blue-600" />} />
+            <SummaryCard title="Total Loans" value={summary?.totalLoans} icon={<CreditCard className="w-6 h-6 text-green-600" />} />
+            <SummaryCard title="Disbursed Loans" value={`TZS ${summary?.totalDisbursed?.toLocaleString()}`} icon={<CreditCard className="w-6 h-6 text-indigo-600" />} />
+            <SummaryCard title="Total Paid" value={`TZS ${summary?.totalPaid?.toLocaleString()}`} icon={<DollarSign className="w-6 h-6 text-purple-600" />} />
+            <SummaryCard title="Total Repaid" value={`TZS ${summary?.totalRepaid?.toLocaleString()}`} icon={<DollarSign className="w-6 h-6 text-emerald-600" />} />
+            <SummaryCard title="Expected Repayments" value={`TZS ${summary?.totalExpectedRepayments?.toLocaleString()}`} icon={<ClipboardList className="w-6 h-6 text-orange-600" />} />
+            <SummaryCard title="Total Deposits" value={`TZS ${summary?.totalDeposits?.toLocaleString()}`} icon={<DollarSign className="w-6 h-6 text-teal-600" />} />
+            <SummaryCard title="Total Withdrawals" value={`TZS ${summary?.totalWithdrawals?.toLocaleString()}`} icon={<DollarSign className="w-6 h-6 text-red-600" />} />
+            <SummaryCard title="Net Savings" value={`TZS ${summary?.netSavings?.toLocaleString()}`} icon={<DollarSign className="w-6 h-6 text-yellow-600" />} />
+
+            {/* New loan statuses */}
+            <SummaryCard title="Pending Loans" value={summary?.pendingLoans} icon={<Clock className="w-6 h-6 text-yellow-600" />} />
+            <SummaryCard title="Approved Loans" value={summary?.approvedLoans} icon={<CheckSquare className="w-6 h-6 text-green-600" />} />
+            <SummaryCard title="Rejected Loans" value={summary?.rejectedLoans} icon={<ThumbsDown className="w-6 h-6 text-red-600" />} />
+
+            {/* Defaulted/Outstanding/Written-off */}
+            <SummaryCard title="Defaulted Loan" value={`TZS ${summary?.defaultedLoan?.toLocaleString()}`} icon={<AlertTriangle className="w-6 h-6 text-rose-600" />} />
+            <SummaryCard title="Defaulted Interest" value={`TZS ${summary?.defaultedInterest?.toLocaleString()}`} icon={<AlertTriangle className="w-6 h-6 text-rose-400" />} />
+            <SummaryCard title="Outstanding Loan" value={`TZS ${summary?.outstandingLoan?.toLocaleString()}`} icon={<CreditCard className="w-6 h-6 text-blue-400" />} />
+            <SummaryCard title="Outstanding Interest" value={`TZS ${summary?.outstandingInterest?.toLocaleString()}`} icon={<DollarSign className="w-6 h-6 text-blue-600" />} />
+            <SummaryCard title="Written-off Loans" value={`TZS ${summary?.writtenOff?.toLocaleString()}`} icon={<ThumbsDown className="w-6 h-6 text-gray-500" />} />
+
+            {/* PAR + Message */}
+            <SummaryCard title="PAR (Portfolio at Risk)" value={`${summary?.parPercent ?? 0}%`} icon={<BarChart2 className="w-6 h-6 text-fuchsia-600" />} />
           </div>
+
+          {/* Company Message */}
+          {summary?.companyMessage && (
+            <div className="mt-6 p-4 border-l-4 border-blue-500 bg-blue-50 text-blue-700">
+              <div className="flex items-center gap-2">
+                <Info className="w-5 h-5" />
+                <p className="text-sm font-medium">{summary.companyMessage}</p>
+              </div>
+            </div>
+          )}
 
           {/* Defaulters Table */}
           <div className="mt-8">
