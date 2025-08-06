@@ -1,86 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { Users, CreditCard, DollarSign, AlertTriangle, Filter } from 'lucide-react';
+import { Users, CreditCard, DollarSign, AlertTriangle, ClipboardList } from 'lucide-react';
 import api from '../api';
 
 const Dashboard = () => {
   const [summary, setSummary] = useState(null);
   const [defaulters, setDefaulters] = useState([]);
-  const [branches, setBranches] = useState([]);
-  const [officers, setOfficers] = useState([]);
-  const [filters, setFilters] = useState({ branch: '', officer: '' });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchFilters();
-    fetchData();
-  }, [filters]);
+    const fetchSummary = async () => {
+      try {
+        const res = await api.get('/dashboard/summary');
+        setSummary(res.data);
+      } catch (err) {
+        console.error('Summary fetch error:', err.message);
+        setSummary(null);
+      }
+    };
 
-  const fetchFilters = async () => {
-    try {
-      const [branchRes, officerRes] = await Promise.all([
-        api.get('/branches'),
-        api.get('/users?role=loan_officer')
-      ]);
-      setBranches(branchRes.data);
-      setOfficers(officerRes.data);
-    } catch (err) {
-      console.error('Filter fetch error:', err);
-    }
-  };
+    const fetchDefaulters = async () => {
+      try {
+        const res = await api.get('/dashboard/defaulters');
+        setDefaulters(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        console.error('Defaulters fetch error:', err.message);
+        setDefaulters([]);
+      }
+    };
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/dashboard/summary', { params: filters });
-      setSummary(res.data);
-
-      const defRes = await api.get('/dashboard/defaulters', { params: filters });
-      setDefaulters(Array.isArray(defRes.data) ? defRes.data : []);
-    } catch (err) {
-      console.error('Data fetch error:', err);
-      setSummary(null);
-      setDefaulters([]);
-    }
-    setLoading(false);
-  };
+    Promise.all([fetchSummary(), fetchDefaulters()]).finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
-        <Filter className="text-gray-600" /> Dashboard
-      </h1>
-
-      {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <select
-          className="border rounded-md px-3 py-2"
-          value={filters.branch}
-          onChange={e => setFilters({ ...filters, branch: e.target.value })}
-        >
-          <option value="">All Branches</option>
-          {branches.map(b => (
-            <option key={b.id} value={b.id}>{b.name}</option>
-          ))}
-        </select>
-
-        <select
-          className="border rounded-md px-3 py-2"
-          value={filters.officer}
-          onChange={e => setFilters({ ...filters, officer: e.target.value })}
-        >
-          <option value="">All Officers</option>
-          {officers.map(o => (
-            <option key={o.id} value={o.id}>{o.name}</option>
-          ))}
-        </select>
-      </div>
+      <h1 className="text-3xl font-bold text-gray-800">📊 Dashboard</h1>
 
       {loading ? (
         <p className="text-gray-600">🔄 Loading dashboard data...</p>
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             <SummaryCard
               title="Total Borrowers"
               value={summary?.totalBorrowers}
@@ -100,6 +60,26 @@ const Dashboard = () => {
               title="Total Repaid"
               value={`TZS ${summary?.totalRepaid?.toLocaleString()}`}
               icon={<DollarSign className="w-6 h-6 text-emerald-600" />}
+            />
+            <SummaryCard
+              title="Expected Repayments"
+              value={`TZS ${summary?.totalExpectedRepayments?.toLocaleString()}`}
+              icon={<ClipboardList className="w-6 h-6 text-orange-600" />}
+            />
+            <SummaryCard
+              title="Total Deposits"
+              value={`TZS ${summary?.totalDeposits?.toLocaleString()}`}
+              icon={<DollarSign className="w-6 h-6 text-teal-600" />}
+            />
+            <SummaryCard
+              title="Total Withdrawals"
+              value={`TZS ${summary?.totalWithdrawals?.toLocaleString()}`}
+              icon={<DollarSign className="w-6 h-6 text-red-600" />}
+            />
+            <SummaryCard
+              title="Net Savings"
+              value={`TZS ${summary?.netSavings?.toLocaleString()}`}
+              icon={<DollarSign className="w-6 h-6 text-yellow-600" />}
             />
           </div>
 
@@ -149,9 +129,7 @@ const SummaryCard = ({ title, value, icon }) => (
     <div className="p-2 bg-gray-100 rounded-full">{icon}</div>
     <div>
       <h3 className="text-sm text-gray-500">{title}</h3>
-      <p className="text-xl font-semibold text-gray-800">
-        {value ?? 'N/A'}
-      </p>
+      <p className="text-xl font-semibold text-gray-800">{value ?? 'N/A'}</p>
     </div>
   </div>
 );
