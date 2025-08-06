@@ -3,6 +3,7 @@ import axios from 'axios';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { CSVLink } from 'react-csv';
+import { Link } from 'react-router-dom';
 
 const Loans = () => {
   const [loans, setLoans] = useState([]);
@@ -193,6 +194,7 @@ const Loans = () => {
                   <span className={getStatusBadge(loan.status)}>{loan.status}</span>
                 </td>
                 <td className="border px-2 text-center space-x-2">
+                  <Link to={`/loans/${loan.id}`} className="text-indigo-600 hover:underline">View</Link>
                   <button onClick={() => handleEdit(loan)} className="text-blue-600 hover:underline">Edit</button>
                   <button onClick={() => handleDelete(loan.id)} className="text-red-600 hover:underline">Delete</button>
                   {loan.status === 'pending' && (

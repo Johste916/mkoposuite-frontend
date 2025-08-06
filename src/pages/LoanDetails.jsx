@@ -1,6 +1,6 @@
-// src/pages/LoanDetails.jsx
+// ✅ Updated LoanDetails.jsx
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import LoanScheduleModal from '../components/LoanScheduleModal';
 
@@ -10,6 +10,9 @@ const LoanDetails = () => {
   const API = import.meta.env.VITE_API_BASE_URL;
 
   const [loan, setLoan] = useState(null);
+  const [repayments, setRepayments] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
   const [schedule, setSchedule] = useState([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
@@ -22,7 +25,28 @@ const LoanDetails = () => {
         console.error('Failed to fetch loan:', err);
       }
     };
+
+    const fetchRepayments = async () => {
+      try {
+        const res = await axios.get(`${API}/repayments/loan/${id}`);
+        setRepayments(res.data);
+      } catch (err) {
+        console.error('Failed to fetch repayments:', err);
+      }
+    };
+
+    const fetchComments = async () => {
+      try {
+        const res = await axios.get(`${API}/comments/loan/${id}`);
+        setComments(res.data);
+      } catch (err) {
+        console.error('Failed to fetch comments:', err);
+      }
+    };
+
     fetchLoan();
+    fetchRepayments();
+    fetchComments();
   }, [id]);
 
   const handleGenerateSchedule = async () => {
@@ -47,6 +71,20 @@ const LoanDetails = () => {
     }
   };
 
+  const handleAddComment = async () => {
+    if (!newComment) return;
+    try {
+      await axios.post(`${API}/comments`, {
+        loanId: id,
+        content: newComment,
+      });
+      setComments([...comments, { content: newComment, createdAt: new Date().toISOString() }]);
+      setNewComment('');
+    } catch (err) {
+      console.error('Error adding comment', err);
+    }
+  };
+
   if (!loan) return <div className="p-4">Loading...</div>;
 
   return (
@@ -60,7 +98,7 @@ const LoanDetails = () => {
 
       <div className="bg-white p-4 rounded shadow space-y-2">
         <h3 className="text-xl font-semibold text-gray-800">Loan Summary</h3>
-        <p><strong>Borrower:</strong> {loan.Borrower?.name}</p>
+        <p><strong>Borrower:</strong> <Link className="text-blue-600 hover:underline" to={`/borrowers/${loan.borrowerId}`}>{loan.Borrower?.name}</Link></p>
         <p><strong>Amount:</strong> TZS {loan.amount.toLocaleString()}</p>
         <p><strong>Interest Rate:</strong> {loan.interestRate}%</p>
         <p><strong>Term:</strong> {loan.termMonths} months</p>
@@ -83,6 +121,56 @@ const LoanDetails = () => {
             Mark as Closed
           </button>
         )}
+      </div>
+
+      <div className="bg-white p-4 rounded shadow">
+        <h3 className="text-lg font-semibold mb-2">Repayments</h3>
+        {repayments.length === 0 ? (
+          <p>No repayments found.</p>
+        ) : (
+          <table className="min-w-full text-sm border">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="border px-2 py-1">Date</th>
+                <th className="border px-2 py-1">Amount</th>
+                <th className="border px-2 py-1">Method</th>
+              </tr>
+            </thead>
+            <tbody>
+              {repayments.map((r, i) => (
+                <tr key={i}>
+                  <td className="border px-2 py-1">{r.date}</td>
+                  <td className="border px-2 py-1">TZS {r.amount.toLocaleString()}</td>
+                  <td className="border px-2 py-1">{r.method}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="bg-white p-4 rounded shadow">
+        <h3 className="text-lg font-semibold mb-2">Comments</h3>
+        <div className="space-y-2 mb-4">
+          {comments.map((c, i) => (
+            <div key={i} className="text-sm border-b pb-1">
+              <p>{c.content}</p>
+              <span className="text-gray-400 text-xs">{new Date(c.createdAt).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            className="border rounded px-2 py-1 w-full"
+            placeholder="Add a comment"
+          />
+          <button onClick={handleAddComment} className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700">
+            Post
+          </button>
+        </div>
       </div>
 
       <LoanScheduleModal
