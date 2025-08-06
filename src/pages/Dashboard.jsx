@@ -1,36 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { Users, CreditCard, DollarSign, AlertTriangle } from 'lucide-react';
+import {
+  Users, CreditCard, DollarSign, AlertTriangle,
+} from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts';
 import api from '../api';
 
 const Dashboard = () => {
   const [summary, setSummary] = useState(null);
   const [defaulters, setDefaulters] = useState([]);
+  const [trends, setTrends] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSummary = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get('/dashboard/summary');
-        setSummary(res.data);
+        const [summaryRes, defaultersRes, trendsRes] = await Promise.all([
+          api.get('/dashboard/summary'),
+          api.get('/dashboard/defaulters'),
+          api.get('/dashboard/trends'),
+        ]);
+
+        setSummary(summaryRes.data);
+        setDefaulters(Array.isArray(defaultersRes.data) ? defaultersRes.data : []);
+        setTrends(Array.isArray(trendsRes.data) ? trendsRes.data : []);
       } catch (err) {
-        console.error('Summary fetch error:', err.message);
+        console.error('Dashboard fetch error:', err);
         setSummary(null);
-      }
-    };
-
-    const fetchDefaulters = async () => {
-      try {
-        const res = await api.get('/dashboard/defaulters');
-        setDefaulters(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error('Defaulters fetch error:', err.message);
         setDefaulters([]);
+        setTrends([]);
+      } finally {
+        setLoading(false);
       }
     };
 
-    Promise.all([fetchSummary(), fetchDefaulters()]).finally(() =>
-      setLoading(false)
-    );
+    fetchData();
   }, []);
 
   return (
@@ -63,6 +68,20 @@ const Dashboard = () => {
               value={`TZS ${summary?.totalRepaid?.toLocaleString()}`}
               icon={<DollarSign className="w-6 h-6 text-emerald-600" />}
             />
+          </div>
+
+          {/* Monthly Trends Chart */}
+          <div className="bg-white rounded shadow p-4 mt-8">
+            <h2 className="text-lg font-semibold mb-4 text-gray-800">📈 Monthly Loan Trends</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={trends}>
+                <XAxis dataKey="month" stroke="#888" />
+                <YAxis stroke="#888" />
+                <Tooltip />
+                <Bar dataKey="loans" fill="#4f46e5" name="Loans" />
+                <Bar dataKey="repayments" fill="#10b981" name="Repayments" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
 
           {/* Defaulters Table */}
