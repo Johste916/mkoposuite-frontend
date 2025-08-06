@@ -1,16 +1,44 @@
 import React, { useEffect, useState } from 'react';
-import { Users, CreditCard, DollarSign, AlertTriangle, ClipboardList } from 'lucide-react';
+import {
+  Users,
+  CreditCard,
+  DollarSign,
+  AlertTriangle,
+  ClipboardList
+} from 'lucide-react';
 import api from '../api';
 
 const Dashboard = () => {
   const [summary, setSummary] = useState(null);
   const [defaulters, setDefaulters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [branches, setBranches] = useState([]);
+  const [officers, setOfficers] = useState([]);
+  const [branchId, setBranchId] = useState('');
+  const [officerId, setOfficerId] = useState('');
+
+  useEffect(() => {
+    const fetchFilters = async () => {
+      try {
+        const [branchesRes, officersRes] = await Promise.all([
+          api.get('/branches'),
+          api.get('/users?role=loan_officer')
+        ]);
+        setBranches(branchesRes.data);
+        setOfficers(officersRes.data);
+      } catch (err) {
+        console.error('Filter fetch error:', err.message);
+      }
+    };
+    fetchFilters();
+  }, []);
 
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const res = await api.get('/dashboard/summary');
+        const res = await api.get('/dashboard/summary', {
+          params: { branchId, officerId }
+        });
         setSummary(res.data);
       } catch (err) {
         console.error('Summary fetch error:', err.message);
@@ -20,7 +48,9 @@ const Dashboard = () => {
 
     const fetchDefaulters = async () => {
       try {
-        const res = await api.get('/dashboard/defaulters');
+        const res = await api.get('/dashboard/defaulters', {
+          params: { branchId }
+        });
         setDefaulters(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error('Defaulters fetch error:', err.message);
@@ -28,12 +58,43 @@ const Dashboard = () => {
       }
     };
 
-    Promise.all([fetchSummary(), fetchDefaulters()]).finally(() => setLoading(false));
-  }, []);
+    Promise.all([fetchSummary(), fetchDefaulters()]).finally(() =>
+      setLoading(false)
+    );
+  }, [branchId, officerId]);
 
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-3xl font-bold text-gray-800">📊 Dashboard</h1>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 mt-2">
+        <select
+          value={branchId}
+          onChange={e => setBranchId(e.target.value)}
+          className="border rounded px-3 py-2"
+        >
+          <option value="">All Branches</option>
+          {branches.map(branch => (
+            <option key={branch.id} value={branch.id}>
+              {branch.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={officerId}
+          onChange={e => setOfficerId(e.target.value)}
+          className="border rounded px-3 py-2"
+        >
+          <option value="">All Loan Officers</option>
+          {officers.map(officer => (
+            <option key={officer.id} value={officer.id}>
+              {officer.name || officer.email}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {loading ? (
         <p className="text-gray-600">🔄 Loading dashboard data...</p>
