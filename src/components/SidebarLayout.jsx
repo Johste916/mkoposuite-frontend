@@ -46,7 +46,7 @@ const SidebarLayout = () => {
 
   const sidebarClasses = `${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-black'} ${
     collapsed ? 'w-20' : 'w-64'
-  } fixed h-screen z-30 shadow transition-all duration-300`;
+  } fixed h-screen z-30 shadow transition-all duration-300 flex flex-col`;
 
   const userRole = user?.role?.toLowerCase();
   const isAdmin = userRole === 'admin';
@@ -61,7 +61,7 @@ const SidebarLayout = () => {
           <button onClick={toggleCollapse} className="p-1">{collapsed ? <FiChevronRight /> : <FiChevronLeft />}</button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
           {!collapsed && user && (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -93,54 +93,30 @@ const SidebarLayout = () => {
 
           {/* Navigation */}
           <nav className="flex flex-col space-y-2">
-            <NavLink to="/" end className={navLinkClasses}>
-              <FiHome /> {!collapsed && 'Dashboard'}
-            </NavLink>
-            <NavLink to="/borrowers" className={navLinkClasses}>
-              <FiUsers /> {!collapsed && 'Borrowers'}
-            </NavLink>
-            <NavLink to="/loans" className={navLinkClasses}>
-              <FiCreditCard /> {!collapsed && 'Loans'}
-            </NavLink>
-            <NavLink to="/repayments" className={navLinkClasses}>
-              <FiDollarSign /> {!collapsed && 'Repayments'}
-            </NavLink>
-            <NavLink to="/reports" className={navLinkClasses}>
-              <FiBarChart2 /> {!collapsed && 'Reports'}
-            </NavLink>
-            <NavLink to="/sms" className={navLinkClasses}>
-              <FiMessageSquare /> {!collapsed && 'SMS'}
-            </NavLink>
-            <NavLink to="/bank" className={navLinkClasses}>
-              <BsBank /> {!collapsed && 'Cash & Bank'}
-            </NavLink>
+            <NavLink to="/" end className={navLinkClasses}><FiHome /> {!collapsed && 'Dashboard'}</NavLink>
+            <NavLink to="/borrowers" className={navLinkClasses}><FiUsers /> {!collapsed && 'Borrowers'}</NavLink>
+            <NavLink to="/loans" className={navLinkClasses}><FiCreditCard /> {!collapsed && 'Loans'}</NavLink>
+            <NavLink to="/repayments" className={navLinkClasses}><FiDollarSign /> {!collapsed && 'Repayments'}</NavLink>
+            <NavLink to="/reports" className={navLinkClasses}><FiBarChart2 /> {!collapsed && 'Reports'}</NavLink>
+            <NavLink to="/sms" className={navLinkClasses}><FiMessageSquare /> {!collapsed && 'SMS'}</NavLink>
+            <NavLink to="/bank" className={navLinkClasses}><BsBank /> {!collapsed && 'Cash & Bank'}</NavLink>
 
             {canViewDisbursements && (
-              <NavLink to="/disbursements" className={navLinkClasses}>
-                <FiSend /> {!collapsed && 'Disbursements'}
-              </NavLink>
+              <NavLink to="/disbursements" className={navLinkClasses}><FiSend /> {!collapsed && 'Disbursements'}</NavLink>
             )}
 
             {isAdmin && (
               <>
-                <NavLink to="/users" className={navLinkClasses}>
-                  <FiUserCheck /> {!collapsed && 'Users'}
-                </NavLink>
-                <NavLink to="/roles" className={navLinkClasses}>
-                  <FiSettings /> {!collapsed && 'Roles'}
-                </NavLink>
-                <NavLink to="/branches" className={navLinkClasses}>
-                  <FiMapPin /> {!collapsed && 'Branches'}
-                </NavLink>
-                <NavLink to="/settings" className={navLinkClasses}>
-                  <FiSettings /> {!collapsed && 'Settings'}
-                </NavLink>
+                <NavLink to="/users" className={navLinkClasses}><FiUserCheck /> {!collapsed && 'Users'}</NavLink>
+                <NavLink to="/roles" className={navLinkClasses}><FiSettings /> {!collapsed && 'Roles'}</NavLink>
+                <NavLink to="/branches" className={navLinkClasses}><FiMapPin /> {!collapsed && 'Branches'}</NavLink>
+                <NavLink to="/settings" className={navLinkClasses}><FiSettings /> {!collapsed && 'Settings'}</NavLink>
               </>
             )}
           </nav>
         </div>
 
-        <div className="absolute bottom-0 w-full px-4 py-3 border-t dark:border-gray-700">
+        <div className="absolute bottom-0 w-full px-4 py-3 border-t dark:border-gray-700 bg-inherit">
           <div className="flex justify-between items-center">
             <button onClick={toggleDark} className="text-sm">
               {darkMode ? <FiSun /> : <FiMoon />}
@@ -153,15 +129,13 @@ const SidebarLayout = () => {
       </aside>
 
       {/* Main Content */}
-      <div className={`flex-1 ml-${collapsed ? '20' : '64'} transition-all`}>
+      <div className={`flex-1 transition-all duration-300 ${collapsed ? 'ml-20' : 'ml-64'}`}>
         <header className="bg-white dark:bg-gray-800 px-6 py-4 shadow flex justify-between items-center">
           <h2 className="text-lg font-semibold">Welcome to MkopoSuite</h2>
-          <span className="text-sm text-gray-400 dark:text-gray-300">
-            {user?.role || 'User'}
-          </span>
+          <span className="text-sm text-gray-400 dark:text-gray-300">{user?.role || 'User'}</span>
         </header>
 
-        <main className="p-4">
+        <main className="p-4 overflow-y-auto h-[calc(100vh-4rem)]">
           <Outlet />
         </main>
       </div>
