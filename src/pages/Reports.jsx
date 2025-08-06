@@ -12,18 +12,44 @@ import {
   Legend,
   Tooltip,
 } from 'chart.js';
+import { Download, FileText } from 'lucide-react';
 
 ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Legend, Tooltip);
 
 const Reports = () => {
   const [summary, setSummary] = useState({});
+  const [loanSummary, setLoanSummary] = useState(null);
   const [trends, setTrends] = useState([]);
   const [year] = useState(new Date().getFullYear());
+  const [branches, setBranches] = useState([]);
+  const [officers, setOfficers] = useState([]);
+  const [branchId, setBranchId] = useState('');
+  const [officerId, setOfficerId] = useState('');
+  const [timeRange, setTimeRange] = useState('');
+  const [loadingLoanSummary, setLoadingLoanSummary] = useState(true);
 
   useEffect(() => {
+    fetchFilters();
     fetchSummary();
     fetchTrends();
   }, []);
+
+  useEffect(() => {
+    fetchLoanSummary();
+  }, [branchId, officerId, timeRange]);
+
+  const fetchFilters = async () => {
+    try {
+      const [branchesRes, officersRes] = await Promise.all([
+        api.get('/branches'),
+        api.get('/users?role=loan_officer'),
+      ]);
+      setBranches(branchesRes.data);
+      setOfficers(officersRes.data);
+    } catch (err) {
+      console.error('Error loading filters:', err);
+    }
+  };
 
   const fetchSummary = async () => {
     try {
@@ -31,6 +57,21 @@ const Reports = () => {
       setSummary(res.data);
     } catch (err) {
       console.error('Error loading summary:', err);
+    }
+  };
+
+  const fetchLoanSummary = async () => {
+    setLoadingLoanSummary(true);
+    try {
+      const res = await api.get('/reports/loan-summary', {
+        params: { branchId, officerId, timeRange },
+      });
+      setLoanSummary(res.data);
+    } catch (err) {
+      console.error('Error loading loan summary:', err);
+      setLoanSummary(null);
+    } finally {
+      setLoadingLoanSummary(false);
     }
   };
 
@@ -52,7 +93,7 @@ const Reports = () => {
   };
 
   const chartData = {
-    labels: trends.map((d) => format(new Date(2023, d.month - 1, 1), 'MMM')),
+    labels: trends.map((d) => format(new Date(year, d.month - 1, 1), 'MMM')),
     datasets: [
       {
         label: 'Loan Disbursed',
@@ -69,12 +110,31 @@ const Reports = () => {
     ],
   };
 
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Reports</h1>
+  const handleExportLoanSummaryCSV = () => {
+    if (!loanSummary) return;
 
-      {/* Summary Boxes */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    const csvRows = [
+      ['Metric', 'Value'],
+      ...Object.entries(loanSummary).map(([key, val]) => [key, val]),
+    ];
+
+    const csvContent = csvRows.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'loan_summary_report.csv';
+    link.click();
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold flex items-center gap-2">
+        <FileText className="w-6 h-6 text-blue-600" />
+        Reports
+      </h1>
+
+      {/* Top Summary Boxes */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded shadow">
           <h2 className="text-gray-500 text-sm">Total Loans Issued</h2>
           <p className="text-xl font-bold">{summary.loanCount || 0}</p>
@@ -89,25 +149,89 @@ const Reports = () => {
         </div>
       </div>
 
+      {/* Filters for Loan Summary */}
+      <div className="flex flex-wrap gap-4 pt-4">
+        <select value={branchId} onChange={e => setBranchId(e.target.value)} className="border rounded px-3 py-2">
+          <option value="">All Branches</option>
+          {branches.map(branch => (
+            <option key={branch.id} value={branch.id}>{branch.name}</option>
+          ))}
+        </select>
+
+        <select value={officerId} onChange={e => setOfficerId(e.target.value)} className="border rounded px-3 py-2">
+          <option value="">All Loan Officers</option>
+          {officers.map(officer => (
+            <option key={officer.id} value={officer.id}>{officer.name || officer.email}</option>
+          ))}
+        </select>
+
+        <select value={timeRange} onChange={e => setTimeRange(e.target.value)} className="border rounded px-3 py-2">
+          <option value="">All Time</option>
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="quarter">This Quarter</option>
+          <option value="semiAnnual">Semi-Annual</option>
+          <option value="annual">Annual</option>
+        </select>
+      </div>
+
+      {/* Loan Summary Report Table */}
+      <div className="bg-white rounded shadow p-4">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-lg font-semibold">Loan Summary Report</h2>
+          {loanSummary && (
+            <button
+              onClick={handleExportLoanSummaryCSV}
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+          )}
+        </div>
+
+        {loadingLoanSummary ? (
+          <p className="text-gray-500">🔄 Loading...</p>
+        ) : loanSummary ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100 text-gray-700 text-left">
+                <tr>
+                  <th className="px-4 py-2">Metric</th>
+                  <th className="px-4 py-2">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(loanSummary).map(([key, value]) => (
+                  <tr key={key} className="border-t hover:bg-gray-50">
+                    <td className="px-4 py-2 capitalize">{key.replace(/([A-Z])/g, ' $1')}</td>
+                    <td className="px-4 py-2 font-medium text-gray-800">
+                      {typeof value === 'number' ? `TZS ${value.toLocaleString()}` : value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-red-600">⚠️ No data found.</p>
+        )}
+      </div>
+
       {/* Chart */}
-      <div className="bg-white rounded shadow p-4 mb-6">
+      <div className="bg-white rounded shadow p-4">
         <h2 className="text-lg font-semibold mb-2">Monthly Trend - {year}</h2>
         <Line data={chartData} />
       </div>
 
       {/* Export Buttons */}
-      <div className="flex space-x-4">
-        <button
-          onClick={exportCSV}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          Export CSV
+      <div className="flex gap-4">
+        <button onClick={exportCSV} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+          Export Full CSV
         </button>
-        <button
-          onClick={exportPDF}
-          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-        >
-          Export PDF
+        <button onClick={exportPDF} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+          Export Full PDF
         </button>
       </div>
     </div>
