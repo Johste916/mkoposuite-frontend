@@ -11,6 +11,7 @@ const SidebarLayout = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -110,12 +111,41 @@ const SidebarLayout = () => {
                 <NavLink to="/users" className={navLinkClasses}><FiUserCheck /> {!collapsed && 'Users'}</NavLink>
                 <NavLink to="/roles" className={navLinkClasses}><FiSettings /> {!collapsed && 'Roles'}</NavLink>
                 <NavLink to="/branches" className={navLinkClasses}><FiMapPin /> {!collapsed && 'Branches'}</NavLink>
-                <NavLink to="/settings" className={navLinkClasses}><FiSettings /> {!collapsed && 'Settings'}</NavLink>
+
+                {/* Settings Dropdown */}
+                <div>
+                  <button
+                    onClick={() => setSettingsExpanded(prev => !prev)}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
+                      settingsExpanded
+                        ? 'bg-blue-100 text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    <FiSettings /> {!collapsed && 'Settings'}
+                  </button>
+
+                  {!collapsed && settingsExpanded && (
+                    <div className="ml-6 mt-1 flex flex-col space-y-1">
+                      <NavLink to="/settings/loan" className={navLinkClasses}>Loan Settings</NavLink>
+                      <NavLink to="/settings/categories" className={navLinkClasses}>Loan Categories</NavLink>
+                      <NavLink to="/settings/penalty" className={navLinkClasses}>Penalty Settings</NavLink>
+                      <NavLink to="/settings/system" className={navLinkClasses}>System Settings</NavLink>
+                      <NavLink to="/settings/integration" className={navLinkClasses}>Integration Settings</NavLink>
+                      <NavLink to="/settings/branches" className={navLinkClasses}>Branch Settings</NavLink>
+                      <NavLink to="/settings/borrower" className={navLinkClasses}>Borrower Settings</NavLink>
+                      <NavLink to="/settings/users" className={navLinkClasses}>User Management</NavLink>
+                      <NavLink to="/settings/bulk-sms" className={navLinkClasses}>Bulk SMS Settings</NavLink>
+                      <NavLink to="/settings/saving" className={navLinkClasses}>Saving Account Settings</NavLink>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </nav>
         </div>
 
+        {/* Footer Controls */}
         <div className="absolute bottom-0 w-full px-4 py-3 border-t dark:border-gray-700 bg-inherit">
           <div className="flex justify-between items-center">
             <button onClick={toggleDark} className="text-sm">
