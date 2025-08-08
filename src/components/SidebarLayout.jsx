@@ -3,15 +3,88 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
   FiBarChart2, FiChevronLeft, FiChevronRight, FiSearch, FiSettings, FiMessageSquare,
-  FiUserCheck, FiMapPin, FiSend
+  FiUserCheck, FiMapPin, FiSend, FiLayout
 } from 'react-icons/fi';
 import { BsBank } from 'react-icons/bs';
+
+// ---- NAV CONFIG (single source of truth) ----
+const NAV = (ctx) => [
+  { label: 'Dashboard', icon: <FiHome />, to: '/' },
+
+  { label: 'Borrowers', icon: <FiUsers />, to: '/borrowers', children: [
+    { label: 'All Borrowers', to: '/borrowers' },
+    { label: 'New Borrower', to: '/borrowers/new' },
+  ]},
+
+  { label: 'Loans', icon: <FiCreditCard />, to: '/loans', children: [
+    { label: 'All Loans', to: '/loans' },
+    { label: 'Applications', to: '/loans/applications' },
+    { label: 'Disbursement Queue', to: '/loans/disbursement-queue' },
+    { label: 'Products', to: '/loans/products' },
+  ]},
+
+  // Only certain roles should see Disbursements at top-level
+  ...(ctx.canViewDisbursements ? [{
+    label: 'Disbursements', icon: <FiSend />, to: '/disbursements', children: [
+      { label: 'All Disbursements', to: '/disbursements' },
+      { label: 'New Disbursement', to: '/disbursements/new' },
+      { label: 'Batches', to: '/disbursements/batches' },
+      { label: 'Integrations', to: '/disbursements/integrations' },
+    ]
+  }] : []),
+
+  { label: 'Repayments', icon: <FiDollarSign />, to: '/repayments', children: [
+    { label: 'Schedule', to: '/repayments' },
+    { label: 'Manual Entry', to: '/repayments/new' },
+    { label: 'Receipts', to: '/repayments/receipts' },
+  ]},
+
+  { label: 'Reports', icon: <FiBarChart2 />, to: '/reports', children: [
+    { label: 'Disbursed Loans', to: '/reports/disbursed-loans' },
+    { label: 'Payments', to: '/reports/payments' },
+    { label: 'Penalties', to: '/reports/penalties' },
+    { label: 'Performance', to: '/reports/performance' },
+  ]},
+
+  { label: 'SMS', icon: <FiMessageSquare />, to: '/sms', children: [
+    { label: 'Bulk SMS', to: '/sms/bulk' },
+    { label: 'Templates', to: '/sms/templates' },
+    { label: 'Logs', to: '/sms/logs' },
+  ]},
+
+  { label: 'Cash & Bank', icon: <BsBank />, to: '/bank', children: [
+    { label: 'Cashbook', to: '/bank' },
+    { label: 'Bank Accounts', to: '/bank/accounts' },
+    { label: 'Transfers', to: '/bank/transfers' },
+    { label: 'Reconciliation', to: '/bank/reconciliation' },
+  ]},
+
+  // Admin section
+  ...(ctx.isAdmin ? [
+    { label: 'Users', icon: <FiUserCheck />, to: '/users' },
+    { label: 'Roles', icon: <FiSettings />, to: '/roles' },
+    { label: 'Branches', icon: <FiMapPin />, to: '/branches' },
+    { label: 'Settings', icon: <FiSettings />, to: '/settings', children: [
+      { label: 'Loan', to: '/settings/loan' },
+      { label: 'Loan Categories', to: '/settings/categories' },
+      { label: 'Penalty', to: '/settings/penalty' },
+      { label: 'System', to: '/settings/system' },
+      { label: 'Integrations', to: '/settings/integration' },
+      { label: 'Dashboard', to: '/settings/dashboard' },
+      { label: 'Bulk SMS', to: '/settings/bulk-sms' },
+      { label: 'Savings', to: '/settings/saving' },
+      { label: 'Borrowers', to: '/settings/borrower' },
+      { label: 'Users', to: '/settings/users' },
+      { label: 'Branches', to: '/settings/branches' },
+    ]},
+  ] : []),
+];
 
 const SidebarLayout = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [open, setOpen] = useState({}); // track which groups are expanded
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -31,12 +104,7 @@ const SidebarLayout = () => {
 
   const toggleDark = () => setDarkMode(!darkMode);
   const toggleCollapse = () => setCollapsed(!collapsed);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
-  };
+  const handleLogout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); };
 
   const navLinkClasses = ({ isActive }) =>
     `flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
@@ -52,6 +120,43 @@ const SidebarLayout = () => {
   const userRole = user?.role?.toLowerCase();
   const isAdmin = userRole === 'admin';
   const canViewDisbursements = ['admin', 'director', 'accountant'].includes(userRole);
+
+  const nav = NAV({ isAdmin, canViewDisbursements });
+
+  const Group = ({ item }) => {
+    const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+    const isOpen = open[item.label];
+
+    if (!hasChildren) {
+      return (
+        <NavLink to={item.to} className={navLinkClasses}>
+          {item.icon} {!collapsed && item.label}
+        </NavLink>
+      );
+    }
+
+    return (
+      <div>
+        <button
+          onClick={() => setOpen((m) => ({ ...m, [item.label]: !isOpen }))}
+          className={`w-full ${navLinkClasses({ isActive: false })}`}
+        >
+          {item.icon} {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
+          {!collapsed && <span className="text-xs">{isOpen ? '▾' : '▸'}</span>}
+        </button>
+
+        {!collapsed && isOpen && (
+          <div className="ml-6 mt-1 flex flex-col space-y-1">
+            {item.children.map((c) => (
+              <NavLink key={c.to} to={c.to} className={navLinkClasses}>
+                <FiLayout className="opacity-70" /> {!collapsed && c.label}
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className={`flex min-h-screen ${darkMode ? 'bg-gray-800 text-white' : 'bg-gray-100 text-black'}`}>
@@ -92,56 +197,9 @@ const SidebarLayout = () => {
             </div>
           )}
 
-          {/* Navigation */}
+          {/* Navigation (driven by NAV config) */}
           <nav className="flex flex-col space-y-2">
-            <NavLink to="/" end className={navLinkClasses}><FiHome /> {!collapsed && 'Dashboard'}</NavLink>
-            <NavLink to="/borrowers" className={navLinkClasses}><FiUsers /> {!collapsed && 'Borrowers'}</NavLink>
-            <NavLink to="/loans" className={navLinkClasses}><FiCreditCard /> {!collapsed && 'Loans'}</NavLink>
-            <NavLink to="/repayments" className={navLinkClasses}><FiDollarSign /> {!collapsed && 'Repayments'}</NavLink>
-            <NavLink to="/reports" className={navLinkClasses}><FiBarChart2 /> {!collapsed && 'Reports'}</NavLink>
-            <NavLink to="/sms" className={navLinkClasses}><FiMessageSquare /> {!collapsed && 'SMS'}</NavLink>
-            <NavLink to="/bank" className={navLinkClasses}><BsBank /> {!collapsed && 'Cash & Bank'}</NavLink>
-
-            {canViewDisbursements && (
-              <NavLink to="/disbursements" className={navLinkClasses}><FiSend /> {!collapsed && 'Disbursements'}</NavLink>
-            )}
-
-            {isAdmin && (
-              <>
-                <NavLink to="/users" className={navLinkClasses}><FiUserCheck /> {!collapsed && 'Users'}</NavLink>
-                <NavLink to="/roles" className={navLinkClasses}><FiSettings /> {!collapsed && 'Roles'}</NavLink>
-                <NavLink to="/branches" className={navLinkClasses}><FiMapPin /> {!collapsed && 'Branches'}</NavLink>
-
-                {/* Settings Dropdown */}
-                <div>
-                  <button
-                    onClick={() => setSettingsExpanded(prev => !prev)}
-                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
-                      settingsExpanded
-                        ? 'bg-blue-100 text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    <FiSettings /> {!collapsed && 'Settings'}
-                  </button>
-
-                  {!collapsed && settingsExpanded && (
-                    <div className="ml-6 mt-1 flex flex-col space-y-1">
-                      <NavLink to="/settings/loan" className={navLinkClasses}>Loan Settings</NavLink>
-                      <NavLink to="/settings/categories" className={navLinkClasses}>Loan Categories</NavLink>
-                      <NavLink to="/settings/penalty" className={navLinkClasses}>Penalty Settings</NavLink>
-                      <NavLink to="/settings/system" className={navLinkClasses}>System Settings</NavLink>
-                      <NavLink to="/settings/integration" className={navLinkClasses}>Integration Settings</NavLink>
-                      <NavLink to="/settings/branches" className={navLinkClasses}>Branch Settings</NavLink>
-                      <NavLink to="/settings/borrower" className={navLinkClasses}>Borrower Settings</NavLink>
-                      <NavLink to="/settings/users" className={navLinkClasses}>User Management</NavLink>
-                      <NavLink to="/settings/bulk-sms" className={navLinkClasses}>Bulk SMS Settings</NavLink>
-                      <NavLink to="/settings/saving" className={navLinkClasses}>Saving Account Settings</NavLink>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+            {nav.map((item) => <Group key={item.label} item={item} />)}
           </nav>
         </div>
 
