@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+// src/components/SidebarLayout.jsx
+import React, { useState, useEffect, useMemo } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
   FiBarChart2, FiChevronLeft, FiChevronRight, FiSearch, FiSettings, FiMessageSquare,
   FiUserCheck, FiMapPin, FiSend, FiLayout
 } from 'react-icons/fi';
 import { BsBank } from 'react-icons/bs';
+import api from '../api';
 
 // ---- NAV CONFIG (single source of truth) ----
 const NAV = (ctx) => [
@@ -23,7 +25,6 @@ const NAV = (ctx) => [
     { label: 'Products', to: '/loans/products' },
   ]},
 
-  // Only certain roles should see Disbursements at top-level
   ...(ctx.canViewDisbursements ? [{
     label: 'Disbursements', icon: <FiSend />, to: '/disbursements', children: [
       { label: 'All Disbursements', to: '/disbursements' },
@@ -82,19 +83,32 @@ const NAV = (ctx) => [
 
 const SidebarLayout = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
   const [darkMode, setDarkMode] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState({}); // track which groups are expanded
   const [user, setUser] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [activeBranchId, setActiveBranchId] = useState('');
 
+  // ---------- init prefs + user ----------
   useEffect(() => {
     const storedDark = localStorage.getItem('darkMode');
     if (storedDark === 'true') {
       setDarkMode(true);
       document.documentElement.classList.add('dark');
     }
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) setUser(JSON.parse(storedUser));
+
+    try {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) setUser(JSON.parse(storedUser));
+    } catch {
+      localStorage.removeItem('user'); // corrupted JSON cleanup
+    }
+
+    const storedCollapsed = localStorage.getItem('sidebarCollapsed');
+    if (storedCollapsed === 'true') setCollapsed(true);
   }, []);
 
   useEffect(() => {
@@ -102,10 +116,48 @@ const SidebarLayout = () => {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
-  const toggleDark = () => setDarkMode(!darkMode);
-  const toggleCollapse = () => setCollapsed(!collapsed);
-  const handleLogout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); };
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', collapsed);
+  }, [collapsed]);
 
+  const toggleDark = () => setDarkMode((prev) => !prev);
+  const toggleCollapse = () => setCollapsed((prev) => !prev);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
+  // ---------- fetch branches for switcher ----------
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await api.get('/branches');
+        const list = Array.isArray(res.data) ? res.data : [];
+        setBranches(list);
+        if (list.length && !activeBranchId) {
+          setActiveBranchId(String(list[0].id));
+        }
+      } catch (e) {
+        // silent fail (switcher is optional)
+      }
+    };
+    load();
+  }, []); // eslint-disable-line
+
+  // Persist branch selection (if you want this globally, you can store in context)
+  useEffect(() => {
+    if (activeBranchId) localStorage.setItem('activeBranchId', activeBranchId);
+  }, [activeBranchId]);
+
+  // ---------- user/role context for NAV ----------
+  const userRole = (user?.role || '').toLowerCase();
+  const isAdmin = userRole === 'admin';
+  const canViewDisbursements = ['admin', 'director', 'accountant'].includes(userRole);
+  const nav = useMemo(() => NAV({ isAdmin, canViewDisbursements }), [isAdmin, canViewDisbursements]);
+
+  // ---------- helpers ----------
   const navLinkClasses = ({ isActive }) =>
     `flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
       isActive
@@ -117,19 +169,29 @@ const SidebarLayout = () => {
     collapsed ? 'w-20' : 'w-64'
   } fixed h-screen z-30 shadow transition-all duration-300 flex flex-col`;
 
-  const userRole = user?.role?.toLowerCase();
-  const isAdmin = userRole === 'admin';
-  const canViewDisbursements = ['admin', 'director', 'accountant'].includes(userRole);
+  // Determine if current route is under a group
+  const isPathActive = (base) => location.pathname === base || location.pathname.startsWith(base + '/');
 
-  const nav = NAV({ isAdmin, canViewDisbursements });
+  // Auto-open groups that match the current route
+  useEffect(() => {
+    const next = {};
+    nav.forEach(item => {
+      if (item.children?.length) {
+        next[item.label] = isPathActive(item.to);
+      }
+    });
+    setOpen(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   const Group = ({ item }) => {
     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
-    const isOpen = open[item.label];
+    const isOpen = !!open[item.label];
+    const groupActive = isPathActive(item.to);
 
     if (!hasChildren) {
       return (
-        <NavLink to={item.to} className={navLinkClasses}>
+        <NavLink to={item.to} className={navLinkClasses} end>
           {item.icon} {!collapsed && item.label}
         </NavLink>
       );
@@ -139,7 +201,11 @@ const SidebarLayout = () => {
       <div>
         <button
           onClick={() => setOpen((m) => ({ ...m, [item.label]: !isOpen }))}
-          className={`w-full ${navLinkClasses({ isActive: false })}`}
+          className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
+            groupActive
+              ? 'bg-blue-100 text-blue-700 font-medium'
+              : 'text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
+          }`}
         >
           {item.icon} {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
           {!collapsed && <span className="text-xs">{isOpen ? '▾' : '▸'}</span>}
@@ -148,7 +214,7 @@ const SidebarLayout = () => {
         {!collapsed && isOpen && (
           <div className="ml-6 mt-1 flex flex-col space-y-1">
             {item.children.map((c) => (
-              <NavLink key={c.to} to={c.to} className={navLinkClasses}>
+              <NavLink key={c.to} to={c.to} className={navLinkClasses} end>
                 <FiLayout className="opacity-70" /> {!collapsed && c.label}
               </NavLink>
             ))}
@@ -172,20 +238,29 @@ const SidebarLayout = () => {
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-400 flex items-center justify-center text-white font-bold">
-                  {user.name?.charAt(0).toUpperCase()}
+                  {user.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{user.name}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-300">Branch: {user.branch || 'Main'}</p>
+                  <p className="text-sm font-medium">{user.name || user.email}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-300">
+                    Branch: {branches.find(b => String(b.id) === String(activeBranchId))?.name || '—'}
+                  </p>
                 </div>
               </div>
 
-              <select className="w-full px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm">
-                <option>Switch Branch</option>
-                <option>Main</option>
-                <option>Dar</option>
+              {/* Branch switcher (optional) */}
+              <select
+                className="w-full px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm"
+                value={activeBranchId}
+                onChange={(e) => setActiveBranchId(e.target.value)}
+              >
+                <option value="">Switch Branch</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
               </select>
 
+              {/* Quick search (non-functional placeholder) */}
               <div className="relative">
                 <FiSearch className="absolute left-2 top-2.5 text-gray-400" />
                 <input
