@@ -1,104 +1,100 @@
-// src/components/SidebarLayout.jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
   FiBarChart2, FiChevronLeft, FiChevronRight, FiSearch, FiSettings, FiMessageSquare,
   FiUserCheck, FiMapPin, FiSend, FiLayout
-} from 'react-icons/fi';
-import { BsBank } from 'react-icons/bs';
-import api from '../api';
+} from "react-icons/fi";
+import { BsBank } from "react-icons/bs";
+import api from "../api";
 
-// ---- NAV CONFIG (single source of truth) ----
+// single source of truth for nav
 const NAV = (ctx) => [
-  { label: 'Dashboard', icon: <FiHome />, to: '/' },
+  { label: "Dashboard", icon: <FiHome />, to: "/" },
 
   {
-    label: 'Borrowers', icon: <FiUsers />, to: '/borrowers', children: [
-      { label: 'All Borrowers', to: '/borrowers' },
-      { label: 'Add Borrower', to: '/borrowers/add' },
-      { label: 'KYC Queue', to: '/borrowers/kyc' },
-      { label: 'Blacklist', to: '/borrowers/blacklist' },
-      { label: 'Imports', to: '/borrowers/imports' },
-      { label: 'Reports', to: '/borrowers/reports' },
-      { label: 'All Groups', to: '/borrowers/groups' },
-      { label: 'Add Group', to: '/borrowers/groups/add' },
-      { label: 'Group Imports', to: '/borrowers/groups/imports' },
-      { label: 'Group Reports', to: '/borrowers/groups/reports' },
+    label: "Borrowers", icon: <FiUsers />, to: "/borrowers", children: [
+      { label: "All Borrowers", to: "/borrowers" },
+      { label: "Add Borrower", to: "/borrowers/add" },
+      { label: "KYC Queue", to: "/borrowers/kyc" },
+      { label: "Blacklist", to: "/borrowers/blacklist" },
+      { label: "Imports", to: "/borrowers/imports" },
+      { label: "Reports", to: "/borrowers/reports" },
+      { label: "All Groups", to: "/borrowers/groups" },
+      { label: "Add Group", to: "/borrowers/groups/add" },
+      { label: "Group Imports", to: "/borrowers/groups/imports" },
+      { label: "Group Reports", to: "/borrowers/groups/reports" },
     ]
   },
 
   {
-    label: 'Loans',
-    icon: <FiCreditCard />,
-    to: '/loans',
-    children: [
-      { label: 'All Loans', to: '/loans' },
-      { label: 'Applications', to: '/loans/applications' },
-      { label: 'Pending Approval', to: '/loans/status/pending' },
-      { label: 'Approved Loans', to: '/loans/status/approved' },
-      { label: 'Rejected Loans', to: '/loans/status/rejected' },
-      { label: 'Disbursement Queue', to: '/loans/disbursement-queue' },
-      { label: 'Disbursed Loans', to: '/loans/status/disbursed' },
-      { label: 'Active Loans', to: '/loans/status/active' },
-      { label: 'Closed Loans', to: '/loans/status/closed' },
-      { label: 'Loan Products', to: '/loans/products' },
-      { label: 'Loan Schedule', to: '/loans/schedule' },
-      { label: 'Loan Reports', to: '/loans/reports' },
+    label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
+      { label: "All Loans", to: "/loans" },                  // ✅ real loans list
+      { label: "Applications", to: "/loans/applications" },  // ✅ separate apps page
+      { label: "Pending Approval", to: "/loans/status/pending" },
+      { label: "Approved Loans", to: "/loans/status/approved" },
+      { label: "Rejected Loans", to: "/loans/status/rejected" },
+      { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
+      { label: "Disbursed Loans", to: "/loans/status/disbursed" },
+      { label: "Active Loans", to: "/loans/status/active" },
+      { label: "Closed Loans", to: "/loans/status/closed" },
+      { label: "Loan Products", to: "/loans/products" },
+      { label: "Loan Schedule", to: "/loans/schedule" },
+      { label: "Loan Reports", to: "/loans/reports" },
     ]
   },
 
   ...(ctx.canViewDisbursements ? [{
-    label: 'Disbursements', icon: <FiSend />, to: '/disbursements', children: [
-      { label: 'All Disbursements', to: '/disbursements' },
-      { label: 'New Disbursement', to: '/disbursements/new' },
-      { label: 'Batches', to: '/disbursements/batches' },
-      { label: 'Integrations', to: '/disbursements/integrations' },
+    label: "Disbursements", icon: <FiSend />, to: "/disbursements", children: [
+      { label: "All Disbursements", to: "/disbursements" },
+      { label: "New Disbursement", to: "/disbursements/new" },
+      { label: "Batches", to: "/disbursements/batches" },
+      { label: "Integrations", to: "/disbursements/integrations" },
     ]
   }] : []),
 
-  { label: 'Repayments', icon: <FiDollarSign />, to: '/repayments', children: [
-    { label: 'Schedule', to: '/repayments' },
-    { label: 'Manual Entry', to: '/repayments/new' },
-    { label: 'Receipts', to: '/repayments/receipts' },
+  { label: "Repayments", icon: <FiDollarSign />, to: "/repayments", children: [
+    { label: "Schedule", to: "/repayments" },
+    { label: "Manual Entry", to: "/repayments/new" },
+    { label: "Receipts", to: "/repayments/receipts" },
   ]},
 
-  { label: 'Reports', icon: <FiBarChart2 />, to: '/reports', children: [
-    { label: 'Disbursed Loans', to: '/reports/disbursed-loans' },
-    { label: 'Payments', to: '/reports/payments' },
-    { label: 'Penalties', to: '/reports/penalties' },
-    { label: 'Performance', to: '/reports/performance' },
+  { label: "Reports", icon: <FiBarChart2 />, to: "/reports", children: [
+    { label: "Disbursed Loans", to: "/reports/disbursed-loans" },
+    { label: "Payments", to: "/reports/payments" },
+    { label: "Penalties", to: "/reports/penalties" },
+    { label: "Performance", to: "/reports/performance" },
   ]},
 
-  { label: 'SMS', icon: <FiMessageSquare />, to: '/sms', children: [
-    { label: 'Bulk SMS', to: '/sms/bulk' },
-    { label: 'Templates', to: '/sms/templates' },
-    { label: 'Logs', to: '/sms/logs' },
+  { label: "SMS", icon: <FiMessageSquare />, to: "/sms", children: [
+    { label: "Bulk SMS", to: "/sms/bulk" },
+    { label: "Templates", to: "/sms/templates" },
+    { label: "Logs", to: "/sms/logs" },
   ]},
 
-  { label: 'Cash & Bank', icon: <BsBank />, to: '/bank', children: [
-    { label: 'Cashbook', to: '/bank' },
-    { label: 'Bank Accounts', to: '/bank/accounts' },
-    { label: 'Transfers', to: '/bank/transfers' },
-    { label: 'Reconciliation', to: '/bank/reconciliation' },
+  { label: "Cash & Bank", icon: <BsBank />, to: "/bank", children: [
+    { label: "Cashbook", to: "/bank" },
+    { label: "Bank Accounts", to: "/bank/accounts" },
+    { label: "Transfers", to: "/bank/transfers" },
+    { label: "Reconciliation", to: "/bank/reconciliation" },
   ]},
 
   ...(ctx.isAdmin ? [
-    { label: 'Users', icon: <FiUserCheck />, to: '/users' },
-    { label: 'Roles', icon: <FiSettings />, to: '/roles' },
-    { label: 'Branches', icon: <FiMapPin />, to: '/branches' },
-    { label: 'Settings', icon: <FiSettings />, to: '/settings', children: [
-      { label: 'Loan', to: '/settings/loan' },
-      { label: 'Loan Categories', to: '/settings/categories' },
-      { label: 'Penalty', to: '/settings/penalty' },
-      { label: 'System', to: '/settings/system' },
-      { label: 'Integrations', to: '/settings/integration' },
-      { label: 'Dashboard', to: '/settings/dashboard' },
-      { label: 'Bulk SMS', to: '/settings/bulk-sms' },
-      { label: 'Savings', to: '/settings/saving' },
-      { label: 'Borrowers', to: '/settings/borrower' },
-      { label: 'Users', to: '/settings/users' },
-      { label: 'Branches', to: '/settings/branches' },
+    { label: "Users", icon: <FiUserCheck />, to: "/users" },
+    { label: "Roles", icon: <FiSettings />, to: "/roles" },
+    { label: "Branches", icon: <FiMapPin />, to: "/branches" },
+    { label: "Settings", icon: <FiSettings />, to: "/settings", children: [
+      { label: "Loan", to: "/settings/loan" },
+      { label: "Loan Categories", to: "/settings/categories" },
+      { label: "Penalty", to: "/settings/penalty" },
+      { label: "System", to: "/settings/system" },
+      { label: "Integrations", to: "/settings/integration" },
+      { label: "Dashboard", to: "/settings/dashboard" },
+      { label: "Bulk SMS", to: "/settings/bulk-sms" },
+      { label: "Savings", to: "/settings/saving" },
+      { label: "Borrowers", to: "/settings/borrower" },
+      { label: "Users", to: "/settings/users" },
+      { label: "Branches", to: "/settings/branches" },
     ]},
   ] : []),
 ];
@@ -111,87 +107,84 @@ const SidebarLayout = () => {
   const [open, setOpen] = useState({});
   const [user, setUser] = useState(null);
   const [branches, setBranches] = useState([]);
-  const [activeBranchId, setActiveBranchId] = useState('');
+  const [activeBranchId, setActiveBranchId] = useState("");
 
+  // init preferences
   useEffect(() => {
-    const storedDark = localStorage.getItem('darkMode');
-    if (storedDark === 'true') {
+    const storedDark = localStorage.getItem("darkMode");
+    if (storedDark === "true") {
       setDarkMode(true);
-      document.documentElement.classList.add('dark');
+      document.documentElement.classList.add("dark");
     }
     try {
-      const storedUser = localStorage.getItem('user');
+      const storedUser = localStorage.getItem("user");
       if (storedUser) setUser(JSON.parse(storedUser));
-    } catch {
-      localStorage.removeItem('user');
-    }
-    const storedCollapsed = localStorage.getItem('sidebarCollapsed');
-    if (storedCollapsed === 'true') setCollapsed(true);
+    } catch { localStorage.removeItem("user"); }
+    const storedCollapsed = localStorage.getItem("sidebarCollapsed");
+    if (storedCollapsed === "true") setCollapsed(true);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('darkMode', darkMode);
-    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem("darkMode", darkMode);
+    document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
   useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', collapsed);
+    localStorage.setItem("sidebarCollapsed", collapsed);
   }, [collapsed]);
 
-  const toggleDark = () => setDarkMode((prev) => !prev);
-  const toggleCollapse = () => setCollapsed((prev) => !prev);
+  const toggleDark = () => setDarkMode((v) => !v);
+  const toggleCollapse = () => setCollapsed((v) => !v);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
   };
 
+  // branches
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await api.get('/branches');
+        const res = await api.get("/branches");
         const list = Array.isArray(res.data) ? res.data : [];
         setBranches(list);
-        if (list.length && !activeBranchId) {
-          setActiveBranchId(String(list[0].id));
-        }
+        if (list.length && !activeBranchId) setActiveBranchId(String(list[0].id));
       } catch {}
     };
     load();
   }, []);
 
   useEffect(() => {
-    if (activeBranchId) localStorage.setItem('activeBranchId', activeBranchId);
+    if (activeBranchId) localStorage.setItem("activeBranchId", activeBranchId);
   }, [activeBranchId]);
 
-  const userRole = (user?.role || '').toLowerCase();
-  const isAdmin = userRole === 'admin';
-  const canViewDisbursements = ['admin', 'director', 'accountant'].includes(userRole);
+  const userRole = (user?.role || "").toLowerCase();
+  const isAdmin = userRole === "admin";
+  const canViewDisbursements = ["admin", "director", "accountant"].includes(userRole);
   const nav = useMemo(() => NAV({ isAdmin, canViewDisbursements }), [isAdmin, canViewDisbursements]);
+
+  const isPathActive = (base) => location.pathname === base || location.pathname.startsWith(base + "/");
+
+  // auto-open active groups
+  useEffect(() => {
+    const next = {};
+    nav.forEach((item) => {
+      if (item.children?.length) next[item.label] = isPathActive(item.to);
+    });
+    setOpen(next);
+  }, [location.pathname]);
 
   const navLinkClasses = ({ isActive }) =>
     `flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
       isActive
-        ? 'bg-blue-100 text-blue-700 font-medium'
-        : 'text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
+        ? "bg-blue-100 text-blue-700 font-medium"
+        : "text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
     }`;
 
-  const sidebarClasses = `${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-black'} ${
-    collapsed ? 'w-20' : 'w-64'
-  } fixed h-screen z-30 shadow transition-all duration-300 flex flex-col`;
-
-  const isPathActive = (base) => location.pathname === base || location.pathname.startsWith(base + '/');
-
-  useEffect(() => {
-    const next = {};
-    nav.forEach(item => {
-      if (item.children?.length) {
-        next[item.label] = isPathActive(item.to);
-      }
-    });
-    setOpen(next);
-  }, [location.pathname]);
+  const sidebarClasses = `${
+    darkMode ? "bg-gray-900 text-white" : "bg-white text-black"
+  } ${collapsed ? "w-20" : "w-64"} fixed h-screen z-30 shadow transition-all duration-300 flex flex-col`;
 
   const Group = ({ item }) => {
     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
@@ -212,12 +205,12 @@ const SidebarLayout = () => {
           onClick={() => setOpen((m) => ({ ...m, [item.label]: !isOpen }))}
           className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
             groupActive
-              ? 'bg-blue-100 text-blue-700 font-medium'
-              : 'text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
+              ? "bg-blue-100 text-blue-700 font-medium"
+              : "text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
           }`}
         >
-          {item.icon} {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
-          {!collapsed && <span className="text-xs">{isOpen ? '▾' : '▸'}</span>}
+          {item.icon} {!collapsed && <span className="flex-1">{item.label}</span>}
+          {!collapsed && <span className="text-xs">{isOpen ? "▾" : "▸"}</span>}
         </button>
 
         {!collapsed && isOpen && (
@@ -234,7 +227,7 @@ const SidebarLayout = () => {
   };
 
   return (
-    <div className={`flex min-h-screen ${darkMode ? 'bg-gray-800 text-white' : 'bg-gray-100 text-black'}`}>
+    <div className={`flex min-h-screen ${darkMode ? "bg-gray-800 text-white" : "bg-gray-100 text-black"}`}>
       {/* Sidebar */}
       <aside className={sidebarClasses}>
         <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
@@ -245,29 +238,32 @@ const SidebarLayout = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
           {!collapsed && (
             <div className="space-y-3">
+              {/* user */}
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-400 flex items-center justify-center text-white font-bold">
-                  {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
+                  {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{user?.name || user?.email || 'User'}</p>
+                  <p className="text-sm font-medium">{user?.name || user?.email || "User"}</p>
                   <p className="text-xs text-gray-400 dark:text-gray-300">
-                    Branch: {branches.find(b => String(b.id) === String(activeBranchId))?.name || '—'}
+                    Branch: {branches.find((b) => String(b.id) === String(activeBranchId))?.name || "—"}
                   </p>
                 </div>
               </div>
 
+              {/* branch */}
               <select
                 className="w-full px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm"
                 value={activeBranchId}
                 onChange={(e) => setActiveBranchId(e.target.value)}
               >
                 <option value="">Switch Branch</option>
-                {branches.map(b => (
+                {branches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
 
+              {/* search */}
               <div className="relative">
                 <FiSearch className="absolute left-2 top-2.5 text-gray-400" />
                 <input
@@ -279,29 +275,29 @@ const SidebarLayout = () => {
             </div>
           )}
 
+          {/* nav */}
           <nav className="flex flex-col space-y-2">
             {nav.map((item) => <Group key={item.label} item={item} />)}
           </nav>
         </div>
 
+        {/* footer */}
         <div className="absolute bottom-0 w-full px-4 py-3 border-t dark:border-gray-700 bg-inherit">
           <div className="flex justify-between items-center">
-            <button onClick={toggleDark} className="text-sm">
-              {darkMode ? <FiSun /> : <FiMoon />}
-            </button>
+            <button onClick={toggleDark} className="text-sm">{darkMode ? <FiSun /> : <FiMoon />}</button>
             <button onClick={handleLogout} className="flex items-center gap-1 text-sm text-red-500">
-              <FiLogOut /> {!collapsed && 'Logout'}
+              <FiLogOut /> {!collapsed && "Logout"}
             </button>
           </div>
         </div>
       </aside>
 
-      <div className={`flex-1 transition-all duration-300 ${collapsed ? 'ml-20' : 'ml-64'}`}>
+      {/* Main */}
+      <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"}`}>
         <header className="bg-white dark:bg-gray-800 px-6 py-4 shadow flex justify-between items-center">
           <h2 className="text-lg font-semibold">Welcome to MkopoSuite</h2>
-          <span className="text-sm text-gray-400 dark:text-gray-300">{userRole || 'user'}</span>
+          <span className="text-sm text-gray-400 dark:text-gray-300">{(user?.role || "user").toLowerCase()}</span>
         </header>
-
         <main className="p-4 overflow-y-auto h-[calc(100vh-4rem)]">
           <Outlet />
         </main>

@@ -1,91 +1,98 @@
-// ✅ Updated LoanDetails.jsx
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
-import LoanScheduleModal from '../components/LoanScheduleModal';
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import api from "../api";
 
 const LoanDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const API = import.meta.env.VITE_API_BASE_URL;
 
   const [loan, setLoan] = useState(null);
+  const [product, setProduct] = useState(null);
   const [repayments, setRepayments] = useState([]);
   const [comments, setComments] = useState([]);
-  const [newComment, setNewComment] = useState('');
-  const [schedule, setSchedule] = useState([]);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadingRepayments, setLoadingRepayments] = useState(true);
+  const [loadingComments, setLoadingComments] = useState(true);
 
-  useEffect(() => {
-    const fetchLoan = async () => {
-      try {
-        const res = await axios.get(`${API}/loans/${id}`);
-        setLoan(res.data);
-      } catch (err) {
-        console.error('Failed to fetch loan:', err);
-      }
-    };
-
-    const fetchRepayments = async () => {
-      try {
-        const res = await axios.get(`${API}/repayments/loan/${id}`);
-        setRepayments(res.data);
-      } catch (err) {
-        console.error('Failed to fetch repayments:', err);
-      }
-    };
-
-    const fetchComments = async () => {
-      try {
-        const res = await axios.get(`${API}/comments/loan/${id}`);
-        setComments(res.data);
-      } catch (err) {
-        console.error('Failed to fetch comments:', err);
-      }
-    };
-
-    fetchLoan();
-    fetchRepayments();
-    fetchComments();
-  }, [id]);
-
-  const handleGenerateSchedule = async () => {
+  const loadLoan = async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${API}/loans/${id}/schedule`);
-      setSchedule(res.data);
-      setShowScheduleModal(true);
-    } catch (err) {
-      console.error('Failed to load schedule:', err);
+      const res = await api.get(`/loans/${id}`);
+      setLoan(res.data);
+      // fetch product if present
+      if (res.data?.productId) {
+        try {
+          const p = await api.get(`/loan-products/${res.data.productId}`);
+          setProduct(p.data);
+        } catch { /* product optional */ }
+      } else {
+        setProduct(null);
+      }
+    } catch {
+      alert("Failed to fetch loan");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleMarkAsClosed = async () => {
-    if (!confirm('Mark this loan as closed?')) return;
+  const loadRepayments = async () => {
+    setLoadingRepayments(true);
     try {
-      await axios.patch(`${API}/loans/${id}/status`, { status: 'closed' });
-      const res = await axios.get(`${API}/loans/${id}`);
-      setLoan(res.data);
-      alert('Loan marked as closed.');
-    } catch (err) {
-      console.error('Failed to mark as closed:', err);
+      const res = await api.get(`/repayments/loan/${id}`);
+      setRepayments(res.data || []);
+    } catch {
+      // optional
+    } finally {
+      setLoadingRepayments(false);
+    }
+  };
+
+  const loadComments = async () => {
+    setLoadingComments(true);
+    try {
+      const res = await api.get(`/comments/loan/${id}`);
+      setComments(res.data || []);
+    } catch {
+      // optional
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLoan();
+    loadRepayments();
+    loadComments();
+  }, [id]);
+
+  const handleClose = async () => {
+    if (!confirm("Mark this loan as closed?")) return;
+    try {
+      await api.patch(`/loans/${id}/status`, { status: "closed" });
+      await loadLoan();
+      alert("Loan marked as closed.");
+    } catch {
+      alert("Failed to mark as closed");
     }
   };
 
   const handleAddComment = async () => {
-    if (!newComment) return;
+    if (!newComment.trim()) return;
     try {
-      await axios.post(`${API}/comments`, {
-        loanId: id,
-        content: newComment,
-      });
-      setComments([...comments, { content: newComment, createdAt: new Date().toISOString() }]);
-      setNewComment('');
-    } catch (err) {
-      console.error('Error adding comment', err);
+      await api.post(`/comments`, { loanId: id, content: newComment });
+      setComments((prev) => [
+        ...prev,
+        { content: newComment, createdAt: new Date().toISOString() },
+      ]);
+      setNewComment("");
+    } catch {
+      alert("Failed to add comment");
     }
   };
 
-  if (!loan) return <div className="p-4">Loading...</div>;
+  if (loading) return <div className="p-4">Loading loan...</div>;
+  if (!loan) return <div className="p-4">Loan not found.</div>;
 
   return (
     <div className="p-4 space-y-6">
@@ -96,36 +103,47 @@ const LoanDetails = () => {
         </button>
       </div>
 
+      {/* Summary */}
       <div className="bg-white p-4 rounded shadow space-y-2">
-        <h3 className="text-xl font-semibold text-gray-800">Loan Summary</h3>
-        <p><strong>Borrower:</strong> <Link className="text-blue-600 hover:underline" to={`/borrowers/${loan.borrowerId}`}>{loan.Borrower?.name}</Link></p>
-        <p><strong>Amount:</strong> TZS {loan.amount.toLocaleString()}</p>
+        <h3 className="text-xl font-semibold text-gray-800">Summary</h3>
+        <p>
+          <strong>Borrower:</strong>{" "}
+          <Link className="text-blue-600 hover:underline" to={`/borrowers/${loan.borrowerId}`}>
+            {loan.Borrower?.name || "N/A"}
+          </Link>
+        </p>
+        <p><strong>Amount:</strong> TZS {Number(loan.amount || 0).toLocaleString()}</p>
         <p><strong>Interest Rate:</strong> {loan.interestRate}%</p>
+        <p><strong>Interest Method:</strong> {loan.interestMethod}</p>
         <p><strong>Term:</strong> {loan.termMonths} months</p>
-        <p><strong>Start Date:</strong> {loan.startDate}</p>
+        <p><strong>Start Date:</strong> {loan.startDate ? new Date(loan.startDate).toLocaleDateString() : "N/A"}</p>
         <p><strong>Status:</strong> <span className="capitalize font-semibold">{loan.status}</span></p>
+
+        {product && (
+          <div className="mt-2 text-sm text-gray-600">
+            <p><strong>Product:</strong> {product.name} {product.code ? `(${product.code})` : ""}</p>
+            <p><strong>Product Defaults:</strong> {product.interestMethod} @ {product.interestRate ?? product.defaultInterestRate}%</p>
+            <p><strong>Limits:</strong> TZS {product.minPrincipal} - {product.maxPrincipal}, {product.minTermMonths}-{product.maxTermMonths} months</p>
+          </div>
+        )}
       </div>
 
-      <div className="flex gap-4">
-        <button
-          onClick={handleGenerateSchedule}
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-        >
-          View Loan Schedule
-        </button>
-        {loan.status !== 'closed' && (
-          <button
-            onClick={handleMarkAsClosed}
-            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-          >
+      {/* Actions */}
+      <div className="flex gap-3">
+        <Link to={`/loans`} className="px-3 py-2 rounded border">Back to Loans</Link>
+        {loan.status !== "closed" && (
+          <button onClick={handleClose} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
             Mark as Closed
           </button>
         )}
       </div>
 
+      {/* Repayments */}
       <div className="bg-white p-4 rounded shadow">
         <h3 className="text-lg font-semibold mb-2">Repayments</h3>
-        {repayments.length === 0 ? (
+        {loadingRepayments ? (
+          <p>Loading repayments...</p>
+        ) : repayments.length === 0 ? (
           <p>No repayments found.</p>
         ) : (
           <table className="min-w-full text-sm border">
@@ -139,9 +157,9 @@ const LoanDetails = () => {
             <tbody>
               {repayments.map((r, i) => (
                 <tr key={i}>
-                  <td className="border px-2 py-1">{r.date}</td>
-                  <td className="border px-2 py-1">TZS {r.amount.toLocaleString()}</td>
-                  <td className="border px-2 py-1">{r.method}</td>
+                  <td className="border px-2 py-1">{r.date ? new Date(r.date).toLocaleDateString() : "—"}</td>
+                  <td className="border px-2 py-1">TZS {Number(r.amount || 0).toLocaleString()}</td>
+                  <td className="border px-2 py-1">{r.method || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -149,16 +167,26 @@ const LoanDetails = () => {
         )}
       </div>
 
+      {/* Comments */}
       <div className="bg-white p-4 rounded shadow">
         <h3 className="text-lg font-semibold mb-2">Comments</h3>
-        <div className="space-y-2 mb-4">
-          {comments.map((c, i) => (
-            <div key={i} className="text-sm border-b pb-1">
-              <p>{c.content}</p>
-              <span className="text-gray-400 text-xs">{new Date(c.createdAt).toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
+        {loadingComments ? (
+          <p>Loading comments...</p>
+        ) : comments.length === 0 ? (
+          <p>No comments yet.</p>
+        ) : (
+          <div className="space-y-2 mb-3">
+            {comments.map((c, i) => (
+              <div key={i} className="text-sm border-b pb-1">
+                <p>{c.content}</p>
+                <span className="text-gray-400 text-xs">
+                  {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-2">
           <input
             type="text"
@@ -172,13 +200,6 @@ const LoanDetails = () => {
           </button>
         </div>
       </div>
-
-      <LoanScheduleModal
-        isOpen={showScheduleModal}
-        onClose={() => setShowScheduleModal(false)}
-        schedule={schedule}
-        loan={loan}
-      />
     </div>
   );
 };
