@@ -6,7 +6,28 @@ import { Suspense, lazy } from 'react';
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Borrowers = lazy(() => import('./pages/Borrowers'));
+const BorrowerDetails = lazy(() => import('./pages/BorrowerDetails'));
+const AddBorrower = lazy(() => import('./pages/borrowers/AddBorrower'));
+const KycQueue = lazy(() => import('./pages/borrowers/KycQueue'));
+const Blacklist = lazy(() => import('./pages/borrowers/Blacklist'));
+const BorrowerImports = lazy(() => import('./pages/borrowers/Imports'));
+const BorrowerReports = lazy(() => import('./pages/borrowers/Reports'));
+
+// Groups
+const BorrowerGroups = lazy(() => import('./pages/borrowers/groups/Groups'));
+const AddGroup = lazy(() => import('./pages/borrowers/groups/AddGroup'));
+const GroupDetails = lazy(() => import('./pages/borrowers/groups/GroupDetails'));
+const GroupImports = lazy(() => import('./pages/borrowers/groups/GroupImports'));
+const GroupReports = lazy(() => import('./pages/borrowers/groups/GroupReports'));
+
+// Loans (main + new subpages)
 const Loans = lazy(() => import('./pages/Loans'));
+const LoanApplications = lazy(() => import('./pages/loans/LoanApplications'));      // /loans/applications
+const LoanStatusList = lazy(() => import('./pages/loans/LoanStatusList'));          // /loans/status/:status
+const DisbursementQueue = lazy(() => import('./pages/loans/DisbursementQueue'));    // /loans/disbursement-queue
+const LoanProducts = lazy(() => import('./pages/loans/LoanProducts'));              // /loans/products
+const LoanSchedulePage = lazy(() => import('./pages/loans/LoanSchedulePage'));      // /loans/schedule
+const LoanReports = lazy(() => import('./pages/loans/LoanReports'));                // /loans/reports
 
 const Repayments = lazy(() => import('./pages/Repayments'));
 const ManualRepayment = lazy(() => import('./pages/repayments/ManualRepayment'));
@@ -51,9 +72,30 @@ function App() {
           {/* Dashboard */}
           <Route index element={<Dashboard />} />
 
-          {/* Core */}
+          {/* Borrowers */}
           <Route path="borrowers" element={<Borrowers />} />
+          <Route path="borrowers/add" element={<AddBorrower />} />
+          <Route path="borrowers/kyc" element={<KycQueue />} />
+          <Route path="borrowers/blacklist" element={<Blacklist />} />
+          <Route path="borrowers/imports" element={<BorrowerImports />} />
+          <Route path="borrowers/reports" element={<BorrowerReports />} />
+          <Route path="borrowers/:id" element={<BorrowerDetails />} />
+
+          {/* Group Borrowers */}
+          <Route path="borrowers/groups" element={<BorrowerGroups />} />
+          <Route path="borrowers/groups/add" element={<AddGroup />} />
+          <Route path="borrowers/groups/:groupId" element={<GroupDetails />} />
+          <Route path="borrowers/groups/imports" element={<GroupImports />} />
+          <Route path="borrowers/groups/reports" element={<GroupReports />} />
+
+          {/* Loans */}
           <Route path="loans" element={<Loans />} />
+          <Route path="loans/applications" element={<LoanApplications />} />
+          <Route path="loans/status/:status" element={<LoanStatusList />} />
+          <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
+          <Route path="loans/products" element={<LoanProducts />} />
+          <Route path="loans/schedule" element={<LoanSchedulePage />} />
+          <Route path="loans/reports" element={<LoanReports />} />
 
           {/* Repayments */}
           <Route path="repayments" element={<Repayments />} />
@@ -97,7 +139,7 @@ function App() {
             }
           />
 
-          {/* 404 inside the authed shell */}
+          {/* 404 inside authed shell */}
           <Route path="*" element={<NotFound />} />
         </Route>
 

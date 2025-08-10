@@ -1,11 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
-  ThumbsDown, Info, BarChart2, MessageSquare, UserPlus, Download
+  ThumbsDown, Info, BarChart2, MessageSquare, UserPlus, Download, PlusCircle
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+} from 'recharts';
 import api from '../api';
 
 const LS_KEY = 'ms_dash_filters_v1';
+const LS_AUTO = 'ms_dash_auto_refresh_v1';
 
 const Dashboard = () => {
   const [summary, setSummary] = useState(null);
@@ -16,6 +21,7 @@ const Dashboard = () => {
   const [branchId, setBranchId] = useState('');
   const [officerId, setOfficerId] = useState('');
   const [timeRange, setTimeRange] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(0); // minutes
 
   // General communications (ticker)
   const [comms, setComms] = useState([]);
@@ -34,6 +40,12 @@ const Dashboard = () => {
 
   // Monthly trends (mini charts)
   const [trends, setTrends] = useState(null);
+
+  // NEW placeholders (no API yet)
+  const [topBorrowers, setTopBorrowers] = useState([]); // []
+  const [upcomingRepayments, setUpcomingRepayments] = useState([]); // []
+  const [branchPerformance, setBranchPerformance] = useState([]); // []
+  const [officerPerformance, setOfficerPerformance] = useState([]); // []
 
   // Loading
   const [loading, setLoading] = useState(true);
@@ -64,11 +76,18 @@ const Dashboard = () => {
         setTimeRange(saved.timeRange || '');
       }
     } catch {}
+    try {
+      const rawAuto = localStorage.getItem(LS_AUTO);
+      if (rawAuto) setAutoRefresh(Number(rawAuto) || 0);
+    } catch {}
   }, []);
   useEffect(() => {
     const payload = { branchId, officerId, timeRange };
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
   }, [branchId, officerId, timeRange]);
+  useEffect(() => {
+    localStorage.setItem(LS_AUTO, String(autoRefresh || 0));
+  }, [autoRefresh]);
 
   // ---------- Data fetchers ----------
   const fetchFilters = useCallback(async (signal) => {
@@ -76,8 +95,8 @@ const Dashboard = () => {
       api.get('/branches', { signal }),
       api.get('/users', { params: { role: 'loan_officer' }, signal })
     ]);
-    setBranches(branchesRes.data || []);
-    setOfficers(officersRes.data || []);
+    setBranches(Array.isArray(branchesRes.data) ? branchesRes.data : []);
+    setOfficers(Array.isArray(officersRes.data) ? officersRes.data : []);
   }, []);
 
   const fetchSummary = useCallback(async (signal) => {
@@ -134,11 +153,15 @@ const Dashboard = () => {
     return () => ac.abort();
   }, [fetchFilters]);
 
+  const loadAll = useCallback(async (signal) => {
+    await Promise.all([fetchSummary(signal), fetchActivity({}, signal), fetchTrends(signal)]);
+  }, [fetchSummary, fetchActivity, fetchTrends]);
+
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
       try {
-        await Promise.all([fetchSummary(ac.signal), fetchActivity({}, ac.signal), fetchTrends(ac.signal)]);
+        await loadAll(ac.signal);
       } catch (err) {
         if (err?.name !== 'CanceledError') {
           console.error('Dashboard fetch error:', err?.message || err);
@@ -149,7 +172,7 @@ const Dashboard = () => {
       }
     })();
     return () => ac.abort();
-  }, [fetchSummary, fetchActivity, fetchTrends]);
+  }, [loadAll]);
 
   // load communications after summary
   useEffect(() => {
@@ -163,6 +186,18 @@ const Dashboard = () => {
     });
     return () => ac.abort();
   }, [summary, fetchCommunications]);
+
+  // NEW: Auto-refresh (minutes)
+  useEffect(() => {
+    if (!autoRefresh || autoRefresh <= 0) return;
+    const id = setInterval(() => {
+      const ac = new AbortController();
+      Promise.all([loadAll(ac.signal), fetchCommunications(ac.signal)])
+        .catch(() => {})
+        .finally(() => ac.abort());
+    }, autoRefresh * 60000);
+    return () => clearInterval(id);
+  }, [autoRefresh, loadAll, fetchCommunications]);
 
   // ---------- Activity actions ----------
   const submitComment = async (activityId) => {
@@ -235,7 +270,8 @@ const Dashboard = () => {
     pushToast(`Opening ${files.length} attachment${files.length > 1 ? 's' : ''}…`, 'info');
   };
 
-  const branchNameById = (id) => branches.find(b => String(b.id) === String(id))?.name || (id ? `Branch #${id}` : 'All branches');
+  const branchNameById = (id) =>
+    branches.find(b => String(b.id) === String(id))?.name || (id ? `Branch #${id}` : 'All branches');
 
   // NEW: dashboard message (single, curated)
   const dashMsg = summary?.dashboardMessage;
@@ -250,8 +286,12 @@ const Dashboard = () => {
       {/* Toasts */}
       <div className="fixed right-4 top-4 z-50 space-y-2">
         {toasts.map(t => (
-          <div key={t.id}
-               className={`px-3 py-2 rounded shadow text-sm text-white ${t.type === 'error' ? 'bg-red-600' : t.type === 'success' ? 'bg-emerald-600' : 'bg-slate-800'}`}>
+          <div
+            key={t.id}
+            className={`px-3 py-2 rounded shadow text-sm text-white ${
+              t.type === 'error' ? 'bg-red-600' : t.type === 'success' ? 'bg-emerald-600' : 'bg-slate-800'
+            }`}
+          >
             {t.msg}
           </div>
         ))}
@@ -389,7 +429,7 @@ const Dashboard = () => {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-4">
         <select value={branchId} onChange={e => setBranchId(e.target.value)} className="border rounded px-3 py-2">
           <option value="">All Branches</option>
           {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -410,6 +450,14 @@ const Dashboard = () => {
           <option value="annual">Annual</option>
         </select>
 
+        {/* NEW: Auto-refresh */}
+        <select value={autoRefresh} onChange={e => setAutoRefresh(Number(e.target.value))} className="border rounded px-3 py-2">
+          <option value={0}>No Auto-Refresh</option>
+          <option value={1}>Every 1 min</option>
+          <option value={5}>Every 5 mins</option>
+          <option value={15}>Every 15 mins</option>
+        </select>
+
         <button
           className="ml-auto px-3 py-2 border rounded"
           onClick={() => {
@@ -422,6 +470,19 @@ const Dashboard = () => {
         >
           Refresh
         </button>
+      </div>
+
+      {/* NEW: Quick Actions */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        <Link to="/loans/new" className="flex items-center gap-2 px-3 py-2 border rounded bg-white hover:bg-gray-50">
+          <PlusCircle className="w-4 h-4" /> Add Loan
+        </Link>
+        <Link to="/borrowers/new" className="flex items-center gap-2 px-3 py-2 border rounded bg-white hover:bg-gray-50">
+          <PlusCircle className="w-4 h-4" /> Add Borrower
+        </Link>
+        <Link to="/repayments/new" className="flex items-center gap-2 px-3 py-2 border rounded bg-white hover:bg-gray-50">
+          <PlusCircle className="w-4 h-4" /> Record Repayment
+        </Link>
       </div>
 
       {/* Two-column layout: MAIN + RIGHT SIDEBAR */}
@@ -458,7 +519,7 @@ const Dashboard = () => {
                 <SummaryCard title="PAR (Portfolio at Risk)" value={`${n(summary?.parPercent)}%`} icon={<BarChart2 className="w-6 h-6" />} />
               </div>
 
-              {/* Monthly Trends */}
+              {/* Monthly Trends (interactive chart + your MiniBars) */}
               {trends && (
                 <div className="bg-white rounded-lg shadow-md p-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -468,6 +529,27 @@ const Dashboard = () => {
                     </h3>
                   </div>
 
+                  {/* NEW Interactive chart */}
+                  <div className="mb-4">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart
+                        data={[
+                          { name: 'Loans', value: trends.monthlyLoans || 0 },
+                          { name: 'Deposits', value: trends.monthlyDeposits || 0 },
+                          { name: 'Repayments', value: trends.monthlyRepayments || 0 },
+                        ]}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="value" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Keep your MiniBar view */}
                   {(() => {
                     const vals = [trends.monthlyLoans || 0, trends.monthlyDeposits || 0, trends.monthlyRepayments || 0];
                     const max = Math.max(...vals);
@@ -481,6 +563,100 @@ const Dashboard = () => {
                   })()}
                 </div>
               )}
+
+              {/* NEW: Top Borrowers / Upcoming Repayments */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg shadow-md p-4 overflow-x-auto">
+                  <h3 className="font-semibold mb-2">Top Borrowers</h3>
+                  {topBorrowers.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No data available.</p>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-gray-600">
+                          <th className="py-1 pr-4">Name</th>
+                          <th className="py-1 pr-4">Outstanding</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {topBorrowers.map(b => (
+                          <tr key={b.id} className="border-t">
+                            <td className="py-1 pr-4">{b.name}</td>
+                            <td className="py-1 pr-4">{money(b.outstanding)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-lg shadow-md p-4 overflow-x-auto">
+                  <h3 className="font-semibold mb-2">Upcoming Repayments</h3>
+                  {upcomingRepayments.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No data available.</p>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-gray-600">
+                          <th className="py-1 pr-4">Borrower</th>
+                          <th className="py-1 pr-4">Due Date</th>
+                          <th className="py-1 pr-4">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {upcomingRepayments.map(r => (
+                          <tr key={r.id} className="border-t">
+                            <td className="py-1 pr-4">{r.borrower}</td>
+                            <td className="py-1 pr-4">{r.dueDate}</td>
+                            <td className="py-1 pr-4">{money(r.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              {/* NEW: Performance charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg shadow-md p-4">
+                  <h3 className="font-semibold mb-2">Branch Performance</h3>
+                  {branchPerformance.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No data available.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={branchPerformance}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branch" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="disbursed" />
+                        <Bar dataKey="repayments" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-lg shadow-md p-4">
+                  <h3 className="font-semibold mb-2">Officer Performance</h3>
+                  {officerPerformance.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No data available.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={officerPerformance}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="officer" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="loans" />
+                        <Bar dataKey="collections" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
             </>
           )}
         </main>
