@@ -1,30 +1,28 @@
-import axios from 'axios';
-
-// Use env if set, otherwise fallback to local dev API
-const baseURL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:10000/api').replace(/\/+$/, '');
+// src/api.js
+import axios from "axios";
 
 const api = axios.create({
-  baseURL,
-  timeout: 20000,
+  baseURL: import.meta.env.VITE_API_BASE_URL, // e.g. https://mkoposuite-backend-42w2.onrender.com/api
+  withCredentials: false,
 });
 
-// Attach JWT automatically
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Handle auth errors globally (optional redirect)
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     const status = err?.response?.status;
     if (status === 401 || status === 403) {
-      console.warn('Auth error (401/403). Check token / login.');
-      // Optionally:
-      // localStorage.removeItem('token');
-      // window.location.href = '/login';
+      console.warn("Auth error (401/403). Redirecting to login.");
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(err);
   }

@@ -1,67 +1,73 @@
 // src/App.jsx
-import { Routes, Route } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
+import { Routes, Route, Outlet } from "react-router-dom";
+import { Suspense, lazy } from "react";
 
 // Auth/public
-const Login = lazy(() => import('./pages/Login'));
+const Login = lazy(() => import("./pages/Login"));
 
 // Shell
-import ProtectedRoute from './components/ProtectedRoute';
-import RoleProtectedRoute from './components/RoleProtectedRoute';
-import SidebarLayout from './components/SidebarLayout';
+import ProtectedRoute from "./components/ProtectedRoute";
+import RoleProtectedRoute from "./components/RoleProtectedRoute";
+import SidebarLayout from "./components/SidebarLayout";
 
 // Core pages
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 
 // Borrowers
-const Borrowers = lazy(() => import('./pages/Borrowers'));
-const BorrowerDetails = lazy(() => import('./pages/BorrowerDetails'));
-const AddBorrower = lazy(() => import('./pages/borrowers/AddBorrower'));
-const KycQueue = lazy(() => import('./pages/borrowers/KycQueue'));
-const Blacklist = lazy(() => import('./pages/borrowers/Blacklist'));
-const BorrowerImports = lazy(() => import('./pages/borrowers/Imports'));
-const BorrowerReports = lazy(() => import('./pages/borrowers/Reports'));
+const Borrowers = lazy(() => import("./pages/Borrowers"));
+const BorrowerDetails = lazy(() => import("./pages/BorrowerDetails"));
+const AddBorrower = lazy(() => import("./pages/borrowers/AddBorrower"));
+const KycQueue = lazy(() => import("./pages/borrowers/KycQueue"));
+const Blacklist = lazy(() => import("./pages/borrowers/Blacklist"));
+const BorrowerImports = lazy(() => import("./pages/borrowers/Imports"));
+const BorrowerReports = lazy(() => import("./pages/borrowers/Reports"));
 
 // Groups
-const BorrowerGroups = lazy(() => import('./pages/borrowers/groups/Groups'));
-const AddGroup = lazy(() => import('./pages/borrowers/groups/AddGroup'));
-const GroupDetails = lazy(() => import('./pages/borrowers/groups/GroupDetails'));
-const GroupImports = lazy(() => import('./pages/borrowers/groups/GroupImports'));
-const GroupReports = lazy(() => import('./pages/borrowers/groups/GroupReports'));
+const BorrowerGroups = lazy(() => import("./pages/borrowers/groups/Groups"));
+const AddGroup = lazy(() => import("./pages/borrowers/groups/AddGroup"));
+const GroupDetails = lazy(() => import("./pages/borrowers/groups/GroupDetails"));
+const GroupImports = lazy(() => import("./pages/borrowers/groups/GroupImports"));
+const GroupReports = lazy(() => import("./pages/borrowers/groups/GroupReports"));
 
 // Loans
-const Loans = lazy(() => import('./pages/Loans'));            // src/pages/Loan.jsx
-const LoanDetails = lazy(() => import('./pages/LoanDetails'));// src/pages/LoanDetails.jsx
-const LoanApplications = lazy(() => import('./pages/loans/LoanApplications')); // ⬅ if your file is under /pages/loans/, change this path
-const LoanStatusList = lazy(() => import('./pages/loans/LoanStatusList'));
-const DisbursementQueue = lazy(() => import('./pages/loans/DisbursementQueue'));
-const LoanProducts = lazy(() => import('./pages/loans/LoanProducts'));
-const LoanSchedulePage = lazy(() => import('./pages/loans/LoanSchedulePage'));
-const LoanReports = lazy(() => import('./pages/loans/LoanReports'));
+const Loans = lazy(() => import("./pages/Loans"));
+const LoanDetails = lazy(() => import("./pages/LoanDetails"));
+const LoanApplications = lazy(() => import("./pages/loans/LoanApplications"));
+const LoanStatusList = lazy(() => import("./pages/loans/LoanStatusList"));
+const DisbursementQueue = lazy(() => import("./pages/loans/DisbursementQueue"));
+const LoanProducts = lazy(() => import("./pages/loans/LoanProducts"));
+const LoanSchedulePage = lazy(() => import("./pages/loans/LoanSchedulePage"));
+const LoanReports = lazy(() => import("./pages/loans/LoanReports"));
 
 // Repayments
-const Repayments = lazy(() => import('./pages/Repayments'));
-const ManualRepayment = lazy(() => import('./pages/repayments/ManualRepayment'));
-const RepaymentReceipts = lazy(() => import('./pages/repayments/RepaymentReceipts'));
+const Repayments = lazy(() => import("./pages/Repayments"));
+const ManualRepayment = lazy(() => import("./pages/repayments/ManualRepayment"));
+const RepaymentReceipts = lazy(() => import("./pages/repayments/RepaymentReceipts"));
 
 // Misc
-const Reports = lazy(() => import('./pages/Reports'));
-const Disbursements = lazy(() => import('./pages/Disbursements'));
-const Sms = lazy(() => import('./pages/Sms'));
-const Bank = lazy(() => import('./pages/Bank'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Users = lazy(() => import('./pages/Users'));
-const Roles = lazy(() => import('./pages/Roles'));
-const Branches = lazy(() => import('./pages/Branches'));
-const NotFound = lazy(() => import('./pages/NotFound'));
+const Reports = lazy(() => import("./pages/Reports"));
+const Disbursements = lazy(() => import("./pages/Disbursements"));
+const Sms = lazy(() => import("./pages/Sms"));
+const Bank = lazy(() => import("./pages/Bank"));
+const Settings = lazy(() => import("./pages/Settings"));
 
-const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
+// User Management nested pages
+const Users = lazy(() => import("./pages/user-management/Users"));
+const Roles = lazy(() => import("./pages/user-management/Roles"));
+const Permissions = lazy(() => import("./pages/user-management/Permissions"));
+
+const Branches = lazy(() => import("./pages/Branches"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+const Fallback = () => (
+  <div className="p-6 text-sm text-gray-600">Loading…</div>
+);
 
 function App() {
   return (
     <Suspense fallback={<Fallback />}>
       <Routes>
-        {/* Public */}
+        {/* Public routes */}
         <Route path="/login" element={<Login />} />
 
         {/* Protected shell */}
@@ -100,7 +106,7 @@ function App() {
           <Route path="loans/products" element={<LoanProducts />} />
           <Route path="loans/schedule" element={<LoanSchedulePage />} />
           <Route path="loans/reports" element={<LoanReports />} />
-          <Route path="loans/:id" element={<LoanDetails />} /> {/* details route */}
+          <Route path="loans/:id" element={<LoanDetails />} />
 
           {/* Repayments */}
           <Route path="repayments" element={<Repayments />} />
@@ -118,27 +124,39 @@ function App() {
           <Route path="bank" element={<Bank />} />
           <Route path="settings" element={<Settings />} />
 
-          {/* Admin */}
-          <Route
-            path="users"
-            element={
-              <RoleProtectedRoute>
-                <Users />
-              </RoleProtectedRoute>
-            }
-          />
-          <Route
-            path="roles"
-            element={
-              <RoleProtectedRoute>
-                <Roles />
-              </RoleProtectedRoute>
-            }
-          />
+          {/* User Management (nested) */}
+          <Route path="user-management" element={<Outlet />}>
+            <Route
+              path="users"
+              element={
+                <RoleProtectedRoute allow={["admin", "manager"]}>
+                  <Users />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="roles"
+              element={
+                <RoleProtectedRoute allow={["admin"]}>
+                  <Roles />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="permissions"
+              element={
+                <RoleProtectedRoute allow={["admin"]}>
+                  <Permissions />
+                </RoleProtectedRoute>
+              }
+            />
+          </Route>
+
+          {/* Branches */}
           <Route
             path="branches"
             element={
-              <RoleProtectedRoute>
+              <RoleProtectedRoute allow={["admin", "director"]}>
                 <Branches />
               </RoleProtectedRoute>
             }

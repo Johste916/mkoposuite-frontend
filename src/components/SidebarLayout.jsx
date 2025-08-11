@@ -1,3 +1,4 @@
+// src/components/SidebarLayout.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -8,7 +9,6 @@ import {
 import { BsBank } from "react-icons/bs";
 import api from "../api";
 
-// single source of truth for nav
 const NAV = (ctx) => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
 
@@ -29,8 +29,8 @@ const NAV = (ctx) => [
 
   {
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
-      { label: "All Loans", to: "/loans" },                  // ✅ real loans list
-      { label: "Applications", to: "/loans/applications" },  // ✅ separate apps page
+      { label: "All Loans", to: "/loans" },
+      { label: "Applications", to: "/loans/applications" },
       { label: "Pending Approval", to: "/loans/status/pending" },
       { label: "Approved Loans", to: "/loans/status/approved" },
       { label: "Rejected Loans", to: "/loans/status/rejected" },
@@ -80,22 +80,29 @@ const NAV = (ctx) => [
   ]},
 
   ...(ctx.isAdmin ? [
-    { label: "Users", icon: <FiUserCheck />, to: "/users" },
-    { label: "Roles", icon: <FiSettings />, to: "/roles" },
+    {
+      label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
+        { label: "Manage Users", to: "/user-management/users" },
+        { label: "Roles", to: "/user-management/roles" },
+        { label: "Permissions", to: "/user-management/permissions" },
+      ]
+    },
     { label: "Branches", icon: <FiMapPin />, to: "/branches" },
-    { label: "Settings", icon: <FiSettings />, to: "/settings", children: [
-      { label: "Loan", to: "/settings/loan" },
-      { label: "Loan Categories", to: "/settings/categories" },
-      { label: "Penalty", to: "/settings/penalty" },
-      { label: "System", to: "/settings/system" },
-      { label: "Integrations", to: "/settings/integration" },
-      { label: "Dashboard", to: "/settings/dashboard" },
-      { label: "Bulk SMS", to: "/settings/bulk-sms" },
-      { label: "Savings", to: "/settings/saving" },
-      { label: "Borrowers", to: "/settings/borrower" },
-      { label: "Users", to: "/settings/users" },
-      { label: "Branches", to: "/settings/branches" },
-    ]},
+    {
+      label: "Settings", icon: <FiSettings />, to: "/settings", children: [
+        { label: "Loan", to: "/settings/loan" },
+        { label: "Loan Categories", to: "/settings/categories" },
+        { label: "Penalty", to: "/settings/penalty" },
+        { label: "System", to: "/settings/system" },
+        { label: "Integrations", to: "/settings/integration" },
+        { label: "Dashboard", to: "/settings/dashboard" },
+        { label: "Bulk SMS", to: "/settings/bulk-sms" },
+        { label: "Savings", to: "/settings/saving" },
+        { label: "Borrowers", to: "/settings/borrower" },
+        { label: "Users", to: "/settings/users" },
+        { label: "Branches", to: "/settings/branches" },
+      ]
+    },
   ] : []),
 ];
 
@@ -109,7 +116,6 @@ const SidebarLayout = () => {
   const [branches, setBranches] = useState([]);
   const [activeBranchId, setActiveBranchId] = useState("");
 
-  // init preferences
   useEffect(() => {
     const storedDark = localStorage.getItem("darkMode");
     if (storedDark === "true") {
@@ -119,7 +125,9 @@ const SidebarLayout = () => {
     try {
       const storedUser = localStorage.getItem("user");
       if (storedUser) setUser(JSON.parse(storedUser));
-    } catch { localStorage.removeItem("user"); }
+    } catch {
+      localStorage.removeItem("user");
+    }
     const storedCollapsed = localStorage.getItem("sidebarCollapsed");
     if (storedCollapsed === "true") setCollapsed(true);
   }, []);
@@ -142,9 +150,8 @@ const SidebarLayout = () => {
     navigate("/login");
   };
 
-  // branches
   useEffect(() => {
-    const load = async () => {
+    const loadBranches = async () => {
       try {
         const res = await api.get("/branches");
         const list = Array.isArray(res.data) ? res.data : [];
@@ -152,7 +159,7 @@ const SidebarLayout = () => {
         if (list.length && !activeBranchId) setActiveBranchId(String(list[0].id));
       } catch {}
     };
-    load();
+    loadBranches();
   }, []);
 
   useEffect(() => {
@@ -162,15 +169,17 @@ const SidebarLayout = () => {
   const userRole = (user?.role || "").toLowerCase();
   const isAdmin = userRole === "admin";
   const canViewDisbursements = ["admin", "director", "accountant"].includes(userRole);
+
   const nav = useMemo(() => NAV({ isAdmin, canViewDisbursements }), [isAdmin, canViewDisbursements]);
 
   const isPathActive = (base) => location.pathname === base || location.pathname.startsWith(base + "/");
 
-  // auto-open active groups
   useEffect(() => {
     const next = {};
     nav.forEach((item) => {
-      if (item.children?.length) next[item.label] = isPathActive(item.to);
+      if (item.children?.length) {
+        next[item.label] = isPathActive(item.to);
+      }
     });
     setOpen(next);
   }, [location.pathname]);
@@ -216,7 +225,7 @@ const SidebarLayout = () => {
         {!collapsed && isOpen && (
           <div className="ml-6 mt-1 flex flex-col space-y-1">
             {item.children.map((c) => (
-              <NavLink key={c.to} to={c.to} className={navLinkClasses} end>
+              <NavLink key={c.to} to={c.to} className={navLinkClasses}>
                 <FiLayout className="opacity-70" /> {!collapsed && c.label}
               </NavLink>
             ))}
@@ -228,17 +237,17 @@ const SidebarLayout = () => {
 
   return (
     <div className={`flex min-h-screen ${darkMode ? "bg-gray-800 text-white" : "bg-gray-100 text-black"}`}>
-      {/* Sidebar */}
       <aside className={sidebarClasses}>
         <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
           {!collapsed && <h1 className="text-xl font-bold text-blue-600">MkopoSuite</h1>}
-          <button onClick={toggleCollapse} className="p-1">{collapsed ? <FiChevronRight /> : <FiChevronLeft />}</button>
+          <button onClick={toggleCollapse} className="p-1">
+            {collapsed ? <FiChevronRight /> : <FiChevronLeft />}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
           {!collapsed && (
             <div className="space-y-3">
-              {/* user */}
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-400 flex items-center justify-center text-white font-bold">
                   {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
@@ -251,7 +260,6 @@ const SidebarLayout = () => {
                 </div>
               </div>
 
-              {/* branch */}
               <select
                 className="w-full px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm"
                 value={activeBranchId}
@@ -263,7 +271,6 @@ const SidebarLayout = () => {
                 ))}
               </select>
 
-              {/* search */}
               <div className="relative">
                 <FiSearch className="absolute left-2 top-2.5 text-gray-400" />
                 <input
@@ -275,13 +282,11 @@ const SidebarLayout = () => {
             </div>
           )}
 
-          {/* nav */}
           <nav className="flex flex-col space-y-2">
             {nav.map((item) => <Group key={item.label} item={item} />)}
           </nav>
         </div>
 
-        {/* footer */}
         <div className="absolute bottom-0 w-full px-4 py-3 border-t dark:border-gray-700 bg-inherit">
           <div className="flex justify-between items-center">
             <button onClick={toggleDark} className="text-sm">{darkMode ? <FiSun /> : <FiMoon />}</button>
@@ -292,7 +297,6 @@ const SidebarLayout = () => {
         </div>
       </aside>
 
-      {/* Main */}
       <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"}`}>
         <header className="bg-white dark:bg-gray-800 px-6 py-4 shadow flex justify-between items-center">
           <h2 className="text-lg font-semibold">Welcome to MkopoSuite</h2>
