@@ -1,121 +1,262 @@
 // src/components/SidebarLayout.jsx
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
-  FiBarChart2, FiChevronLeft, FiChevronRight, FiSearch, FiSettings, FiMessageSquare,
-  FiUserCheck, FiMapPin, FiSend, FiLayout
+  FiBarChart2, FiSearch, FiSettings, FiUserCheck, FiFileText, FiBriefcase,
+  FiDatabase, FiMenu, FiX, FiChevronDown, FiChevronUp
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
 
+/* ---------- NAV CONFIG (Settings removed from sidebar) ---------- */
 const NAV = (ctx) => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
 
   {
     label: "Borrowers", icon: <FiUsers />, to: "/borrowers", children: [
-      { label: "All Borrowers", to: "/borrowers" },
+      { label: "View Borrowers", to: "/borrowers" },
       { label: "Add Borrower", to: "/borrowers/add" },
-      { label: "KYC Queue", to: "/borrowers/kyc" },
-      { label: "Blacklist", to: "/borrowers/blacklist" },
-      { label: "Imports", to: "/borrowers/imports" },
-      { label: "Reports", to: "/borrowers/reports" },
-      { label: "All Groups", to: "/borrowers/groups" },
-      { label: "Add Group", to: "/borrowers/groups/add" },
-      { label: "Group Imports", to: "/borrowers/groups/imports" },
-      { label: "Group Reports", to: "/borrowers/groups/reports" },
+      { label: "View Borrower Groups", to: "/borrowers/groups" },
+      { label: "Add Borrower Group", to: "/borrowers/groups/add" },
+      { label: "Send SMS to All", to: "/borrowers/sms" },
+      { label: "Send Email to All", to: "/borrowers/email" },
+      { label: "Invite Borrowers", to: "/borrowers/invite" },
     ]
   },
 
   {
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
-      { label: "All Loans", to: "/loans" },
-      { label: "Applications", to: "/loans/applications" },
-      { label: "Pending Approval", to: "/loans/status/pending" },
-      { label: "Approved Loans", to: "/loans/status/approved" },
-      { label: "Rejected Loans", to: "/loans/status/rejected" },
-      { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
-      { label: "Disbursed Loans", to: "/loans/status/disbursed" },
-      { label: "Active Loans", to: "/loans/status/active" },
-      { label: "Closed Loans", to: "/loans/status/closed" },
-      { label: "Loan Products", to: "/loans/products" },
-      { label: "Loan Schedule", to: "/loans/schedule" },
-      { label: "Loan Reports", to: "/loans/reports" },
+      { label: "View All Loans", to: "/loans" },
+      { label: "Add Loan", to: "/loans/add" },
+      { label: "Due Loans", to: "/loans/due" },
+      { label: "Missed Repayments", to: "/loans/missed" },
+      { label: "Loans in Arrears", to: "/loans/arrears" },
+      { label: "No Repayments", to: "/loans/no-repayments" },
+      { label: "Past Maturity Date", to: "/loans/past-maturity" },
+      { label: "Principal Outstanding", to: "/loans/principal-outstanding" },
+      { label: "1 Month Late", to: "/loans/1-month-late" },
+      { label: "3 Months Late", to: "/loans/3-months-late" },
+      { label: "Loan Calculator", to: "/loans/calculator" },
+      { label: "Guarantors", to: "/loans/guarantors" },
+      { label: "Loan Comments", to: "/loans/comments" },
+      { label: "Approve Loans", to: "/loans/approve" },
     ]
   },
 
-  ...(ctx.canViewDisbursements ? [{
-    label: "Disbursements", icon: <FiSend />, to: "/disbursements", children: [
-      { label: "All Disbursements", to: "/disbursements" },
-      { label: "New Disbursement", to: "/disbursements/new" },
-      { label: "Batches", to: "/disbursements/batches" },
-      { label: "Integrations", to: "/disbursements/integrations" },
+  {
+    label: "Repayments", icon: <FiDollarSign />, to: "/repayments", children: [
+      { label: "View Repayments", to: "/repayments" },
+      { label: "Add Bulk Repayments", to: "/repayments/bulk" },
+      { label: "Add via CSV", to: "/repayments/csv" },
+      { label: "Repayment Charts", to: "/repayments/charts" },
+      { label: "Approve Repayments", to: "/repayments/approve" },
     ]
-  }] : []),
+  },
 
-  { label: "Repayments", icon: <FiDollarSign />, to: "/repayments", children: [
-    { label: "Schedule", to: "/repayments" },
-    { label: "Manual Entry", to: "/repayments/new" },
-    { label: "Receipts", to: "/repayments/receipts" },
-  ]},
+  { label: "Collateral Register", icon: <FiBriefcase />, to: "/collateral" },
 
-  { label: "Reports", icon: <FiBarChart2 />, to: "/reports", children: [
-    { label: "Disbursed Loans", to: "/reports/disbursed-loans" },
-    { label: "Payments", to: "/reports/payments" },
-    { label: "Penalties", to: "/reports/penalties" },
-    { label: "Performance", to: "/reports/performance" },
-  ]},
+  {
+    label: "Collection Sheets", icon: <FiFileText />, to: "/collections", children: [
+      { label: "Daily Collection Sheet", to: "/collections/daily" },
+      { label: "Missed Repayment Sheet", to: "/collections/missed" },
+      { label: "Past Maturity Loans", to: "/collections/past-maturity" },
+      { label: "Send SMS", to: "/collections/sms" },
+      { label: "Send Email", to: "/collections/email" },
+    ]
+  },
 
-  { label: "SMS", icon: <FiMessageSquare />, to: "/sms", children: [
-    { label: "Bulk SMS", to: "/sms/bulk" },
-    { label: "Templates", to: "/sms/templates" },
-    { label: "Logs", to: "/sms/logs" },
-  ]},
+  {
+    label: "Savings", icon: <BsBank />, to: "/savings", children: [
+      { label: "View Accounts", to: "/savings" },
+      { label: "Add Account", to: "/savings/add" },
+      { label: "Savings Charts", to: "/savings/charts" },
+      { label: "Savings Report", to: "/savings/report" },
+      { label: "Products Report", to: "/savings/products" },
+      { label: "Fee Report", to: "/savings/fees" },
+      { label: "Cash Safe Management", to: "/savings/cash-safe" },
+    ]
+  },
 
-  { label: "Cash & Bank", icon: <BsBank />, to: "/bank", children: [
-    { label: "Cashbook", to: "/bank" },
-    { label: "Bank Accounts", to: "/bank/accounts" },
-    { label: "Transfers", to: "/bank/transfers" },
-    { label: "Reconciliation", to: "/bank/reconciliation" },
-  ]},
+  {
+    label: "Savings Transactions", icon: <FiDatabase />, to: "/savings-transactions", children: [
+      { label: "View Transactions", to: "/savings-transactions" },
+      { label: "Add Bulk Transactions", to: "/savings-transactions/bulk" },
+      { label: "Upload CSV", to: "/savings-transactions/csv" },
+      { label: "Staff Transactions Report", to: "/savings-transactions/staff-report" },
+      { label: "Approve Transactions", to: "/savings-transactions/approve" },
+    ]
+  },
 
-  ...(ctx.isAdmin ? [
-    {
-      label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
-        { label: "Manage Users", to: "/user-management/users" },
-        { label: "Roles", to: "/user-management/roles" },
-        { label: "Permissions", to: "/user-management/permissions" },
-      ]
-    },
-    { label: "Branches", icon: <FiMapPin />, to: "/branches" },
-    {
-      label: "Settings", icon: <FiSettings />, to: "/settings", children: [
-        { label: "Loan", to: "/settings/loan" },
-        { label: "Loan Categories", to: "/settings/categories" },
-        { label: "Penalty", to: "/settings/penalty" },
-        { label: "System", to: "/settings/system" },
-        { label: "Integrations", to: "/settings/integration" },
-        { label: "Dashboard", to: "/settings/dashboard" },
-        { label: "Bulk SMS", to: "/settings/bulk-sms" },
-        { label: "Savings", to: "/settings/saving" },
-        { label: "Borrowers", to: "/settings/borrower" },
-        { label: "Users", to: "/settings/users" },
-        { label: "Branches", to: "/settings/branches" },
-      ]
-    },
-  ] : []),
+  {
+    label: "Investors", icon: <FiUsers />, to: "/investors", children: [
+      { label: "View Investors", to: "/investors" },
+      { label: "Add Investor", to: "/investors/add" },
+      { label: "Send SMS to All", to: "/investors/sms" },
+      { label: "Send Email to All", to: "/investors/email" },
+      { label: "Invite Investors", to: "/investors/invite" },
+    ]
+  },
+
+  { label: "E-Signatures", icon: <FiFileText />, to: "/esignatures" },
+
+  {
+    label: "Payroll", icon: <FiUserCheck />, to: "/payroll", children: [
+      { label: "View Payroll", to: "/payroll" },
+      { label: "Add Payroll", to: "/payroll/add" },
+      { label: "Payroll Report", to: "/payroll/report" },
+    ]
+  },
+
+  {
+    label: "Expenses", icon: <FiCreditCard />, to: "/expenses", children: [
+      { label: "View Expenses", to: "/expenses" },
+      { label: "Add Expense", to: "/expenses/add" },
+      { label: "Upload CSV", to: "/expenses/csv" },
+    ]
+  },
+
+  {
+    label: "Other Income", icon: <FiDollarSign />, to: "/other-income", children: [
+      { label: "View Other Income", to: "/other-income" },
+      { label: "Add Other Income", to: "/other-income/add" },
+      { label: "Upload CSV", to: "/other-income/csv" },
+    ]
+  },
+
+  {
+    label: "Asset Management", icon: <FiBriefcase />, to: "/assets", children: [
+      { label: "View Assets", to: "/assets" },
+      { label: "Add Asset", to: "/assets/add" },
+    ]
+  },
+
+  {
+    label: "Reports", icon: <FiBarChart2 />, to: "/reports", children: [
+      { label: "Borrowers Report", to: "/reports/borrowers" },
+      { label: "Loan Report", to: "/reports/loans" },
+      { label: "Loan Arrears Aging", to: "/reports/arrears-aging" },
+      { label: "Collections Report", to: "/reports/collections" },
+      { label: "Collector Report", to: "/reports/collector" },
+      { label: "Deferred Income", to: "/reports/deferred-income" },
+      { label: "Deferred Income Monthly", to: "/reports/deferred-income-monthly" },
+      { label: "Pro-Rata Collections", to: "/reports/pro-rata" },
+      { label: "Disbursement Report", to: "/reports/disbursement" },
+      { label: "Fees Report", to: "/reports/fees" },
+      { label: "Loan Officer Report", to: "/reports/loan-officer" },
+      { label: "Loan Products Report", to: "/reports/loan-products" },
+      { label: "MFRS Ratios", to: "/reports/mfrs" },
+      { label: "Daily Report", to: "/reports/daily" },
+      { label: "Monthly Report", to: "/reports/monthly" },
+      { label: "Outstanding Report", to: "/reports/outstanding" },
+      { label: "Portfolio At Risk (PAR)", to: "/reports/par" },
+      { label: "At a Glance", to: "/reports/at-a-glance" },
+      { label: "All Entries", to: "/reports/all" },
+    ]
+  },
 ];
+
+/* ---------- Helpers ---------- */
+const pathIsIn = (pathname, base) => pathname === base || pathname.startsWith(base + "/");
+
+const Section = ({ item, currentPath, onNavigate }) => {
+  const hasChildren = !!item.children?.length;
+  const isActiveSection = pathIsIn(currentPath, item.to);
+  const [open, setOpen] = useState(isActiveSection || !hasChildren);
+
+  React.useEffect(() => {
+    if (isActiveSection) setOpen(true);
+  }, [isActiveSection]);
+
+  const baseItem =
+    "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
+
+  if (!hasChildren) {
+    return (
+      <NavLink
+        to={item.to}
+        className={({ isActive }) =>
+          `${baseItem} ${
+            isActive
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+          }`
+        }
+        onClick={onNavigate}
+      >
+        <span className="shrink-0">{item.icon}</span>
+        <span className="truncate">{item.label}</span>
+      </NavLink>
+    );
+  }
+
+  return (
+    <div className="rounded-md">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`${baseItem} ${
+          isActiveSection
+            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
+            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+        } w-full justify-between`}
+      >
+        <span className="inline-flex items-center gap-2">
+          <span className="shrink-0">{item.icon}</span>
+          <span className="truncate">{item.label}</span>
+        </span>
+        {open ? <FiChevronUp /> : <FiChevronDown />}
+      </button>
+
+      {open && (
+        <div className="mt-1 ml-2 border-l border-slate-200 dark:border-slate-700">
+          <div className="pl-3 py-1 space-y-1">
+            {item.children.map((c) => (
+              <NavLink
+                key={c.to}
+                to={c.to}
+                className={({ isActive }) =>
+                  `block px-2 py-1.5 rounded text-[13px] ${
+                    isActive
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                  }`
+                }
+                onClick={onNavigate}
+              >
+                {c.label}
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SidebarLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
   const [darkMode, setDarkMode] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const [open, setOpen] = useState({});
   const [user, setUser] = useState(null);
   const [branches, setBranches] = useState([]);
   const [activeBranchId, setActiveBranchId] = useState("");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Settings dropdown
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+  React.useEffect(() => {
+    const onDoc = (e) => {
+      if (!settingsRef.current) return;
+      if (!settingsRef.current.contains(e.target)) setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  /* theme + user load */
   useEffect(() => {
     const storedDark = localStorage.getItem("darkMode");
     if (storedDark === "true") {
@@ -128,21 +269,14 @@ const SidebarLayout = () => {
     } catch {
       localStorage.removeItem("user");
     }
-    const storedCollapsed = localStorage.getItem("sidebarCollapsed");
-    if (storedCollapsed === "true") setCollapsed(true);
+    const storedBranch = localStorage.getItem("activeBranchId");
+    if (storedBranch) setActiveBranchId(storedBranch);
   }, []);
 
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode);
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
-
-  useEffect(() => {
-    localStorage.setItem("sidebarCollapsed", collapsed);
-  }, [collapsed]);
-
-  const toggleDark = () => setDarkMode((v) => !v);
-  const toggleCollapse = () => setCollapsed((v) => !v);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -151,15 +285,15 @@ const SidebarLayout = () => {
   };
 
   useEffect(() => {
-    const loadBranches = async () => {
+    (async () => {
       try {
         const res = await api.get("/branches");
         const list = Array.isArray(res.data) ? res.data : [];
         setBranches(list);
         if (list.length && !activeBranchId) setActiveBranchId(String(list[0].id));
       } catch {}
-    };
-    loadBranches();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -169,143 +303,207 @@ const SidebarLayout = () => {
   const userRole = (user?.role || "").toLowerCase();
   const isAdmin = userRole === "admin";
   const canViewDisbursements = ["admin", "director", "accountant"].includes(userRole);
-
   const nav = useMemo(() => NAV({ isAdmin, canViewDisbursements }), [isAdmin, canViewDisbursements]);
 
-  const isPathActive = (base) => location.pathname === base || location.pathname.startsWith(base + "/");
-
+  /* close mobile when route changes & close settings */
   useEffect(() => {
-    const next = {};
-    nav.forEach((item) => {
-      if (item.children?.length) {
-        next[item.label] = isPathActive(item.to);
-      }
-    });
-    setOpen(next);
+    setMobileOpen(false);
+    setSettingsOpen(false);
   }, [location.pathname]);
 
-  const navLinkClasses = ({ isActive }) =>
-    `flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
-      isActive
-        ? "bg-blue-100 text-blue-700 font-medium"
-        : "text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-    }`;
-
-  const sidebarClasses = `${
-    darkMode ? "bg-gray-900 text-white" : "bg-white text-black"
-  } ${collapsed ? "w-20" : "w-64"} fixed h-screen z-30 shadow transition-all duration-300 flex flex-col`;
-
-  const Group = ({ item }) => {
-    const hasChildren = Array.isArray(item.children) && item.children.length > 0;
-    const isOpen = !!open[item.label];
-    const groupActive = isPathActive(item.to);
-
-    if (!hasChildren) {
-      return (
-        <NavLink to={item.to} className={navLinkClasses} end>
-          {item.icon} {!collapsed && item.label}
-        </NavLink>
-      );
-    }
-
-    return (
-      <div>
-        <button
-          onClick={() => setOpen((m) => ({ ...m, [item.label]: !isOpen }))}
-          className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition ${
-            groupActive
-              ? "bg-blue-100 text-blue-700 font-medium"
-              : "text-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-          }`}
-        >
-          {item.icon} {!collapsed && <span className="flex-1">{item.label}</span>}
-          {!collapsed && <span className="text-xs">{isOpen ? "▾" : "▸"}</span>}
-        </button>
-
-        {!collapsed && isOpen && (
-          <div className="ml-6 mt-1 flex flex-col space-y-1">
-            {item.children.map((c) => (
-              <NavLink key={c.to} to={c.to} className={navLinkClasses}>
-                <FiLayout className="opacity-70" /> {!collapsed && c.label}
-              </NavLink>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
-    <div className={`flex min-h-screen ${darkMode ? "bg-gray-800 text-white" : "bg-gray-100 text-black"}`}>
-      <aside className={sidebarClasses}>
-        <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
-          {!collapsed && <h1 className="text-xl font-bold text-blue-600">MkopoSuite</h1>}
-          <button onClick={toggleCollapse} className="p-1">
-            {collapsed ? <FiChevronRight /> : <FiChevronLeft />}
-          </button>
-        </div>
+    <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
+      {/* Header (full-width, compact) */}
+      <header className="sticky top-0 z-50 border-b bg-white/90 dark:bg-slate-900/90 backdrop-blur">
+        <div className="px-3 md:px-4">
+          <div className="h-14 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                className="lg:hidden p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => setMobileOpen((v) => !v)}
+                aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              >
+                {mobileOpen ? <FiX /> : <FiMenu />}
+              </button>
+              <span className="text-lg font-extrabold tracking-tight">
+                <span className="text-blue-600">Mkopo</span>
+                <span className="text-slate-800 dark:text-slate-200">Suite</span>
+              </span>
+            </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
-          {!collapsed && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-400 flex items-center justify-center text-white font-bold">
-                  {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
-                </div>
-                <div>
-                  <p className="text-sm font-medium">{user?.name || user?.email || "User"}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-300">
-                    Branch: {branches.find((b) => String(b.id) === String(activeBranchId))?.name || "—"}
-                  </p>
-                </div>
+            <div className="hidden md:flex items-center gap-2 min-w-[280px] max-w-[640px] w-full">
+              <div className="relative w-full">
+                <FiSearch className="absolute left-3 top-3 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search borrowers, loans, receipts…"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+                />
               </div>
+            </div>
 
+            <div className="flex items-center gap-2">
               <select
-                className="w-full px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-sm"
+                className="hidden md:block px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-sm border border-slate-200 dark:border-slate-700"
                 value={activeBranchId}
                 onChange={(e) => setActiveBranchId(e.target.value)}
               >
-                <option value="">Switch Branch</option>
+                <option value="">Branch</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
 
-              <div className="relative">
-                <FiSearch className="absolute left-2 top-2.5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search borrowers"
-                  className="w-full pl-8 pr-2 py-1 text-sm rounded bg-gray-100 dark:bg-gray-800"
-                />
+              <button
+                onClick={() => setDarkMode((v) => !v)}
+                className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label="Toggle dark mode"
+              >
+                {darkMode ? <FiSun /> : <FiMoon />}
+              </button>
+
+              {/* Admin (top-right) */}
+              {isAdmin && (
+                <button
+                  onClick={() => navigate("/admin")}
+                  className="hidden md:inline-flex items-center gap-2 h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  title="Admin"
+                >
+                  <FiSettings /> Admin
+                </button>
+              )}
+
+              {/* Settings dropdown */}
+              <div className="relative" ref={settingsRef}>
+                <button
+                  onClick={() => setSettingsOpen((v) => !v)}
+                  className="inline-flex items-center gap-2 h-9 px-3 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  title="Settings"
+                >
+                  <FiSettings /> Settings <FiChevronDown className="opacity-70" />
+                </button>
+                {settingsOpen && (
+                  <div className="absolute right-0 mt-2 w-60 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 z-[60] p-2">
+                    <NavLink
+                      to="/settings/billing"
+                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      Billing
+                    </NavLink>
+                    <NavLink
+                      to="/settings/change-password"
+                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      Change Password
+                    </NavLink>
+                    <NavLink
+                      to="/settings/2fa"
+                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      Two-Factor Authentication
+                    </NavLink>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-3 py-2 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-sm text-rose-600 dark:text-rose-300"
+                    >
+                      <span className="inline-flex items-center gap-2"><FiLogOut /> Logout</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Avatar */}
+              <div className="flex items-center gap-2 pl-1">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                  {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
+                </div>
+                <span className="hidden md:block text-xs opacity-70">{(user?.role || "user").toLowerCase()}</span>
               </div>
             </div>
-          )}
-
-          <nav className="flex flex-col space-y-2">
-            {nav.map((item) => <Group key={item.label} item={item} />)}
-          </nav>
-        </div>
-
-        <div className="absolute bottom-0 w-full px-4 py-3 border-t dark:border-gray-700 bg-inherit">
-          <div className="flex justify-between items-center">
-            <button onClick={toggleDark} className="text-sm">{darkMode ? <FiSun /> : <FiMoon />}</button>
-            <button onClick={handleLogout} className="flex items-center gap-1 text-sm text-red-500">
-              <FiLogOut /> {!collapsed && "Logout"}
-            </button>
           </div>
         </div>
-      </aside>
+      </header>
 
-      <div className={`flex-1 transition-all duration-300 ${collapsed ? "ml-20" : "ml-64"}`}>
-        <header className="bg-white dark:bg-gray-800 px-6 py-4 shadow flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Welcome to MkopoSuite</h2>
-          <span className="text-sm text-gray-400 dark:text-gray-300">{(user?.role || "user").toLowerCase()}</span>
-        </header>
-        <main className="p-4 overflow-y-auto h-[calc(100vh-4rem)]">
+      {/* Shell: left sidebar + main content */}
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+        {/* Sidebar */}
+        <aside className="hidden lg:block border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
+            <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Navigation
+            </div>
+            <nav className="space-y-1">
+              {nav.map((item) => (
+                <Section
+                  key={item.label}
+                  item={item}
+                  currentPath={location.pathname}
+                  onNavigate={() => {}}
+                />
+              ))}
+            </nav>
+            <div className="h-6" />
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
           <Outlet />
         </main>
       </div>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-[86%] max-w-[340px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl p-3 overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-sm font-semibold">Menu</span>
+              <button
+                className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close menu"
+              >
+                <FiX />
+              </button>
+            </div>
+
+            {/* Quick Admin + Settings on mobile */}
+            <div className="mt-3 space-y-2">
+              {isAdmin && (
+                <button
+                  onClick={() => { setMobileOpen(false); navigate("/admin"); }}
+                  className="w-full inline-flex items-center gap-2 px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  <FiSettings /> Admin
+                </button>
+              )}
+              <div className="grid grid-cols-1 gap-1">
+                <NavLink to="/settings/billing" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">Billing</NavLink>
+                <NavLink to="/settings/change-password" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">Change Password</NavLink>
+                <NavLink to="/settings/2fa" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">Two-Factor Authentication</NavLink>
+                <button onClick={handleLogout} className="text-left px-3 py-2 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-sm text-rose-600 dark:text-rose-300">
+                  <span className="inline-flex items-center gap-2"><FiLogOut /> Logout</span>
+                </button>
+              </div>
+            </div>
+
+            <nav className="mt-4 space-y-1">
+              {nav.map((item) => (
+                <Section
+                  key={item.label}
+                  item={item}
+                  currentPath={location.pathname}
+                  onNavigate={() => setMobileOpen(false)}
+                />
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

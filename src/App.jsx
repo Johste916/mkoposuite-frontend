@@ -1,5 +1,4 @@
-// src/App.jsx
-import { Routes, Route, Outlet } from "react-router-dom";
+import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
 // Auth/public
@@ -44,12 +43,14 @@ const Repayments = lazy(() => import("./pages/Repayments"));
 const ManualRepayment = lazy(() => import("./pages/repayments/ManualRepayment"));
 const RepaymentReceipts = lazy(() => import("./pages/repayments/RepaymentReceipts"));
 
-// Misc
+// Misc Existing
 const Reports = lazy(() => import("./pages/Reports"));
 const Disbursements = lazy(() => import("./pages/Disbursements"));
 const Sms = lazy(() => import("./pages/Sms"));
 const Bank = lazy(() => import("./pages/Bank"));
-const Settings = lazy(() => import("./pages/Settings"));
+
+// ⚠️ Old Settings page was removed from the sidebar.
+// We’ll redirect /settings -> /admin below for backward compatibility.
 
 // User Management nested pages
 const Users = lazy(() => import("./pages/user-management/Users"));
@@ -59,9 +60,30 @@ const Permissions = lazy(() => import("./pages/user-management/Permissions"));
 const Branches = lazy(() => import("./pages/Branches"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const Fallback = () => (
-  <div className="p-6 text-sm text-gray-600">Loading…</div>
-);
+/** ===================== NEW MODULES ===================== **/
+const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
+const Assets = lazy(() => import("./pages/assets/Assets"));
+const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets"));
+const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
+const Investors = lazy(() => import("./pages/investors/Investors"));
+const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
+const Payroll = lazy(() => import("./pages/payroll/Payroll"));
+const Expenses = lazy(() => import("./pages/expenses/Expenses"));
+const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
+
+/** ===================== ACCOUNTING ===================== **/
+const ChartOfAccounts = lazy(() => import("./pages/accounting/ChartOfAccounts"));
+const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
+const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
+const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
+
+/** ===================== NEW: ADMIN & ACCOUNT SETTINGS ===================== **/
+// Admin hub (system settings, integrations, users, branches, etc.)
+const Admin = lazy(() => import("./pages/Admin")); 
+// Personal settings (Billing, Change Password, 2FA, Logout shortcuts)
+const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
+
+const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
 function App() {
   return (
@@ -113,16 +135,44 @@ function App() {
           <Route path="repayments/new" element={<ManualRepayment />} />
           <Route path="repayments/receipts" element={<RepaymentReceipts />} />
 
-          {/* Reports */}
+          {/* Existing Misc */}
           <Route path="reports" element={<Reports />} />
-
-          {/* Disbursements */}
           <Route path="disbursements" element={<Disbursements />} />
-
-          {/* Other */}
           <Route path="sms" element={<Sms />} />
           <Route path="bank" element={<Bank />} />
-          <Route path="settings" element={<Settings />} />
+
+          {/* ===== NEW: Admin (top-right "Admin") ===== */}
+          <Route
+            path="admin"
+            element={
+              <RoleProtectedRoute allow={["admin"]}>
+                <Admin />
+              </RoleProtectedRoute>
+            }
+          />
+
+          {/* ===== NEW: Account settings for current user (top-right "Settings") ===== */}
+          <Route path="me/settings" element={<AccountSettings />} />
+
+          {/* Backward-compat: /settings now redirects to /admin */}
+          <Route path="settings" element={<Navigate to="/admin" replace />} />
+
+          {/* NEW MODULES */}
+          <Route path="collateral" element={<CollateralList />} />
+          <Route path="assets" element={<Assets />} />
+          <Route path="collections" element={<CollectionSheets />} />
+          <Route path="savings-transactions" element={<SavingsTransactions />} />
+          <Route path="investors" element={<Investors />} />
+          <Route path="esignatures" element={<ESignatures />} />
+          <Route path="payroll" element={<Payroll />} />
+          <Route path="expenses" element={<Expenses />} />
+          <Route path="other-income" element={<OtherIncome />} />
+
+          {/* ACCOUNTING */}
+          <Route path="accounting/chart-of-accounts" element={<ChartOfAccounts />} />
+          <Route path="accounting/trial-balance" element={<TrialBalance />} />
+          <Route path="accounting/profit-loss" element={<ProfitLoss />} />
+          <Route path="accounting/cashflow" element={<Cashflow />} />
 
           {/* User Management (nested) */}
           <Route path="user-management" element={<Outlet />}>
