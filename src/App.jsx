@@ -1,3 +1,4 @@
+// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -9,7 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import SidebarLayout from "./components/SidebarLayout";
 
-// Core pages
+// Core
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 
 // Borrowers
@@ -43,16 +44,13 @@ const Repayments = lazy(() => import("./pages/Repayments"));
 const ManualRepayment = lazy(() => import("./pages/repayments/ManualRepayment"));
 const RepaymentReceipts = lazy(() => import("./pages/repayments/RepaymentReceipts"));
 
-// Misc Existing
+// Misc Existing (legacy)
 const Reports = lazy(() => import("./pages/Reports"));
 const Disbursements = lazy(() => import("./pages/Disbursements"));
 const Sms = lazy(() => import("./pages/Sms"));
 const Bank = lazy(() => import("./pages/Bank"));
 
-// ⚠️ Old Settings page was removed from the sidebar.
-// We’ll redirect /settings -> /admin below for backward compatibility.
-
-// User Management nested pages
+// User management
 const Users = lazy(() => import("./pages/user-management/Users"));
 const Roles = lazy(() => import("./pages/user-management/Roles"));
 const Permissions = lazy(() => import("./pages/user-management/Permissions"));
@@ -60,7 +58,12 @@ const Permissions = lazy(() => import("./pages/user-management/Permissions"));
 const Branches = lazy(() => import("./pages/Branches"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-/** ===================== NEW MODULES ===================== **/
+// Admin hub + account
+const Admin = lazy(() => import("./pages/Admin"));
+const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
+const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
+
+// NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
 const Assets = lazy(() => import("./pages/assets/Assets"));
 const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets"));
@@ -71,17 +74,11 @@ const Payroll = lazy(() => import("./pages/payroll/Payroll"));
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
 const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
-/** ===================== ACCOUNTING ===================== **/
+// ACCOUNTING
 const ChartOfAccounts = lazy(() => import("./pages/accounting/ChartOfAccounts"));
 const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
 const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
 const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
-
-/** ===================== NEW: ADMIN & ACCOUNT SETTINGS ===================== **/
-// Admin hub (system settings, integrations, users, branches, etc.)
-const Admin = lazy(() => import("./pages/Admin")); 
-// Personal settings (Billing, Change Password, 2FA, Logout shortcuts)
-const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
@@ -89,7 +86,7 @@ function App() {
   return (
     <Suspense fallback={<Fallback />}>
       <Routes>
-        {/* Public routes */}
+        {/* Public */}
         <Route path="/login" element={<Login />} />
 
         {/* Protected shell */}
@@ -103,6 +100,25 @@ function App() {
         >
           {/* Dashboard */}
           <Route index element={<Dashboard />} />
+
+          {/* ===== Admin hub + dynamic admin pages ===== */}
+          <Route
+            path="admin"
+            element={
+              <RoleProtectedRoute allow={["admin", "director"]}>
+                <Outlet />
+              </RoleProtectedRoute>
+            }
+          >
+            {/* Admin home grid */}
+            <Route index element={<Admin />} />
+
+            {/* All admin pages handled dynamically */}
+            <Route path=":slug" element={<AdminRouter />} />
+          </Route>
+
+          {/* Top-right Account quick panel */}
+          <Route path="account/settings" element={<AccountSettings />} />
 
           {/* Borrowers */}
           <Route path="borrowers" element={<Borrowers />} />
@@ -135,27 +151,11 @@ function App() {
           <Route path="repayments/new" element={<ManualRepayment />} />
           <Route path="repayments/receipts" element={<RepaymentReceipts />} />
 
-          {/* Existing Misc */}
+          {/* Misc (legacy) */}
           <Route path="reports" element={<Reports />} />
           <Route path="disbursements" element={<Disbursements />} />
           <Route path="sms" element={<Sms />} />
           <Route path="bank" element={<Bank />} />
-
-          {/* ===== NEW: Admin (top-right "Admin") ===== */}
-          <Route
-            path="admin"
-            element={
-              <RoleProtectedRoute allow={["admin"]}>
-                <Admin />
-              </RoleProtectedRoute>
-            }
-          />
-
-          {/* ===== NEW: Account settings for current user (top-right "Settings") ===== */}
-          <Route path="me/settings" element={<AccountSettings />} />
-
-          {/* Backward-compat: /settings now redirects to /admin */}
-          <Route path="settings" element={<Navigate to="/admin" replace />} />
 
           {/* NEW MODULES */}
           <Route path="collateral" element={<CollateralList />} />
@@ -174,43 +174,15 @@ function App() {
           <Route path="accounting/profit-loss" element={<ProfitLoss />} />
           <Route path="accounting/cashflow" element={<Cashflow />} />
 
-          {/* User Management (nested) */}
+          {/* User Management */}
           <Route path="user-management" element={<Outlet />}>
-            <Route
-              path="users"
-              element={
-                <RoleProtectedRoute allow={["admin", "manager"]}>
-                  <Users />
-                </RoleProtectedRoute>
-              }
-            />
-            <Route
-              path="roles"
-              element={
-                <RoleProtectedRoute allow={["admin"]}>
-                  <Roles />
-                </RoleProtectedRoute>
-              }
-            />
-            <Route
-              path="permissions"
-              element={
-                <RoleProtectedRoute allow={["admin"]}>
-                  <Permissions />
-                </RoleProtectedRoute>
-              }
-            />
+            <Route path="users" element={<Users />} />
+            <Route path="roles" element={<Roles />} />
+            <Route path="permissions" element={<Permissions />} />
           </Route>
 
           {/* Branches */}
-          <Route
-            path="branches"
-            element={
-              <RoleProtectedRoute allow={["admin", "director"]}>
-                <Branches />
-              </RoleProtectedRoute>
-            }
-          />
+          <Route path="branches" element={<Branches />} />
 
           {/* 404 inside shell */}
           <Route path="*" element={<NotFound />} />
