@@ -1,332 +1,187 @@
-// src/pages/admin/Staff.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import api from "../../api";
-
-const makeId = () =>
-  (typeof crypto !== "undefined" && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+import { ACL } from "../../api/acl";
+import { SettingsAPI } from "../../api/settings"; // for branches list
+import { FiSearch } from "react-icons/fi";
 
 export default function Staff() {
-  const [items, setItems] = useState([]);
-  const [branches, setBranches] = useState([]);
+  const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    setLoading(true); setErr("");
+  const [form, setForm] = useState({
+    name: "", email: "", phone: "",
+    username: "", password: "",
+    roleId: "", branchIds: [],
+    twoFactor: false,
+  });
+
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return users;
+    return users.filter(u =>
+      [u.name, u.email, u.username].some(s => String(s||"").toLowerCase().includes(t))
+    );
+  }, [users, q]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        setErr("");
+
+        const [rList, bList] = await Promise.all([
+          ACL.listRoles().catch(() => []),
+          SettingsAPI.listBranches().catch(() => []),
+        ]);
+
+        setRoles(rList || []);
+        setBranches(Array.isArray(bList) ? bList : (bList.items || []));
+
+        const rows = await ACL.listUsers();
+        setUsers(rows || []);
+      } catch (e) {
+        setErr(e?.response?.data?.error || "Failed to load staff");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const create = async () => {
     try {
-      const [u, b, r] = await Promise.all([
-        api.get("/users"),
-        api.get("/branches"),
-        api.get("/roles"),
-      ]);
-      setItems(u.data || []);
-      setBranches(b.data || []);
-      setRoles(r.data || []);
+      setErr("");
+      const payload = {
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        username: form.username,
+        password: form.password,
+        roleId: form.roleId || null,
+        branchIds: form.branchIds,   // UI allows multiple; backend will use the first for branchId
+        twoFactor: !!form.twoFactor,
+      };
+      const newUser = await ACL.createUser(payload);
+      setUsers([newUser, ...users]);
+      setForm({ ...form, name:"", email:"", phone:"", username:"", password:"" });
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to load staff");
-    } finally {
-      setLoading(false);
+      setErr(e?.response?.data?.error || "Failed to create user");
     }
   };
 
-  useEffect(() => { load(); }, []);
-
-  const create = async (payload) => {
-    setSaving(true); setErr("");
-    try {
-      await api.post("/users", payload);
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to create staff");
-    } finally { setSaving(false); }
+  const toggleBranch = (id) => {
+    setForm(f => {
+      const has = f.branchIds.includes(id);
+      return { ...f, branchIds: has ? f.branchIds.filter(b => b !== id) : [...f.branchIds, id] };
+    });
   };
 
-  const update = async (id, payload) => {
-    setSaving(true); setErr("");
-    try {
-      await api.put(`/users/${id}`, payload);
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to update staff");
-    } finally { setSaving(false); }
-  };
-
-  const remove = async (id) => {
-    if (!confirm("Delete this staff?")) return;
-    setSaving(true); setErr("");
-    try {
-      await api.delete(`/users/${id}`);
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to delete staff");
-    } finally { setSaving(false); }
-  };
-
-  const filtered = useMemo(() => {
-    const term = q.toLowerCase().trim();
-    if (!term) return items;
-    return items.filter(u =>
-      [u.name, u.email, u.phone].some(v => (v || "").toLowerCase().includes(term))
-    );
-  }, [q, items]);
+  if (loading) return <div className="p-4 text-sm text-slate-500">Loading…</div>;
 
   return (
     <div className="space-y-4">
-      <header className="bg-white dark:bg-slate-900 border rounded-2xl p-4 flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Staff</h1>
-          <p className="text-sm text-slate-500">Add staff, set branch access, roles, 2FA, and credentials.</p>
-        </div>
-        <div className="flex gap-2">
-          <input
-            value={q}
-            onChange={(e)=>setQ(e.target.value)}
-            placeholder="Search staff…"
-            className="rounded border px-3 py-2 text-sm"
-          />
-          <NewStaffDialog branches={branches} roles={roles} onCreate={create} busy={saving} />
-        </div>
+      <header className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
+        <h1 className="text-xl font-semibold">Staff</h1>
+        <p className="text-sm text-slate-500">Add staff, set branch access, roles, 2FA, and credentials.</p>
       </header>
 
       {err && <div className="text-sm text-rose-600">{err}</div>}
 
-      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
-        {loading ? (
-          <div className="text-sm text-slate-500">Loading…</div>
-        ) : filtered.length === 0 ? (
-          <div className="text-sm text-slate-500">No staff found.</div>
-        ) : (
-          <div className="space-y-2">
-            {filtered.map(u => (
-              <StaffRow
-                key={u.id || makeId()}
-                user={u}
-                roles={roles}
-                branches={branches}
-                onSave={update}
-                onDelete={remove}
-                busy={saving}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function StaffRow({ user, roles, branches, onSave, onDelete, busy }) {
-  const [edit, setEdit] = useState(false);
-  const [u, setU] = useState({
-    name: user.name || "",
-    email: user.email || "",
-    phone: user.phone || "",
-    roleId: user.roleId || null,
-    branchIds: user.branchIds || [],
-    twoFA: !!user.twoFA,
-    username: user.username || "",
-    // password left blank; only send if changed
-    password: "",
-  });
-
-  useEffect(() => {
-    setU({
-      name: user.name || "",
-      email: user.email || "",
-      phone: user.phone || "",
-      roleId: user.roleId || null,
-      branchIds: user.branchIds || [],
-      twoFA: !!user.twoFA,
-      username: user.username || "",
-      password: "",
-    });
-  }, [user]);
-
-  const toggleBranch = (id) => {
-    setU(prev => ({
-      ...prev,
-      branchIds: prev.branchIds.includes(id)
-        ? prev.branchIds.filter(x => x !== id)
-        : [...prev.branchIds, id],
-    }));
-  };
-
-  const submit = async () => {
-    const payload = { ...u };
-    if (!payload.password) delete payload.password; // don’t overwrite password if untouched
-    await onSave(user.id, payload);
-    setEdit(false);
-  };
-
-  return (
-    <div className="p-3 border rounded-lg grid grid-cols-1 md:grid-cols-7 gap-2">
-      <input
-        disabled={!edit}
-        className="rounded border px-3 py-2 text-sm"
-        placeholder="Full name"
-        value={u.name}
-        onChange={(e)=>setU({...u, name:e.target.value})}
-      />
-      <input
-        disabled={!edit}
-        className="rounded border px-3 py-2 text-sm"
-        placeholder="Email"
-        value={u.email}
-        onChange={(e)=>setU({...u, email:e.target.value})}
-      />
-      <input
-        disabled={!edit}
-        className="rounded border px-3 py-2 text-sm"
-        placeholder="Phone"
-        value={u.phone}
-        onChange={(e)=>setU({...u, phone:e.target.value})}
-      />
-      <select
-        disabled={!edit}
-        className="rounded border px-3 py-2 text-sm"
-        value={u.roleId || ""}
-        onChange={(e)=>setU({...u, roleId: e.target.value ? Number(e.target.value) : null})}
-      >
-        <option value="">Select role…</option>
-        {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-      </select>
-
-      {/* Branch access (multi) */}
-      <div className="text-sm">
-        <div className="font-medium mb-1">Branches</div>
-        <div className="flex flex-wrap gap-2">
-          {branches.map(b => (
-            <label key={b.id} className={`px-2 py-1 rounded border ${u.branchIds.includes(b.id) ? "bg-blue-50 border-blue-300" : "bg-slate-50"}`}>
-              <input
-                type="checkbox"
-                disabled={!edit}
-                className="mr-1"
-                checked={u.branchIds.includes(b.id)}
-                onChange={()=>toggleBranch(b.id)}
-              />
-              {b.name}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* 2FA */}
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          disabled={!edit}
-          checked={!!u.twoFA}
-          onChange={(e)=>setU({...u, twoFA:e.target.checked})}
-        />
-        Two-Factor
-      </label>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        {edit ? (
-          <>
-            {/* Credentials only when editing */}
-            <input
-              type="text"
-              disabled={!edit}
-              className="rounded border px-3 py-2 text-sm"
-              placeholder="Username"
-              value={u.username}
-              onChange={(e)=>setU({...u, username:e.target.value})}
-            />
-            <input
-              type="password"
-              disabled={!edit}
-              className="rounded border px-3 py-2 text-sm"
-              placeholder="New password (optional)"
-              value={u.password}
-              onChange={(e)=>setU({...u, password:e.target.value})}
-            />
-            <button className="px-3 py-1.5 rounded bg-blue-600 text-white" onClick={submit} disabled={busy}>Save</button>
-            <button className="px-3 py-1.5 rounded bg-slate-100" onClick={()=>{ setU({ ...u, password:"" }); setEdit(false); }}>Cancel</button>
-          </>
-        ) : (
-          <>
-            <button className="px-3 py-1.5 rounded bg-slate-100" onClick={()=>setEdit(true)}>Edit</button>
-            <button className="px-3 py-1.5 rounded bg-rose-50 text-rose-700" onClick={()=>onDelete(user.id)} disabled={busy}>Delete</button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function NewStaffDialog({ branches, roles, onCreate, busy }) {
-  const [open, setOpen] = useState(false);
-  const [u, setU] = useState({
-    name: "", email: "", phone: "",
-    roleId: "", branchIds: [], twoFA: false,
-    username: "", password: "",
-  });
-
-  const toggleBranch = (id) => {
-    setU(prev => ({
-      ...prev,
-      branchIds: prev.branchIds.includes(id)
-        ? prev.branchIds.filter(x => x !== id)
-        : [...prev.branchIds, id],
-    }));
-  };
-
-  const submit = async () => {
-    const payload = {
-      ...u,
-      roleId: u.roleId ? Number(u.roleId) : null,
-    };
-    await onCreate(payload);
-    setOpen(false);
-    setU({ name:"", email:"", phone:"", roleId:"", branchIds:[], twoFA:false, username:"", password:"" });
-  };
-
-  if (!open) {
-    return <button className="px-3 py-1.5 rounded bg-blue-600 text-white" onClick={()=>setOpen(true)}>Add Staff</button>;
-  }
-
-  return (
-    <div className="border rounded-xl p-3 bg-white dark:bg-slate-900">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Full name" value={u.name} onChange={(e)=>setU({...u, name:e.target.value})}/>
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Email" value={u.email} onChange={(e)=>setU({...u, email:e.target.value})}/>
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Phone" value={u.phone} onChange={(e)=>setU({...u, phone:e.target.value})}/>
-        <select className="rounded border px-3 py-2 text-sm" value={u.roleId} onChange={(e)=>setU({...u, roleId:e.target.value})}>
+      {/* Create form */}
+      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 grid grid-cols-1 md:grid-cols-6 gap-2">
+        <input className="rounded border px-3 py-2 text-sm" placeholder="Full name"
+          value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+        <input className="rounded border px-3 py-2 text-sm" placeholder="Email"
+          value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
+        <input className="rounded border px-3 py-2 text-sm" placeholder="Phone"
+          value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/>
+        <select className="rounded border px-3 py-2 text-sm"
+          value={form.roleId} onChange={e=>setForm(f=>({...f,roleId:e.target.value}))}>
           <option value="">Select role…</option>
           {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
-        <input className="rounded border px-3 py-2 text-sm" placeholder="Username" value={u.username} onChange={(e)=>setU({...u, username:e.target.value})}/>
-        <input type="password" className="rounded border px-3 py-2 text-sm" placeholder="Password" value={u.password} onChange={(e)=>setU({...u, password:e.target.value})}/>
-      </div>
+        <input className="rounded border px-3 py-2 text-sm" placeholder="Username"
+          value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))}/>
+        <input type="password" className="rounded border px-3 py-2 text-sm" placeholder="Password"
+          value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))}/>
 
-      <div className="mt-2">
-        <div className="text-sm font-medium mb-1">Branch access</div>
-        <div className="flex flex-wrap gap-2">
-          {branches.map(b => (
-            <label key={b.id} className={`px-2 py-1 rounded border ${u.branchIds.includes(b.id) ? "bg-blue-50 border-blue-300" : "bg-slate-50"}`}>
-              <input type="checkbox" className="mr-1" checked={u.branchIds.includes(b.id)} onChange={()=>toggleBranch(b.id)} />
-              {b.name}
-            </label>
-          ))}
+        <div className="md:col-span-6">
+          <div className="text-xs mb-2">Branch access</div>
+          <div className="flex flex-wrap gap-3">
+            {branches.map(b => (
+              <label key={b.id} className="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox"
+                  checked={form.branchIds.includes(b.id)}
+                  onChange={()=>toggleBranch(b.id)}/>
+                {b.name}
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div className="mt-2 flex items-center gap-2">
-        <label className="text-sm flex items-center gap-2">
-          <input type="checkbox" checked={u.twoFA} onChange={(e)=>setU({...u, twoFA:e.target.checked})}/>
+        <label className="inline-flex items-center gap-2 text-sm md:col-span-3">
+          <input type="checkbox"
+            checked={!!form.twoFactor}
+            onChange={e=>setForm(f=>({...f, twoFactor:e.target.checked}))}/>
           Two-Factor
         </label>
-        <div className="ml-auto flex gap-2">
-          <button className="px-3 py-1.5 rounded bg-slate-100" onClick={()=>setOpen(false)}>Close</button>
-          <button className="px-3 py-1.5 rounded bg-blue-600 text-white" onClick={submit} disabled={busy}>Create</button>
+
+        <div className="md:col-span-3 flex justify-end gap-2">
+          <button className="px-3 py-2 rounded border" onClick={() => setForm({
+            name:"", email:"", phone:"", username:"", password:"", roleId:"", branchIds:[], twoFactor:false
+          })}>Close</button>
+          <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={create}>Create</button>
         </div>
+      </div>
+
+      {/* Search + list */}
+      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
+        <div className="relative mb-3">
+          <FiSearch className="absolute left-3 top-3 text-slate-400" />
+          <input
+            value={q} onChange={e=>setQ(e.target.value)}
+            placeholder="Search staff…"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded border"
+          />
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="text-sm text-slate-500">No staff found.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-slate-500">
+                <tr>
+                  <th className="py-2 pr-4">Name</th>
+                  <th className="py-2 pr-4">Email</th>
+                  <th className="py-2 pr-4">Role(s)</th>
+                  <th className="py-2 pr-4">Branch</th>
+                  <th className="py-2 pr-4">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(u => (
+                  <tr key={u.id} className="border-t">
+                    <td className="py-2 pr-4">{u.name}</td>
+                    <td className="py-2 pr-4">{u.email}</td>
+                    <td className="py-2 pr-4">
+                      {Array.isArray(u.Roles) && u.Roles.length
+                        ? u.Roles.map(r=>r.name).join(", ")
+                        : (u.role || "—")}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {/* Backend returns belongsTo Branch (singular) */}
+                      {u.Branch?.name ?? "—"}
+                    </td>
+                    <td className="py-2 pr-4">{new Date(u.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -8,15 +8,20 @@ import {
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
+import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigContext";
 
-/* ---------- NAV CONFIG (Settings removed from sidebar) ---------- */
-const NAV = (ctx) => [
+/* ---------- NAV CONFIG (all features included; Admin decides visibility/labels) ---------- */
+const NAV = () => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
 
   {
     label: "Borrowers", icon: <FiUsers />, to: "/borrowers", children: [
       { label: "View Borrowers", to: "/borrowers" },
       { label: "Add Borrower", to: "/borrowers/add" },
+      { label: "KYC Queue", to: "/borrowers/kyc" },
+      { label: "Blacklist", to: "/borrowers/blacklist" },
+      { label: "Imports", to: "/borrowers/imports" },
+      { label: "Reports", to: "/borrowers/reports" },
       { label: "View Borrower Groups", to: "/borrowers/groups" },
       { label: "Add Borrower Group", to: "/borrowers/groups/add" },
       { label: "Send SMS to All", to: "/borrowers/sms" },
@@ -28,7 +33,10 @@ const NAV = (ctx) => [
   {
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
       { label: "View All Loans", to: "/loans" },
-      { label: "Add Loan", to: "/loans/add" },
+      { label: "Add Loan", to: "/loans/applications" },
+      { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
+      { label: "Loan Products", to: "/loans/products" },
+      { label: "Loan Reports", to: "/loans/reports" },
       { label: "Due Loans", to: "/loans/due" },
       { label: "Missed Repayments", to: "/loans/missed" },
       { label: "Loans in Arrears", to: "/loans/arrears" },
@@ -47,6 +55,8 @@ const NAV = (ctx) => [
   {
     label: "Repayments", icon: <FiDollarSign />, to: "/repayments", children: [
       { label: "View Repayments", to: "/repayments" },
+      { label: "Record Repayment", to: "/repayments/new" },
+      { label: "Receipts", to: "/repayments/receipts" },
       { label: "Add Bulk Repayments", to: "/repayments/bulk" },
       { label: "Add via CSV", to: "/repayments/csv" },
       { label: "Repayment Charts", to: "/repayments/charts" },
@@ -132,6 +142,25 @@ const NAV = (ctx) => [
   },
 
   {
+    label: "Accounting", icon: <FiDatabase />, to: "/accounting", children: [
+      { label: "Chart of Accounts", to: "/accounting/chart-of-accounts" },
+      { label: "Trial Balance", to: "/accounting/trial-balance" },
+      { label: "Profit & Loss", to: "/accounting/profit-loss" },
+      { label: "Cashflow", to: "/accounting/cashflow" },
+    ]
+  },
+
+  {
+    label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
+      { label: "Users", to: "/user-management/users" },
+      { label: "Roles", to: "/user-management/roles" },
+      { label: "Permissions", to: "/user-management/permissions" },
+    ]
+  },
+
+  { label: "Branches", icon: <FiDatabase />, to: "/branches" },
+
+  {
     label: "Reports", icon: <FiBarChart2 />, to: "/reports", children: [
       { label: "Borrowers Report", to: "/reports/borrowers" },
       { label: "Loan Report", to: "/reports/loans" },
@@ -154,6 +183,14 @@ const NAV = (ctx) => [
       { label: "All Entries", to: "/reports/all" },
     ]
   },
+
+  // Legacy routes present in App.jsx
+  {
+    label: "Legacy", icon: <FiFileText />, to: "/legacy", children: [
+      { label: "Disbursements (Legacy)", to: "/disbursements" },
+      { label: "Bank (Legacy)", to: "/bank" },
+    ]
+  },
 ];
 
 /* ---------- Helpers ---------- */
@@ -168,8 +205,7 @@ const Section = ({ item, currentPath, onNavigate }) => {
     if (isActiveSection) setOpen(true);
   }, [isActiveSection]);
 
-  const baseItem =
-    "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
+  const baseItem = "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
 
   if (!hasChildren) {
     return (
@@ -244,6 +280,9 @@ const SidebarLayout = () => {
   const [activeBranchId, setActiveBranchId] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Read Admin-driven feature config (read-only)
+  const { loading: featuresLoading, features } = useFeatureConfig();
+
   // Settings dropdown
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
@@ -301,9 +340,12 @@ const SidebarLayout = () => {
   }, [activeBranchId]);
 
   const userRole = (user?.role || "").toLowerCase();
-  const isAdmin = userRole === "admin";
-  const canViewDisbursements = ["admin", "director", "accountant"].includes(userRole);
-  const nav = useMemo(() => NAV({ isAdmin, canViewDisbursements }), [isAdmin, canViewDisbursements]);
+
+  // Build full NAV, then apply Admin filters/labels (no local control here)
+  const computedNav = useMemo(() => {
+    const base = NAV(); // all possible items
+    return filterNavByFeatures(base, features, userRole);
+  }, [features, userRole]);
 
   /* close mobile when route changes & close settings */
   useEffect(() => {
@@ -313,7 +355,7 @@ const SidebarLayout = () => {
 
   return (
     <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
-      {/* Header (full-width, compact) */}
+      {/* Header (unchanged UI) */}
       <header className="sticky top-0 z-50 border-b bg-white/90 dark:bg-slate-900/90 backdrop-blur">
         <div className="px-3 md:px-4">
           <div className="h-14 flex items-center justify-between gap-3">
@@ -362,16 +404,14 @@ const SidebarLayout = () => {
                 {darkMode ? <FiSun /> : <FiMoon />}
               </button>
 
-              {/* Admin (top-right) */}
-              {isAdmin && (
-                <button
-                  onClick={() => navigate("/admin")}
-                  className="hidden md:inline-flex items-center gap-2 h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
-                  title="Admin"
-                >
-                  <FiSettings /> Admin
-                </button>
-              )}
+              {/* Admin hub button stays as-is */}
+              <button
+                onClick={() => navigate("/admin")}
+                className="hidden md:inline-flex items-center gap-2 h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
+                title="Admin"
+              >
+                <FiSettings /> Admin
+              </button>
 
               {/* Settings dropdown */}
               <div className="relative" ref={settingsRef}>
@@ -436,14 +476,18 @@ const SidebarLayout = () => {
               Navigation
             </div>
             <nav className="space-y-1">
-              {nav.map((item) => (
-                <Section
-                  key={item.label}
-                  item={item}
-                  currentPath={location.pathname}
-                  onNavigate={() => {}}
-                />
-              ))}
+              {featuresLoading ? (
+                <div className="px-3 py-2 text-xs text-slate-500">Loading menu…</div>
+              ) : (
+                computedNav.map((item) => (
+                  <Section
+                    key={item.label + item.to}
+                    item={item}
+                    currentPath={location.pathname}
+                    onNavigate={() => {}}
+                  />
+                ))
+              )}
             </nav>
             <div className="h-6" />
           </div>
@@ -473,14 +517,12 @@ const SidebarLayout = () => {
 
             {/* Quick Admin + Settings on mobile */}
             <div className="mt-3 space-y-2">
-              {isAdmin && (
-                <button
-                  onClick={() => { setMobileOpen(false); navigate("/admin"); }}
-                  className="w-full inline-flex items-center gap-2 px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  <FiSettings /> Admin
-                </button>
-              )}
+              <button
+                onClick={() => { setMobileOpen(false); navigate("/admin"); }}
+                className="w-full inline-flex items-center gap-2 px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+              >
+                <FiSettings /> Admin
+              </button>
               <div className="grid grid-cols-1 gap-1">
                 <NavLink to="/settings/billing" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">Billing</NavLink>
                 <NavLink to="/settings/change-password" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">Change Password</NavLink>
@@ -492,14 +534,18 @@ const SidebarLayout = () => {
             </div>
 
             <nav className="mt-4 space-y-1">
-              {nav.map((item) => (
-                <Section
-                  key={item.label}
-                  item={item}
-                  currentPath={location.pathname}
-                  onNavigate={() => setMobileOpen(false)}
-                />
-              ))}
+              {featuresLoading ? (
+                <div className="px-3 py-2 text-xs text-slate-500">Loading menu…</div>
+              ) : (
+                computedNav.map((item) => (
+                  <Section
+                    key={item.label + item.to}
+                    item={item}
+                    currentPath={location.pathname}
+                    onNavigate={() => setMobileOpen(false)}
+                  />
+                ))
+              )}
             </nav>
           </div>
         </div>

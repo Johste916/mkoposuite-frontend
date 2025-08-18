@@ -1,155 +1,105 @@
-// src/pages/admin/StaffRolesPermissions.jsx
 import React, { useEffect, useState } from "react";
-import api from "../../api";
-
-const defaultPerms = [
-  "borrowers:view", "borrowers:edit",
-  "loans:view", "loans:edit", "loans:approve",
-  "repayments:view", "repayments:record",
-  "reports:view",
-  "settings:view", "settings:edit",
-  "users:view", "users:edit",
-];
+import { ACL } from "../../api/acl";
 
 export default function StaffRolesPermissions() {
   const [roles, setRoles] = useState([]);
+  const [perms, setPerms] = useState([]);
   const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [savingId, setSavingId] = useState(null);
-  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState({ name: "", description: "" });
 
-  const load = async () => {
-    setLoading(true); setErr("");
+  useEffect(() => {
+    (async () => {
+      try {
+        setErr("");
+        const [r, p] = await Promise.all([ACL.listRoles(), ACL.listPermissions()]);
+        setRoles(r || []);
+        setPerms(p || []);
+      } catch (e) {
+        setErr(e?.response?.data?.error || "Failed to load roles or permissions");
+      }
+    })();
+  }, []);
+
+  const createRole = async () => {
     try {
-      const r = await api.get("/roles");
-      setRoles(r.data || []);
+      const role = await ACL.createRole(creating);
+      setRoles([role, ...roles]);
+      setCreating({ name: "", description: "" });
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to load roles");
-    } finally { setLoading(false); }
+      setErr(e?.response?.data?.error || "Failed to create role");
+    }
   };
 
-  useEffect(() => { load(); }, []);
-
-  const create = async () => {
-    if (!newName.trim()) return;
-    setSavingId("new");
-    try {
-      await api.post("/roles", { name: newName.trim(), permissions: [] });
-      setNewName("");
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to create role");
-    } finally { setSavingId(null); }
+  const toggle = (action, roleName) => {
+    setPerms(ps => ps.map(p => {
+      if (p.action !== action) return p;
+      const has = (p.roles || []).includes(roleName);
+      return { ...p, roles: has ? p.roles.filter(r => r !== roleName) : [...p.roles, roleName] };
+    }));
   };
 
-  const save = async (id, payload) => {
-    setSavingId(id);
+  const saveAction = async (action) => {
     try {
-      await api.put(`/roles/${id}`, payload);
-      await load();
+      const p = perms.find(x => x.action === action);
+      await ACL.updatePermission(action, p.roles || []);
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to update role");
-    } finally { setSavingId(null); }
-  };
-
-  const remove = async (id) => {
-    if (!confirm("Delete this role?")) return;
-    setSavingId(id);
-    try {
-      await api.delete(`/roles/${id}`);
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to delete role");
-    } finally { setSavingId(null); }
+      setErr(e?.response?.data?.error || `Failed to update "${action}"`);
+    }
   };
 
   return (
     <div className="space-y-4">
       <header className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
         <h1 className="text-xl font-semibold">Staff Roles & Permissions</h1>
-        <p className="text-sm text-slate-500">Control who can see and do what.</p>
+        <p className="text-sm text-slate-500">Add roles and control which roles can perform each action.</p>
       </header>
 
       {err && <div className="text-sm text-rose-600">{err}</div>}
 
       {/* Create role */}
-      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 flex gap-2">
-        <input
-          className="rounded border px-3 py-2 text-sm"
-          placeholder="New role name"
-          value={newName}
-          onChange={(e)=>setNewName(e.target.value)}
-        />
-        <button className="px-3 py-1.5 rounded bg-blue-600 text-white" onClick={create} disabled={savingId==="new"}>
-          {savingId==="new" ? "Creating…" : "Create"}
-        </button>
+      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+        <input className="rounded border px-3 py-2 text-sm" placeholder="Role name (e.g., manager)"
+          value={creating.name} onChange={e=>setCreating(c=>({...c,name:e.target.value}))}/>
+        <input className="rounded border px-3 py-2 text-sm" placeholder="Description"
+          value={creating.description} onChange={e=>setCreating(c=>({...c,description:e.target.value}))}/>
+        <div className="md:col-span-2 flex justify-end">
+          <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={createRole}>Create Role</button>
+        </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
-        {loading ? (
-          <div className="text-sm text-slate-500">Loading…</div>
-        ) : roles.length === 0 ? (
-          <div className="text-sm text-slate-500">No roles yet.</div>
+      {/* Permissions matrix */}
+      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 overflow-x-auto">
+        {perms.length === 0 ? (
+          <div className="text-sm text-slate-500">No permissions defined.</div>
         ) : (
-          <div className="space-y-3">
-            {roles.map(r => (
-              <RoleRow key={r.id} role={r} allPerms={defaultPerms} onSave={save} onDelete={remove} busy={savingId===r.id}/>
-            ))}
-          </div>
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-slate-500">
+              <tr>
+                <th className="py-2 pr-4">Action</th>
+                {roles.map(r => <th key={r.id} className="py-2 pr-4">{r.name}</th>)}
+                <th className="py-2 pr-4">Save</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perms.map(p => (
+                <tr key={p.action} className="border-t">
+                  <td className="py-2 pr-4">{p.action}</td>
+                  {roles.map(r => {
+                    const checked = (p.roles || []).includes(r.name);
+                    return (
+                      <td key={r.id} className="py-2 pr-4">
+                        <input type="checkbox" checked={checked} onChange={()=>toggle(p.action, r.name)} />
+                      </td>
+                    );
+                  })}
+                  <td className="py-2 pr-4">
+                    <button className="px-3 py-1.5 rounded border" onClick={()=>saveAction(p.action)}>Save</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
-      </div>
-    </div>
-  );
-}
-
-function RoleRow({ role, allPerms, onSave, onDelete, busy }) {
-  const [edit, setEdit] = useState(false);
-  const [name, setName] = useState(role.name || "");
-  const [perms, setPerms] = useState(Array.isArray(role.permissions) ? role.permissions : []);
-
-  const toggle = (p) => setPerms(prev => prev.includes(p) ? prev.filter(x=>x!==p) : [...prev, p]);
-
-  const submit = async () => {
-    await onSave(role.id, { name: name.trim(), permissions: perms });
-    setEdit(false);
-  };
-
-  return (
-    <div className="p-3 border rounded-lg space-y-2">
-      <div className="flex items-center gap-2">
-        <input
-          disabled={!edit}
-          className="rounded border px-3 py-2 text-sm"
-          value={name}
-          onChange={(e)=>setName(e.target.value)}
-        />
-        {edit ? (
-          <>
-            <button className="px-3 py-1.5 rounded bg-blue-600 text-white" onClick={submit} disabled={busy}>Save</button>
-            <button className="px-3 py-1.5 rounded bg-slate-100" onClick={()=>{setEdit(false); setName(role.name || ""); setPerms(Array.isArray(role.permissions)?role.permissions:[])}}>Cancel</button>
-          </>
-        ) : (
-          <>
-            <button className="px-3 py-1.5 rounded bg-slate-100" onClick={()=>setEdit(true)}>Edit</button>
-            <button className="px-3 py-1.5 rounded bg-rose-50 text-rose-700" onClick={()=>onDelete(role.id)} disabled={busy}>Delete</button>
-          </>
-        )}
-      </div>
-
-      {/* Permissions */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        {allPerms.map(p => (
-          <label key={p} className={`px-2 py-1 rounded border text-sm ${perms.includes(p) ? "bg-blue-50 border-blue-300" : "bg-slate-50"}`}>
-            <input
-              type="checkbox"
-              className="mr-1"
-              checked={perms.includes(p)}
-              onChange={()=>toggle(p)}
-              disabled={!edit}
-            />
-            {p}
-          </label>
-        ))}
       </div>
     </div>
   );

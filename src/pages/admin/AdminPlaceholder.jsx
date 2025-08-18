@@ -1,11 +1,8 @@
-// src/pages/admin/AdminPlaceholder.jsx
 import React from "react";
 import { useParams } from "react-router-dom";
 
 const prettify = (slug = "") =>
-  slug
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (m) => m.toUpperCase());
+  slug.replace(/-/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 
 const AdminPlaceholder = () => {
   const { slug } = useParams();

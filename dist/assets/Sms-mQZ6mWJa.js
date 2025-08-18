@@ -1,1 +1,0 @@
-import{j as s}from"./index-Dk5Cvq3D.js";const a=()=>s.jsxs("div",{className:"p-4",children:[s.jsx("h2",{className:"text-2xl font-bold mb-4",children:"SMS Notifications"}),s.jsx("p",{children:"This is where you can manage SMS and WhatsApp alerts for borrowers, repayments, and system messages."})]});export{a as default};

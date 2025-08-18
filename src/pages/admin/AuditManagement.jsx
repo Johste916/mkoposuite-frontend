@@ -1,4 +1,3 @@
-// src/pages/admin/AuditManagement.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
@@ -11,11 +10,10 @@ export default function AuditManagement() {
   const load = async () => {
     setLoading(true); setErr("");
     try {
-      // adjust to your actual endpoint shape
-      const r = await api.get("/audit-logs");
+      // Canonical backend path
+      const r = await api.get("/admin/audit");
       setRows(r.data || []);
     } catch (e) {
-      // Graceful fallback if route isn’t ready yet
       setErr(e?.response?.data?.error || e.message || "Failed to load audits");
       setRows([]);
     } finally { setLoading(false); }
@@ -27,14 +25,13 @@ export default function AuditManagement() {
     const term = q.toLowerCase().trim();
     if (!term) return true;
     return [
-      x.staffName, x.branchName, x.category, x.message, x.ip, x.action,
-    ].some((v) => (v || "").toLowerCase().includes(term));
+      x?.User?.name, x?.Branch?.name, x?.category, x?.message, x?.ip, x?.action,
+    ].some((v) => String(v || "").toLowerCase().includes(term));
   });
 
-  // “Reverse” here just means toggling a flag. Implement actual reverse logic in backend.
   const reverse = async (id) => {
     try {
-      await api.post(`/audit-logs/${id}/reverse`);
+      await api.post(`/admin/audit/${id}/reverse`);
       await load();
     } catch (e) {
       alert(e?.response?.data?.error || e.message || "Failed to reverse entry");
@@ -44,7 +41,7 @@ export default function AuditManagement() {
   const remove = async (id) => {
     if (!confirm("Delete this audit entry?")) return;
     try {
-      await api.delete(`/audit-logs/${id}`);
+      await api.delete(`/admin/audit/${id}`);
       await load();
     } catch (e) {
       alert(e?.response?.data?.error || e.message || "Failed to delete entry");
@@ -94,8 +91,8 @@ export default function AuditManagement() {
                 {filtered.map((r) => (
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="py-2 pr-3">{new Date(r.createdAt || r.ts || Date.now()).toLocaleString()}</td>
-                    <td className="py-2 pr-3">{r.branchName || r.branch || "-"}</td>
-                    <td className="py-2 pr-3">{r.staffName || r.userName || "-"}</td>
+                    <td className="py-2 pr-3">{r?.Branch?.name || "-"}</td>
+                    <td className="py-2 pr-3">{r?.User?.name || "-"}</td>
                     <td className="py-2 pr-3">{r.category || "-"}</td>
                     <td className="py-2 pr-3">{r.message || "-"}</td>
                     <td className="py-2 pr-3">{r.action || "-"}</td>
