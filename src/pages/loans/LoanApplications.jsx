@@ -1,352 +1,691 @@
-// src/pages/loans/LoanApplications.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api";
+import {
+  Save, PlusCircle, X, Calendar, User, FileUp, Upload, Building2, Landmark, Wallet, ShieldCheck,
+} from "lucide-react";
 
-// tiny helper: always return an array from various API shapes
-const toArray = (x) =>
-  Array.isArray(x)            ? x :
-  Array.isArray(x?.rows)      ? x.rows :
-  Array.isArray(x?.items)     ? x.items :
-  Array.isArray(x?.data)      ? x.data :
-  Array.isArray(x?.results)   ? x.results :
-  Array.isArray(x?.borrowers) ? x.borrowers :
-  [];
+/* ---------------- helpers ---------------- */
+const today = () => new Date().toISOString().slice(0, 10);
+const clsInput =
+  "w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
+const card = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-4 md:p-6";
 
+const INTEREST_METHODS = [
+  { value: "flat", label: "Flat rate" },
+  { value: "reducing_equal_installments", label: "Reduced balance — equal installments" },
+  { value: "reducing_equal_principal", label: "Reduced balance — equal principal" },
+  { value: "interest_only", label: "Interest only" },
+  { value: "compound_accrued", label: "Compound interest (accrued)" },
+  { value: "compound_equal_installments", label: "Compound interest — equal installments" },
+];
+
+const COLLATERAL_TYPES = [
+  "None",
+  "Household Items",
+  "Vehicle (Logbook)",
+  "Land Title",
+  "Business Stock",
+  "Electronics",
+  "Salary Assignment",
+  "Other",
+];
+
+const REPAYMENT_CYCLES = [
+  { value: "weekly", label: "Weekly", perMonth: 4 },
+  { value: "biweekly", label: "Bi-weekly", perMonth: 2 },
+  { value: "monthly", label: "Monthly", perMonth: 1 },
+  { value: "custom", label: "Custom" },
+];
+
+const DISBURSE_METHODS = [
+  { value: "cash", label: "Cash" },
+  { value: "bank", label: "Bank" },
+  { value: "mobile_money", label: "Mobile Money" },
+  { value: "other", label: "Other" },
+];
+
+const STATUS_LABELS = [
+  "new loan",
+  "open",
+  "top-up",
+  "defaulted",
+];
+
+/* ---------------- page ---------------- */
 export default function LoanApplications() {
   const navigate = useNavigate();
 
-  const [apps, setApps] = useState([]);         // list of loans (pending)
-  const [borrowers, setBorrowers] = useState([]); // <- keep as array
-  const [branches, setBranches] = useState([]);
+  // refs / options
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
+  const [borrowers, setBorrowers] = useState([]);
+  const [banks, setBanks] = useState([]);
 
+  // ui
+  const [submitting, setSubmitting] = useState(false);
+  const [loadingCounts, setLoadingCounts] = useState(false);
+
+  // form
   const [form, setForm] = useState({
     productId: "",
-    amount: "",
-    interestRate: "",
-    termMonths: "",
-    interestMethod: "flat",
     borrowerId: "",
-    branchId: "",
-    startDate: "",
-    endDate: "",
+
+    // auto
+    loanNumber: "",
+
+    // terms
+    principal: "",
+    releaseDate: today(),
+    durationMonths: "",
+    collateralType: "",
+    collateralAmount: "",
+
+    // interest
+    interestMethod: "flat",
+    interestRate: "",
+    interestAmount: "",
+
+    // fees (array)
+    fees: [], // {name, amount, paid:boolean}
+
+    // repayments
+    repaymentCycle: "monthly",
+    numberOfRepayments: "",
+
+    // status label for UI only (we still send status: "pending" to match your enum)
+    statusLabel: "new loan",
+
+    // disbursement
+    disbursementMethod: "cash",
+    disbursementBankId: "",
+    disbursementReference: "",
+
+    // guarantors
+    guarantors: [], // {type:'existing'|'manual', borrowerId?, name?, occupation?, residence?, contacts?, verification?}
+
+    // spouse (optional)
+    spouseName: "",
+    spouseOccupation: "",
+    spouseIdNumber: "",
+    spouseConsentNote: "",
+    spousePhone: "",
+
+    // attachments meta (files are separate)
+    attachmentsMeta: [], // {type, note, fileKey}
   });
 
-  // --- fetchers ---
-  const fetchLoans = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/loans");
-      const list = toArray(res.data);
-      setApps(list.filter((l) => l?.status === "pending"));
-    } catch {
-      alert("Failed to load applications");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // files store; key -> File
+  const filesRef = useRef({}); // {fileKey: File}
 
-  const fetchBorrowers = async () => {
-    try {
-      const r = await api.get("/borrowers");
-      setBorrowers(toArray(r.data));
-    } catch {
-      setBorrowers([]); // stay an array even on error
-    }
-  };
-
-  const fetchBranches = async () => {
-    try {
-      const r = await api.get("/branches");
-      setBranches(toArray(r.data));
-    } catch {
-      setBranches([]);
-    }
-  };
-
-  const fetchProducts = async () => {
-    try {
-      const r = await api.get("/loan-products");
-      setProducts(toArray(r.data));
-    } catch {
-      setProducts([]);
-    }
-  };
-
+  /* ----------- fetch dropdowns ----------- */
   useEffect(() => {
-    fetchLoans();
-    fetchBorrowers();
-    fetchBranches();
-    fetchProducts();
+    (async () => {
+      try {
+        const [p, bws] = await Promise.all([
+          api.get("/loan-products"),
+          api.get("/borrowers", { params: { page: 1, pageSize: 500 } }).catch(() => ({ data: { items: [] } })),
+        ]);
+        setProducts(Array.isArray(p.data) ? p.data : p.data.items || []);
+        setBorrowers(Array.isArray(bws.data) ? bws.data : bws.data.items || []);
+      } catch (e) {
+        console.warn("Failed to load products/borrowers", e);
+      }
+      // optional banks list
+      try {
+        const r = await api.get("/banks");
+        setBanks(Array.isArray(r.data) ? r.data : r.data.items || []);
+      } catch {
+        setBanks([]);
+      }
+    })();
   }, []);
 
-  // --- helpers ---
+  /* ----------- compute loan # when borrower changes ----------- */
+  useEffect(() => {
+    if (!form.borrowerId) return;
+    setLoadingCounts(true);
+    (async () => {
+      try {
+        // Try borrower loans endpoint first; fallback to loans query
+        let total = 0;
+        try {
+          const r = await api.get(`/borrowers/${form.borrowerId}/loans`);
+          total = Array.isArray(r.data) ? r.data.length : (r.data?.items?.length || 0);
+        } catch {
+          const r2 = await api.get("/loans", { params: { borrowerId: form.borrowerId, page: 1, pageSize: 1 } });
+          total = r2.data?.total || 0;
+        }
+        const next = (total + 1).toString().padStart(3, "0");
+        setForm(f => ({ ...f, loanNumber: next }));
+      } catch {
+        // if it fails, leave blank — backend may assign
+        setForm(f => ({ ...f, loanNumber: "" }));
+      } finally {
+        setLoadingCounts(false);
+      }
+    })();
+  }, [form.borrowerId]);
+
+  /* ----------- auto-calc numberOfRepayments ----------- */
+  useEffect(() => {
+    if (form.repaymentCycle === "custom") return; // user will set manually
+    const cycle = REPAYMENT_CYCLES.find(c => c.value === form.repaymentCycle);
+    const months = Number(form.durationMonths || 0);
+    if (!cycle || months <= 0) return;
+    const count = months * (cycle.perMonth || 1);
+    setForm(f => ({ ...f, numberOfRepayments: String(count) }));
+  }, [form.repaymentCycle, form.durationMonths]);
+
+  /* ----------- fees handlers ----------- */
+  const addFee = () =>
+    setForm(f => ({ ...f, fees: [...f.fees, { name: "", amount: "", paid: false }] }));
+  const updateFee = (idx, patch) =>
+    setForm(f => ({
+      ...f,
+      fees: f.fees.map((x, i) => (i === idx ? { ...x, ...patch } : x)),
+    }));
+  const removeFee = (idx) =>
+    setForm(f => ({ ...f, fees: f.fees.filter((_, i) => i !== idx) }));
+
+  /* ----------- guarantors ----------- */
+  const addGuarantor = () =>
+    setForm(f => ({
+      ...f,
+      guarantors: [...f.guarantors, { type: "existing", borrowerId: "", name: "", occupation: "", residence: "", contacts: "", verification: "" }],
+    }));
+  const updateGuarantor = (idx, patch) =>
+    setForm(f => ({
+      ...f,
+      guarantors: f.guarantors.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
+    }));
+  const removeGuarantor = (idx) =>
+    setForm(f => ({ ...f, guarantors: f.guarantors.filter((_, i) => i !== idx) }));
+
+  /* ----------- attachments ----------- */
+  const addAttachment = (typeLabel) => {
+    const key = Math.random().toString(36).slice(2);
+    setForm(f => ({
+      ...f,
+      attachmentsMeta: [...f.attachmentsMeta, { type: typeLabel || "other", note: "", fileKey: key }],
+    }));
+  };
+  const setFile = (fileKey, file) => {
+    filesRef.current[fileKey] = file || undefined;
+  };
+  const updateAttachment = (idx, patch) =>
+    setForm(f => ({
+      ...f,
+      attachmentsMeta: f.attachmentsMeta.map((a, i) => (i === idx ? { ...a, ...patch } : a)),
+    }));
+  const removeAttachment = (idx) =>
+    setForm(f => ({
+      ...f,
+      attachmentsMeta: f.attachmentsMeta.filter((_, i) => i !== idx),
+    }));
+
+  /* ----------- submit ----------- */
+  const onSubmit = async (e) => {
+    e.preventDefault();
+
+    // minimal validations
+    if (!form.productId) return alert("Select a loan product");
+    if (!form.borrowerId) return alert("Select a borrower");
+    if (!form.principal || Number(form.principal) <= 0) return alert("Enter a principal amount");
+    if (!form.durationMonths) return alert("Enter loan duration (months)");
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        // core
+        productId: form.productId,
+        borrowerId: form.borrowerId,
+        loanNumber: form.loanNumber || null,
+
+        // terms
+        amount: form.principal,
+        currency: "TZS", // adjust if you support multi-currency
+        releaseDate: form.releaseDate || today(),
+        durationMonths: form.durationMonths,
+        collateralType: form.collateralType || null,
+        collateralAmount: form.collateralAmount || null,
+
+        // interest
+        interestMethod: form.interestMethod,
+        interestRate: form.interestRate || null,
+        interestAmount: form.interestAmount || null,
+
+        // fees + repayments + disbursement
+        fees: form.fees,
+        repaymentCycle: form.repaymentCycle,
+        numberOfRepayments: form.numberOfRepayments,
+        disbursementMethod: form.disbursementMethod,
+        disbursementBankId: form.disbursementBankId || null,
+        disbursementReference: form.disbursementReference || null,
+
+        // guarantors
+        guarantors: form.guarantors,
+
+        // spouse
+        spouse: {
+          name: form.spouseName || "",
+          occupation: form.spouseOccupation || "",
+          idNumber: form.spouseIdNumber || "",
+          consentNote: form.spouseConsentNote || "",
+          phone: form.spousePhone || "",
+        },
+
+        // UI label only (DB status stays pending to match enum)
+        status: "pending",
+        statusLabel: form.statusLabel,
+      };
+
+      const fd = new FormData();
+      fd.append("payload", JSON.stringify(payload));
+      // pack files
+      for (const meta of form.attachmentsMeta) {
+        const file = filesRef.current[meta.fileKey];
+        if (file) {
+          fd.append("files", file, file.name);
+          // add meta alongside (index is inferred by order)
+          fd.append("filesMeta", JSON.stringify({ type: meta.type, note: meta.note, name: file.name }));
+        }
+      }
+
+      const res = await api.post("/loans", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      alert("Loan application saved");
+      navigate(`/loans/${res.data?.id || ""}`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save loan application");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /* ----------- derived ----------- */
   const selectedProduct = useMemo(
-    () => products.find((p) => String(p.id) === String(form.productId)),
+    () => products.find(p => String(p.id) === String(form.productId)),
     [products, form.productId]
   );
 
-  const validateForm = () => {
-    if (!form.borrowerId) return alert("Select a borrower"), false;
-    const a = Number(form.amount || 0);
-    const t = Number(form.termMonths || 0);
-    if (a <= 0) return alert("Enter amount"), false;
-    if (t <= 0) return alert("Enter term months"), false;
-
-    if (selectedProduct) {
-      if (selectedProduct.minPrincipal && a < Number(selectedProduct.minPrincipal))
-        return alert(`Amount must be at least ${selectedProduct.minPrincipal}`), false;
-      if (selectedProduct.maxPrincipal && a > Number(selectedProduct.maxPrincipal))
-        return alert(`Amount must not exceed ${selectedProduct.maxPrincipal}`), false;
-      if (selectedProduct.minTermMonths && t < Number(selectedProduct.minTermMonths))
-        return alert(`Term must be at least ${selectedProduct.minTermMonths} months`), false;
-      if (selectedProduct.maxTermMonths && t > Number(selectedProduct.maxTermMonths))
-        return alert(`Term must not exceed ${selectedProduct.maxTermMonths} months`), false;
-    } else {
-      if (!form.interestRate) return alert("Enter interest rate or select a product"), false;
-    }
-    return true;
-  };
-
-  // --- actions ---
-  const submitApplication = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-    try {
-      await api.post("/loans", form); // backend sets status="pending"
-      resetForm();
-      fetchLoans();
-      alert("Application submitted.");
-    } catch {
-      alert("Failed to submit application");
-    }
-  };
-
-  const approve = async (id) => {
-    try {
-      await api.patch(`/loans/${id}/approve`);
-    } catch {
-      // fallback to generic status endpoint if specific route is missing
-      try { await api.patch(`/loans/${id}/status`, { status: "approved" }); }
-      catch { return alert("Failed to approve"); }
-    }
-    fetchLoans();
-  };
-
-  const reject = async (id) => {
-    try {
-      await api.patch(`/loans/${id}/reject`);
-    } catch {
-      try { await api.patch(`/loans/${id}/status`, { status: "rejected" }); }
-      catch { return alert("Failed to reject"); }
-    }
-    fetchLoans();
-  };
-
-  const resetForm = () => {
-    setForm({
-      productId: "",
-      amount: "",
-      interestRate: "",
-      termMonths: "",
-      interestMethod: "flat",
-      borrowerId: "",
-      branchId: "",
-      startDate: "",
-      endDate: "",
-    });
-  };
-
-  const filtered = (apps ?? []).filter((l) =>
-    (l?.Borrower?.name || "").toLowerCase().includes(search.toLowerCase())
-  );
-
   return (
-    <div className="p-4 space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Loan Applications</h2>
-        <Link className="text-blue-600 underline text-sm" to="/loans">Back to Loans</Link>
+    <div className="p-4 md:p-6 lg:p-8">
+      {/* header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Add Loan</h1>
+          <p className="text-sm text-gray-500">Configure the product, terms, interest, repayments, guarantors and attachments.</p>
+        </div>
+        <Link to="/loans" className="text-indigo-600 hover:underline text-sm">Back to Loans</Link>
       </div>
 
-      {/* Intake form */}
-      <form onSubmit={submitApplication} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded shadow">
-        {/* Product */}
-        <select
-          value={form.productId}
-          onChange={(e) => {
-            const pid = e.target.value;
-            const p = products.find((x) => String(x.id) === String(pid));
-            setForm((f) => ({
-              ...f,
-              productId: pid,
-              // only auto-fill if empty (so edits aren't overwritten)
-              interestMethod: f.interestMethod || p?.interestMethod || "flat",
-              interestRate: f.interestRate || p?.interestRate || p?.defaultInterestRate || "",
-            }));
-          }}
-          className="border px-4 py-2 rounded"
-        >
-          <option value="">Select Product (optional)</option>
-          {(products ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} {p.code ? `(${p.code})` : ""}
-            </option>
-          ))}
-        </select>
+      <form onSubmit={onSubmit} className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative">
+        {/* LEFT (2/3): product + borrower + terms + interest + fees + repayments + spouse */}
+        <div className="xl:col-span-2 space-y-6">
+          {/* product & borrower */}
+          <section className={card}>
+            <div className="flex items-center gap-2 mb-4">
+              <Wallet className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-semibold text-lg">Product & Borrower</h2>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-600">Loan Product</label>
+                <select
+                  className={clsInput}
+                  value={form.productId}
+                  onChange={(e) => setForm({ ...form, productId: e.target.value, interestMethod: e.target.value ? (selectedProduct?.interestMethod || form.interestMethod) : form.interestMethod })}
+                  required
+                >
+                  <option value="">Select product…</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}{p.code ? ` (${p.code})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Borrower</label>
+                <div className="flex gap-2">
+                  <select
+                    className={`${clsInput} flex-1`}
+                    value={form.borrowerId}
+                    onChange={(e) => setForm({ ...form, borrowerId: e.target.value })}
+                    required
+                  >
+                    <option value="">Select borrower…</option>
+                    {borrowers.map(b => (
+                      <option key={b.id} value={b.id}>{b.name} {b.phone ? `— ${b.phone}` : ""}</option>
+                    ))}
+                  </select>
+                  <Link target="_blank" to="/borrowers/add" className="px-3 py-2 rounded-lg border hover:bg-gray-50 inline-flex items-center gap-2">
+                    <PlusCircle className="h-4 w-4" /> Add
+                  </Link>
+                </div>
+              </div>
 
-        {/* Amount */}
-        <input
-          type="number"
-          placeholder="Amount"
-          value={form.amount}
-          min={selectedProduct?.minPrincipal ?? 0}
-          max={selectedProduct?.maxPrincipal ?? undefined}
-          onChange={(e) => setForm({ ...form, amount: e.target.value })}
-          required
-          className="border px-4 py-2 rounded"
-        />
+              <div>
+                <label className="text-xs text-gray-600">Loan # (auto)</label>
+                <input className={clsInput} value={loadingCounts ? "…" : (form.loanNumber || "—")} readOnly />
+              </div>
+            </div>
+          </section>
 
-        {/* Term */}
-        <input
-          type="number"
-          placeholder="Term (Months)"
-          value={form.termMonths}
-          min={selectedProduct?.minTermMonths ?? 1}
-          max={selectedProduct?.maxTermMonths ?? undefined}
-          onChange={(e) => setForm({ ...form, termMonths: e.target.value })}
-          required
-          className="border px-4 py-2 rounded"
-        />
+          {/* terms */}
+          <section className={card}>
+            <div className="flex items-center gap-2 mb-4">
+              <Building2 className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-semibold text-lg">Loan Terms</h2>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-600">Principal Amount</label>
+                <input type="number" className={clsInput} value={form.principal} onChange={(e)=>setForm({...form, principal:e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 flex items-center gap-1"><Calendar className="h-3.5 w-3.5"/> Loan Release Date</label>
+                <input type="date" className={clsInput} value={form.releaseDate} onChange={(e)=>setForm({...form, releaseDate:e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Collateral Type</label>
+                <select className={clsInput} value={form.collateralType} onChange={(e)=>setForm({...form, collateralType:e.target.value})}>
+                  <option value="">Select…</option>
+                  {COLLATERAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Collateral Amount</label>
+                <input type="number" className={clsInput} value={form.collateralAmount} onChange={(e)=>setForm({...form, collateralAmount:e.target.value})} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Loan Duration (months)</label>
+                <input type="number" className={clsInput} value={form.durationMonths} onChange={(e)=>setForm({...form, durationMonths:e.target.value})} required />
+              </div>
+            </div>
+          </section>
 
-        {/* Interest (only if no product) */}
-        {!form.productId && (
-          <>
-            <input
-              type="number"
-              placeholder="Interest Rate (%)"
-              value={form.interestRate}
-              onChange={(e) => setForm({ ...form, interestRate: e.target.value })}
-              required
-              className="border px-4 py-2 rounded"
-            />
-            <select
-              value={form.interestMethod}
-              onChange={(e) => setForm({ ...form, interestMethod: e.target.value })}
-              className="border px-4 py-2 rounded"
-            >
-              <option value="flat">Flat</option>
-              <option value="reducing">Reducing Balance</option>
-            </select>
-          </>
-        )}
+          {/* interest */}
+          <section className={card}>
+            <div className="flex items-center gap-2 mb-4">
+              <Landmark className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-semibold text-lg">Interest</h2>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <label className="text-xs text-gray-600">Interest Method</label>
+                <select className={clsInput} value={form.interestMethod} onChange={(e)=>setForm({...form, interestMethod:e.target.value})}>
+                  {INTEREST_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Interest Rate (%)</label>
+                <input type="number" step="0.01" className={clsInput} value={form.interestRate} onChange={(e)=>setForm({...form, interestRate:e.target.value})} placeholder={selectedProduct?.interestRate ? String(selectedProduct.interestRate) : "e.g. 3"} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Interest Amount (optional)</label>
+                <input type="number" className={clsInput} value={form.interestAmount} onChange={(e)=>setForm({...form, interestAmount:e.target.value})} />
+              </div>
+            </div>
+          </section>
 
-        {/* Borrower */}
-        <select
-          value={form.borrowerId}
-          onChange={(e) => setForm({ ...form, borrowerId: e.target.value })}
-          required
-          className="border px-4 py-2 rounded"
-        >
-          <option value="">Select Borrower</option>
-          {(borrowers ?? []).map((b) => (
-            <option key={b.id} value={b.id}>{b.name}</option>
-          ))}
-        </select>
+          {/* fees */}
+          <section className={card}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <FileUp className="h-5 w-5 text-indigo-600" />
+                <h2 className="font-semibold text-lg">Loan Fees</h2>
+              </div>
+              <button type="button" onClick={addFee} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50">
+                <PlusCircle className="h-4 w-4" /> Add Fee
+              </button>
+            </div>
+            {form.fees.length === 0 ? (
+              <p className="text-sm text-gray-500">No fees added.</p>
+            ) : (
+              <div className="space-y-3">
+                {form.fees.map((fee, i) => (
+                  <div key={i} className="grid md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-center">
+                    <input className={clsInput} placeholder="Fee name (e.g. Processing)" value={fee.name} onChange={(e)=>updateFee(i, {name: e.target.value})} />
+                    <input type="number" className={clsInput} placeholder="Amount" value={fee.amount} onChange={(e)=>updateFee(i, {amount: e.target.value})} />
+                    <select className={clsInput} value={fee.paid ? "paid" : "not_paid"} onChange={(e)=>updateFee(i, {paid: e.target.value === "paid"})}>
+                      <option value="paid">Paid</option>
+                      <option value="not_paid">Not paid</option>
+                    </select>
+                    <button type="button" onClick={()=>removeFee(i)} className="p-2 rounded hover:bg-gray-50">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-2">Unpaid fees will be included in the repayment schedule.</p>
+          </section>
 
-        {/* Branch */}
-        <select
-          value={form.branchId}
-          onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-          className="border px-4 py-2 rounded"
-        >
-          <option value="">Select Branch</option>
-          {(branches ?? []).map((br) => (
-            <option key={br.id} value={br.id}>{br.name}</option>
-          ))}
-        </select>
+          {/* repayments */}
+          <section className={card}>
+            <div className="flex items-center gap-2 mb-4">
+              <Calendar className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-semibold text-lg">Repayments</h2>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs text-gray-600">Repayment Cycle</label>
+                <select className={clsInput} value={form.repaymentCycle} onChange={(e)=>setForm({...form, repaymentCycle:e.target.value})}>
+                  {REPAYMENT_CYCLES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-600"># of Repayments</label>
+                <input type="number" className={clsInput} value={form.numberOfRepayments} onChange={(e)=>setForm({...form, numberOfRepayments:e.target.value})} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Loan Status (label)</label>
+                <select className={clsInput} value={form.statusLabel} onChange={(e)=>setForm({...form, statusLabel:e.target.value})}>
+                  {STATUS_LABELS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <p className="text-[11px] text-gray-500 mt-1">DB status stays “pending” on create to match your enum.</p>
+              </div>
+            </div>
+          </section>
 
-        {/* Dates */}
-        <input
-          type="date"
-          value={form.startDate}
-          onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-          required
-          className="border px-4 py-2 rounded"
-        />
-        <input
-          type="date"
-          value={form.endDate}
-          onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-          className="border px-4 py-2 rounded"
-        />
+          {/* spouse (optional) */}
+          <section className={card}>
+            <div className="flex items-center gap-2 mb-4">
+              <User className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-semibold text-lg">Spouse (optional)</h2>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <input className={clsInput} placeholder="Name" value={form.spouseName} onChange={(e)=>setForm({...form, spouseName:e.target.value})} />
+              <input className={clsInput} placeholder="Occupation" value={form.spouseOccupation} onChange={(e)=>setForm({...form, spouseOccupation:e.target.value})} />
+              <input className={clsInput} placeholder="ID Number" value={form.spouseIdNumber} onChange={(e)=>setForm({...form, spouseIdNumber:e.target.value})} />
+              <input className={clsInput} placeholder="Phone" value={form.spousePhone} onChange={(e)=>setForm({...form, spousePhone:e.target.value})} />
+              <div className="md:col-span-2">
+                <textarea className={`${clsInput} min-h-[84px]`} placeholder="Consent / declaration note" value={form.spouseConsentNote} onChange={(e)=>setForm({...form, spouseConsentNote:e.target.value})}/>
+              </div>
+            </div>
+          </section>
+        </div>
 
-        <div className="col-span-full flex gap-2">
-          <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
-            Submit Application
-          </button>
-          <button type="button" onClick={resetForm} className="px-4 py-2 rounded border">
-            Reset
-          </button>
+      {/* RIGHT (1/3): disbursement + guarantors + attachments + actions */}
+        <div className="space-y-6">
+          {/* disbursement */}
+          <section className={card}>
+            <div className="flex items-center gap-2 mb-4">
+              <Wallet className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-semibold text-lg">Disbursement</h2>
+            </div>
+            <div className="grid gap-4">
+              <div>
+                <label className="text-xs text-gray-600">Method</label>
+                <select className={clsInput} value={form.disbursementMethod} onChange={(e)=>setForm({...form, disbursementMethod:e.target.value})}>
+                  {DISBURSE_METHODS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                </select>
+              </div>
+              {form.disbursementMethod === "bank" && (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-600">Bank</label>
+                    <select className={clsInput} value={form.disbursementBankId} onChange={(e)=>setForm({...form, disbursementBankId:e.target.value})}>
+                      <option value="">Select bank…</option>
+                      {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Reference (optional)</label>
+                    <input className={clsInput} value={form.disbursementReference} onChange={(e)=>setForm({...form, disbursementReference:e.target.value})} placeholder="Txn ref / slip #" />
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* guarantors */}
+          <section className={card}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                <h2 className="font-semibold text-lg">Guarantors</h2>
+              </div>
+              <button type="button" onClick={addGuarantor} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50">
+                <PlusCircle className="h-4 w-4" /> Add Guarantor
+              </button>
+            </div>
+            {form.guarantors.length === 0 ? (
+              <p className="text-sm text-gray-500">No guarantors added.</p>
+            ) : (
+              <div className="space-y-4">
+                {form.guarantors.map((g, i) => (
+                  <div key={i} className="border rounded-xl p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-gray-800">Guarantor #{i+1}</div>
+                      <button type="button" onClick={()=>removeGuarantor(i)} className="p-1 rounded hover:bg-gray-50">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid gap-3">
+                      <div>
+                        <label className="text-xs text-gray-600">Source</label>
+                        <select className={clsInput} value={g.type} onChange={(e)=>updateGuarantor(i, { type: e.target.value })}>
+                          <option value="existing">Select from borrowers</option>
+                          <option value="manual">Enter manually</option>
+                        </select>
+                      </div>
+
+                      {g.type === "existing" ? (
+                        <div>
+                          <label className="text-xs text-gray-600">Borrower</label>
+                          <select className={clsInput} value={g.borrowerId || ""} onChange={(e)=>updateGuarantor(i, { borrowerId: e.target.value })}>
+                            <option value="">Select borrower…</option>
+                            {borrowers.map(b => <option key={b.id} value={b.id}>{b.name} {b.phone ? `— ${b.phone}` : ""}</option>)}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="grid md:grid-cols-2 gap-3">
+                          <input className={clsInput} placeholder="Full name" value={g.name} onChange={(e)=>updateGuarantor(i, {name: e.target.value})}/>
+                          <input className={clsInput} placeholder="Occupation" value={g.occupation} onChange={(e)=>updateGuarantor(i, {occupation: e.target.value})}/>
+                          <input className={clsInput} placeholder="Residence" value={g.residence} onChange={(e)=>updateGuarantor(i, {residence: e.target.value})}/>
+                          <input className={clsInput} placeholder="Contacts" value={g.contacts} onChange={(e)=>updateGuarantor(i, {contacts: e.target.value})}/>
+                          <input className={clsInput} placeholder="Verification (ID #, etc.)" value={g.verification} onChange={(e)=>updateGuarantor(i, {verification: e.target.value})}/>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* attachments */}
+          <section className={card}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Upload className="h-5 w-5 text-indigo-600" />
+                <h2 className="font-semibold text-lg">Attachments</h2>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  "Borrower: Loan form",
+                  "Borrower: Village introduction",
+                  "Borrower: Fee receipt",
+                  "Borrower: ID",
+                  "Borrower: Business licence",
+                  "Borrower: TIN",
+                  "Borrower: Employment contract",
+                  "Borrower: Salary slips",
+                  "Borrower: Employer letter",
+                  "Guarantor: ID",
+                  "Guarantor: Village introduction",
+                  "Other",
+                ].map((lbl) => (
+                  <button
+                    key={lbl}
+                    type="button"
+                    onClick={() => addAttachment(lbl)}
+                    className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                  >
+                    + {lbl.replace(/Borrower: |Guarantor: /g, "")}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {form.attachmentsMeta.length === 0 ? (
+              <p className="text-sm text-gray-500">No files attached.</p>
+            ) : (
+              <div className="space-y-3">
+                {form.attachmentsMeta.map((a, i) => (
+                  <div key={a.fileKey} className="grid md:grid-cols-[2fr_1fr_auto] gap-3 items-center">
+                    <div className="grid gap-2">
+                      <input
+                        className={clsInput}
+                        value={a.type}
+                        onChange={(e)=>updateAttachment(i, { type: e.target.value })}
+                      />
+                      <input
+                        className={clsInput}
+                        placeholder="Note (optional)"
+                        value={a.note}
+                        onChange={(e)=>updateAttachment(i, { note: e.target.value })}
+                      />
+                    </div>
+                    <input
+                      type="file"
+                      className={clsInput}
+                      onChange={(e)=>setFile(a.fileKey, e.target.files?.[0])}
+                    />
+                    <button type="button" onClick={()=>removeAttachment(i)} className="p-2 rounded hover:bg-gray-50">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-2">Accepted images/PDFs as supported by your backend.</p>
+          </section>
+        </div>
+
+        {/* sticky bottom actions */}
+        <div className="col-span-full">
+          <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-t">
+            <div className="max-w-screen-2xl mx-auto px-4 py-3 flex justify-end gap-3">
+              <Link to="/loans" className="px-4 py-2 rounded-xl border hover:bg-gray-50">Cancel</Link>
+              <button
+                disabled={submitting}
+                type="submit"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+              >
+                <Save className="h-4 w-4"/>
+                {submitting ? "Saving…" : "Save Loan"}
+              </button>
+            </div>
+          </div>
         </div>
       </form>
-
-      {/* Filters */}
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold">Pending Applications</h3>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search borrower..."
-          className="border px-3 py-2 rounded"
-        />
-      </div>
-
-      {/* List */}
-      <div className="overflow-x-auto">
-        {loading ? (
-          <p>Loading applications...</p>
-        ) : filtered.length === 0 ? (
-          <p>No pending applications.</p>
-        ) : (
-          <table className="min-w-full bg-white rounded shadow border text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="border px-2 py-1">Borrower</th>
-                <th className="border px-2 py-1">Amount</th>
-                <th className="border px-2 py-1">Rate</th>
-                <th className="border px-2 py-1">Term</th>
-                <th className="border px-2 py-1">Branch</th>
-                <th className="border px-2 py-1">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((l) => (
-                <tr key={l.id}>
-                  <td className="border px-2">{l?.Borrower?.name || "N/A"}</td>
-                  <td className="border px-2">{l?.amount}</td>
-                  <td className="border px-2">{l?.interestRate}</td>
-                  <td className="border px-2">{l?.termMonths}</td>
-                  <td className="border px-2">{l?.branch?.name || "—"}</td>
-                  <td className="border px-2 space-x-2">
-                    <button onClick={() => navigate(`/loans/${l.id}`)} className="text-indigo-600 hover:underline">
-                      View
-                    </button>
-                    <button onClick={() => approve(l.id)} className="text-green-600 hover:underline">
-                      Approve
-                    </button>
-                    <button onClick={() => reject(l.id)} className="text-red-600 hover:underline">
-                      Reject
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
     </div>
   );
 }
