@@ -1,10 +1,8 @@
-// src/pages/borrowers/AddBorrower.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import api from "../../api"; // axios instance
+import api from "../../api";
 import { Camera, Upload, Save, X, User, IdCard, Phone, Calendar, MapPin, Building2, UserPlus } from "lucide-react";
 
-// --- helpers ---
 const today = () => new Date().toISOString().slice(0, 10);
 const classInput =
   "w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
@@ -13,23 +11,20 @@ const sectionCard = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-4 md:p
 export default function AddBorrower() {
   const navigate = useNavigate();
 
-  // ---- options ----
   const genderOptions = [
     { value: "male", label: "Male" },
     { value: "female", label: "Female" },
     { value: "other", label: "Other" },
   ];
-
   const employmentOptions = [
     { value: "employed_private", label: "Employed (Private)" },
     { value: "employed_public", label: "Employed (Public)" },
-    { value: "self_employed", label: "Self‑Employed" },
+    { value: "self_employed", label: "Self-Employed" },
     { value: "business_owner", label: "Business Owner" },
     { value: "student", label: "Student" },
     { value: "pensioner", label: "Pensioner" },
     { value: "unemployed", label: "Unemployed" },
   ];
-
   const idTypeOptions = [
     { value: "national_id", label: "National ID" },
     { value: "passport", label: "Passport" },
@@ -37,13 +32,11 @@ export default function AddBorrower() {
     { value: "voter_id", label: "Voter ID" },
     { value: "other", label: "Other" },
   ];
-
   const loanTypeOptions = [
     { value: "individual", label: "Individual" },
     { value: "group", label: "Group" },
   ];
 
-  // ---- state ----
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -61,34 +54,26 @@ export default function AddBorrower() {
     occupation: "",
     gender: "",
     birthDate: "",
-
-    // address
     addressLine: "",
     city: "",
     district: "",
     ward: "",
     street: "",
     houseNumber: "",
-
     employmentStatus: "",
-
     idType: "",
     idNumber: "",
     idIssuedDate: "",
     idExpiryDate: "",
-
     loanOfficerId: "",
     branchId: "",
     loanType: "individual",
-    groupId: "", // optional when loanType === 'group'
-
+    groupId: "",
     nextKinName: "",
     nextKinPhone: "",
-
     regDate: today(),
   });
 
-  // ---- fetchers ----
   useEffect(() => {
     (async () => {
       try {
@@ -106,7 +91,6 @@ export default function AddBorrower() {
     })();
   }, []);
 
-  // ---- photo handling ----
   const onPickFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -115,14 +99,12 @@ export default function AddBorrower() {
     reader.onload = () => setPhotoPreview(reader.result);
     reader.readAsDataURL(f);
   };
-
   const removePhoto = () => {
     setPhotoFile(null);
     setPhotoPreview(null);
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  // ---- validation ----
   const validate = () => {
     if (!form.firstName.trim() || !form.lastName.trim()) return alert("First & last name are required"), false;
     if (!form.phone.trim()) return alert("Primary phone is required"), false;
@@ -131,16 +113,13 @@ export default function AddBorrower() {
     return true;
   };
 
-  // ---- submit ----
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
     setSubmitting(true);
     try {
       const fd = new FormData();
-
       const payload = {
-        // backend compatibility: some instances store combined name
         name: `${form.firstName} ${form.lastName}`.trim(),
         firstName: form.firstName,
         lastName: form.lastName,
@@ -150,32 +129,25 @@ export default function AddBorrower() {
         occupation: form.occupation,
         gender: form.gender,
         birthDate: form.birthDate || null,
-
         addressLine: form.addressLine,
         city: form.city,
         district: form.district,
         ward: form.ward,
         street: form.street,
         houseNumber: form.houseNumber,
-
         employmentStatus: form.employmentStatus,
-
         idType: form.idType,
         idNumber: form.idNumber,
         idIssuedDate: form.idIssuedDate || null,
         idExpiryDate: form.idExpiryDate || null,
-
         loanOfficerId: form.loanOfficerId || null,
         branchId: form.branchId,
         loanType: form.loanType,
         groupId: form.loanType === "group" ? form.groupId || null : null,
-
         nextKinName: form.nextKinName,
         nextKinPhone: form.nextKinPhone,
-
         regDate: form.regDate || today(),
       };
-
       Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ""));
       if (photoFile) fd.append("photo", photoFile);
 
@@ -183,7 +155,6 @@ export default function AddBorrower() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // success UX
       alert("Borrower saved successfully");
       navigate(`/borrowers/${res.data?.id || ""}`);
     } catch (e) {
@@ -194,7 +165,6 @@ export default function AddBorrower() {
     }
   };
 
-  // ---- UI ----
   return (
     <div className="p-4 md:p-6 lg:p-8">
       {/* header */}
@@ -206,16 +176,46 @@ export default function AddBorrower() {
         <Link to="/borrowers" className="text-indigo-600 hover:underline text-sm">Back to Borrowers</Link>
       </div>
 
-      <form onSubmit={onSubmit} className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* left column: identity + address */}
+      {/* NOTE: removed sticky cards; actions moved to sticky footer */}
+      <form onSubmit={onSubmit} className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative">
+        {/* LEFT: identity + address + ID + kin (2/3 width) */}
         <div className="xl:col-span-2 space-y-6">
+          {/* Profile photo now part of main flow so it scrolls with the form */}
+          <section className={sectionCard}>
+            <div className="flex items-center gap-2 mb-4">
+              <Camera className="h-5 w-5 text-indigo-600"/>
+              <h2 className="font-semibold text-lg">Profile Photo</h2>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="w-28 h-28 rounded-2xl bg-gray-100 overflow-hidden ring-1 ring-black/5 flex items-center justify-center">
+                {photoPreview ? (
+                  <img src={photoPreview} alt="Profile photo preview" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="h-10 w-10 text-gray-400" />
+                )}
+              </div>
+              <div className="space-x-2">
+                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 cursor-pointer">
+                  <Upload className="h-4 w-4"/>
+                  <span>Upload</span>
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
+                </label>
+                {photoFile && (
+                  <button type="button" onClick={removePhoto} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50">
+                    <X className="h-4 w-4"/>
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
           {/* identity */}
           <section className={sectionCard}>
             <div className="flex items-center gap-2 mb-4">
               <User className="h-5 w-5 text-indigo-600"/>
               <h2 className="font-semibold text-lg">Identity</h2>
             </div>
-
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-gray-600">First Name</label>
@@ -225,7 +225,6 @@ export default function AddBorrower() {
                 <label className="text-xs text-gray-600">Last Name</label>
                 <input className={classInput} value={form.lastName} onChange={(e)=>setForm({...form, lastName:e.target.value})} required />
               </div>
-
               <div>
                 <label className="text-xs text-gray-600 flex items-center gap-1"><Phone className="h-3.5 w-3.5"/> Phone</label>
                 <input className={classInput} value={form.phone} onChange={(e)=>setForm({...form, phone:e.target.value})} placeholder="e.g. +2557…" required />
@@ -234,7 +233,6 @@ export default function AddBorrower() {
                 <label className="text-xs text-gray-600">Secondary #</label>
                 <input className={classInput} value={form.secondaryPhone} onChange={(e)=>setForm({...form, secondaryPhone:e.target.value})} placeholder="Optional" />
               </div>
-
               <div>
                 <label className="text-xs text-gray-600">Email</label>
                 <input type="email" className={classInput} value={form.email} onChange={(e)=>setForm({...form, email:e.target.value})} placeholder="name@email.com" />
@@ -243,7 +241,6 @@ export default function AddBorrower() {
                 <label className="text-xs text-gray-600">Business / Occupation</label>
                 <input className={classInput} value={form.occupation} onChange={(e)=>setForm({...form, occupation:e.target.value})} placeholder="e.g. Retail shop" />
               </div>
-
               <div>
                 <label className="text-xs text-gray-600">Gender</label>
                 <select className={classInput} value={form.gender} onChange={(e)=>setForm({...form, gender:e.target.value})} required>
@@ -255,7 +252,6 @@ export default function AddBorrower() {
                 <label className="text-xs text-gray-600 flex items-center gap-1"><Calendar className="h-3.5 w-3.5"/> Birth date</label>
                 <input type="date" className={classInput} value={form.birthDate} onChange={(e)=>setForm({...form, birthDate:e.target.value})} />
               </div>
-
               <div className="md:col-span-2">
                 <label className="text-xs text-gray-600">Employment / Working Status</label>
                 <select className={classInput} value={form.employmentStatus} onChange={(e)=>setForm({...form, employmentStatus:e.target.value})}>
@@ -348,41 +344,9 @@ export default function AddBorrower() {
           </section>
         </div>
 
-        {/* right column: photo + assignment */}
+        {/* RIGHT: assignment (no sticky) */}
         <div className="space-y-6">
-          {/* photo */}
-          <section className={`${sectionCard} sticky top-4`}>
-            <div className="flex items-center gap-2 mb-4">
-              <Camera className="h-5 w-5 text-indigo-600"/>
-              <h2 className="font-semibold text-lg">Profile Photo</h2>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="w-28 h-28 rounded-2xl bg-gray-100 overflow-hidden ring-1 ring-black/5 flex items-center justify-center">
-                {photoPreview ? (
-                  // eslint-disable-next-line jsx-a11y/img-redundant-alt
-                  <img src={photoPreview} alt="Profile photo preview" className="w-full h-full object-cover" />
-                ) : (
-                  <User className="h-10 w-10 text-gray-400" />
-                )}
-              </div>
-              <div className="space-x-2">
-                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 cursor-pointer">
-                  <Upload className="h-4 w-4"/>
-                  <span>Upload</span>
-                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
-                </label>
-                {photoFile && (
-                  <button type="button" onClick={removePhoto} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50">
-                    <X className="h-4 w-4"/>
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* assignment & meta */}
-          <section className={`${sectionCard} sticky top-[11.5rem]`}>
+          <section className={sectionCard}>
             <div className="flex items-center gap-2 mb-4">
               <Building2 className="h-5 w-5 text-indigo-600"/>
               <h2 className="font-semibold text-lg">Assignment & Loan Type</h2>
@@ -420,14 +384,22 @@ export default function AddBorrower() {
               </div>
             </div>
           </section>
+        </div>
 
-          {/* actions */}
-          <div className="flex items-center gap-3">
-            <button disabled={submitting} type="submit" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm">
-              <Save className="h-4 w-4"/>
-              {submitting ? "Saving…" : "Save"}
-            </button>
-            <Link to="/borrowers" className="px-4 py-2 rounded-xl border hover:bg-gray-50">Cancel</Link>
+        {/* sticky bottom action bar (always accessible) */}
+        <div className="col-span-full">
+          <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-t">
+            <div className="max-w-screen-2xl mx-auto px-4 py-3 flex justify-end gap-3">
+              <Link to="/borrowers" className="px-4 py-2 rounded-xl border hover:bg-gray-50">Cancel</Link>
+              <button
+                disabled={submitting}
+                type="submit"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+              >
+                <Save className="h-4 w-4"/>
+                {submitting ? "Saving…" : "Save"}
+              </button>
+            </div>
           </div>
         </div>
       </form>
