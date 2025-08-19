@@ -1,13 +1,23 @@
 // src/pages/loans/LoanApplications.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../../api"; // ⬅️ if this file is at src/pages/LoanApplications.jsx, change to: ../api
+import api from "../../api";
+
+// tiny helper: always return an array from various API shapes
+const toArray = (x) =>
+  Array.isArray(x)            ? x :
+  Array.isArray(x?.rows)      ? x.rows :
+  Array.isArray(x?.items)     ? x.items :
+  Array.isArray(x?.data)      ? x.data :
+  Array.isArray(x?.results)   ? x.results :
+  Array.isArray(x?.borrowers) ? x.borrowers :
+  [];
 
 export default function LoanApplications() {
   const navigate = useNavigate();
 
-  const [apps, setApps] = useState([]);
-  const [borrowers, setBorrowers] = useState([]);
+  const [apps, setApps] = useState([]);         // list of loans (pending)
+  const [borrowers, setBorrowers] = useState([]); // <- keep as array
   const [branches, setBranches] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -29,26 +39,41 @@ export default function LoanApplications() {
   const fetchLoans = async () => {
     setLoading(true);
     try {
-      // fetch all and filter pending (works with current backend)
       const res = await api.get("/loans");
-      setApps((res.data || []).filter((l) => l.status === "pending"));
+      const list = toArray(res.data);
+      setApps(list.filter((l) => l?.status === "pending"));
     } catch {
       alert("Failed to load applications");
     } finally {
       setLoading(false);
     }
   };
+
   const fetchBorrowers = async () => {
-    try { const r = await api.get("/borrowers"); setBorrowers(r.data || []); } catch {}
+    try {
+      const r = await api.get("/borrowers");
+      setBorrowers(toArray(r.data));
+    } catch {
+      setBorrowers([]); // stay an array even on error
+    }
   };
+
   const fetchBranches = async () => {
-    try { const r = await api.get("/branches"); setBranches(r.data || []); } catch {}
+    try {
+      const r = await api.get("/branches");
+      setBranches(toArray(r.data));
+    } catch {
+      setBranches([]);
+    }
   };
+
   const fetchProducts = async () => {
     try {
       const r = await api.get("/loan-products");
-      setProducts(Array.isArray(r.data) ? r.data : r.data.items || []);
-    } catch {}
+      setProducts(toArray(r.data));
+    } catch {
+      setProducts([]);
+    }
   };
 
   useEffect(() => {
@@ -91,8 +116,7 @@ export default function LoanApplications() {
     e.preventDefault();
     if (!validateForm()) return;
     try {
-      // backend sets status="pending" by default
-      await api.post("/loans", form);
+      await api.post("/loans", form); // backend sets status="pending"
       resetForm();
       fetchLoans();
       alert("Application submitted.");
@@ -102,12 +126,24 @@ export default function LoanApplications() {
   };
 
   const approve = async (id) => {
-    try { await api.patch(`/loans/${id}/approve`); fetchLoans(); }
-    catch { alert("Failed to approve"); }
+    try {
+      await api.patch(`/loans/${id}/approve`);
+    } catch {
+      // fallback to generic status endpoint if specific route is missing
+      try { await api.patch(`/loans/${id}/status`, { status: "approved" }); }
+      catch { return alert("Failed to approve"); }
+    }
+    fetchLoans();
   };
+
   const reject = async (id) => {
-    try { await api.patch(`/loans/${id}/reject`); fetchLoans(); }
-    catch { alert("Failed to reject"); }
+    try {
+      await api.patch(`/loans/${id}/reject`);
+    } catch {
+      try { await api.patch(`/loans/${id}/status`, { status: "rejected" }); }
+      catch { return alert("Failed to reject"); }
+    }
+    fetchLoans();
   };
 
   const resetForm = () => {
@@ -124,8 +160,8 @@ export default function LoanApplications() {
     });
   };
 
-  const filtered = apps.filter((l) =>
-    (l.Borrower?.name || "").toLowerCase().includes(search.toLowerCase())
+  const filtered = (apps ?? []).filter((l) =>
+    (l?.Borrower?.name || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -154,7 +190,7 @@ export default function LoanApplications() {
           className="border px-4 py-2 rounded"
         >
           <option value="">Select Product (optional)</option>
-          {products.map((p) => (
+          {(products ?? []).map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} {p.code ? `(${p.code})` : ""}
             </option>
@@ -215,7 +251,7 @@ export default function LoanApplications() {
           className="border px-4 py-2 rounded"
         >
           <option value="">Select Borrower</option>
-          {borrowers.map((b) => (
+          {(borrowers ?? []).map((b) => (
             <option key={b.id} value={b.id}>{b.name}</option>
           ))}
         </select>
@@ -227,7 +263,7 @@ export default function LoanApplications() {
           className="border px-4 py-2 rounded"
         >
           <option value="">Select Branch</option>
-          {branches.map((br) => (
+          {(branches ?? []).map((br) => (
             <option key={br.id} value={br.id}>{br.name}</option>
           ))}
         </select>
@@ -289,11 +325,11 @@ export default function LoanApplications() {
             <tbody>
               {filtered.map((l) => (
                 <tr key={l.id}>
-                  <td className="border px-2">{l.Borrower?.name || "N/A"}</td>
-                  <td className="border px-2">{l.amount}</td>
-                  <td className="border px-2">{l.interestRate}</td>
-                  <td className="border px-2">{l.termMonths}</td>
-                  <td className="border px-2">{l.branch?.name || "—"}</td>
+                  <td className="border px-2">{l?.Borrower?.name || "N/A"}</td>
+                  <td className="border px-2">{l?.amount}</td>
+                  <td className="border px-2">{l?.interestRate}</td>
+                  <td className="border px-2">{l?.termMonths}</td>
+                  <td className="border px-2">{l?.branch?.name || "—"}</td>
                   <td className="border px-2 space-x-2">
                     <button onClick={() => navigate(`/loans/${l.id}`)} className="text-indigo-600 hover:underline">
                       View

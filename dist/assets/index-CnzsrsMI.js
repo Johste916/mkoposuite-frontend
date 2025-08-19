@@ -1,0 +1,1 @@
+import{a}from"./index-Dn3244iQ.js";const o=a.create({baseURL:"http://localhost:10000/api",withCredentials:!0});o.interceptors.request.use(e=>{const t=localStorage.getItem("token")||sessionStorage.getItem("token");return t&&(e.headers.Authorization=`Bearer ${t}`),e});export{o as a};
