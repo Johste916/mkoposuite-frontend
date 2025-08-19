@@ -1,18 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  PlusCircle, Upload, Search, Filter, X, Users, Phone, Building2, ChevronLeft, ChevronRight, FileUp, IdCard, Loader2
+  PlusCircle, Upload, Search, Filter, X, Users, Phone, Building2,
+  ChevronLeft, ChevronRight, FileUp, IdCard
 } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../api";
-
-// Borrowers Management Module
-// - List + filters + pagination
-// - Add Borrower modal
-// - Borrower details drawer with tabs (Overview, Loans, Savings, Documents)
-// NOTES: No dummy data. All calls expect real endpoints; empty states will show until backend is ready.
 
 const PAGE_SIZE = 10;
 
 const Borrowers = () => {
+  const navigate = useNavigate();
+
   // Data
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -35,8 +33,6 @@ const Borrowers = () => {
 
   // UI
   const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
 
   const [selected, setSelected] = useState(null); // borrower id
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -62,18 +58,18 @@ const Borrowers = () => {
   useEffect(() => {
     const ac = new AbortController();
     Promise.all([
-      api.get("/branches", { signal: ac.signal }),
-      api.get("/users", { params: { role: "loan_officer" }, signal: ac.signal }),
+      api.get("/branches", { signal: ac.signal }).catch(() => ({ data: [] })),
+      api.get("/users", { params: { role: "loan_officer" }, signal: ac.signal }).catch(() => ({ data: [] })),
     ])
       .then(([b, u]) => {
-        setBranches(b.data || []);
-        setOfficers(u.data || []);
+        setBranches(Array.isArray(b.data) ? b.data : []);
+        setOfficers(Array.isArray(u.data) ? u.data : []);
       })
       .catch(() => pushToast("Failed to load filters", "error"));
     return () => ac.abort();
   }, []);
 
-  // Fetch list
+  // Fetch list (resilient to API shape)
   const fetchList = useCallback(
     async (signal) => {
       setLoading(true);
@@ -91,10 +87,23 @@ const Borrowers = () => {
             dir,
           },
         });
-        setRows(res.data?.items || []);
-        setTotal(res.data?.total || 0);
+
+        let list = [];
+        let count = 0;
+        if (Array.isArray(res.data)) {
+          list = res.data;
+          count = res.data.length;
+        } else {
+          list = res.data?.items || res.data?.rows || [];
+          count = Number(res.data?.total ?? list.length ?? 0);
+        }
+
+        setRows(list);
+        setTotal(count);
       } catch (e) {
         pushToast("Failed to load borrowers", "error");
+        setRows([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
@@ -107,42 +116,6 @@ const Borrowers = () => {
     fetchList(ac.signal);
     return () => ac.abort();
   }, [fetchList]);
-
-  // Add Borrower
-  const [addForm, setAddForm] = useState({
-    name: "",
-    phone: "",
-    nationalId: "",
-    branchId: "",
-    officerId: "",
-  });
-
-  const canSubmitAdd = useMemo(() => {
-    return addForm.name.trim() && addForm.phone.trim();
-  }, [addForm]);
-
-  const submitAdd = async () => {
-    if (!canSubmitAdd) return;
-    setAdding(true);
-    try {
-      await api.post("/borrowers", {
-        name: addForm.name.trim(),
-        phone: addForm.phone.trim(),
-        nationalId: addForm.nationalId.trim() || null,
-        branchId: addForm.branchId || null,
-        officerId: addForm.officerId || null,
-      });
-      setShowAddModal(false);
-      setAddForm({ name: "", phone: "", nationalId: "", branchId: "", officerId: "" });
-      const ac = new AbortController();
-      await fetchList(ac.signal);
-      pushToast("Borrower added", "success");
-    } catch (e) {
-      pushToast("Failed to add borrower", "error");
-    } finally {
-      setAdding(false);
-    }
-  };
 
   // Drawer loads
   const openDrawer = (borrowerId) => {
@@ -199,6 +172,13 @@ const Borrowers = () => {
   const pageFrom = useMemo(() => (total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1), [page, total]);
   const pageTo   = useMemo(() => Math.min(page * PAGE_SIZE, total), [page, total]);
 
+  const displayName = (b) =>
+    b.name || `${b.firstName || ""} ${b.lastName || ""}`.trim() || "—";
+  const displayBranch = (b) =>
+    b.branchName || b.Branch?.name || b.branch?.name || "—";
+  const displayOfficer = (b) =>
+    b.officerName || b.officer?.name || b.loanOfficer?.name || "—";
+
   return (
     <div className="p-6">
       {/* Toasts */}
@@ -218,8 +198,9 @@ const Borrowers = () => {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800">👥 Borrowers</h1>
         <div className="flex gap-2">
+          {/* Directly navigate to the Add Borrower page */}
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => navigate("/borrowers/add")}
             className="inline-flex items-center gap-2 px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
           >
             <PlusCircle className="w-4 h-4" /> Add Borrower
@@ -292,10 +273,10 @@ const Borrowers = () => {
               ) : (
                 rows.map(b => (
                   <tr key={b.id} className="border-t hover:bg-gray-50">
-                    <td className="px-4 py-2">{b.name}</td>
-                    <td className="px-4 py-2">{b.phone}</td>
-                    <td className="px-4 py-2">{b.branchName || "-"}</td>
-                    <td className="px-4 py-2">{b.officerName || "-"}</td>
+                    <td className="px-4 py-2">{displayName(b)}</td>
+                    <td className="px-4 py-2">{b.phone || "—"}</td>
+                    <td className="px-4 py-2">{displayBranch(b)}</td>
+                    <td className="px-4 py-2">{displayOfficer(b)}</td>
                     <td className="px-4 py-2">{fmtMoney(b.outstanding)}</td>
                     <td className="px-4 py-2">
                       <span className={`text-xs px-2 py-0.5 rounded border ${
@@ -308,7 +289,15 @@ const Borrowers = () => {
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <button onClick={() => openDrawer(b.id)} className="underline text-indigo-600">View</button>
+                      <div className="flex gap-3 justify-end">
+                        <button onClick={() => openDrawer(b.id)} className="underline text-indigo-600">View</button>
+                        <Link
+                          to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
+                          className="underline text-blue-600"
+                        >
+                          New Loan
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -326,13 +315,13 @@ const Borrowers = () => {
               <div key={b.id} className="p-4 flex items-start justify-between">
                 <div>
                   <div className="font-medium text-gray-900 flex items-center gap-2">
-                    <Users className="w-4 h-4" /> {b.name}
+                    <Users className="w-4 h-4" /> {displayName(b)}
                   </div>
                   <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
-                    <Phone className="w-3 h-3" /> {b.phone}
+                    <Phone className="w-3 h-3" /> {b.phone || "—"}
                   </div>
                   <div className="text-xs text-gray-600 flex items-center gap-1">
-                    <Building2 className="w-3 h-3" /> {b.branchName || "-"}
+                    <Building2 className="w-3 h-3" /> {displayBranch(b)}
                   </div>
                   <div className="text-xs text-gray-600">Outstanding: {fmtMoney(b.outstanding)}</div>
                   <div className="mt-1">
@@ -346,8 +335,14 @@ const Borrowers = () => {
                     </span>
                   </div>
                 </div>
-                <div>
+                <div className="flex flex-col items-end gap-2">
                   <button onClick={() => openDrawer(b.id)} className="underline text-indigo-600">View</button>
+                  <Link
+                    to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
+                    className="underline text-blue-600 text-sm"
+                  >
+                    New Loan
+                  </Link>
                 </div>
               </div>
             ))}
@@ -377,76 +372,6 @@ const Borrowers = () => {
           </div>
         </div>
       </div>
-
-      {/* Add Borrower Modal */}
-      {showAddModal && (
-        <Modal onClose={() => setShowAddModal(false)} title="Add Borrower">
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm text-gray-600">Full Name</label>
-              <input
-                className="w-full border rounded px-3 py-2"
-                value={addForm.name}
-                onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="Jane Doe"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Phone Number</label>
-              <input
-                className="w-full border rounded px-3 py-2"
-                value={addForm.phone}
-                onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
-                placeholder="+2557…"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">National ID (optional)</label>
-              <input
-                className="w-full border rounded px-3 py-2"
-                value={addForm.nationalId}
-                onChange={e => setAddForm(f => ({ ...f, nationalId: e.target.value }))}
-                placeholder="NIDA / ID"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm text-gray-600">Branch (optional)</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={addForm.branchId}
-                  onChange={e => setAddForm(f => ({ ...f, branchId: e.target.value }))}
-                >
-                  <option value="">—</option>
-                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Loan Officer (optional)</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={addForm.officerId}
-                  onChange={e => setAddForm(f => ({ ...f, officerId: e.target.value }))}
-                >
-                  <option value="">—</option>
-                  {officers.map(o => <option key={o.id} value={o.id}>{o.name || o.email}</option>)}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 flex justify-end gap-2">
-            <button className="px-3 py-2 border rounded" onClick={() => setShowAddModal(false)}>Cancel</button>
-            <button
-              className="px-3 py-2 rounded text-white bg-indigo-600 disabled:opacity-50 inline-flex items-center gap-2"
-              onClick={submitAdd}
-              disabled={!canSubmitAdd || adding}
-            >
-              {adding && <Loader2 className="w-4 h-4 animate-spin" />} Save
-            </button>
-          </div>
-        </Modal>
-      )}
 
       {/* Drawer: Borrower Details */}
       {drawerOpen && (
@@ -504,47 +429,46 @@ const Th = ({ label, sortKey, sort, dir, onSort }) => {
   );
 };
 
-const Modal = ({ title, onClose, children }) => {
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-lg shadow-xl w-[95%] max-w-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-800">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X className="w-4 h-4" /></button>
-        </div>
-        {children}
+const Modal = ({ title, onClose, children }) => (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+    <div className="relative bg-white rounded-lg shadow-xl w-[95%] max-w-xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-gray-800">{title}</h3>
+        <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X className="w-4 h-4" /></button>
       </div>
+      {children}
     </div>
-  );
-};
+  </div>
+);
 
-const Drawer = ({ title, onClose, children }) => {
-  return (
-    <div className="fixed inset-0 z-[60]">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="absolute right-0 top-0 h-full w-full sm:w-[540px] bg-white shadow-xl p-4 overflow-y-auto">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-800">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X className="w-5 h-5" /></button>
-        </div>
-        {children}
+const Drawer = ({ title, onClose, children }) => (
+  <div className="fixed inset-0 z-[60]">
+    <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+    <div className="absolute right-0 top-0 h-full w-full sm:w-[540px] bg-white shadow-xl p-4 overflow-y-auto">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-gray-800">{title}</h3>
+        <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X className="w-5 h-5" /></button>
       </div>
+      {children}
     </div>
-  );
-};
+  </div>
+);
 
 /* Tabs */
 
 const OverviewTab = ({ data }) => {
   if (!data) return <p className="text-gray-500 text-sm">No overview data.</p>;
+  const name = data.name || `${data.firstName || ""} ${data.lastName || ""}`.trim() || "—";
+  const branch = data.branchName || data.Branch?.name || data.branch?.name || "—";
+  const officer = data.officerName || data.officer?.name || data.loanOfficer?.name || "—";
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <InfoCard label="Full Name" value={data.name || "—"} />
+        <InfoCard label="Full Name" value={name} />
         <InfoCard label="Phone" value={data.phone || "—"} />
-        <InfoCard label="Branch" value={data.branchName || "—"} />
-        <InfoCard label="Loan Officer" value={data.officerName || "—"} />
+        <InfoCard label="Branch" value={branch} />
+        <InfoCard label="Loan Officer" value={officer} />
         <InfoCard label="Status" value={data.status || "—"} />
         <InfoCard label="National ID" value={data.nationalId || "—"} />
       </div>
