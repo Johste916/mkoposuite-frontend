@@ -34,9 +34,10 @@ const NAV = () => [
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
       { label: "View All Loans", to: "/loans" },
       { label: "Add Loan", to: "/loans/applications" },
+      { label: "Review Queue", to: "/loans/review-queue" },        // NEW
       { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
       { label: "Loan Products", to: "/loans/products" },
-      { label: "Loan Reports", to: "/loans/reports" },
+      // REMOVED: Loan Reports (reports live under the Reports module)
       { label: "Due Loans", to: "/loans/due" },
       { label: "Missed Repayments", to: "/loans/missed" },
       { label: "Loans in Arrears", to: "/loans/arrears" },
@@ -46,9 +47,7 @@ const NAV = () => [
       { label: "1 Month Late", to: "/loans/1-month-late" },
       { label: "3 Months Late", to: "/loans/3-months-late" },
       { label: "Loan Calculator", to: "/loans/calculator" },
-      { label: "Guarantors", to: "/loans/guarantors" },
-      { label: "Loan Comments", to: "/loans/comments" },
-      { label: "Approve Loans", to: "/loans/approve" },
+      // REMOVED: Guarantors / Loan Comments / Approve Loans (covered by Review Queue & Details)
     ]
   },
 

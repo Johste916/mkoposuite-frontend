@@ -39,8 +39,10 @@ const LoanStatusList = lazy(() => import("./pages/loans/LoanStatusList"));
 const DisbursementQueue = lazy(() => import("./pages/loans/DisbursementQueue"));
 const LoanProducts = lazy(() => import("./pages/loans/LoanProducts"));
 const LoanSchedulePage = lazy(() => import("./pages/loans/LoanSchedulePage"));
-const LoanReports = lazy(() => import("./pages/loans/LoanReports"));
-const DisburseLoan = lazy(() => import("./pages/loans/DisburseLoan")); // <-- NEW
+// REMOVED: LoanReports (moved under Reports module)
+const DisburseLoan = lazy(() => import("./pages/loans/DisburseLoan"));
+// NEW: Review Queue
+const LoanReview = lazy(() => import("./pages/loans/LoanReview"));
 
 // Repayments
 const Repayments = lazy(() => import("./pages/Repayments"));
@@ -158,12 +160,21 @@ function App() {
             <Route path="loans/applications" element={<LoanApplications />} />
             <Route path="loans/add" element={<Navigate to="/loans/applications" replace />} />
             <Route path="loans/status/:status" element={<LoanStatusList />} />
+            {/* NEW: Review Queue (role-gated) */}
+            <Route
+              path="loans/review-queue"
+              element={
+                <RoleProtectedRoute allow={["branch_manager", "compliance", "admin", "director"]}>
+                  <LoanReview />
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
             <Route path="loans/products" element={<LoanProducts />} />
             <Route path="loans/schedule" element={<LoanSchedulePage />} />
-            <Route path="loans/reports" element={<LoanReports />} />
+            {/* REMOVED: /loans/reports */}
             <Route path="loans/:id" element={<LoanDetails />} />
-            <Route path="loans/:id/disburse" element={<DisburseLoan />} /> {/* NEW */}
+            <Route path="loans/:id/disburse" element={<DisburseLoan />} />
 
             {/* Loans aliases */}
             <Route path="loans/due" element={<Navigate to="/loans/status/due" replace />} />
@@ -175,9 +186,7 @@ function App() {
             <Route path="loans/1-month-late" element={<Navigate to="/loans/status/1-month-late" replace />} />
             <Route path="loans/3-months-late" element={<Navigate to="/loans/status/3-months-late" replace />} />
             <Route path="loans/calculator" element={<LoanSchedulePage />} />
-            <Route path="loans/guarantors" element={<Stub title="Guarantors" />} />
-            <Route path="loans/comments" element={<Stub title="Loan Comments" />} />
-            <Route path="loans/approve" element={<Stub title="Approve Loans" />} />
+            {/* REMOVED: /loans/guarantors, /loans/comments, /loans/approve */}
 
             {/* Repayments */}
             <Route path="repayments" element={<Repayments />} />
