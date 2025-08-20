@@ -1,6 +1,6 @@
 // src/pages/loans/LoanStatusList.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import api from "../../api";
 
 /* ---------- helpers ---------- */
@@ -32,6 +32,8 @@ const TITLE_MAP = {
 
 export default function LoanStatusList() {
   const { status } = useParams(); // core status or a derived scope
+  const navigate = useNavigate();
+
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -48,7 +50,12 @@ export default function LoanStatusList() {
   const [minAmt, setMinAmt] = useState("");
   const [maxAmt, setMaxAmt] = useState("");
 
+  // row menu + assign modal state
+  const [menuOpenRow, setMenuOpenRow] = useState(null);
+  const [assignModal, setAssignModal] = useState({ open: false, loan: null, officerId: "" });
+
   const title = TITLE_MAP[status] || "Loans";
+  const showActions = ["disbursed", "active"].includes(String(status || "").toLowerCase());
 
   /* ---------- fetch lists for filters (products & loan officers) ---------- */
   useEffect(() => {
@@ -61,8 +68,9 @@ export default function LoanStatusList() {
         setProducts([]);
       }
       try {
-        const r2 = await api.get("/users", { params: { role: "loan_officer" } });
-        setOfficers(Array.isArray(r2.data) ? r2.data : r2.data?.items || []);
+        const r2 = await api.get("/users", { params: { role: "loan_officer", pageSize: 500 } });
+        const data = Array.isArray(r2.data) ? r2.data : r2.data?.items || [];
+        setOfficers(data);
       } catch {
         setOfficers([]);
       }
@@ -111,6 +119,7 @@ export default function LoanStatusList() {
 
   useEffect(() => {
     load();
+    setMenuOpenRow(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
@@ -122,8 +131,7 @@ export default function LoanStatusList() {
     return rows.filter((l) => {
       // date range (releaseDate/startDate/disbursementDate/createdAt)
       if (sd || ed) {
-        const when =
-          l.releaseDate || l.startDate || l.disbursementDate || l.createdAt || null;
+        const when = l.releaseDate || l.startDate || l.disbursementDate || l.createdAt || null;
         const d = when ? new Date(when) : null;
         if (sd && (!d || d < sd)) return false;
         if (ed && (!d || d > ed)) return false;
@@ -141,20 +149,19 @@ export default function LoanStatusList() {
       if (needle) {
         const borrower = l.Borrower || l.borrower || {};
         const product = l.Product || l.product || {};
-        const hay =
-          [
-            borrower.name,
-            borrower.phone,
-            l.borrowerName,
-            l.borrowerPhone,
-            product.name,
-            l.productName,
-            l.loanNumber,
-            l.id,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
+        const hay = [
+          borrower.name,
+          borrower.phone,
+          l.borrowerName,
+          l.borrowerPhone,
+          product.name,
+          l.productName,
+          l.loanNumber,
+          l.id,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
@@ -173,8 +180,7 @@ export default function LoanStatusList() {
       const oi = Number(l.outstandingInterest || 0);
       const of = Number(l.outstandingFees || 0);
       const ope = Number(l.outstandingPenalty || 0);
-      const tot =
-        l.outstanding != null ? Number(l.outstanding) : op + oi + of + ope;
+      const tot = l.outstanding != null ? Number(l.outstanding) : op + oi + of + ope;
       p += op;
       i += oi;
       f += of;
@@ -191,8 +197,7 @@ export default function LoanStatusList() {
       const product = l.Product || l.product || {};
       const officer = l.officer || {};
       const currency = l.currency || "TZS";
-      const date =
-        l.releaseDate || l.startDate || l.disbursementDate || l.createdAt || null;
+      const date = l.releaseDate || l.startDate || l.disbursementDate || l.createdAt || null;
 
       const op = l.outstandingPrincipal ?? null;
       const oi = l.outstandingInterest ?? null;
@@ -234,23 +239,25 @@ export default function LoanStatusList() {
 
   const exportCSV = () => {
     const rows = buildExportRows();
-    const headers = Object.keys(rows[0] || {
-      Date: "",
-      "Borrower Name": "",
-      "Phone Number": "",
-      "Loan Product": "",
-      "Principal Amount": "",
-      "Interest Amount": "",
-      "Outstanding Principal": "",
-      "Outstanding Interest": "",
-      "Outstanding Fees": "",
-      "Outstanding Penalty": "",
-      "Total Outstanding": "",
-      "Interest Rate/Year (%)": "",
-      "Loan Duration (Months)": "",
-      "Loan Officer": "",
-      Status: "",
-    });
+    const headers = Object.keys(
+      rows[0] || {
+        Date: "",
+        "Borrower Name": "",
+        "Phone Number": "",
+        "Loan Product": "",
+        "Principal Amount": "",
+        "Interest Amount": "",
+        "Outstanding Principal": "",
+        "Outstanding Interest": "",
+        "Outstanding Fees": "",
+        "Outstanding Penalty": "",
+        "Total Outstanding": "",
+        "Interest Rate/Year (%)": "",
+        "Loan Duration (Months)": "",
+        "Loan Officer": "",
+        Status: "",
+      }
+    );
     const csv = [
       headers.join(","),
       ...rows.map((r) =>
@@ -277,22 +284,22 @@ export default function LoanStatusList() {
     const rows = buildExportRows();
     const headers = Object.keys(rows[0] || {});
     const html =
-      `<table border="1"><thead><tr>${headers
-        .map((h) => `<th>${h}</th>`)
-        .join("")}</tr></thead><tbody>` +
+      `<table border="1"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
       rows
         .map(
           (r) =>
             `<tr>${headers
-              .map((h) => `<td>${String(r[h] ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</td>`)
+              .map((h) =>
+                `<td>${String(r[h] ?? "")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")}</td>`
+              )
               .join("")}</tr>`
         )
         .join("") +
       `</tbody></table>`;
 
-    const blob = new Blob([`\ufeff${html}`], {
-      type: "application/vnd.ms-excel",
-    });
+    const blob = new Blob([`\ufeff${html}`], { type: "application/vnd.ms-excel" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -310,7 +317,7 @@ export default function LoanStatusList() {
         body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; padding: 16px; }
         h1 { font-size: 16px; margin: 0 0 12px 0; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+        th, td { border: 1px solid #ccc; padding: 6px; text-align: left; white-space: nowrap; }
         thead { background: #f3f4f6; }
       </style>
     `;
@@ -322,7 +329,11 @@ export default function LoanStatusList() {
         .map(
           (r) =>
             `<tr>${headers
-              .map((h) => `<td>${String(r[h] ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</td>`)
+              .map((h) =>
+                `<td>${String(r[h] ?? "")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")}</td>`
+              )
               .join("")}</tr>`
         )
         .join("") +
@@ -330,14 +341,92 @@ export default function LoanStatusList() {
 
     const win = window.open("", "_blank");
     if (win) {
-      win.document.write(`<html><head><title>${TITLE_MAP[status] || "Loans"}</title>${style}</head><body>${html}</body></html>`);
+      win.document.write(
+        `<html><head><title>${TITLE_MAP[status] || "Loans"}</title>${style}</head><body>${html}</body></html>`
+      );
       win.document.close();
       win.focus();
       win.print(); // user can choose "Save as PDF"
     }
   };
 
+  /* ---------- row actions ---------- */
+  const viewLoan = (id) => navigate(`/loans/${id}`);
+  const editLoan = (id) => navigate(`/loans/${id}?edit=1`);
+  const redisburse = (id) => navigate(`/loans/${id}/disburse`);
+  const recordRepayment = (id) => navigate(`/repayments/new?loanId=${id}`);
+  const reschedule = (id) => navigate(`/loans/schedule?loanId=${id}`);
+
+  const downloadSchedule = async (row) => {
+    try {
+      const res = await api.get(`/loans/${row.id}/schedule`);
+      const data = Array.isArray(res.data) ? res.data : [];
+      const columns = [
+        { label: "#", value: (_r, i) => i + 1 },
+        { label: "Due Date", value: (r) => (r.dueDate ? new Date(r.dueDate).toISOString().slice(0, 10) : "") },
+        { label: "Principal", value: (r) => r.principal ?? 0 },
+        { label: "Interest", value: (r) => r.interest ?? 0 },
+        { label: "Penalty", value: (r) => r.penalty ?? 0 },
+        { label: "Total", value: (r) => r.total ?? ((r.principal || 0) + (r.interest || 0) + (r.penalty || 0)) },
+        { label: "Balance", value: (r) => r.balance ?? "" },
+      ];
+      const head = columns.map((c) => `"${c.label.replace(/"/g, '""')}"`).join(",");
+      const body = data
+        .map((row, i) =>
+          columns
+            .map((c) => `"${String(c.value(row, i) ?? "").replace(/"/g, '""')}"`)
+            .join(",")
+        )
+        .join("\n");
+      const csv = `${head}\n${body}`;
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `loan_${row.id}_schedule.csv`;
+      a.click();
+    } catch (e) {
+      console.error(e);
+      alert("Couldn't download schedule.");
+    }
+  };
+
+  const openAssignOfficer = (loan) =>
+    setAssignModal({ open: true, loan, officerId: loan?.loanOfficerId || "" });
+
+  const submitAssignOfficer = async () => {
+    const { loan, officerId } = assignModal;
+    if (!loan || !officerId) return;
+    try {
+      await api
+        .patch(`/loans/${loan.id}/assign-officer`, { userId: officerId })
+        .catch(() => api.patch(`/loans/${loan.id}`, { loanOfficerId: officerId }));
+      // refresh local row
+      setRows((prev) =>
+        prev.map((l) =>
+          l.id === loan.id
+            ? {
+                ...l,
+                loanOfficerId: officerId,
+                officerId: officerId,
+                officerName:
+                  officers.find((o) => String(o.id) === String(officerId))?.name ||
+                  loan.officerName,
+              }
+            : l
+        )
+      );
+      setAssignModal({ open: false, loan: null, officerId: "" });
+      alert("Loan officer assigned.");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to assign officer.");
+    }
+  };
+
   /* ---------- render ---------- */
+  const baseHeadCount = 15; // current number of data columns
+  const headCount = baseHeadCount + (showActions ? 1 : 0);
+
   return (
     <div className="p-4 space-y-4">
       {/* header */}
@@ -390,7 +479,8 @@ export default function LoanStatusList() {
               <option value="">All</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}{p.code ? ` (${p.code})` : ""}
+                  {p.name}
+                  {p.code ? ` (${p.code})` : ""}
                 </option>
               ))}
             </select>
@@ -496,19 +586,20 @@ export default function LoanStatusList() {
               <th>Loan Duration (Months)</th>
               <th>Loan Officer</th>
               <th>Status</th>
+              {showActions && <th>Action</th>}
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={15} className="text-center p-6 text-gray-500">
+                <td colSpan={headCount} className="text-center p-6 text-gray-500">
                   Loading…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={15} className="text-center p-6 text-gray-500">
+                <td colSpan={headCount} className="text-center p-6 text-gray-500">
                   No loans found.
                 </td>
               </tr>
@@ -543,14 +634,11 @@ export default function LoanStatusList() {
                 const termMonths = l.termMonths ?? l.durationMonths ?? null;
 
                 return (
-                  <tr key={l.id} className="[&>td]:px-2 [&>td]:py-2 [&>td]:border">
+                  <tr key={l.id} className="[&>td]:px-2 [&>td]:py-2 [&>td]:border hover:bg-gray-50">
                     <td>{fmtDate(date)}</td>
                     <td>
                       {borrower.id ? (
-                        <Link
-                          to={`/borrowers/${borrower.id}`}
-                          className="text-indigo-700 hover:underline"
-                        >
+                        <Link to={`/borrowers/${borrower.id}`} className="text-indigo-700 hover:underline">
                           {borrower.name || l.borrowerName || "—"}
                         </Link>
                       ) : (
@@ -570,6 +658,86 @@ export default function LoanStatusList() {
                     <td>{fmtNum(termMonths)}</td>
                     <td>{l.officerName || officer.name || "—"}</td>
                     <td>{l.status || "—"}</td>
+
+                    {showActions && (
+                      <td className="whitespace-nowrap">
+                        <div className="relative inline-block">
+                          <button
+                            className="px-2 py-1 rounded border hover:bg-gray-50"
+                            onClick={() => setMenuOpenRow((r) => (r === l.id ? null : l.id))}
+                          >
+                            Actions ▾
+                          </button>
+                          {menuOpenRow === l.id && (
+                            <div className="absolute right-0 mt-1 w-56 bg-white border rounded shadow-lg z-10">
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  viewLoan(l.id);
+                                }}
+                              >
+                                View (details & repayments)
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  editLoan(l.id);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  recordRepayment(l.id);
+                                }}
+                              >
+                                Record Repayment
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={async () => {
+                                  setMenuOpenRow(null);
+                                  await downloadSchedule(l);
+                                }}
+                              >
+                                Download Schedule (CSV)
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  reschedule(l.id);
+                                }}
+                              >
+                                Reschedule Repayments
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  redisburse(l.id);
+                                }}
+                              >
+                                Re-disburse
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  openAssignOfficer(l);
+                                }}
+                              >
+                                Assign Loan Officer
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })
@@ -587,12 +755,77 @@ export default function LoanStatusList() {
                 <td>{fmtTZS(totals.f)}</td>
                 <td>{fmtTZS(totals.pen)}</td>
                 <td>{fmtTZS(totals.t)}</td>
-                <td colSpan={4}></td>
+                <td colSpan={4 + (showActions ? 1 : 0)}></td>
               </tr>
             </tfoot>
           )}
         </table>
       </div>
+
+      {/* Assign officer modal */}
+      {assignModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-lg font-semibold">Assign Loan Officer</h4>
+              <button
+                onClick={() => setAssignModal({ open: false, loan: null, officerId: "" })}
+                className="text-gray-500 hover:text-gray-700"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="text-sm text-gray-700">
+                Loan:{" "}
+                <span className="font-medium">
+                  {assignModal.loan?.Borrower?.name || `#${assignModal.loan?.id}`}
+                </span>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Officer</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={assignModal.officerId}
+                  onChange={(e) =>
+                    setAssignModal((s) => ({ ...s, officerId: e.target.value }))
+                  }
+                >
+                  <option value="">Select officer…</option>
+                  {officers.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name || o.fullName || o.email || `User ${o.id}`}
+                    </option>
+                  ))}
+                </select>
+                {!officers.length && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    No officers found. Ensure users with role “loan_officer” exist.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setAssignModal({ open: false, loan: null, officerId: "" })}
+                className="px-3 py-2 rounded border"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAssignOfficer}
+                disabled={!assignModal.officerId}
+                className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
