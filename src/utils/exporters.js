@@ -62,7 +62,7 @@ export function exportExcel(arg1, filenameMaybe) {
  * - exportPDF(rows, filename?) -> opens print dialog (user can save as PDF)
  * - exportPDF({ rows, headers, title })
  */
-export function exportPDF(arg1, filenameMaybe) {
+export function exportPDF(arg1) {
   const { rows, headers, title } =
     Array.isArray(arg1)
       ? { rows: arg1, headers: _inferHeaders(arg1), title: "Export" }
@@ -103,6 +103,17 @@ export function exportPDF(arg1, filenameMaybe) {
     win.focus();
     win.print();
   }
+}
+
+/* ---------- Backwards-compat names to match your imports ---------- */
+export function exportCSVFromRows(arg1, filenameMaybe) {
+  return exportCSV(arg1, filenameMaybe);
+}
+export function exportExcelHTMLFromRows(arg1, filenameMaybe) {
+  return exportExcel(arg1, filenameMaybe);
+}
+export function exportPDFPrintFromRows(arg1, filenameMaybe) {
+  return exportPDF(arg1, filenameMaybe);
 }
 
 /* ---------- internal helpers ---------- */

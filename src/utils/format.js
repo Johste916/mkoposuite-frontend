@@ -15,9 +15,27 @@ export const fmtDate = (d) => {
   return ok ? dt.toLocaleDateString() : "—";
 };
 
-// (Optional) a tiny HTML escaper used by exporters
+// Generic currency formatter (alias is provided as fmtCurrency)
+export const fmtCurrency = (v, currency = "TZS", locale) => {
+  if (v == null || v === "") return "—";
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(Number(v || 0));
+  } catch {
+    return `\u200e${currency} ${Number(v || 0).toLocaleString()}`;
+  }
+};
+
+// HTML escaper used by exporters
 export const escapeHtml = (s = "") =>
-  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 // Convenience: get ordered headers from first row if none provided
 export const inferHeaders = (rows = []) => (rows[0] ? Object.keys(rows[0]) : []);
