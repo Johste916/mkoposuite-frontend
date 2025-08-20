@@ -2,51 +2,38 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 
-// shadcn/ui (as in your snippet)
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-
 const money = (v) => Number(v || 0).toLocaleString();
 
 const Row = ({ title, desc, control }) => (
   <div className="flex items-center justify-between border rounded-xl p-3">
     <div>
       <p className="font-medium">{title}</p>
-      {desc && <p className="text-sm text-muted-foreground">{desc}</p>}
+      {desc && <p className="text-sm text-gray-500">{desc}</p>}
     </div>
     {control}
   </div>
 );
 
 const StatusBadge = ({ status }) => {
-  const map = {
-    current: "default",
-    paid: "secondary",
-    partial: "outline",
-    overdue: "destructive",
-    upcoming: "default",
-    closed: "secondary",
-  };
-  return <Badge variant={map[status] || "outline"} className="capitalize">{status}</Badge>;
+  const cls =
+    status === "overdue"
+      ? "bg-red-600 text-white"
+      : status === "paid" || status === "closed"
+      ? "bg-green-100 text-green-800 border border-green-300"
+      : status === "partial"
+      ? "bg-yellow-50 text-yellow-800 border border-yellow-300"
+      : "bg-gray-100 text-gray-800 border";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs capitalize ${cls}`}>
+      {status || "—"}
+    </span>
+  );
 };
 
 export default function Repayments() {
   const navigate = useNavigate();
 
-  // top-level state
+  // loading
   const [loading, setLoading] = useState(false);
   const [filtersLoading, setFiltersLoading] = useState(false);
 
@@ -60,13 +47,13 @@ export default function Repayments() {
   const [dueRange, setDueRange] = useState("next_30_days"); // next_7_days|next_30_days|overdue|all
   const [includeClosed, setIncludeClosed] = useState(false);
 
-  // data table
+  // data
   const [loans, setLoans] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
-  // side panel (loan details + schedule)
+  // side panel
   const [open, setOpen] = useState(false);
   const [activeLoan, setActiveLoan] = useState(null);
   const [schedule, setSchedule] = useState([]);
@@ -88,7 +75,7 @@ export default function Repayments() {
       setBranches(Array.isArray(b.data) ? b.data : b.data?.items || []);
       setOfficers(Array.isArray(u.data) ? u.data : u.data?.items || []);
     } catch {
-      // silent
+      // noop
     } finally {
       setFiltersLoading(false);
     }
@@ -104,13 +91,12 @@ export default function Repayments() {
       if (dueRange && dueRange !== "all") params.dueRange = dueRange;
       params.status = includeClosed ? "all" : status;
 
-      // Use /loans list; backend may ignore some filters (OK)
       const { data } = await api.get("/loans", { params });
       const items = Array.isArray(data) ? data : data?.items || [];
       setLoans(items);
       setTotal(Number(data?.total || items.length || 0));
     } catch {
-      // silent
+      // noop
     } finally {
       setLoading(false);
     }
@@ -122,8 +108,8 @@ export default function Repayments() {
     setPanelLoading(true);
     try {
       const [schedRes, payRes] = await Promise.all([
-        api.get(`/loans/${loan.id}/schedule`), // [{ period, dueDate, principal, interest, fees, total, paid, status, overdueDays, penalty }]
-        api.get(`/loans/${loan.id}/repayments`), // [{ id, date, amount, method, ref, postedBy }]
+        api.get(`/loans/${loan.id}/schedule`),
+        api.get(`/loans/${loan.id}/repayments`),
       ]);
       setSchedule(Array.isArray(schedRes.data) ? schedRes.data : []);
       setRepayments(Array.isArray(payRes.data) ? payRes.data : []);
@@ -153,388 +139,411 @@ export default function Repayments() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card>
-        <CardContent className="p-6 flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold">Repayment Schedule</h2>
-            <p className="text-sm text-muted-foreground">
-              Browse upcoming installments, see overdue items, and post manual repayments.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => fetchLoans()} disabled={loading || filtersLoading}>
-              {loading ? "Refreshing…" : "Refresh"}
-            </Button>
-            <Button onClick={() => navigate("/repayments/new")}>Manual Repayment</Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="bg-white dark:bg-gray-800 border rounded-xl shadow p-6 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold">Repayment Schedule</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Browse upcoming installments, see overdue items, and post manual repayments.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            className="px-3 py-2 rounded border hover:bg-gray-50 disabled:opacity-60"
+            onClick={() => fetchLoans()}
+            disabled={loading || filtersLoading}
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
+            className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            onClick={() => navigate("/repayments/new")}
+          >
+            Manual Repayment
+          </button>
+        </div>
+      </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="p-6 space-y-4">
-          <h3 className="text-lg font-semibold">Filters</h3>
-          <form onSubmit={onSearch} className="grid md:grid-cols-6 gap-4">
-            <div className="space-y-2 md:col-span-2">
-              <Label>Search (Borrower / Loan Ref)</Label>
-              <Input
-                placeholder="e.g., Juma / L-000123"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-            </div>
+      <div className="bg-white dark:bg-gray-800 border rounded-xl shadow p-6 space-y-4">
+        <h3 className="text-lg font-semibold">Filters</h3>
+        <form onSubmit={onSearch} className="grid md:grid-cols-6 gap-4">
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-sm">Search (Borrower / Loan Ref)</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              placeholder="e.g., Juma / L-000123"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label>Branch</Label>
-              <Select value={branchId} onValueChange={setBranchId}>
-                <SelectTrigger><SelectValue placeholder="All branches" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All</SelectItem>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1">
+            <label className="text-sm">Branch</label>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+            >
+              <option value="">All</option>
+              {branches.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="space-y-2">
-              <Label>Loan Officer</Label>
-              <Select value={officerId} onValueChange={setOfficerId}>
-                <SelectTrigger><SelectValue placeholder="All officers" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All</SelectItem>
-                  {officers.map((o) => (
-                    <SelectItem key={o.id} value={String(o.id)}>
-                      {o.name || `${o.firstName || ""} ${o.lastName || ""}`.trim() || o.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1">
+            <label className="text-sm">Loan Officer</label>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={officerId}
+              onChange={(e) => setOfficerId(e.target.value)}
+            >
+              <option value="">All</option>
+              {officers.map((o) => (
+                <option key={o.id} value={String(o.id)}>
+                  {o.name || `${o.firstName || ""} ${o.lastName || ""}`.trim() || o.email}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="space-y-2">
-              <Label>Due Range</Label>
-              <Select value={dueRange} onValueChange={setDueRange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="next_7_days">Next 7 days</SelectItem>
-                  <SelectItem value="next_30_days">Next 30 days</SelectItem>
-                  <SelectItem value="overdue">Overdue only</SelectItem>
-                  <SelectItem value="all">All</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1">
+            <label className="text-sm">Due Range</label>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={dueRange}
+              onChange={(e) => setDueRange(e.target.value)}
+            >
+              <option value="next_7_days">Next 7 days</option>
+              <option value="next_30_days">Next 30 days</option>
+              <option value="overdue">Overdue only</option>
+              <option value="all">All</option>
+            </select>
+          </div>
 
-            <div className={`${includeClosed ? "opacity-60 pointer-events-none" : ""} space-y-2`}>
-              <Label>Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="delinquent">Delinquent</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                  <SelectItem value="all">All</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className={`${includeClosed ? "opacity-60 pointer-events-none" : ""} space-y-1`}>
+            <label className="text-sm">Status</label>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="active">Active</option>
+              <option value="delinquent">Delinquent</option>
+              <option value="closed">Closed</option>
+              <option value="all">All</option>
+            </select>
+          </div>
 
-            <div className="flex items-end">
-              <Row
-                title="Include Closed"
-                control={<Switch checked={includeClosed} onCheckedChange={setIncludeClosed} />}
-              />
-            </div>
+          <div className="flex items-end">
+            <Row
+              title="Include Closed"
+              control={
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={includeClosed}
+                    onChange={(e) => setIncludeClosed(e.target.checked)}
+                  />
+                </label>
+              }
+            />
+          </div>
 
-            <div className="md:col-span-6 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setBranchId("");
-                  setOfficerId("");
-                  setStatus("active");
-                  setDueRange("next_30_days");
-                  setIncludeClosed(false);
-                  setQ("");
-                  setPage(1);
-                  fetchLoans();
-                }}
-              >
-                Reset
-              </Button>
-              <Button type="submit">Search</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+          <div className="md:col-span-6 flex justify-end gap-2">
+            <button
+              type="button"
+              className="px-3 py-2 rounded border hover:bg-gray-50"
+              onClick={() => {
+                setBranchId("");
+                setOfficerId("");
+                setStatus("active");
+                setDueRange("next_30_days");
+                setIncludeClosed(false);
+                setQ("");
+                setPage(1);
+                fetchLoans();
+              }}
+            >
+              Reset
+            </button>
+            <button
+              type="submit"
+              className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Search
+            </button>
+          </div>
+        </form>
+      </div>
 
       {/* Loans table */}
-      <Card>
-        <CardContent className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Loans</h3>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm">Page size</Label>
-              <Select
-                value={String(pageSize)}
-                onValueChange={(v) => {
-                  setPageSize(Number(v));
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[10, 20, 50].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="bg-white dark:bg-gray-800 border rounded-xl shadow p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Loans</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Page size</span>
+            <select
+              className="border rounded px-2 py-1 text-sm"
+              value={String(pageSize)}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              {[10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
           </div>
+        </div>
 
-          <div className="overflow-x-auto border rounded-xl">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="bg-muted/40">
-                  <th className="text-left p-3">Loan Ref</th>
-                  <th className="text-left p-3">Borrower</th>
-                  <th className="text-left p-3">Outstanding</th>
-                  <th className="text-left p-3">Next Due</th>
-                  <th className="text-left p-3">Officer</th>
-                  <th className="text-left p-3">Status</th>
-                  <th className="text-right p-3">Actions</th>
+        <div className="overflow-x-auto border rounded-xl">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="text-left p-3">Loan Ref</th>
+                <th className="text-left p-3">Borrower</th>
+                <th className="text-left p-3">Outstanding</th>
+                <th className="text-left p-3">Next Due</th>
+                <th className="text-left p-3">Officer</th>
+                <th className="text-left p-3">Status</th>
+                <th className="text-right p-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!loading && loans.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="p-4 text-gray-500">
+                    No loans found.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {!loading && loans.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="p-4 text-muted-foreground">
-                      No loans found.
-                    </td>
-                  </tr>
-                )}
-                {loans.map((l) => (
-                  <tr key={l.id} className="border-t">
-                    <td className="p-3">{l.reference || `L-${l.id}`}</td>
-                    <td className="p-3">{l.borrowerName || l.Borrower?.name}</td>
-                    <td className="p-3">
-                      {l.currency || "TZS"} {money(l.outstanding ?? l.balance ?? 0)}
-                    </td>
-                    <td className="p-3">
-                      {l.nextDueDate ? (
-                        <div className="flex items-center gap-2">
-                          <span>{l.nextDueDate}</span>
-                          {l.nextDueStatus && <StatusBadge status={l.nextDueStatus} />}
-                        </div>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="p-3">{l.officerName || l.officer?.name || "—"}</td>
-                    <td className="p-3">{l.state || l.status || "active"}</td>
-                    <td className="p-3 text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button size="sm" variant="outline" onClick={() => openLoanPanel(l)}>
-                          View Schedule
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => navigate(`/repayments/new?loanId=${l.id}`)}
-                        >
-                          Add Repayment
-                        </Button>
+              )}
+              {loans.map((l) => (
+                <tr key={l.id} className="border-t">
+                  <td className="p-3">{l.reference || `L-${l.id}`}</td>
+                  <td className="p-3">{l.borrowerName || l.Borrower?.name}</td>
+                  <td className="p-3">
+                    {l.currency || "TZS"} {money(l.outstanding ?? l.balance ?? 0)}
+                  </td>
+                  <td className="p-3">
+                    {l.nextDueDate ? (
+                      <div className="flex items-center gap-2">
+                        <span>{l.nextDueDate}</span>
+                        {l.nextDueStatus && <StatusBadge status={l.nextDueStatus} />}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-                {loading && (
-                  <tr>
-                    <td colSpan={7} className="p-4">
-                      Loading…
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="p-3">{l.officerName || l.officer?.name || "—"}</td>
+                  <td className="p-3">{l.state || l.status || "active"}</td>
+                  <td className="p-3 text-right">
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        className="px-3 py-1.5 rounded border hover:bg-gray-50"
+                        onClick={() => openLoanPanel(l)}
+                      >
+                        View Schedule
+                      </button>
+                      <button
+                        className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700"
+                        onClick={() => navigate(`/repayments/new?loanId=${l.id}`)}
+                      >
+                        Add Repayment
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {loading && (
+                <tr>
+                  <td colSpan={7} className="p-4">
+                    Loading…
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* pagination */}
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-sm text-gray-600">
+            Page {page} of {pages} • {total} total
+          </p>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1.5 rounded border hover:bg-gray-50 disabled:opacity-60"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Prev
+            </button>
+            <button
+              className="px-3 py-1.5 rounded border hover:bg-gray-50 disabled:opacity-60"
+              disabled={page >= pages}
+              onClick={() => setPage((p) => Math.min(pages, p + 1))}
+            >
+              Next
+            </button>
           </div>
+        </div>
+      </div>
 
-          {/* pagination */}
-          <div className="flex items-center justify-between pt-2">
-            <p className="text-sm text-muted-foreground">
-              Page {page} of {pages} • {total} total
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+      {/* Side panel (drawer) */}
+      {open && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+          <div className="absolute inset-y-0 right-0 w-full sm:max-w-3xl bg-white dark:bg-gray-900 shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold">Loan Schedule</h3>
+              <button
+                className="px-3 py-1.5 rounded border hover:bg-gray-50"
+                onClick={() => setOpen(false)}
               >
-                Prev
-              </Button>
-              <Button
-                variant="outline"
-                disabled={page >= pages}
-                onClick={() => setPage((p) => Math.min(pages, p + 1))}
-              >
-                Next
-              </Button>
+                Close
+              </button>
             </div>
+
+            {!activeLoan ? (
+              <div className="p-4 text-sm text-gray-500">No loan selected.</div>
+            ) : (
+              <div className="p-4 space-y-4">
+                <div className="space-y-1">
+                  <h4 className="text-lg font-semibold">
+                    {activeLoan.reference || `L-${activeLoan.id}`}
+                  </h4>
+                  <p className="text-sm text-gray-600">
+                    {activeLoan.borrowerName || activeLoan.Borrower?.name} •{" "}
+                    {activeLoan.currency || "TZS"} {money(activeLoan.principal || activeLoan.amount || 0)}
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700"
+                      onClick={() => navigate(`/repayments/new?loanId=${activeLoan.id}`)}
+                    >
+                      Add Repayment
+                    </button>
+                    <button
+                      className="px-3 py-1.5 rounded border hover:bg-gray-50"
+                      onClick={() => window.open(`/loans/${activeLoan.id}`, "_blank")}
+                    >
+                      Open Loan
+                    </button>
+                  </div>
+                </div>
+
+                <hr />
+
+                {/* Installments */}
+                <div className="space-y-2">
+                  <h5 className="font-medium">Installments</h5>
+                  <div className="overflow-x-auto border rounded-xl">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="text-left p-3">#</th>
+                          <th className="text-left p-3">Due Date</th>
+                          <th className="text-left p-3">Principal</th>
+                          <th className="text-left p-3">Interest</th>
+                          <th className="text-left p-3">Fees</th>
+                          <th className="text-left p-3">Total</th>
+                          <th className="text-left p-3">Paid</th>
+                          <th className="text-left p-3">Penalty</th>
+                          <th className="text-left p-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {panelLoading && (
+                          <tr>
+                            <td colSpan={9} className="p-4">
+                              Loading…
+                            </td>
+                          </tr>
+                        )}
+                        {!panelLoading && schedule.length === 0 && (
+                          <tr>
+                            <td colSpan={9} className="p-4 text-gray-500">
+                              No schedule entries.
+                            </td>
+                          </tr>
+                        )}
+                        {schedule.map((s, idx) => (
+                          <tr key={`${s.period}-${s.dueDate}`} className="border-t">
+                            <td className="p-3">{s.period ?? idx + 1}</td>
+                            <td className="p-3">{s.dueDate}</td>
+                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.principal)}</td>
+                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.interest)}</td>
+                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.fees)}</td>
+                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.total)}</td>
+                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.paid)}</td>
+                            <td className="p-3">
+                              {s.penalty ? `${activeLoan.currency || "TZS"} ${money(s.penalty)}` : "—"}
+                            </td>
+                            <td className="p-3">
+                              <StatusBadge status={s.status || "upcoming"} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Repayments */}
+                <div className="space-y-2">
+                  <h5 className="font-medium">Repayments</h5>
+                  <div className="overflow-x-auto border rounded-xl">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="text-left p-3">Date</th>
+                          <th className="text-left p-3">Amount</th>
+                          <th className="text-left p-3">Method</th>
+                          <th className="text-left p-3">Reference</th>
+                          <th className="text-left p-3">Posted By</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {panelLoading && (
+                          <tr>
+                            <td colSpan={5} className="p-4">
+                              Loading…
+                            </td>
+                          </tr>
+                        )}
+                        {!panelLoading && repayments.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="p-4 text-gray-500">
+                              No repayments yet.
+                            </td>
+                          </tr>
+                        )}
+                        {repayments.map((r) => (
+                          <tr key={r.id} className="border-t">
+                            <td className="p-3">{r.date}</td>
+                            <td className="p-3">
+                              {activeLoan.currency || "TZS"} {money(r.amount || 0)}
+                            </td>
+                            <td className="p-3">{r.method || "—"}</td>
+                            <td className="p-3">{r.ref || r.reference || "—"}</td>
+                            <td className="p-3">{r.postedBy || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Side panel */}
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Loan Schedule</SheetTitle>
-          </SheetHeader>
-          {!activeLoan ? (
-            <div className="p-4 text-sm text-muted-foreground">No loan selected.</div>
-          ) : (
-            <div className="p-4 space-y-4">
-              <div className="space-y-1">
-                <h3 className="text-lg font-semibold">
-                  {activeLoan.reference || `L-${activeLoan.id}`}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {activeLoan.borrowerName || activeLoan.Borrower?.name} •{" "}
-                  {activeLoan.currency || "TZS"} {money(activeLoan.principal || activeLoan.amount || 0)}
-                </p>
-                <div className="flex gap-2 mt-2">
-                  <Button
-                    size="sm"
-                    onClick={() => navigate(`/repayments/new?loanId=${activeLoan.id}`)}
-                  >
-                    Add Repayment
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => window.open(`/loans/${activeLoan.id}`, "_blank")}
-                  >
-                    Open Loan
-                  </Button>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Installments */}
-              <div className="space-y-2">
-                <h4 className="font-medium">Installments</h4>
-                <div className="overflow-x-auto border rounded-xl">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="bg-muted/40">
-                        <th className="text-left p-3">#</th>
-                        <th className="text-left p-3">Due Date</th>
-                        <th className="text-left p-3">Principal</th>
-                        <th className="text-left p-3">Interest</th>
-                        <th className="text-left p-3">Fees</th>
-                        <th className="text-left p-3">Total</th>
-                        <th className="text-left p-3">Paid</th>
-                        <th className="text-left p-3">Penalty</th>
-                        <th className="text-left p-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {panelLoading && (
-                        <tr>
-                          <td colSpan={9} className="p-4">
-                            Loading…
-                          </td>
-                        </tr>
-                      )}
-                      {!panelLoading && schedule.length === 0 && (
-                        <tr>
-                          <td colSpan={9} className="p-4 text-muted-foreground">
-                            No schedule entries.
-                          </td>
-                        </tr>
-                      )}
-                      {schedule.map((s, idx) => (
-                        <tr key={`${s.period}-${s.dueDate}`} className="border-t">
-                          <td className="p-3">{s.period ?? idx + 1}</td>
-                          <td className="p-3">{s.dueDate}</td>
-                          <td className="p-3">
-                            {activeLoan.currency || "TZS"} {money(s.principal)}
-                          </td>
-                          <td className="p-3">
-                            {activeLoan.currency || "TZS"} {money(s.interest)}
-                          </td>
-                          <td className="p-3">
-                            {activeLoan.currency || "TZS"} {money(s.fees)}
-                          </td>
-                          <td className="p-3">
-                            {activeLoan.currency || "TZS"} {money(s.total)}
-                          </td>
-                          <td className="p-3">
-                            {activeLoan.currency || "TZS"} {money(s.paid)}
-                          </td>
-                          <td className="p-3">
-                            {s.penalty
-                              ? `${activeLoan.currency || "TZS"} ${money(s.penalty)}`
-                              : "—"}
-                          </td>
-                          <td className="p-3">
-                            <StatusBadge status={s.status || "upcoming"} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Repayments */}
-              <div className="space-y-2">
-                <h4 className="font-medium">Repayments</h4>
-                <div className="overflow-x-auto border rounded-xl">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="bg-muted/40">
-                        <th className="text-left p-3">Date</th>
-                        <th className="text-left p-3">Amount</th>
-                        <th className="text-left p-3">Method</th>
-                        <th className="text-left p-3">Reference</th>
-                        <th className="text-left p-3">Posted By</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {panelLoading && (
-                        <tr>
-                          <td colSpan={5} className="p-4">
-                            Loading…
-                          </td>
-                        </tr>
-                      )}
-                      {!panelLoading && repayments.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="p-4 text-muted-foreground">
-                            No repayments yet.
-                          </td>
-                        </tr>
-                      )}
-                      {repayments.map((r) => (
-                        <tr key={r.id} className="border-t">
-                          <td className="p-3">{r.date}</td>
-                          <td className="p-3">
-                            {activeLoan.currency || "TZS"} {money(r.amount || 0)}
-                          </td>
-                          <td className="p-3">{r.method || "—"}</td>
-                          <td className="p-3">{r.ref || r.reference || "—"}</td>
-                          <td className="p-3">{r.postedBy || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+        </div>
+      )}
     </div>
   );
 }
