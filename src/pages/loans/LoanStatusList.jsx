@@ -1,15 +1,14 @@
 // src/pages/loans/LoanStatusList.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api";
+import { fmtCurrency as fmtC, fmtTZS, fmtNum, fmtPct, fmtDate } from "../../utils/format";
+import { exportCSVFromRows, exportExcelHTMLFromRows, exportPDFPrintFromRows } from "../../utils/exporters";
+import Pagination from "../../components/table/Pagination";
+import ConfirmDialog from "../../components/common/ConfirmDialog";
+import { useToast } from "../../components/common/ToastProvider";
 
-/* ---------- helpers ---------- */
-const fmtTZS = (v, currency = "TZS") =>
-  v == null || v === "" ? "—" : `\u200e${currency} ${Number(v || 0).toLocaleString()}`;
-const fmtNum = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString());
-const fmtPct = (v) => (v == null || v === "" ? "—" : `${Number(v)}%`);
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
-
+/* ---------- constants ---------- */
 const CORE_STATUSES = ["pending", "approved", "rejected", "disbursed", "active", "closed"];
 
 const TITLE_MAP = {
@@ -33,6 +32,8 @@ const TITLE_MAP = {
 export default function LoanStatusList() {
   const { status } = useParams(); // core status or a derived scope
   const navigate = useNavigate();
+  const { success, error, info } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -42,17 +43,26 @@ export default function LoanStatusList() {
   const [products, setProducts] = useState([]);
   const [officers, setOfficers] = useState([]);
 
-  const [q, setQ] = useState("");
-  const [productId, setProductId] = useState("");
-  const [officerId, setOfficerId] = useState("");
-  const [startDate, setStartDate] = useState(""); // yyyy-mm-dd
-  const [endDate, setEndDate] = useState("");     // yyyy-mm-dd
-  const [minAmt, setMinAmt] = useState("");
-  const [maxAmt, setMaxAmt] = useState("");
+  const [q, setQ] = useState(searchParams.get("q") || "");
+  const [productId, setProductId] = useState(searchParams.get("productId") || "");
+  const [officerId, setOfficerId] = useState(searchParams.get("officerId") || "");
+  const [startDate, setStartDate] = useState(searchParams.get("startDate") || ""); // yyyy-mm-dd
+  const [endDate, setEndDate] = useState(searchParams.get("endDate") || "");     // yyyy-mm-dd
+  const [minAmt, setMinAmt] = useState(searchParams.get("minAmt") || "");
+  const [maxAmt, setMaxAmt] = useState(searchParams.get("maxAmt") || "");
+
+  // pagination
+  const initialPage = Number(searchParams.get("page") || 1);
+  const initialPageSize = Number(searchParams.get("pageSize") || 25);
+  const [page, setPage] = useState(Math.max(1, initialPage));
+  const [pageSize, setPageSize] = useState([10, 25, 50, 100].includes(initialPageSize) ? initialPageSize : 25);
 
   // row menu + assign modal state
   const [menuOpenRow, setMenuOpenRow] = useState(null);
   const [assignModal, setAssignModal] = useState({ open: false, loan: null, officerId: "" });
+
+  // confirms
+  const [confirm, setConfirm] = useState({ open: false, title: "", description: "", destructive: false, onConfirm: null });
 
   const title = TITLE_MAP[status] || "Loans";
   const showActions = ["disbursed", "active"].includes(String(status || "").toLowerCase());
@@ -78,19 +88,21 @@ export default function LoanStatusList() {
   }, []);
 
   /* ---------- load data with server-side filters when possible ---------- */
-  const load = async () => {
+  const load = async (opts = {}) => {
     setLoading(true);
     try {
-      const params = { page: 1, pageSize: 1000 }; // pull broadly, filter client-side if needed
+      const params = {
+        page,
+        pageSize,
+      };
 
       if (CORE_STATUSES.includes(String(status))) {
         params.status = status;
       } else if (status) {
-        // scope parameter for derived lists (adjust if your backend uses another name)
-        params.scope = status;
+        params.scope = status; // derived list hint for backend
       }
 
-      // These are common names; backend may ignore some/all — we’ll fallback to client filtering
+      // server-side filters if supported
       if (q.trim()) params.q = q.trim();
       if (productId) params.productId = productId;
       if (officerId) params.officerId = officerId;
@@ -109,19 +121,35 @@ export default function LoanStatusList() {
 
       setRows(data);
       setTotalCount(total);
-    } catch {
+    } catch (e) {
+      console.error(e);
       setRows([]);
       setTotalCount(0);
+      error("Failed to load loans.");
     } finally {
       setLoading(false);
+    }
+
+    if (!opts.skipSyncUrl) {
+      const next = new URLSearchParams();
+      if (q) next.set("q", q);
+      if (productId) next.set("productId", productId);
+      if (officerId) next.set("officerId", officerId);
+      if (startDate) next.set("startDate", startDate);
+      if (endDate) next.set("endDate", endDate);
+      if (minAmt) next.set("minAmt", minAmt);
+      if (maxAmt) next.set("maxAmt", maxAmt);
+      next.set("page", String(page));
+      next.set("pageSize", String(pageSize));
+      setSearchParams(next);
     }
   };
 
   useEffect(() => {
-    load();
+    load({ skipSyncUrl: true }); // first paint reads existing URL
     setMenuOpenRow(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, page, pageSize]);
 
   /* ---------- client-side filtering fallback ---------- */
   const filtered = useMemo(() => {
@@ -139,7 +167,7 @@ export default function LoanStatusList() {
       // product
       if (productId && String(l.productId) !== String(productId)) return false;
       // officer
-      if (officerId && String(l.officerId) !== String(officerId)) return false;
+      if (officerId && String(l.officerId) !== String(officerId) && String(l.loanOfficerId) !== String(officerId)) return false;
       // amount
       const amt = Number(l.amount ?? l.principal ?? 0);
       if (minAmt && !(amt >= Number(minAmt))) return false;
@@ -168,24 +196,24 @@ export default function LoanStatusList() {
     });
   }, [rows, q, productId, officerId, startDate, endDate, minAmt, maxAmt]);
 
+  // slice for client pagination when server doesn't paginate
+  const paged = useMemo(() => {
+    // If backend provided total > rows.length, assume server-pagination already applied
+    if (totalCount > rows.length) return filtered;
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize, rows.length, totalCount]);
+
   /* ---------- totals ---------- */
   const totals = useMemo(() => {
-    let p = 0,
-      i = 0,
-      f = 0,
-      pen = 0,
-      t = 0;
+    let p = 0, i = 0, f = 0, pen = 0, t = 0;
     filtered.forEach((l) => {
       const op = Number(l.outstandingPrincipal || 0);
       const oi = Number(l.outstandingInterest || 0);
       const of = Number(l.outstandingFees || 0);
       const ope = Number(l.outstandingPenalty || 0);
       const tot = l.outstanding != null ? Number(l.outstanding) : op + oi + of + ope;
-      p += op;
-      i += oi;
-      f += of;
-      pen += ope;
-      t += tot;
+      p += op; i += oi; f += of; pen += ope; t += tot;
     });
     return { p, i, f, pen, t };
   }, [filtered]);
@@ -237,125 +265,35 @@ export default function LoanStatusList() {
       };
     });
 
-  const exportCSV = () => {
-    const rows = buildExportRows();
-    const headers = Object.keys(
-      rows[0] || {
-        Date: "",
-        "Borrower Name": "",
-        "Phone Number": "",
-        "Loan Product": "",
-        "Principal Amount": "",
-        "Interest Amount": "",
-        "Outstanding Principal": "",
-        "Outstanding Interest": "",
-        "Outstanding Fees": "",
-        "Outstanding Penalty": "",
-        "Total Outstanding": "",
-        "Interest Rate/Year (%)": "",
-        "Loan Duration (Months)": "",
-        "Loan Officer": "",
-        Status: "",
-      }
-    );
-    const csv = [
-      headers.join(","),
-      ...rows.map((r) =>
-        headers
-          .map((h) => {
-            const val = String(r[h] ?? "").replace(/"/g, '""');
-            return `"${val}"`;
-          })
-          .join(",")
-      ),
-    ].join("\n");
+  const exportCSV = () =>
+    exportCSVFromRows(buildExportRows(), (TITLE_MAP[status] || "loans").toLowerCase().replace(/\s+/g, "-"));
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${(TITLE_MAP[status] || "loans").toLowerCase().replace(/\s+/g, "-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportExcel = () =>
+    exportExcelHTMLFromRows(buildExportRows(), (TITLE_MAP[status] || "loans").toLowerCase().replace(/\s+/g, "-"));
 
-  // Excel-compatible (HTML table with XLS mimetype, opens in Excel)
-  const exportExcel = () => {
-    const rows = buildExportRows();
-    const headers = Object.keys(rows[0] || {});
-    const html =
-      `<table border="1"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
-      rows
-        .map(
-          (r) =>
-            `<tr>${headers
-              .map((h) =>
-                `<td>${String(r[h] ?? "")
-                  .replace(/&/g, "&amp;")
-                  .replace(/</g, "&lt;")}</td>`
-              )
-              .join("")}</tr>`
-        )
-        .join("") +
-      `</tbody></table>`;
-
-    const blob = new Blob([`\ufeff${html}`], { type: "application/vnd.ms-excel" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${(TITLE_MAP[status] || "loans").toLowerCase().replace(/\s+/g, "-")}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // PDF via print-friendly window (users can Save as PDF)
-  const exportPDF = () => {
-    const rows = buildExportRows();
-    const headers = Object.keys(rows[0] || {});
-    const style = `
-      <style>
-        body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; padding: 16px; }
-        h1 { font-size: 16px; margin: 0 0 12px 0; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { border: 1px solid #ccc; padding: 6px; text-align: left; white-space: nowrap; }
-        thead { background: #f3f4f6; }
-      </style>
-    `;
-    const html =
-      `<h1>${TITLE_MAP[status] || "Loans"}</h1><table><thead><tr>${headers
-        .map((h) => `<th>${h}</th>`)
-        .join("")}</tr></thead><tbody>` +
-      rows
-        .map(
-          (r) =>
-            `<tr>${headers
-              .map((h) =>
-                `<td>${String(r[h] ?? "")
-                  .replace(/&/g, "&amp;")
-                  .replace(/</g, "&lt;")}</td>`
-              )
-              .join("")}</tr>`
-        )
-        .join("") +
-      `</tbody></table>`;
-
-    const win = window.open("", "_blank");
-    if (win) {
-      win.document.write(
-        `<html><head><title>${TITLE_MAP[status] || "Loans"}</title>${style}</head><body>${html}</body></html>`
-      );
-      win.document.close();
-      win.focus();
-      win.print(); // user can choose "Save as PDF"
-    }
-  };
+  const exportPDF = () =>
+    exportPDFPrintFromRows(buildExportRows(), TITLE_MAP[status] || "Loans");
 
   /* ---------- row actions ---------- */
   const viewLoan = (id) => navigate(`/loans/${id}`);
   const editLoan = (id) => navigate(`/loans/${id}?edit=1`);
-  const redisburse = (id) => navigate(`/loans/${id}/disburse`);
+  const redisburse = (id) =>
+    setConfirm({
+      open: true,
+      destructive: false,
+      title: "Re-disburse this loan?",
+      description: "You will be taken to the disbursement screen to create a new disbursement tied to this loan.",
+      onConfirm: () => navigate(`/loans/${id}/disburse`),
+    });
   const recordRepayment = (id) => navigate(`/repayments/new?loanId=${id}`);
-  const reschedule = (id) => navigate(`/loans/schedule?loanId=${id}`);
+  const reschedule = (id) =>
+    setConfirm({
+      open: true,
+      destructive: false,
+      title: "Reschedule repayments?",
+      description: "Open the schedule tool to recompute the repayment plan for this loan.",
+      onConfirm: () => navigate(`/loans/schedule?loanId=${id}`),
+    });
 
   const downloadSchedule = async (row) => {
     try {
@@ -372,11 +310,7 @@ export default function LoanStatusList() {
       ];
       const head = columns.map((c) => `"${c.label.replace(/"/g, '""')}"`).join(",");
       const body = data
-        .map((row, i) =>
-          columns
-            .map((c) => `"${String(c.value(row, i) ?? "").replace(/"/g, '""')}"`)
-            .join(",")
-        )
+        .map((row, i) => columns.map((c) => `"${String(c.value(row, i) ?? "").replace(/"/g, '""')}"`).join(","))
         .join("\n");
       const csv = `${head}\n${body}`;
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -384,14 +318,15 @@ export default function LoanStatusList() {
       a.href = URL.createObjectURL(blob);
       a.download = `loan_${row.id}_schedule.csv`;
       a.click();
+      success("Schedule downloaded.");
     } catch (e) {
       console.error(e);
-      alert("Couldn't download schedule.");
+      error("Couldn't download schedule.");
     }
   };
 
   const openAssignOfficer = (loan) =>
-    setAssignModal({ open: true, loan, officerId: loan?.loanOfficerId || "" });
+    setAssignModal({ open: true, loan, officerId: loan?.loanOfficerId || loan?.officerId || "" });
 
   const submitAssignOfficer = async () => {
     const { loan, officerId } = assignModal;
@@ -409,23 +344,32 @@ export default function LoanStatusList() {
                 loanOfficerId: officerId,
                 officerId: officerId,
                 officerName:
-                  officers.find((o) => String(o.id) === String(officerId))?.name ||
-                  loan.officerName,
+                  officers.find((o) => String(o.id) === String(officerId))?.name || l.officerName,
               }
             : l
         )
       );
       setAssignModal({ open: false, loan: null, officerId: "" });
-      alert("Loan officer assigned.");
+      success("Loan officer assigned.");
     } catch (e) {
       console.error(e);
-      alert("Failed to assign officer.");
+      error("Failed to assign officer.");
     }
   };
 
   /* ---------- render ---------- */
-  const baseHeadCount = 15; // current number of data columns
+  const baseHeadCount = 15; // number of data columns before Action
   const headCount = baseHeadCount + (showActions ? 1 : 0);
+
+  const dropdownRef = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (!dropdownRef.current) return;
+      if (!dropdownRef.current.contains(e.target)) setMenuOpenRow(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
 
   return (
     <div className="p-4 space-y-4">
@@ -436,23 +380,15 @@ export default function LoanStatusList() {
           <div className="text-sm text-gray-600">
             Total: {fmtNum(totalCount)}{" "}
             <span className="mx-2 text-gray-400">•</span>
-            <Link to="/loans" className="text-indigo-600 underline">
-              All Loans
-            </Link>
+            <Link to="/loans" className="text-indigo-600 underline">All Loans</Link>
           </div>
         </div>
 
         {/* export buttons */}
         <div className="flex flex-wrap gap-2">
-          <button onClick={exportCSV} className="px-3 py-2 rounded border hover:bg-gray-50">
-            Export CSV
-          </button>
-          <button onClick={exportExcel} className="px-3 py-2 rounded border hover:bg-gray-50">
-            Export Excel
-          </button>
-          <button onClick={exportPDF} className="px-3 py-2 rounded border hover:bg-gray-50">
-            Export PDF
-          </button>
+          <button onClick={exportCSV} className="px-3 py-2 rounded border hover:bg-gray-50">Export CSV</button>
+          <button onClick={exportExcel} className="px-3 py-2 rounded border hover:bg-gray-50">Export Excel</button>
+          <button onClick={exportPDF} className="px-3 py-2 rounded border hover:bg-gray-50">Export PDF</button>
         </div>
       </div>
 
@@ -479,8 +415,7 @@ export default function LoanStatusList() {
               <option value="">All</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.code ? ` (${p.code})` : ""}
+                  {p.name}{p.code ? ` (${p.code})` : ""}
                 </option>
               ))}
             </select>
@@ -544,7 +479,13 @@ export default function LoanStatusList() {
         </div>
 
         <div className="mt-3 flex gap-2">
-          <button onClick={load} className="px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">
+          <button
+            onClick={() => {
+              setPage(1);
+              load();
+            }}
+            className="px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+          >
             Apply Filters
           </button>
           <button
@@ -556,8 +497,9 @@ export default function LoanStatusList() {
               setEndDate("");
               setMinAmt("");
               setMaxAmt("");
-              // reload base
-              setTimeout(load, 0);
+              setPage(1);
+              setSearchParams(new URLSearchParams());
+              setTimeout(() => load({ skipSyncUrl: true }), 0);
             }}
             className="px-3 py-2 rounded border hover:bg-gray-50"
           >
@@ -590,21 +532,17 @@ export default function LoanStatusList() {
             </tr>
           </thead>
 
-          <tbody>
+          <tbody ref={dropdownRef}>
             {loading ? (
               <tr>
-                <td colSpan={headCount} className="text-center p-6 text-gray-500">
-                  Loading…
-                </td>
+                <td colSpan={headCount} className="p-6 text-center text-gray-500">Loading…</td>
               </tr>
-            ) : filtered.length === 0 ? (
+            ) : paged.length === 0 ? (
               <tr>
-                <td colSpan={headCount} className="text-center p-6 text-gray-500">
-                  No loans found.
-                </td>
+                <td colSpan={headCount} className="p-6 text-center text-gray-500">No loans found.</td>
               </tr>
             ) : (
-              filtered.map((l) => {
+              paged.map((l) => {
                 const borrower = l.Borrower || l.borrower || {};
                 const product = l.Product || l.product || {};
                 const officer = l.officer || {};
@@ -625,11 +563,9 @@ export default function LoanStatusList() {
                     : Number(op || 0) + Number(oi || 0) + Number(of || 0) + Number(ope || 0);
 
                 const annualRate =
-                  l.interestRateAnnual != null
-                    ? l.interestRateAnnual
-                    : l.interestRate != null
-                    ? l.interestRate
-                    : null;
+                  l.interestRateAnnual != null ? l.interestRateAnnual
+                  : l.interestRate != null ? l.interestRate
+                  : null;
 
                 const termMonths = l.termMonths ?? l.durationMonths ?? null;
 
@@ -647,8 +583,8 @@ export default function LoanStatusList() {
                     </td>
                     <td>{borrower.phone || l.borrowerPhone || "—"}</td>
                     <td>{product.name || l.productName || "—"}</td>
-                    <td>{fmtTZS(l.amount ?? l.principal, currency)}</td>
-                    <td>{fmtTZS(l.interestAmount, currency)}</td>
+                    <td>{fmtC(l.amount ?? l.principal, currency)}</td>
+                    <td>{fmtC(l.interestAmount, currency)}</td>
                     <td>{fmtTZS(op, currency)}</td>
                     <td>{fmtTZS(oi, currency)}</td>
                     <td>{fmtTZS(of, currency)}</td>
@@ -670,67 +606,25 @@ export default function LoanStatusList() {
                           </button>
                           {menuOpenRow === l.id && (
                             <div className="absolute right-0 mt-1 w-56 bg-white border rounded shadow-lg z-10">
-                              <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  viewLoan(l.id);
-                                }}
-                              >
+                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); viewLoan(l.id); }}>
                                 View (details & repayments)
                               </button>
-                              <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  editLoan(l.id);
-                                }}
-                              >
+                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); editLoan(l.id); }}>
                                 Edit
                               </button>
-                              <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  recordRepayment(l.id);
-                                }}
-                              >
+                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); recordRepayment(l.id); }}>
                                 Record Repayment
                               </button>
-                              <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={async () => {
-                                  setMenuOpenRow(null);
-                                  await downloadSchedule(l);
-                                }}
-                              >
+                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={async () => { setMenuOpenRow(null); await downloadSchedule(l); }}>
                                 Download Schedule (CSV)
                               </button>
-                              <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  reschedule(l.id);
-                                }}
-                              >
+                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); reschedule(l.id); }}>
                                 Reschedule Repayments
                               </button>
-                              <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  redisburse(l.id);
-                                }}
-                              >
+                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); redisburse(l.id); }}>
                                 Re-disburse
                               </button>
-                              <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  openAssignOfficer(l);
-                                }}
-                              >
+                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); openAssignOfficer(l); }}>
                                 Assign Loan Officer
                               </button>
                             </div>
@@ -747,9 +641,7 @@ export default function LoanStatusList() {
           {!loading && filtered.length > 0 && (
             <tfoot>
               <tr className="bg-gray-50 font-semibold [&>td]:px-2 [&>td]:py-2 [&>td]:border">
-                <td colSpan={6} className="text-right">
-                  Totals:
-                </td>
+                <td colSpan={6} className="text-right">Totals:</td>
                 <td>{fmtTZS(totals.p)}</td>
                 <td>{fmtTZS(totals.i)}</td>
                 <td>{fmtTZS(totals.f)}</td>
@@ -761,6 +653,15 @@ export default function LoanStatusList() {
           )}
         </table>
       </div>
+
+      {/* pagination */}
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={totalCount || filtered.length}
+        onPageChange={(p) => setPage(p)}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+      />
 
       {/* Assign officer modal */}
       {assignModal.open && (
@@ -781,7 +682,9 @@ export default function LoanStatusList() {
               <div className="text-sm text-gray-700">
                 Loan:{" "}
                 <span className="font-medium">
-                  {assignModal.loan?.Borrower?.name || `#${assignModal.loan?.id}`}
+                  {assignModal.loan?.Borrower?.name ||
+                    assignModal.loan?.borrowerName ||
+                    `#${assignModal.loan?.id}`}
                 </span>
               </div>
               <div>
@@ -826,6 +729,16 @@ export default function LoanStatusList() {
           </div>
         </div>
       )}
+
+      {/* confirmations */}
+      <ConfirmDialog
+        open={confirm.open}
+        title={confirm.title}
+        description={confirm.description}
+        destructive={confirm.destructive}
+        onConfirm={confirm.onConfirm}
+        onClose={() => setConfirm((c) => ({ ...c, open: false }))}
+      />
     </div>
   );
 }
