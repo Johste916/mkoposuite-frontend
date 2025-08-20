@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api";
 
+/* ---------- small helpers ---------- */
 const fmtTZS = (n, currency = "TZS") =>
   `\u200e${currency} ${Number(n || 0).toLocaleString()}`;
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "N/A");
@@ -16,6 +17,26 @@ const statusColors = {
   closed: "bg-slate-200 text-slate-700",
 };
 
+const chip = "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold";
+
+/* Map a loose set of role names -> capability buckets */
+const roleOf = () => {
+  try {
+    const r = (JSON.parse(localStorage.getItem("user") || "{}").role || "").toLowerCase();
+    return r;
+  } catch {
+    return "";
+  }
+};
+const isAdmin = (r) => r === "admin" || r === "director" || r === "superadmin";
+const isBM = (r) =>
+  ["branch_manager", "manager", "bm"].includes(r) || isAdmin(r);
+const isCompliance = (r) =>
+  ["compliance", "compliance_officer", "legal"].includes(r) || isAdmin(r);
+const isAccountant = (r) =>
+  ["accountant", "finance"].includes(r) || isAdmin(r);
+
+/* ---------- component ---------- */
 export default function LoanDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -32,29 +53,49 @@ export default function LoanDetails() {
   const [loadingSchedule, setLoadingSchedule] = useState(false);
 
   const [errs, setErrs] = useState(null);
-  const [newComment, setNewComment] = useState("");
-  const [openRepay, setOpenRepay] = useState(false);
-  const [openSchedule, setOpenSchedule] = useState(false);
 
+  // review state
+  const [reviewComment, setReviewComment] = useState("");
+  const [suggestedAmount, setSuggestedAmount] = useState("");
+  const [acting, setActing] = useState(false);
+
+  // comment box below
+  const [newComment, setNewComment] = useState("");
+
+  // repay modal
+  const [openRepay, setOpenRepay] = useState(false);
+  const [postLoading, setPostLoading] = useState(false);
   const [repForm, setRepForm] = useState({
     amount: "",
     date: new Date().toISOString().slice(0, 10),
     method: "cash",
     notes: "",
   });
-  const [postingRepayment, setPostingRepayment] = useState(false);
+
+  // schedule modal
+  const [openSchedule, setOpenSchedule] = useState(false);
 
   const currency = loan?.currency || "TZS";
-  const statusBadge =
-    statusColors[loan?.status] || "bg-slate-100 text-slate-800";
+  const statusBadge = statusColors[loan?.status] || "bg-slate-100 text-slate-800";
 
-  // Load loan + related data
+  const role = roleOf();
+  const canBM = isBM(role);
+  const canCO = isCompliance(role);
+  const canACC = isAccountant(role);
+
+  const workflowStage = loan?.workflowStage || deriveStageFromStatus(loan?.status);
+  const showBMToolbar = canBM && ["submitted", "bm_review", "changes_resubmitted"].includes(workflowStage);
+  const showCOToolbar = canCO && ["compliance", "compliance_review"].includes(workflowStage);
+  const showDisburse = canACC && (loan?.status === "approved" || workflowStage === "accounting");
+
+  /* ---------- load ---------- */
   const loadLoan = async () => {
     setLoading(true);
     setErrs(null);
     try {
       const { data: l } = await api.get(`/loans/${id}`);
       setLoan(l);
+      setSuggestedAmount(String(l?.amount ?? ""));
 
       const tasks = [
         api
@@ -62,14 +103,12 @@ export default function LoanDetails() {
           .then((r) => setRepayments(r.data || []))
           .catch(() => setRepayments([]))
           .finally(() => setLoadingRepayments(false)),
-
         api
           .get(`/comments/loan/${id}`)
           .then((r) => setComments(r.data || []))
           .catch(() => setComments([]))
           .finally(() => setLoadingComments(false)),
       ];
-
       if (l?.productId) {
         tasks.push(
           api
@@ -78,7 +117,6 @@ export default function LoanDetails() {
             .catch(() => setProduct(null))
         );
       }
-
       await Promise.all(tasks);
     } catch (e) {
       console.error(e);
@@ -90,34 +128,101 @@ export default function LoanDetails() {
 
   useEffect(() => {
     setSchedule(null);
+    setReviewComment("");
+    setNewComment("");
     loadLoan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Status change handler
-  const handleStatusChange = async (nextStatus, extraBody = {}) => {
-    if (nextStatus === "disbursed" && loan?.status !== "approved") {
-      alert("You can disburse only after the loan is approved.");
+  /* ---------- actions / workflow ---------- */
+
+  async function postCommentInline(content) {
+    try {
+      await api.post(`/comments`, { loanId: id, content });
+      // reload comments only
+      const r = await api.get(`/comments/loan/${id}`);
+      setComments(r.data || []);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Preferred workflow endpoint; graceful fallback if backend not ready
+  async function workflowAction(action, extra = {}) {
+    setActing(true);
+    try {
+      await api.post(`/loans/${id}/workflow`, {
+        action,
+        comment: reviewComment?.trim() || undefined,
+        suggestedAmount:
+          extra.suggestedAmount != null && extra.suggestedAmount !== ""
+            ? Number(extra.suggestedAmount)
+            : undefined,
+      });
+      await loadLoan();
+      setReviewComment("");
+      alert("Action applied.");
+    } catch (e) {
+      // Fallbacks to legacy endpoints if /workflow is not available
+      try {
+        if (action === "bm_approve" || action === "compliance_approve") {
+          await api.patch(`/loans/${id}/status`, { status: "approved" });
+          if (reviewComment.trim()) await postCommentInline(reviewComment.trim());
+        } else if (action === "reject") {
+          await api.patch(`/loans/${id}/status`, { status: "rejected" });
+          if (reviewComment.trim()) await postCommentInline(reviewComment.trim());
+        } else if (action === "request_changes") {
+          if (reviewComment.trim()) await postCommentInline(`Changes requested: ${reviewComment.trim()}`);
+        } else if (action === "resubmit") {
+          if (reviewComment.trim()) await postCommentInline(`Resubmitted: ${reviewComment.trim()}`);
+        }
+        await loadLoan();
+        setReviewComment("");
+        alert("Action applied (fallback).");
+      } catch (ee) {
+        console.error(ee);
+        alert("Failed to apply action.");
+      }
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function saveSuggestion() {
+    if (!suggestedAmount || Number(suggestedAmount) <= 0) {
+      alert("Enter a valid amount.");
       return;
     }
-    if (nextStatus === "closed" && (loan?.outstanding ?? 0) > 0) {
-      if (!confirm("Outstanding > 0. Close anyway?")) return;
-      extraBody.override = true;
-    }
-    if (!confirm(`Mark this loan as ${nextStatus}?`)) return;
-
+    setActing(true);
     try {
-      await api.patch(`/loans/${id}/status`, { status: nextStatus, ...extraBody });
+      await api.patch(`/loans/${id}`, { amount: Number(suggestedAmount) });
+      if (reviewComment.trim()) await postCommentInline(`Suggested amount: ${fmtTZS(suggestedAmount, currency)} — ${reviewComment.trim()}`);
       await loadLoan();
-      alert(`Loan marked as ${nextStatus}.`);
+      alert("Suggestion saved.");
     } catch (e) {
       console.error(e);
-      alert(`Failed to update status to ${nextStatus}.`);
+      alert("Failed to save suggestion.");
+    } finally {
+      setActing(false);
+    }
+  }
+
+  // Close loan (legacy)
+  const closeLoan = async () => {
+    const outstanding = loan?.outstanding ?? 0;
+    if (outstanding > 0 && !window.confirm("Outstanding > 0. Close anyway?")) return;
+    try {
+      await api.patch(`/loans/${id}/status`, { status: "closed", override: outstanding > 0 });
+      await loadLoan();
+      alert("Loan closed.");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to close loan.");
     }
   };
 
-  // Comment handler
-  const handleAddComment = async () => {
+  /* ---------- comments ---------- */
+  const addComment = async () => {
     if (!newComment.trim()) return;
     try {
       const res = await api.post(`/comments`, { loanId: id, content: newComment });
@@ -129,7 +234,7 @@ export default function LoanDetails() {
     }
   };
 
-  // Schedule modal
+  /* ---------- schedule ---------- */
   const openScheduleModal = async () => {
     setOpenSchedule(true);
     if (schedule) return;
@@ -145,12 +250,11 @@ export default function LoanDetails() {
     }
   };
 
-  // Repayment handler
+  /* ---------- repayment ---------- */
   const postRepayment = async () => {
     const amt = Number(repForm.amount);
     if (!amt || amt <= 0) return alert("Enter a valid amount.");
-
-    setPostingRepayment(true);
+    setPostLoading(true);
     try {
       await api.post(`/repayments`, { loanId: id, ...repForm, amount: amt });
       await loadLoan();
@@ -166,10 +270,11 @@ export default function LoanDetails() {
       console.error(e);
       alert("Failed to post repayment.");
     } finally {
-      setPostingRepayment(false);
+      setPostLoading(false);
     }
   };
 
+  /* ---------- render ---------- */
   if (loading) return <div className="p-4">Loading loan…</div>;
   if (errs) return <div className="p-4 text-red-600">{errs}</div>;
   if (!loan) return <div className="p-4">Loan not found.</div>;
@@ -180,11 +285,14 @@ export default function LoanDetails() {
     <div className="p-4 space-y-6">
       {/* HEADER */}
       <div className="flex justify-between items-center">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-2xl font-bold">Loan Details</h2>
-          <span className={`px-2 py-1 rounded text-xs font-semibold ${statusBadge}`}>
-            {loan.status}
-          </span>
+          <span className={`${chip} ${statusBadge}`}>{loan.status}</span>
+          {workflowStage && (
+            <span className={`${chip} bg-indigo-50 text-indigo-700 border border-indigo-200`}>
+              Stage: {workflowStage.replaceAll("_", " ")}
+            </span>
+          )}
         </div>
         <button onClick={() => navigate(-1)} className="text-blue-600 hover:underline">
           &larr; Back
@@ -197,7 +305,7 @@ export default function LoanDetails() {
           <div>
             <div className="text-gray-500 text-xs">Borrower</div>
             <Link className="text-blue-600 hover:underline" to={`/borrowers/${loan.borrowerId}`}>
-              {loan.Borrower?.name || "N/A"}
+              {loan.Borrower?.name || loan.borrowerName || "N/A"}
             </Link>
           </div>
           <div>
@@ -210,11 +318,11 @@ export default function LoanDetails() {
           </div>
           <div>
             <div className="text-gray-500 text-xs">Term</div>
-            <div>{loan.termMonths} months</div>
+            <div>{loan.termMonths || loan.durationMonths} months</div>
           </div>
           <div>
-            <div className="text-gray-500 text-xs">Start Date</div>
-            <div>{fmtDate(loan.startDate)}</div>
+            <div className="text-gray-500 text-xs">Start / Release</div>
+            <div>{fmtDate(loan.startDate || loan.releaseDate)}</div>
           </div>
           <div>
             <div className="text-gray-500 text-xs">Outstanding</div>
@@ -238,35 +346,113 @@ export default function LoanDetails() {
         )}
       </div>
 
-      {/* ACTION BUTTONS */}
+      {/* REVIEW TOOLBAR */}
+      {(showBMToolbar || showCOToolbar || showDisburse) && (
+        <div className="bg-white p-4 rounded shadow space-y-3 border">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold">
+              {showBMToolbar ? "Branch Manager Review"
+                : showCOToolbar ? "Compliance Review"
+                : "Accounting / Disbursement"}
+            </h3>
+            {showDisburse && (
+              <Link
+                to={`/loans/${id}/disburse`}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                Disburse
+              </Link>
+            )}
+          </div>
+
+          {(showBMToolbar || showCOToolbar) && (
+            <>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600">Suggested Principal Amount</label>
+                  <input
+                    type="number"
+                    className="border rounded px-3 py-2 w-full"
+                    value={suggestedAmount}
+                    onChange={(e) => setSuggestedAmount(e.target.value)}
+                    min="0"
+                    step="0.01"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Save a suggestion or approve with a different amount.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600">Comment</label>
+                  <textarea
+                    className="border rounded px-3 py-2 w-full min-h-[44px]"
+                    placeholder="Why approving / changes / rejection?"
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() =>
+                    workflowAction(showBMToolbar ? "bm_approve" : "compliance_approve", {
+                      suggestedAmount,
+                    })
+                  }
+                  disabled={acting}
+                  className="bg-emerald-600 text-white px-3 py-2 rounded hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {acting ? "Working…" : "Approve"}
+                </button>
+                <button
+                  onClick={() => workflowAction("request_changes")}
+                  disabled={acting}
+                  className="bg-amber-600 text-white px-3 py-2 rounded hover:bg-amber-700 disabled:opacity-60"
+                  title="Send back to Loan Officer with requested changes"
+                >
+                  {acting ? "Working…" : "Request Changes"}
+                </button>
+                <button
+                  onClick={() => workflowAction("reject")}
+                  disabled={acting}
+                  className="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-800 disabled:opacity-60"
+                >
+                  {acting ? "Working…" : "Reject"}
+                </button>
+                <button
+                  onClick={saveSuggestion}
+                  disabled={acting}
+                  className="px-3 py-2 rounded border hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {acting ? "Saving…" : "Save Suggestion"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {showDisburse && (
+            <p className="text-sm text-gray-600">
+              This loan is approved. Proceed to disbursement to finalize payout.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* QUICK ACTIONS (generic) */}
       <div className="flex flex-wrap gap-3">
         <Link to={`/loans`} className="px-3 py-2 rounded border">Back to Loans</Link>
-        {loan.status === "pending" && (
-          <>
-            <button onClick={() => handleStatusChange("approved")} className="bg-emerald-600 text-white px-3 py-2 rounded hover:bg-emerald-700">
-              Approve
-            </button>
-            <button onClick={() => handleStatusChange("rejected")} className="bg-gray-600 text-white px-3 py-2 rounded hover:bg-gray-700">
-              Reject
-            </button>
-          </>
-        )}
-        {(loan.status === "approved" || loan.status === "disbursed") && (
-          <button onClick={() => handleStatusChange("disbursed")} className="bg-indigo-600 text-white px-3 py-2 rounded hover:bg-indigo-700">
-            Disburse
-          </button>
-        )}
-        {loan.status !== "closed" && (
-          <button onClick={() => handleStatusChange("closed")} className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700">
-            Close
-          </button>
-        )}
         <button onClick={openScheduleModal} className="px-3 py-2 rounded border hover:bg-gray-50">
           View Schedule
         </button>
         <button onClick={() => setOpenRepay(true)} className="px-3 py-2 rounded border hover:bg-gray-50">
           Post Repayment
         </button>
+        {loan.status !== "closed" && (
+          <button onClick={closeLoan} className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700">
+            Close Loan
+          </button>
+        )}
       </div>
 
       {/* REPAYMENTS */}
@@ -325,7 +511,7 @@ export default function LoanDetails() {
             className="border rounded px-2 py-1 w-full"
             placeholder="Add a comment"
           />
-          <button onClick={handleAddComment} className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700">
+          <button onClick={addComment} className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700">
             Post
           </button>
         </div>
@@ -387,10 +573,10 @@ export default function LoanDetails() {
               <button onClick={() => setOpenRepay(false)} className="px-3 py-2 rounded border">Cancel</button>
               <button
                 onClick={postRepayment}
-                disabled={postingRepayment}
+                disabled={postLoading}
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
               >
-                {postingRepayment ? "Posting…" : "Post"}
+                {postLoading ? "Posting…" : "Post"}
               </button>
             </div>
           </div>
@@ -447,4 +633,13 @@ export default function LoanDetails() {
       )}
     </div>
   );
+}
+
+/* If backend has no stage, derive a sensible label off status. */
+function deriveStageFromStatus(status) {
+  if (!status) return "";
+  const s = String(status).toLowerCase();
+  if (s === "pending") return "submitted";
+  if (s === "approved") return "accounting";
+  return "";
 }

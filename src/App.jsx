@@ -1,4 +1,3 @@
-// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -41,6 +40,7 @@ const DisbursementQueue = lazy(() => import("./pages/loans/DisbursementQueue"));
 const LoanProducts = lazy(() => import("./pages/loans/LoanProducts"));
 const LoanSchedulePage = lazy(() => import("./pages/loans/LoanSchedulePage"));
 const LoanReports = lazy(() => import("./pages/loans/LoanReports"));
+const DisburseLoan = lazy(() => import("./pages/loans/DisburseLoan")); // <-- NEW
 
 // Repayments
 const Repayments = lazy(() => import("./pages/Repayments"));
@@ -85,7 +85,7 @@ const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
-// Tiny inline placeholder so missing pages don’t 404
+// Tiny inline placeholder
 const Stub = ({ title = "Coming soon" }) => (
   <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
     <h1 className="text-lg font-semibold">{title}</h1>
@@ -113,7 +113,7 @@ function App() {
             {/* Dashboard */}
             <Route index element={<Dashboard />} />
 
-            {/* ===== Admin hub + dynamic admin pages ===== */}
+            {/* ===== Admin hub ===== */}
             <Route
               path="admin"
               element={
@@ -126,10 +126,10 @@ function App() {
               <Route path=":slug" element={<AdminRouter />} />
             </Route>
 
-            {/* Top-right Account quick panel */}
+            {/* Account quick panel */}
             <Route path="account/settings" element={<AccountSettings />} />
 
-            {/* Settings targets surfaced in UI */}
+            {/* Settings */}
             <Route path="settings/billing" element={<Stub title="Billing Settings" />} />
             <Route path="settings/change-password" element={<AccountSettings />} />
             <Route path="settings/2fa" element={<Stub title="Two-Factor Authentication" />} />
@@ -142,7 +142,6 @@ function App() {
             <Route path="borrowers/imports" element={<BorrowerImports />} />
             <Route path="borrowers/reports" element={<BorrowerReports />} />
             <Route path="borrowers/:id" element={<BorrowerDetails />} />
-            {/* Borrowers extras */}
             <Route path="borrowers/sms" element={<Sms />} />
             <Route path="borrowers/email" element={<Stub title="Send Email to Borrowers" />} />
             <Route path="borrowers/invite" element={<Stub title="Invite Borrowers" />} />
@@ -164,6 +163,8 @@ function App() {
             <Route path="loans/schedule" element={<LoanSchedulePage />} />
             <Route path="loans/reports" element={<LoanReports />} />
             <Route path="loans/:id" element={<LoanDetails />} />
+            <Route path="loans/:id/disburse" element={<DisburseLoan />} /> {/* NEW */}
+
             {/* Loans aliases */}
             <Route path="loans/due" element={<Navigate to="/loans/status/due" replace />} />
             <Route path="loans/missed" element={<Navigate to="/loans/status/missed" replace />} />
@@ -182,7 +183,6 @@ function App() {
             <Route path="repayments" element={<Repayments />} />
             <Route path="repayments/new" element={<ManualRepayment />} />
             <Route path="repayments/receipts" element={<RepaymentReceipts />} />
-            {/* Repayments extras */}
             <Route path="repayments/bulk" element={<Stub title="Add Bulk Repayments" />} />
             <Route path="repayments/csv" element={<Stub title="Upload Repayments CSV" />} />
             <Route path="repayments/charts" element={<Stub title="Repayment Charts" />} />
@@ -199,7 +199,7 @@ function App() {
             <Route path="collections/sms" element={<Sms />} />
             <Route path="collections/email" element={<Stub title="Send Collection Emails" />} />
 
-            {/* Savings (alias to transactions module) */}
+            {/* Savings */}
             <Route path="savings" element={<Navigate to="/savings-transactions" replace />} />
             <Route path="savings/add" element={<Stub title="Add Savings Account" />} />
             <Route path="savings/charts" element={<Stub title="Savings Charts" />} />
@@ -260,7 +260,7 @@ function App() {
             {/* Branches */}
             <Route path="branches" element={<Branches />} />
 
-            {/* Reports (map all sub-links to one page for now) */}
+            {/* Reports */}
             <Route path="reports" element={<Reports />} />
             <Route path="reports/borrowers" element={<Reports />} />
             <Route path="reports/loans" element={<Reports />} />
