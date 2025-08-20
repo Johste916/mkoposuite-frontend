@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import api from "../../api";
 
 const money = (v) => Number(v || 0).toLocaleString();
 
@@ -9,8 +8,8 @@ const money = (v) => Number(v || 0).toLocaleString();
 function localPreviewAllocation(
   schedule = [],
   amount = 0,
-  strategy = 'oldest_due_first',
-  customOrder = 'penalties,interest,fees,principal',
+  strategy = "oldest_due_first",
+  customOrder = "penalties,interest,fees,principal",
   waivePenalties = false
 ) {
   const amt = Number(amount || 0);
@@ -19,26 +18,29 @@ function localPreviewAllocation(
 
   // Determine category order
   let order;
-  if (strategy === 'principal_first') order = ['principal', 'interest', 'fees', 'penalties'];
-  else if (strategy === 'interest_first') order = ['interest', 'fees', 'penalties', 'principal'];
-  else if (strategy === 'fees_first') order = ['fees', 'interest', 'penalties', 'principal'];
-  else if (strategy === 'custom') order = customOrder.split(',').map(s => s.trim()).filter(Boolean);
-  else order = ['penalties', 'interest', 'fees', 'principal']; // default
+  if (strategy === "principal_first") order = ["principal", "interest", "fees", "penalties"];
+  else if (strategy === "interest_first") order = ["interest", "fees", "penalties", "principal"];
+  else if (strategy === "fees_first") order = ["fees", "interest", "penalties", "principal"];
+  else if (strategy === "custom") order = customOrder.split(",").map((s) => s.trim()).filter(Boolean);
+  else order = ["penalties", "interest", "fees", "principal"]; // default
 
-  if (waivePenalties) order = order.filter(x => x !== 'penalties');
+  if (waivePenalties) order = order.filter((x) => x !== "penalties");
 
   // Build simplified “remaining” per installment
   const rows = schedule.map((s, idx) => {
     const principalDue = Math.max(0, Number(s.principal ?? 0) - Number(s.principalPaid ?? 0));
-    const interestDue  = Math.max(0, Number(s.interest  ?? 0) - Number(s.interestPaid  ?? 0));
-    const feesDue      = Math.max(0, Number(s.fees      ?? 0) - Number(s.feesPaid      ?? 0));
-    const penDue       = Math.max(0, Number(s.penalties ?? s.penalty ?? 0) - Number(s.penaltiesPaid ?? 0));
+    const interestDue = Math.max(0, Number(s.interest ?? 0) - Number(s.interestPaid ?? 0));
+    const feesDue = Math.max(0, Number(s.fees ?? 0) - Number(s.feesPaid ?? 0));
+    const penDue = Math.max(
+      0,
+      Number(s.penalties ?? s.penalty ?? 0) - Number(s.penaltiesPaid ?? 0)
+    );
 
     let remaining = {
       principal: isFinite(principalDue) ? principalDue : 0,
-      interest : isFinite(interestDue)  ? interestDue  : 0,
-      fees     : isFinite(feesDue)      ? feesDue      : 0,
-      penalties: waivePenalties ? 0 : (isFinite(penDue) ? penDue : 0),
+      interest: isFinite(interestDue) ? interestDue : 0,
+      fees: isFinite(feesDue) ? feesDue : 0,
+      penalties: waivePenalties ? 0 : isFinite(penDue) ? penDue : 0,
     };
 
     // Heuristic if totals exist but parts are 0
@@ -49,7 +51,7 @@ function localPreviewAllocation(
       remaining.principal = Math.max(0, totalLeft - remaining.interest);
     }
 
-    return { period: s.period ?? (idx + 1), remaining };
+    return { period: s.period ?? idx + 1, remaining };
   });
 
   let left = amt;
@@ -91,7 +93,7 @@ const getNextDueRemaining = (sch = []) => {
     const paid = Number(s.paid || 0);
     const remain = Math.max(0, total - paid);
 
-    const isPaid = String(s.status || '').toLowerCase() === 'paid';
+    const isPaid = String(s.status || "").toLowerCase() === "paid";
     if (!isPaid && remain > 0) {
       return { amount: remain, dueDate: s.dueDate, period: s.period };
     }
@@ -101,20 +103,20 @@ const getNextDueRemaining = (sch = []) => {
 
 // Normalize any date-ish value to "YYYY-MM-DD" for <input type="date" />
 const toDateInputValue = (val) => {
-  if (!val) return '';
-  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  if (!val) return "";
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
   const d = new Date(val);
-  if (isNaN(d.getTime())) return '';
+  if (isNaN(d.getTime())) return "";
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
 
-const ManualRepayment = () => {
+export default function ManualRepayment() {
   const navigate = useNavigate();
   const [sp] = useSearchParams();
-  const qpLoanId = sp.get('loanId');
+  const qpLoanId = sp.get("loanId");
 
   // loan selection
-  const [loanQuery, setLoanQuery] = useState('');
+  const [loanQuery, setLoanQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState([]);
   const [loan, setLoan] = useState(null); // { id, reference, borrowerName, currency, outstanding }
@@ -125,14 +127,14 @@ const ManualRepayment = () => {
 
   // payment form
   const [form, setForm] = useState({
-    loanId: '',
+    loanId: "",
     date: new Date().toISOString().slice(0, 10),
-    amount: '',
-    method: 'cash',
-    reference: '',
-    notes: '',
-    allocateStrategy: 'oldest_due_first',
-    customOrder: 'penalties,interest,fees,principal',
+    amount: "",
+    method: "cash",
+    reference: "",
+    notes: "",
+    allocateStrategy: "oldest_due_first",
+    customOrder: "penalties,interest,fees,principal",
     waivePenalties: false,
     issueReceipt: true,
   });
@@ -151,9 +153,7 @@ const ManualRepayment = () => {
     const { name, value, type, checked } = e.target;
     setForm((f) => ({
       ...f,
-      [name]:
-        type === 'checkbox' ? checked :
-        type === 'number' ? Number(value) : value
+      [name]: type === "checkbox" ? checked : type === "number" ? Number(value) : value,
     }));
   };
   const setVal = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
@@ -164,10 +164,12 @@ const ManualRepayment = () => {
     if (!loanQuery.trim()) return;
     setSearching(true);
     try {
-      const { data } = await axios.get('/api/loans/search', { params: { q: loanQuery.trim(), limit: 10 } });
-      setResults(data || []);
+      const { data } = await api.get("/loans/search", {
+        params: { q: loanQuery.trim(), limit: 10 },
+      });
+      setResults(Array.isArray(data) ? data : data?.items || []);
     } catch {
-      toast.error('Search failed');
+      alert("Search failed");
     } finally {
       setSearching(false);
     }
@@ -183,8 +185,8 @@ const ManualRepayment = () => {
   const fetchSchedule = async (loanId) => {
     setLoadingLoan(true);
     try {
-      const { data } = await axios.get(`/api/loans/${loanId}/schedule`);
-      setSchedule(data || []);
+      const { data } = await api.get(`/loans/${loanId}/schedule`);
+      setSchedule(Array.isArray(data) ? data : []);
     } catch {
       setSchedule([]);
     } finally {
@@ -196,42 +198,43 @@ const ManualRepayment = () => {
     if (!id) return;
     setLoadingLoan(true);
     try {
-      const { data } = await axios.get(`/api/loans/${id}`);
+      const { data } = await api.get(`/loans/${id}`);
       if (data) {
         setLoan(data);
         setForm((f) => ({ ...f, loanId: data.id }));
         await fetchSchedule(data.id);
       } else {
-        toast.error('Loan not found');
+        alert("Loan not found");
       }
     } catch {
-      toast.error('Failed to load loan');
+      alert("Failed to load loan");
     } finally {
       setLoadingLoan(false);
     }
   };
 
-  useEffect(() => { if (qpLoanId) loadLoanById(qpLoanId); }, [qpLoanId]);
+  useEffect(() => {
+    if (qpLoanId) loadLoanById(qpLoanId);
+  }, [qpLoanId]);
 
   // ---- Use Next Due Amount (and date) ----
   const useNextDue = () => {
     if (!schedule?.length) {
-      toast.info('Load a loan first');
+      alert("Load a loan first");
       return;
     }
     const next = getNextDueRemaining(schedule);
     if (!next) {
-      toast.info('No unpaid installment found');
+      alert("No unpaid installment found");
       return;
     }
 
     const nextDate = toDateInputValue(next.dueDate);
-    setForm(f => ({
+    setForm((f) => ({
       ...f,
       amount: Number(next.amount).toFixed(2),
       date: nextDate || f.date,
     }));
-    toast.success(`Filled ${Number(next.amount).toLocaleString()}${nextDate ? `; date → ${nextDate}` : ''}`);
   };
 
   // ---- Preview allocation ----
@@ -244,10 +247,10 @@ const ManualRepayment = () => {
         amount: Number(form.amount),
         date: form.date,
         strategy: form.allocateStrategy,
-        customOrder: form.allocateStrategy === 'custom' ? form.customOrder : undefined,
+        customOrder: form.allocateStrategy === "custom" ? form.customOrder : undefined,
         waivePenalties: !!form.waivePenalties,
       };
-      const { data } = await axios.post('/api/repayments/preview-allocation', payload);
+      const { data } = await api.post("/repayments/preview-allocation", payload);
       setPreview(data || null);
     } catch {
       const local = localPreviewAllocation(
@@ -258,7 +261,7 @@ const ManualRepayment = () => {
         !!form.waivePenalties
       );
       setPreview(local);
-      toast.info('Server preview unavailable — used local preview.');
+      alert("Server preview unavailable — used local preview.");
     } finally {
       setPreviewing(false);
     }
@@ -266,7 +269,7 @@ const ManualRepayment = () => {
 
   // ---- Submit repayment ----
   const submitPayment = async () => {
-    if (!canPreview) return toast.error('Fill amount, date, and select a loan');
+    if (!canPreview) return alert("Fill amount, date, and select a loan");
     setPosting(true);
     try {
       const payload = {
@@ -277,20 +280,23 @@ const ManualRepayment = () => {
         reference: form.reference || undefined,
         notes: form.notes || undefined,
         strategy: form.allocateStrategy,
-        customOrder: form.allocateStrategy === 'custom' ? form.customOrder : undefined,
+        customOrder: form.allocateStrategy === "custom" ? form.customOrder : undefined,
         waivePenalties: !!form.waivePenalties,
         issueReceipt: !!form.issueReceipt,
       };
-      const { data } = await axios.post('/api/repayments/manual', payload);
-      toast.success('Repayment posted');
+      const { data } = await api.post("/repayments/manual", payload);
       if (data?.repaymentId) {
-        navigate(`/repayments/receipt/${data.repaymentId}`);
+        // optional receipt route if you have it
+        // navigate(`/repayments/receipt/${data.repaymentId}`);
+        alert("Repayment posted");
+        navigate("/repayments/receipts");
       } else {
-        navigate(`/repayments`);
+        alert("Repayment posted");
+        navigate("/repayments");
       }
     } catch (e) {
-      const msg = e?.response?.data?.error || 'Failed to post repayment';
-      toast.error(msg);
+      const msg = e?.response?.data?.error || "Failed to post repayment";
+      alert(msg);
     } finally {
       setPosting(false);
     }
@@ -310,7 +316,7 @@ const ManualRepayment = () => {
           <div className="flex gap-2">
             <button
               className="inline-flex items-center rounded-md px-3 py-2 text-sm border hover:bg-gray-50 dark:hover:bg-gray-700"
-              onClick={() => navigate('/repayments')}
+              onClick={() => navigate("/repayments")}
             >
               Back to Schedule
             </button>
@@ -339,7 +345,7 @@ const ManualRepayment = () => {
                 disabled={searching}
                 className="inline-flex items-center rounded-md px-3 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                {searching ? 'Searching…' : 'Search'}
+                {searching ? "Searching…" : "Search"}
               </button>
             </div>
           </form>
@@ -361,8 +367,10 @@ const ManualRepayment = () => {
                     <tr key={l.id} className="border-t">
                       <td className="p-3">{l.reference || `L-${l.id}`}</td>
                       <td className="p-3">{l.borrowerName}</td>
-                      <td className="p-3">{l.currency || 'TZS'} {money(l.outstanding)}</td>
-                      <td className="p-3">{l.nextDueDate || '—'}</td>
+                      <td className="p-3">
+                        {l.currency || "TZS"} {money(l.outstanding)}
+                      </td>
+                      <td className="p-3">{l.nextDueDate || "—"}</td>
                       <td className="p-3 text-right">
                         <button
                           className="inline-flex items-center rounded-md px-3 py-1.5 text-sm border hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -387,7 +395,9 @@ const ManualRepayment = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-500">Outstanding</p>
-                  <p className="font-semibold">{loan.currency || 'TZS'} {money(loan.outstanding)}</p>
+                  <p className="font-semibold">
+                    {loan.currency || "TZS"} {money(loan.outstanding)}
+                  </p>
                 </div>
               </div>
 
@@ -406,24 +416,40 @@ const ManualRepayment = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {loadingLoan && <tr><td colSpan={6} className="p-4">Loading schedule…</td></tr>}
-                    {!loadingLoan && schedule.length === 0 && <tr><td colSpan={6} className="p-4 text-gray-500">No schedule items.</td></tr>}
+                    {loadingLoan && (
+                      <tr>
+                        <td colSpan={6} className="p-4">
+                          Loading schedule…
+                        </td>
+                      </tr>
+                    )}
+                    {!loadingLoan && schedule.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="p-4 text-gray-500">
+                          No schedule items.
+                        </td>
+                      </tr>
+                    )}
                     {schedule.map((s, idx) => (
                       <tr key={`${s.period}-${s.dueDate}`} className="border-t">
                         <td className="p-3">{s.period ?? idx + 1}</td>
                         <td className="p-3">{s.dueDate}</td>
-                        <td className="p-3">{loan.currency || 'TZS'} {money(s.total)}</td>
-                        <td className="p-3">{loan.currency || 'TZS'} {money(s.paid)}</td>
-                        <td className="p-3">{s.penalty ? `${loan.currency || 'TZS'} ${money(s.penalty)}` : '—'}</td>
+                        <td className="p-3">
+                          {loan.currency || "TZS"} {money(s.total)}
+                        </td>
+                        <td className="p-3">
+                          {loan.currency || "TZS"} {money(s.paid)}
+                        </td>
+                        <td className="p-3">
+                          {s.penalty ? `${loan.currency || "TZS"} ${money(s.penalty)}` : "—"}
+                        </td>
                         <td className="p-3">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
-                              s.status === 'overdue'
-                                ? 'bg-red-600 text-white'
-                                : 'border'
+                              s.status === "overdue" ? "bg-red-600 text-white" : "border"
                             }`}
                           >
-                            {(s.status || 'upcoming').toString()}
+                            {(s.status || "upcoming").toString()}
                           </span>
                         </td>
                       </tr>
@@ -479,7 +505,7 @@ const ManualRepayment = () => {
               <label className="text-sm font-medium">Method</label>
               <select
                 value={form.method}
-                onChange={(e) => setVal('method')(e.target.value)}
+                onChange={(e) => setVal("method")(e.target.value)}
                 className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-900"
               >
                 <option value="cash">Cash</option>
@@ -521,7 +547,7 @@ const ManualRepayment = () => {
               <label className="text-sm font-medium">Strategy</label>
               <select
                 value={form.allocateStrategy}
-                onChange={(e) => setVal('allocateStrategy')(e.target.value)}
+                onChange={(e) => setVal("allocateStrategy")(e.target.value)}
                 className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-900"
               >
                 <option value="oldest_due_first">Oldest Due First</option>
@@ -532,7 +558,11 @@ const ManualRepayment = () => {
               </select>
             </div>
 
-            <div className={`${form.allocateStrategy === 'custom' ? '' : 'opacity-60 pointer-events-none'} space-y-2 md:col-span-2`}>
+            <div
+              className={`${
+                form.allocateStrategy === "custom" ? "" : "opacity-60 pointer-events-none"
+              } space-y-2 md:col-span-2`}
+            >
               <label className="text-sm font-medium">Custom Order</label>
               <input
                 name="customOrder"
@@ -541,7 +571,9 @@ const ManualRepayment = () => {
                 placeholder="penalties,interest,fees,principal"
                 className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-900"
               />
-              <p className="text-xs text-gray-500">Comma-separated among: penalties, interest, fees, principal.</p>
+              <p className="text-xs text-gray-500">
+                Comma-separated among: penalties, interest, fees, principal.
+              </p>
             </div>
 
             <div className="flex items-end">
@@ -552,7 +584,7 @@ const ManualRepayment = () => {
                     <input
                       type="checkbox"
                       checked={!!form.waivePenalties}
-                      onChange={(e) => setVal('waivePenalties')(e.target.checked)}
+                      onChange={(e) => setVal("waivePenalties")(e.target.checked)}
                     />
                     Waive penalties
                   </label>
@@ -560,7 +592,7 @@ const ManualRepayment = () => {
                     <input
                       type="checkbox"
                       checked={!!form.issueReceipt}
-                      onChange={(e) => setVal('issueReceipt')(e.target.checked)}
+                      onChange={(e) => setVal("issueReceipt")(e.target.checked)}
                     />
                     Issue receipt
                   </label>
@@ -575,7 +607,7 @@ const ManualRepayment = () => {
                 onClick={getPreview}
                 className="inline-flex items-center rounded-md px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 disabled:opacity-60"
               >
-                {previewing ? 'Previewing…' : 'Preview Allocation'}
+                {previewing ? "Previewing…" : "Preview Allocation"}
               </button>
               <button
                 type="button"
@@ -583,7 +615,7 @@ const ManualRepayment = () => {
                 onClick={submitPayment}
                 className="inline-flex items-center rounded-md px-3 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                {posting ? 'Posting…' : 'Post Repayment'}
+                {posting ? "Posting…" : "Post Repayment"}
               </button>
             </div>
           </div>
@@ -604,26 +636,40 @@ const ManualRepayment = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.allocations?.length ? preview.allocations.map((a) => (
-                      <tr key={a.period} className="border-t">
-                        <td className="p-3">{a.period}</td>
-                        <td className="p-3">{loan?.currency || 'TZS'} {money(a.principal)}</td>
-                        <td className="p-3">{loan?.currency || 'TZS'} {money(a.interest)}</td>
-                        <td className="p-3">{loan?.currency || 'TZS'} {money(a.fees)}</td>
-                        <td className="p-3">{loan?.currency || 'TZS'} {money(a.penalties)}</td>
+                    {preview.allocations?.length ? (
+                      preview.allocations.map((a) => (
+                        <tr key={a.period} className="border-t">
+                          <td className="p-3">{a.period}</td>
+                          <td className="p-3">{loan?.currency || "TZS"} {money(a.principal)}</td>
+                          <td className="p-3">{loan?.currency || "TZS"} {money(a.interest)}</td>
+                          <td className="p-3">{loan?.currency || "TZS"} {money(a.fees)}</td>
+                          <td className="p-3">{loan?.currency || "TZS"} {money(a.penalties)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="p-4 text-gray-500">
+                          No allocation details.
+                        </td>
                       </tr>
-                    )) : (
-                      <tr><td colSpan={5} className="p-4 text-gray-500">No allocation details.</td></tr>
                     )}
                   </tbody>
                   {preview.totals && (
                     <tfoot>
                       <tr className="border-t">
                         <td className="p-3 font-medium">Totals</td>
-                        <td className="p-3 font-medium">{loan?.currency || 'TZS'} {money(preview.totals.principal)}</td>
-                        <td className="p-3 font-medium">{loan?.currency || 'TZS'} {money(preview.totals.interest)}</td>
-                        <td className="p-3 font-medium">{loan?.currency || 'TZS'} {money(preview.totals.fees)}</td>
-                        <td className="p-3 font-medium">{loan?.currency || 'TZS'} {money(preview.totals.penalties)}</td>
+                        <td className="p-3 font-medium">
+                          {loan?.currency || "TZS"} {money(preview.totals.principal)}
+                        </td>
+                        <td className="p-3 font-medium">
+                          {loan?.currency || "TZS"} {money(preview.totals.interest)}
+                        </td>
+                        <td className="p-3 font-medium">
+                          {loan?.currency || "TZS"} {money(preview.totals.fees)}
+                        </td>
+                        <td className="p-3 font-medium">
+                          {loan?.currency || "TZS"} {money(preview.totals.penalties)}
+                        </td>
                       </tr>
                     </tfoot>
                   )}
@@ -635,6 +681,4 @@ const ManualRepayment = () => {
       </div>
     </div>
   );
-};
-
-export default ManualRepayment;
+}
