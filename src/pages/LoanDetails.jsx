@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api";
 
-/* ---------- small helpers ---------- */
+/* ---------- helpers ---------- */
 const fmtTZS = (n, currency = "TZS") =>
   `\u200e${currency} ${Number(n || 0).toLocaleString()}`;
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "N/A");
@@ -17,9 +17,9 @@ const statusColors = {
   closed: "bg-slate-200 text-slate-700",
 };
 
-const chip = "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold";
+const chip =
+  "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold";
 
-/* Map a loose set of role names -> capability buckets */
 const roleOf = () => {
   try {
     const r = (JSON.parse(localStorage.getItem("user") || "{}").role || "").toLowerCase();
@@ -35,6 +35,17 @@ const isCompliance = (r) =>
   ["compliance", "compliance_officer", "legal"].includes(r) || isAdmin(r);
 const isAccountant = (r) =>
   ["accountant", "finance"].includes(r) || isAdmin(r);
+const isOfficer = (r) =>
+  ["loan_officer", "officer"].includes(r) && !isAdmin(r); // admins already have all bars
+
+/* If backend has no stage, derive a sensible label off status. */
+function deriveStageFromStatus(status) {
+  if (!status) return "";
+  const s = String(status).toLowerCase();
+  if (s === "pending") return "submitted";
+  if (s === "approved") return "accounting";
+  return "";
+}
 
 /* ---------- component ---------- */
 export default function LoanDetails() {
@@ -54,12 +65,12 @@ export default function LoanDetails() {
 
   const [errs, setErrs] = useState(null);
 
-  // review state
+  // review state (BM/Compliance + Officer resubmit uses comment too)
   const [reviewComment, setReviewComment] = useState("");
   const [suggestedAmount, setSuggestedAmount] = useState("");
   const [acting, setActing] = useState(false);
 
-  // comment box below
+  // general comments box
   const [newComment, setNewComment] = useState("");
 
   // repay modal
@@ -82,11 +93,29 @@ export default function LoanDetails() {
   const canBM = isBM(role);
   const canCO = isCompliance(role);
   const canACC = isAccountant(role);
+  const canOFF = isOfficer(role);
 
-  const workflowStage = loan?.workflowStage || deriveStageFromStatus(loan?.status);
-  const showBMToolbar = canBM && ["submitted", "bm_review", "changes_resubmitted"].includes(workflowStage);
-  const showCOToolbar = canCO && ["compliance", "compliance_review"].includes(workflowStage);
-  const showDisburse = canACC && (loan?.status === "approved" || workflowStage === "accounting");
+  const workflowStage =
+    loan?.workflowStage || deriveStageFromStatus(loan?.status);
+
+  // Show bars depending on stage
+  const showLOTB = canOFF && [
+    "changes_requested",
+    "bm_changes_requested",
+    "compliance_changes_requested",
+    "returned_to_officer",
+    "request_changes",
+  ].includes(workflowStage);
+
+  const showBMToolbar =
+    canBM &&
+    ["submitted", "bm_review", "changes_resubmitted"].includes(workflowStage);
+
+  const showCOToolbar =
+    canCO && ["compliance", "compliance_review"].includes(workflowStage);
+
+  const showDisburse =
+    canACC && (loan?.status === "approved" || workflowStage === "accounting");
 
   /* ---------- load ---------- */
   const loadLoan = async () => {
@@ -134,12 +163,10 @@ export default function LoanDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  /* ---------- actions / workflow ---------- */
-
+  /* ---------- comments ---------- */
   async function postCommentInline(content) {
     try {
       await api.post(`/comments`, { loanId: id, content });
-      // reload comments only
       const r = await api.get(`/comments/loan/${id}`);
       setComments(r.data || []);
     } catch {
@@ -147,7 +174,7 @@ export default function LoanDetails() {
     }
   }
 
-  // Preferred workflow endpoint; graceful fallback if backend not ready
+  /* ---------- workflow actions ---------- */
   async function workflowAction(action, extra = {}) {
     setActing(true);
     try {
@@ -167,14 +194,21 @@ export default function LoanDetails() {
       try {
         if (action === "bm_approve" || action === "compliance_approve") {
           await api.patch(`/loans/${id}/status`, { status: "approved" });
-          if (reviewComment.trim()) await postCommentInline(reviewComment.trim());
+          if (reviewComment.trim())
+            await postCommentInline(reviewComment.trim());
         } else if (action === "reject") {
           await api.patch(`/loans/${id}/status`, { status: "rejected" });
-          if (reviewComment.trim()) await postCommentInline(reviewComment.trim());
+          if (reviewComment.trim())
+            await postCommentInline(reviewComment.trim());
         } else if (action === "request_changes") {
-          if (reviewComment.trim()) await postCommentInline(`Changes requested: ${reviewComment.trim()}`);
+          if (reviewComment.trim())
+            await postCommentInline(
+              `Changes requested: ${reviewComment.trim()}`
+            );
         } else if (action === "resubmit") {
-          if (reviewComment.trim()) await postCommentInline(`Resubmitted: ${reviewComment.trim()}`);
+          await api.patch(`/loans/${id}/status`, { status: "pending" });
+          if (reviewComment.trim())
+            await postCommentInline(`Resubmitted: ${reviewComment.trim()}`);
         }
         await loadLoan();
         setReviewComment("");
@@ -196,7 +230,13 @@ export default function LoanDetails() {
     setActing(true);
     try {
       await api.patch(`/loans/${id}`, { amount: Number(suggestedAmount) });
-      if (reviewComment.trim()) await postCommentInline(`Suggested amount: ${fmtTZS(suggestedAmount, currency)} — ${reviewComment.trim()}`);
+      if (reviewComment.trim())
+        await postCommentInline(
+          `Suggested amount: ${fmtTZS(
+            suggestedAmount,
+            currency
+          )} — ${reviewComment.trim()}`
+        );
       await loadLoan();
       alert("Suggestion saved.");
     } catch (e) {
@@ -210,9 +250,13 @@ export default function LoanDetails() {
   // Close loan (legacy)
   const closeLoan = async () => {
     const outstanding = loan?.outstanding ?? 0;
-    if (outstanding > 0 && !window.confirm("Outstanding > 0. Close anyway?")) return;
+    if (outstanding > 0 && !window.confirm("Outstanding > 0. Close anyway?"))
+      return;
     try {
-      await api.patch(`/loans/${id}/status`, { status: "closed", override: outstanding > 0 });
+      await api.patch(`/loans/${id}/status`, {
+        status: "closed",
+        override: outstanding > 0,
+      });
       await loadLoan();
       alert("Loan closed.");
     } catch (e) {
@@ -221,12 +265,14 @@ export default function LoanDetails() {
     }
   };
 
-  /* ---------- comments ---------- */
   const addComment = async () => {
     if (!newComment.trim()) return;
     try {
-      const res = await api.post(`/comments`, { loanId: id, content: newComment });
-      setComments((prev) => [res.data, ...prev]);
+      const res = await api.post(`/comments`, {
+        loanId: id,
+        content: newComment,
+      });
+    setComments((prev) => [res.data, ...prev]);
       setNewComment("");
     } catch (e) {
       console.error(e);
@@ -250,7 +296,7 @@ export default function LoanDetails() {
     }
   };
 
-  /* ---------- repayment ---------- */
+  /* ---------- repayments ---------- */
   const postRepayment = async () => {
     const amt = Number(repForm.amount);
     if (!amt || amt <= 0) return alert("Enter a valid amount.");
@@ -289,12 +335,17 @@ export default function LoanDetails() {
           <h2 className="text-2xl font-bold">Loan Details</h2>
           <span className={`${chip} ${statusBadge}`}>{loan.status}</span>
           {workflowStage && (
-            <span className={`${chip} bg-indigo-50 text-indigo-700 border border-indigo-200`}>
+            <span
+              className={`${chip} bg-indigo-50 text-indigo-700 border border-indigo-200`}
+            >
               Stage: {workflowStage.replaceAll("_", " ")}
             </span>
           )}
         </div>
-        <button onClick={() => navigate(-1)} className="text-blue-600 hover:underline">
+        <button
+          onClick={() => navigate(-1)}
+          className="text-blue-600 hover:underline"
+        >
           &larr; Back
         </button>
       </div>
@@ -304,17 +355,24 @@ export default function LoanDetails() {
         <div className="flex flex-wrap gap-6">
           <div>
             <div className="text-gray-500 text-xs">Borrower</div>
-            <Link className="text-blue-600 hover:underline" to={`/borrowers/${loan.borrowerId}`}>
+            <Link
+              className="text-blue-600 hover:underline"
+              to={`/borrowers/${loan.borrowerId}`}
+            >
               {loan.Borrower?.name || loan.borrowerName || "N/A"}
             </Link>
           </div>
           <div>
             <div className="text-gray-500 text-xs">Amount</div>
-            <div className="font-semibold">{fmtTZS(loan.amount, currency)}</div>
+            <div className="font-semibold">
+              {fmtTZS(loan.amount, currency)}
+            </div>
           </div>
           <div>
             <div className="text-gray-500 text-xs">Interest</div>
-            <div>{loan.interestRate}% · {loan.interestMethod}</div>
+            <div>
+              {loan.interestRate}% · {loan.interestMethod}
+            </div>
           </div>
           <div>
             <div className="text-gray-500 text-xs">Term</div>
@@ -335,24 +393,67 @@ export default function LoanDetails() {
         {product && (
           <div className="mt-4 text-sm text-gray-700">
             <div className="font-semibold">
-              Product: {product.name}{product.code ? ` (${product.code})` : ""}
+              Product: {product.name}
+              {product.code ? ` (${product.code})` : ""}
             </div>
             <div>
-              Defaults: {product.interestMethod} @ {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
-              {fmtTZS(product.minPrincipal, currency)} – {fmtTZS(product.maxPrincipal, currency)},{" "}
+              Defaults: {product.interestMethod} @{" "}
+              {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
+              {fmtTZS(product.minPrincipal, currency)} –{" "}
+              {fmtTZS(product.maxPrincipal, currency)},{" "}
               {product.minTermMonths}-{product.maxTermMonths} months
             </div>
           </div>
         )}
       </div>
 
-      {/* REVIEW TOOLBAR */}
+      {/* LOAN OFFICER RESUBMIT BAR */}
+      {showLOTB && (
+        <div className="bg-white p-4 rounded shadow border space-y-3">
+          <h3 className="text-lg font-semibold">Changes Requested</h3>
+            <p className="text-sm text-gray-600">
+              Your Branch Manager / Compliance requested changes. Update the
+              application and attach missing documents, then{" "}
+              <strong>Resubmit</strong>. Add a short note if helpful.
+            </p>
+          <div>
+            <label className="block text-xs text-gray-600">Comment (optional)</label>
+            <textarea
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              className="border rounded px-3 py-2 w-full min-h-[44px]"
+              placeholder="What did you fix / add?"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => workflowAction("resubmit")}
+              disabled={acting}
+              className="bg-indigo-600 text-white px-3 py-2 rounded hover:bg-indigo-700 disabled:opacity-60"
+              title="Send for review again"
+            >
+              {acting ? "Submitting…" : "Resubmit for Review"}
+            </button>
+            <Link
+              to="/loans/applications"
+              className="px-3 py-2 rounded border hover:bg-gray-50"
+              title="Open applications to edit details/attachments"
+            >
+              Edit Application
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* REVIEW TOOLBAR (BM / COMPLIANCE / ACCOUNTING) */}
       {(showBMToolbar || showCOToolbar || showDisburse) && (
         <div className="bg-white p-4 rounded shadow space-y-3 border">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-lg font-semibold">
-              {showBMToolbar ? "Branch Manager Review"
-                : showCOToolbar ? "Compliance Review"
+              {showBMToolbar
+                ? "Branch Manager Review"
+                : showCOToolbar
+                ? "Compliance Review"
                 : "Accounting / Disbursement"}
             </h3>
             {showDisburse && (
@@ -369,7 +470,9 @@ export default function LoanDetails() {
             <>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-600">Suggested Principal Amount</label>
+                  <label className="block text-xs text-gray-600">
+                    Suggested Principal Amount
+                  </label>
                   <input
                     type="number"
                     className="border rounded px-3 py-2 w-full"
@@ -396,9 +499,10 @@ export default function LoanDetails() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() =>
-                    workflowAction(showBMToolbar ? "bm_approve" : "compliance_approve", {
-                      suggestedAmount,
-                    })
+                    workflowAction(
+                      showBMToolbar ? "bm_approve" : "compliance_approve",
+                      { suggestedAmount }
+                    )
                   }
                   disabled={acting}
                   className="bg-emerald-600 text-white px-3 py-2 rounded hover:bg-emerald-700 disabled:opacity-60"
@@ -439,17 +543,28 @@ export default function LoanDetails() {
         </div>
       )}
 
-      {/* QUICK ACTIONS (generic) */}
+      {/* QUICK ACTIONS */}
       <div className="flex flex-wrap gap-3">
-        <Link to={`/loans`} className="px-3 py-2 rounded border">Back to Loans</Link>
-        <button onClick={openScheduleModal} className="px-3 py-2 rounded border hover:bg-gray-50">
+        <Link to={`/loans`} className="px-3 py-2 rounded border">
+          Back to Loans
+        </Link>
+        <button
+          onClick={openScheduleModal}
+          className="px-3 py-2 rounded border hover:bg-gray-50"
+        >
           View Schedule
         </button>
-        <button onClick={() => setOpenRepay(true)} className="px-3 py-2 rounded border hover:bg-gray-50">
+        <button
+          onClick={() => setOpenRepay(true)}
+          className="px-3 py-2 rounded border hover:bg-gray-50"
+        >
           Post Repayment
         </button>
         {loan.status !== "closed" && (
-          <button onClick={closeLoan} className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700">
+          <button
+            onClick={closeLoan}
+            className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700"
+          >
             Close Loan
           </button>
         )}
@@ -476,7 +591,9 @@ export default function LoanDetails() {
               {repayments.map((r, i) => (
                 <tr key={r.id || i}>
                   <td className="border px-2 py-1">{fmtDate(r.date)}</td>
-                  <td className="border px-2 py-1">{fmtTZS(r.amount, currency)}</td>
+                  <td className="border px-2 py-1">
+                    {fmtTZS(r.amount, currency)}
+                  </td>
                   <td className="border px-2 py-1">{r.method || "—"}</td>
                   <td className="border px-2 py-1">{r.notes || "—"}</td>
                 </tr>
@@ -498,7 +615,9 @@ export default function LoanDetails() {
             {comments.map((c, i) => (
               <div key={c.id || i} className="text-sm border-b pb-1">
                 <p>{c.content}</p>
-                <span className="text-gray-400 text-xs">{fmtDateTime(c.createdAt)}</span>
+                <span className="text-gray-400 text-xs">
+                  {fmtDateTime(c.createdAt)}
+                </span>
               </div>
             ))}
           </div>
@@ -511,7 +630,10 @@ export default function LoanDetails() {
             className="border rounded px-2 py-1 w-full"
             placeholder="Add a comment"
           />
-          <button onClick={addComment} className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700">
+          <button
+            onClick={addComment}
+            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
+          >
             Post
           </button>
         </div>
@@ -523,7 +645,12 @@ export default function LoanDetails() {
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-4">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Post Repayment</h4>
-              <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+              <button
+                onClick={() => setOpenRepay(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
             </div>
             <div className="space-y-3">
               <div>
@@ -531,7 +658,9 @@ export default function LoanDetails() {
                 <input
                   type="number"
                   value={repForm.amount}
-                  onChange={(e) => setRepForm((s) => ({ ...s, amount: e.target.value }))}
+                  onChange={(e) =>
+                    setRepForm((s) => ({ ...s, amount: e.target.value }))
+                  }
                   className="border rounded px-2 py-1 w-full"
                   min="0"
                   step="0.01"
@@ -542,7 +671,9 @@ export default function LoanDetails() {
                 <input
                   type="date"
                   value={repForm.date}
-                  onChange={(e) => setRepForm((s) => ({ ...s, date: e.target.value }))}
+                  onChange={(e) =>
+                    setRepForm((s) => ({ ...s, date: e.target.value }))
+                  }
                   className="border rounded px-2 py-1 w-full"
                 />
               </div>
@@ -550,7 +681,9 @@ export default function LoanDetails() {
                 <label className="block text-sm text-gray-600">Method</label>
                 <select
                   value={repForm.method}
-                  onChange={(e) => setRepForm((s) => ({ ...s, method: e.target.value }))}
+                  onChange={(e) =>
+                    setRepForm((s) => ({ ...s, method: e.target.value }))
+                  }
                   className="border rounded px-2 py-1 w-full"
                 >
                   <option value="cash">Cash</option>
@@ -559,18 +692,27 @@ export default function LoanDetails() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Notes (optional)</label>
+                <label className="block text-sm text-gray-600">
+                  Notes (optional)
+                </label>
                 <input
                   type="text"
                   value={repForm.notes}
-                  onChange={(e) => setRepForm((s) => ({ ...s, notes: e.target.value }))}
+                  onChange={(e) =>
+                    setRepForm((s) => ({ ...s, notes: e.target.value }))
+                  }
                   className="border rounded px-2 py-1 w-full"
                   placeholder="Receipt no., reference, etc."
                 />
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenRepay(false)} className="px-3 py-2 rounded border">Cancel</button>
+              <button
+                onClick={() => setOpenRepay(false)}
+                className="px-3 py-2 rounded border"
+              >
+                Cancel
+              </button>
               <button
                 onClick={postRepayment}
                 disabled={postLoading}
@@ -589,7 +731,12 @@ export default function LoanDetails() {
           <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-4">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Repayment Schedule</h4>
-              <button onClick={() => setOpenSchedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+              <button
+                onClick={() => setOpenSchedule(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
             </div>
             {loadingSchedule ? (
               <p>Loading schedule…</p>
@@ -613,12 +760,24 @@ export default function LoanDetails() {
                     {schedule.map((row, idx) => (
                       <tr key={row.id || idx}>
                         <td className="border px-2 py-1">{idx + 1}</td>
-                        <td className="border px-2 py-1">{fmtDate(row.dueDate)}</td>
-                        <td className="border px-2 py-1">{fmtTZS(row.principal, currency)}</td>
-                        <td className="border px-2 py-1">{fmtTZS(row.interest, currency)}</td>
-                        <td className="border px-2 py-1">{fmtTZS(row.penalty || 0, currency)}</td>
-                        <td className="border px-2 py-1">{fmtTZS(row.total, currency)}</td>
-                        <td className="border px-2 py-1">{fmtTZS(row.balance, currency)}</td>
+                        <td className="border px-2 py-1">
+                          {fmtDate(row.dueDate)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {fmtTZS(row.principal, currency)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {fmtTZS(row.interest, currency)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {fmtTZS(row.penalty || 0, currency)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {fmtTZS(row.total, currency)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {fmtTZS(row.balance, currency)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -626,20 +785,16 @@ export default function LoanDetails() {
               </div>
             )}
             <div className="mt-3 flex justify-end">
-              <button onClick={() => setOpenSchedule(false)} className="px-3 py-2 rounded border">Close</button>
+              <button
+                onClick={() => setOpenSchedule(false)}
+                className="px-3 py-2 rounded border"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-}
-
-/* If backend has no stage, derive a sensible label off status. */
-function deriveStageFromStatus(status) {
-  if (!status) return "";
-  const s = String(status).toLowerCase();
-  if (s === "pending") return "submitted";
-  if (s === "approved") return "accounting";
-  return "";
 }
