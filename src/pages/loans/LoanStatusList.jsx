@@ -31,68 +31,150 @@ const TITLE_MAP = {
 };
 
 export default function LoanStatusList() {
-  const { status } = useParams(); // could be a core status or a derived scope (e.g., "due")
+  const { status } = useParams(); // core status or a derived scope
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // filter refs
+  const [products, setProducts] = useState([]);
+  const [officers, setOfficers] = useState([]);
+
+  const [q, setQ] = useState("");
+  const [productId, setProductId] = useState("");
+  const [officerId, setOfficerId] = useState("");
+  const [startDate, setStartDate] = useState(""); // yyyy-mm-dd
+  const [endDate, setEndDate] = useState("");     // yyyy-mm-dd
+  const [minAmt, setMinAmt] = useState("");
+  const [maxAmt, setMaxAmt] = useState("");
+
   const title = TITLE_MAP[status] || "Loans";
 
+  /* ---------- fetch lists for filters (products & loan officers) ---------- */
   useEffect(() => {
-    let cancelled = false;
     (async () => {
-      setLoading(true);
       try {
-        const params = { page: 1, pageSize: 500 };
-        if (CORE_STATUSES.includes(String(status))) {
-          params.status = status;
-        } else if (status) {
-          // Many backends expose a scope-style filter for report views.
-          // If your API uses a different param name, adjust here.
-          params.scope = status;
-        }
-
-        const res = await api.get("/loans", { params });
-        // Accept common shapes: {items,total}, array, or unknown -> []
-        const data = Array.isArray(res.data)
-          ? res.data
-          : Array.isArray(res.data?.items)
-          ? res.data.items
-          : [];
-        const total = res.data?.total ?? data.length;
-
-        if (!cancelled) {
-          setRows(data);
-          setTotalCount(total);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setRows([]);
-          setTotalCount(0);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+        const res = await api.get("/loan-products");
+        const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
+        setProducts(list);
+      } catch {
+        setProducts([]);
+      }
+      try {
+        const r2 = await api.get("/users", { params: { role: "loan_officer" } });
+        setOfficers(Array.isArray(r2.data) ? r2.data : r2.data?.items || []);
+      } catch {
+        setOfficers([]);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+  }, []);
+
+  /* ---------- load data with server-side filters when possible ---------- */
+  const load = async () => {
+    setLoading(true);
+    try {
+      const params = { page: 1, pageSize: 1000 }; // pull broadly, filter client-side if needed
+
+      if (CORE_STATUSES.includes(String(status))) {
+        params.status = status;
+      } else if (status) {
+        // scope parameter for derived lists (adjust if your backend uses another name)
+        params.scope = status;
+      }
+
+      // These are common names; backend may ignore some/all — we’ll fallback to client filtering
+      if (q.trim()) params.q = q.trim();
+      if (productId) params.productId = productId;
+      if (officerId) params.officerId = officerId;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+      if (minAmt) params.minAmount = minAmt;
+      if (maxAmt) params.maxAmount = maxAmt;
+
+      const res = await api.get("/loans", { params });
+      const data = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.items)
+        ? res.data.items
+        : [];
+      const total = res.data?.total ?? data.length;
+
+      setRows(data);
+      setTotalCount(total);
+    } catch {
+      setRows([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  // Derived totals for a quick footer summary (optional)
+  /* ---------- client-side filtering fallback ---------- */
+  const filtered = useMemo(() => {
+    const sd = startDate ? new Date(startDate) : null;
+    const ed = endDate ? new Date(endDate) : null;
+
+    return rows.filter((l) => {
+      // date range (releaseDate/startDate/disbursementDate/createdAt)
+      if (sd || ed) {
+        const when =
+          l.releaseDate || l.startDate || l.disbursementDate || l.createdAt || null;
+        const d = when ? new Date(when) : null;
+        if (sd && (!d || d < sd)) return false;
+        if (ed && (!d || d > ed)) return false;
+      }
+      // product
+      if (productId && String(l.productId) !== String(productId)) return false;
+      // officer
+      if (officerId && String(l.officerId) !== String(officerId)) return false;
+      // amount
+      const amt = Number(l.amount ?? l.principal ?? 0);
+      if (minAmt && !(amt >= Number(minAmt))) return false;
+      if (maxAmt && !(amt <= Number(maxAmt))) return false;
+      // q against borrower/product/phone/loan #
+      const needle = q.trim().toLowerCase();
+      if (needle) {
+        const borrower = l.Borrower || l.borrower || {};
+        const product = l.Product || l.product || {};
+        const hay =
+          [
+            borrower.name,
+            borrower.phone,
+            l.borrowerName,
+            l.borrowerPhone,
+            product.name,
+            l.productName,
+            l.loanNumber,
+            l.id,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+  }, [rows, q, productId, officerId, startDate, endDate, minAmt, maxAmt]);
+
+  /* ---------- totals ---------- */
   const totals = useMemo(() => {
     let p = 0,
       i = 0,
       f = 0,
       pen = 0,
       t = 0;
-    rows.forEach((r) => {
-      const op = Number(r.outstandingPrincipal || 0);
-      const oi = Number(r.outstandingInterest || 0);
-      const of = Number(r.outstandingFees || 0);
-      const ope = Number(r.outstandingPenalty || 0);
-      const tot = r.outstanding != null ? Number(r.outstanding) : op + oi + of + ope;
-
+    filtered.forEach((l) => {
+      const op = Number(l.outstandingPrincipal || 0);
+      const oi = Number(l.outstandingInterest || 0);
+      const of = Number(l.outstandingFees || 0);
+      const ope = Number(l.outstandingPenalty || 0);
+      const tot =
+        l.outstanding != null ? Number(l.outstanding) : op + oi + of + ope;
       p += op;
       i += oi;
       f += of;
@@ -100,20 +182,301 @@ export default function LoanStatusList() {
       t += tot;
     });
     return { p, i, f, pen, t };
-  }, [rows]);
+  }, [filtered]);
 
+  /* ---------- export helpers ---------- */
+  const buildExportRows = () =>
+    filtered.map((l) => {
+      const borrower = l.Borrower || l.borrower || {};
+      const product = l.Product || l.product || {};
+      const officer = l.officer || {};
+      const currency = l.currency || "TZS";
+      const date =
+        l.releaseDate || l.startDate || l.disbursementDate || l.createdAt || null;
+
+      const op = l.outstandingPrincipal ?? null;
+      const oi = l.outstandingInterest ?? null;
+      const of = l.outstandingFees ?? null;
+      const ope = l.outstandingPenalty ?? null;
+      const totalOutstanding =
+        l.outstanding != null
+          ? l.outstanding
+          : [op, oi, of, ope].every((x) => x == null)
+          ? null
+          : Number(op || 0) + Number(oi || 0) + Number(of || 0) + Number(ope || 0);
+
+      const annualRate =
+        l.interestRateAnnual != null
+          ? l.interestRateAnnual
+          : l.interestRate != null
+          ? l.interestRate
+          : null;
+      const termMonths = l.termMonths ?? l.durationMonths ?? null;
+
+      return {
+        Date: fmtDate(date),
+        "Borrower Name": borrower.name || l.borrowerName || "",
+        "Phone Number": borrower.phone || l.borrowerPhone || "",
+        "Loan Product": product.name || l.productName || "",
+        "Principal Amount": `${currency} ${Number(l.amount ?? l.principal ?? 0)}`,
+        "Interest Amount": `${currency} ${Number(l.interestAmount ?? 0)}`,
+        "Outstanding Principal": `${currency} ${Number(op ?? 0)}`,
+        "Outstanding Interest": `${currency} ${Number(oi ?? 0)}`,
+        "Outstanding Fees": `${currency} ${Number(of ?? 0)}`,
+        "Outstanding Penalty": `${currency} ${Number(ope ?? 0)}`,
+        "Total Outstanding": `${currency} ${Number(totalOutstanding ?? 0)}`,
+        "Interest Rate/Year (%)": annualRate ?? "",
+        "Loan Duration (Months)": termMonths ?? "",
+        "Loan Officer": l.officerName || officer.name || "",
+        Status: l.status || "",
+      };
+    });
+
+  const exportCSV = () => {
+    const rows = buildExportRows();
+    const headers = Object.keys(rows[0] || {
+      Date: "",
+      "Borrower Name": "",
+      "Phone Number": "",
+      "Loan Product": "",
+      "Principal Amount": "",
+      "Interest Amount": "",
+      "Outstanding Principal": "",
+      "Outstanding Interest": "",
+      "Outstanding Fees": "",
+      "Outstanding Penalty": "",
+      "Total Outstanding": "",
+      "Interest Rate/Year (%)": "",
+      "Loan Duration (Months)": "",
+      "Loan Officer": "",
+      Status: "",
+    });
+    const csv = [
+      headers.join(","),
+      ...rows.map((r) =>
+        headers
+          .map((h) => {
+            const val = String(r[h] ?? "").replace(/"/g, '""');
+            return `"${val}"`;
+          })
+          .join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(TITLE_MAP[status] || "loans").toLowerCase().replace(/\s+/g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Excel-compatible (HTML table with XLS mimetype, opens in Excel)
+  const exportExcel = () => {
+    const rows = buildExportRows();
+    const headers = Object.keys(rows[0] || {});
+    const html =
+      `<table border="1"><thead><tr>${headers
+        .map((h) => `<th>${h}</th>`)
+        .join("")}</tr></thead><tbody>` +
+      rows
+        .map(
+          (r) =>
+            `<tr>${headers
+              .map((h) => `<td>${String(r[h] ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</td>`)
+              .join("")}</tr>`
+        )
+        .join("") +
+      `</tbody></table>`;
+
+    const blob = new Blob([`\ufeff${html}`], {
+      type: "application/vnd.ms-excel",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(TITLE_MAP[status] || "loans").toLowerCase().replace(/\s+/g, "-")}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // PDF via print-friendly window (users can Save as PDF)
+  const exportPDF = () => {
+    const rows = buildExportRows();
+    const headers = Object.keys(rows[0] || {});
+    const style = `
+      <style>
+        body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; padding: 16px; }
+        h1 { font-size: 16px; margin: 0 0 12px 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+        thead { background: #f3f4f6; }
+      </style>
+    `;
+    const html =
+      `<h1>${TITLE_MAP[status] || "Loans"}</h1><table><thead><tr>${headers
+        .map((h) => `<th>${h}</th>`)
+        .join("")}</tr></thead><tbody>` +
+      rows
+        .map(
+          (r) =>
+            `<tr>${headers
+              .map((h) => `<td>${String(r[h] ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</td>`)
+              .join("")}</tr>`
+        )
+        .join("") +
+      `</tbody></table>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(`<html><head><title>${TITLE_MAP[status] || "Loans"}</title>${style}</head><body>${html}</body></html>`);
+      win.document.close();
+      win.focus();
+      win.print(); // user can choose "Save as PDF"
+    }
+  };
+
+  /* ---------- render ---------- */
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">{title}</h2>
-        <div className="text-sm text-gray-600">
-          <span className="mr-3">Total: {fmtNum(totalCount)}</span>
-          <Link to="/loans" className="text-indigo-600 underline">
-            All Loans
-          </Link>
+      {/* header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold">{title}</h2>
+          <div className="text-sm text-gray-600">
+            Total: {fmtNum(totalCount)}{" "}
+            <span className="mx-2 text-gray-400">•</span>
+            <Link to="/loans" className="text-indigo-600 underline">
+              All Loans
+            </Link>
+          </div>
+        </div>
+
+        {/* export buttons */}
+        <div className="flex flex-wrap gap-2">
+          <button onClick={exportCSV} className="px-3 py-2 rounded border hover:bg-gray-50">
+            Export CSV
+          </button>
+          <button onClick={exportExcel} className="px-3 py-2 rounded border hover:bg-gray-50">
+            Export Excel
+          </button>
+          <button onClick={exportPDF} className="px-3 py-2 rounded border hover:bg-gray-50">
+            Export PDF
+          </button>
         </div>
       </div>
 
+      {/* filters */}
+      <div className="bg-white rounded shadow border p-3">
+        <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-600">Search (borrower / phone / product / loan #)</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              placeholder="e.g. Jane, 0712…, Business Loan"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-600">Product</label>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={productId}
+              onChange={(e) => setProductId(e.target.value)}
+            >
+              <option value="">All</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.code ? ` (${p.code})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-600">Loan Officer</label>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={officerId}
+              onChange={(e) => setOfficerId(e.target.value)}
+            >
+              <option value="">All</option>
+              {officers.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name || o.email}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-600">From Date</label>
+            <input
+              type="date"
+              className="w-full border rounded px-3 py-2"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-600">To Date</label>
+            <input
+              type="date"
+              className="w-full border rounded px-3 py-2"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-600">Min Amount</label>
+            <input
+              type="number"
+              className="w-full border rounded px-3 py-2"
+              value={minAmt}
+              onChange={(e) => setMinAmt(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-600">Max Amount</label>
+            <input
+              type="number"
+              className="w-full border rounded px-3 py-2"
+              value={maxAmt}
+              onChange={(e) => setMaxAmt(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <button onClick={load} className="px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">
+            Apply Filters
+          </button>
+          <button
+            onClick={() => {
+              setQ("");
+              setProductId("");
+              setOfficerId("");
+              setStartDate("");
+              setEndDate("");
+              setMinAmt("");
+              setMaxAmt("");
+              // reload base
+              setTimeout(load, 0);
+            }}
+            className="px-3 py-2 rounded border hover:bg-gray-50"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      {/* table */}
       <div className="bg-white rounded shadow border overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-gray-700">
@@ -143,14 +506,14 @@ export default function LoanStatusList() {
                   Loading…
                 </td>
               </tr>
-            ) : rows.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={15} className="text-center p-6 text-gray-500">
                   No loans found.
                 </td>
               </tr>
             ) : (
-              rows.map((l) => {
+              filtered.map((l) => {
                 const borrower = l.Borrower || l.borrower || {};
                 const product = l.Product || l.product || {};
                 const officer = l.officer || {};
@@ -159,7 +522,6 @@ export default function LoanStatusList() {
                 const date =
                   l.releaseDate || l.startDate || l.createdAt || l.disbursementDate || null;
 
-                // Outstandings
                 const op = l.outstandingPrincipal ?? null;
                 const oi = l.outstandingInterest ?? null;
                 const of = l.outstandingFees ?? null;
@@ -171,7 +533,6 @@ export default function LoanStatusList() {
                     ? null
                     : Number(op || 0) + Number(oi || 0) + Number(of || 0) + Number(ope || 0);
 
-                // Interest rate (annual) – fall back to monthly field if that's all we have
                 const annualRate =
                   l.interestRateAnnual != null
                     ? l.interestRateAnnual
@@ -215,7 +576,7 @@ export default function LoanStatusList() {
             )}
           </tbody>
 
-          {!loading && rows.length > 0 && (
+          {!loading && filtered.length > 0 && (
             <tfoot>
               <tr className="bg-gray-50 font-semibold [&>td]:px-2 [&>td]:py-2 [&>td]:border">
                 <td colSpan={6} className="text-right">

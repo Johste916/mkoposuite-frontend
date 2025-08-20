@@ -36,6 +36,7 @@ const NAV = () => [
       { label: "Add Loan", to: "/loans/applications" },
       { label: "Review Queue", to: "/loans/review-queue" },      // stays in Loans
       { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
+      { label: "Disbursed Loans", to: "/loans/status/disbursed" }, // NEW per update
       // REMOVED from sidebar (Admin-only via Admin hub): Loan Products, Loan Calculator
       { label: "Due Loans", to: "/loans/due" },
       { label: "Missed Repayments", to: "/loans/missed" },
