@@ -10,7 +10,7 @@ import { BsBank } from "react-icons/bs";
 import api from "../api";
 import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigContext";
 
-/* ---------- NAV CONFIG (all features included; Admin decides visibility/labels) ---------- */
+/* ---------- NAV CONFIG (Admin controls visibility via FeatureConfig) ---------- */
 const NAV = () => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
 
@@ -34,10 +34,9 @@ const NAV = () => [
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
       { label: "View All Loans", to: "/loans" },
       { label: "Add Loan", to: "/loans/applications" },
-      { label: "Review Queue", to: "/loans/review-queue" },        // NEW
+      { label: "Review Queue", to: "/loans/review-queue" },      // stays in Loans
       { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
-      { label: "Loan Products", to: "/loans/products" },
-      // REMOVED: Loan Reports (reports live under the Reports module)
+      // REMOVED from sidebar (Admin-only via Admin hub): Loan Products, Loan Calculator
       { label: "Due Loans", to: "/loans/due" },
       { label: "Missed Repayments", to: "/loans/missed" },
       { label: "Loans in Arrears", to: "/loans/arrears" },
@@ -46,8 +45,7 @@ const NAV = () => [
       { label: "Principal Outstanding", to: "/loans/principal-outstanding" },
       { label: "1 Month Late", to: "/loans/1-month-late" },
       { label: "3 Months Late", to: "/loans/3-months-late" },
-      { label: "Loan Calculator", to: "/loans/calculator" },
-      // REMOVED: Guarantors / Loan Comments / Approve Loans (covered by Review Queue & Details)
+      // REMOVED earlier: Loan Reports, Guarantors, Loan Comments, Approve Loans
     ]
   },
 
@@ -279,7 +277,7 @@ const SidebarLayout = () => {
   const [activeBranchId, setActiveBranchId] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Read Admin-driven feature config (read-only)
+  // Admin-driven feature config (authoritative)
   const { loading: featuresLoading, features } = useFeatureConfig();
 
   // Settings dropdown
@@ -340,9 +338,9 @@ const SidebarLayout = () => {
 
   const userRole = (user?.role || "").toLowerCase();
 
-  // Build full NAV, then apply Admin filters/labels (no local control here)
+  // Build full NAV, then apply Admin filters/labels (authoritative)
   const computedNav = useMemo(() => {
-    const base = NAV(); // all possible items
+    const base = NAV();
     return filterNavByFeatures(base, features, userRole);
   }, [features, userRole]);
 
@@ -354,7 +352,7 @@ const SidebarLayout = () => {
 
   return (
     <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
-      {/* Header (unchanged UI) */}
+      {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-white/90 dark:bg-slate-900/90 backdrop-blur">
         <div className="px-3 md:px-4">
           <div className="h-14 flex items-center justify-between gap-3">
@@ -403,7 +401,7 @@ const SidebarLayout = () => {
                 {darkMode ? <FiSun /> : <FiMoon />}
               </button>
 
-              {/* Admin hub button stays as-is */}
+              {/* Admin hub button */}
               <button
                 onClick={() => navigate("/admin")}
                 className="hidden md:inline-flex items-center gap-2 h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
