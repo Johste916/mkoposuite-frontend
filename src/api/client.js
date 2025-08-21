@@ -1,28 +1,31 @@
+// src/api/client.js
 import axios from "axios";
 
-// Prefer env var, fall back to origin + /api (works on Render/Netlify proxy setups)
 const baseURL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ||
   `${window.location.origin}/api`;
 
-const api = axios.create({
+const client = axios.create({
   baseURL,
-  withCredentials: false, // set true only if you use cookie-based auth
+  withCredentials: false,
+  headers: { "Content-Type": "application/json" },
 });
 
+// Try a few common token keys
 const TOKEN_KEYS = ["token", "authToken", "accessToken", "jwt"];
 
-api.interceptors.request.use((config) => {
-  let token = null;
+client.interceptors.request.use((config) => {
   for (const k of TOKEN_KEYS) {
-    token = localStorage.getItem(k) || sessionStorage.getItem(k);
-    if (token) break;
+    const v = localStorage.getItem(k);
+    if (v) {
+      config.headers.Authorization = `Bearer ${v.replace(/^Bearer /i, "")}`;
+      break;
+    }
   }
-  if (token) config.headers.Authorization = `Bearer ${token.replace(/^Bearer /i, "")}`;
   return config;
 });
 
-api.interceptors.response.use(
+client.interceptors.response.use(
   (res) => res,
   (err) => {
     const msg =
@@ -35,4 +38,4 @@ api.interceptors.response.use(
   }
 );
 
-export default api;
+export default client;

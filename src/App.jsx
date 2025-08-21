@@ -50,6 +50,10 @@ const LoanReview = lazy(() => import("./pages/loans/LoanReview"));
 const Repayments = lazy(() => import("./pages/Repayments"));
 const ManualRepayment = lazy(() => import("./pages/repayments/ManualRepayment"));
 const RepaymentReceipts = lazy(() => import("./pages/repayments/RepaymentReceipts"));
+const UploadRepaymentsCSV = lazy(() => import("./pages/repayments/UploadRepaymentsCSV"));
+const BulkRepayments = lazy(() => import("./pages/repayments/BulkRepayments"));
+const RepaymentCharts = lazy(() => import("./pages/repayments/RepaymentCharts"));
+const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayments"));
 
 // Misc Existing (legacy)
 const Reports = lazy(() => import("./pages/Reports"));
@@ -184,7 +188,7 @@ function App() {
                 }
               />
 
-              {/* Calculator restricted to Admin/Director. 
+              {/* Calculator restricted to Admin/Director.
                   Rescheduling for staff uses /loans/schedule?loanId=… (gated to branch_manager+admin+director) */}
               <Route
                 path="loans/calculator"
@@ -220,10 +224,10 @@ function App() {
               <Route path="repayments" element={<Repayments />} />
               <Route path="repayments/new" element={<ManualRepayment />} />
               <Route path="repayments/receipts" element={<RepaymentReceipts />} />
-              <Route path="repayments/bulk" element={<Stub title="Add Bulk Repayments" />} />
-              <Route path="repayments/csv" element={<Stub title="Upload Repayments CSV" />} />
-              <Route path="repayments/charts" element={<Stub title="Repayment Charts" />} />
-              <Route path="repayments/approve" element={<Stub title="Approve Repayments" />} />
+              <Route path="repayments/bulk" element={<BulkRepayments />} />
+              <Route path="repayments/csv" element={<UploadRepaymentsCSV />} />
+              <Route path="repayments/charts" element={<RepaymentCharts />} />
+              <Route path="repayments/approve" element={<ApproveRepayments />} />
 
               {/* Collateral */}
               <Route path="collateral" element={<CollateralList />} />

@@ -13,7 +13,7 @@ function localPreviewAllocation(
   waivePenalties = false
 ) {
   const amt = Number(amount || 0);
-  if (!amt || !schedule.length)
+  if (!amt || schedule.length === 0)
     return { allocations: [], totals: { principal: 0, interest: 0, fees: 0, penalties: 0 } };
 
   // Determine category order
@@ -31,16 +31,13 @@ function localPreviewAllocation(
     const principalDue = Math.max(0, Number(s.principal ?? 0) - Number(s.principalPaid ?? 0));
     const interestDue = Math.max(0, Number(s.interest ?? 0) - Number(s.interestPaid ?? 0));
     const feesDue = Math.max(0, Number(s.fees ?? 0) - Number(s.feesPaid ?? 0));
-    const penDue = Math.max(
-      0,
-      Number(s.penalties ?? s.penalty ?? 0) - Number(s.penaltiesPaid ?? 0)
-    );
+    const penDue = Math.max(0, Number(s.penalties ?? s.penalty ?? 0) - Number(s.penaltiesPaid ?? 0));
 
     let remaining = {
-      principal: isFinite(principalDue) ? principalDue : 0,
-      interest: isFinite(interestDue) ? interestDue : 0,
-      fees: isFinite(feesDue) ? feesDue : 0,
-      penalties: waivePenalties ? 0 : isFinite(penDue) ? penDue : 0,
+      principal: Number.isFinite(principalDue) ? principalDue : 0,
+      interest: Number.isFinite(interestDue) ? interestDue : 0,
+      fees: Number.isFinite(feesDue) ? feesDue : 0,
+      penalties: waivePenalties ? 0 : Number.isFinite(penDue) ? penDue : 0,
     };
 
     // Heuristic if totals exist but parts are 0
@@ -164,10 +161,12 @@ export default function ManualRepayment() {
     if (!loanQuery.trim()) return;
     setSearching(true);
     try {
-      const { data } = await api.get("/loans/search", {
-        params: { q: loanQuery.trim(), limit: 10 },
+      // ✅ align with backend: /loans?q=...&page=1&pageSize=10
+      const { data } = await api.get("/loans", {
+        params: { q: loanQuery.trim(), page: 1, pageSize: 10 },
       });
-      setResults(Array.isArray(data) ? data : data?.items || []);
+      const items = Array.isArray(data) ? data : data?.items || [];
+      setResults(items);
     } catch {
       alert("Search failed");
     } finally {
@@ -177,7 +176,7 @@ export default function ManualRepayment() {
 
   const pickLoan = async (l) => {
     setLoan(l);
-    setForm((f) => ({ ...f, loanId: l.id }));
+    setForm((f) => ({ ...f, loanId: l.id, reference: l.reference || f.reference }));
     await fetchSchedule(l.id);
     setPreview(null);
   };
@@ -201,7 +200,7 @@ export default function ManualRepayment() {
       const { data } = await api.get(`/loans/${id}`);
       if (data) {
         setLoan(data);
-        setForm((f) => ({ ...f, loanId: data.id }));
+        setForm((f) => ({ ...f, loanId: data.id, reference: data.reference || f.reference }));
         await fetchSchedule(data.id);
       } else {
         alert("Loan not found");
@@ -215,6 +214,7 @@ export default function ManualRepayment() {
 
   useEffect(() => {
     if (qpLoanId) loadLoanById(qpLoanId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qpLoanId]);
 
   // ---- Use Next Due Amount (and date) ----
@@ -286,8 +286,6 @@ export default function ManualRepayment() {
       };
       const { data } = await api.post("/repayments/manual", payload);
       if (data?.repaymentId) {
-        // optional receipt route if you have it
-        // navigate(`/repayments/receipt/${data.repaymentId}`);
         alert("Repayment posted");
         navigate("/repayments/receipts");
       } else {
@@ -366,9 +364,9 @@ export default function ManualRepayment() {
                   {results.map((l) => (
                     <tr key={l.id} className="border-t">
                       <td className="p-3">{l.reference || `L-${l.id}`}</td>
-                      <td className="p-3">{l.borrowerName}</td>
+                      <td className="p-3">{l.borrowerName || l.Borrower?.name}</td>
                       <td className="p-3">
-                        {l.currency || "TZS"} {money(l.outstanding)}
+                        {l.currency || "TZS"} {money(l.outstanding ?? l.balance ?? 0)}
                       </td>
                       <td className="p-3">{l.nextDueDate || "—"}</td>
                       <td className="p-3 text-right">
@@ -390,13 +388,13 @@ export default function ManualRepayment() {
             <div className="border rounded-xl p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{loan.borrowerName}</p>
+                  <p className="font-medium">{loan.borrowerName || loan.Borrower?.name}</p>
                   <p className="text-sm text-gray-500">{loan.reference || `L-${loan.id}`}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-500">Outstanding</p>
                   <p className="font-semibold">
-                    {loan.currency || "TZS"} {money(loan.outstanding)}
+                    {loan.currency || "TZS"} {money(loan.outstanding ?? loan.balance ?? 0)}
                   </p>
                 </div>
               </div>
