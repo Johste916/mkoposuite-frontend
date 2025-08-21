@@ -30,6 +30,9 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// Only these should be sent to backend as ?status=
+const BACKEND_ENUM_STATUSES = ["pending", "approved", "rejected", "disbursed", "closed"];
+
 export default function Repayments() {
   const navigate = useNavigate();
 
@@ -89,14 +92,40 @@ export default function Repayments() {
       if (officerId) params.officerId = officerId;
       if (q?.trim()) params.q = q.trim();
       if (dueRange && dueRange !== "all") params.dueRange = dueRange;
-      params.status = includeClosed ? "all" : status;
+
+      // Only send DB-backed statuses; "active"/"delinquent" are derived client-side
+      if (!includeClosed && BACKEND_ENUM_STATUSES.includes(String(status))) {
+        params.status = status;
+      }
+      // If includeClosed is true, omit status entirely
 
       const { data } = await api.get("/loans", { params });
-      const items = Array.isArray(data) ? data : data?.items || [];
+      let items = Array.isArray(data) ? data : data?.items || [];
+
+      // Derived filters client-side
+      if (!includeClosed) {
+        const s = String(status).toLowerCase();
+        if (s === "active") {
+          items = items.filter(
+            (l) => String(l.status || l.state || "").toLowerCase() === "disbursed"
+          );
+        } else if (s === "delinquent") {
+          items = items.filter(
+            (l) =>
+              String(l.nextDueStatus || "").toLowerCase() === "overdue" ||
+              Number(l.dpd || 0) > 0 ||
+              Number(l.arrears || 0) > 0
+          );
+        } else if (s === "closed") {
+          items = items.filter((l) => String(l.status || "").toLowerCase() === "closed");
+        }
+      }
+
       setLoans(items);
       setTotal(Number(data?.total || items.length || 0));
     } catch {
-      // noop
+      setLoans([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -269,10 +298,7 @@ export default function Repayments() {
             >
               Reset
             </button>
-            <button
-              type="submit"
-              className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-            >
+            <button type="submit" className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
               Search
             </button>
           </div>
@@ -402,10 +428,7 @@ export default function Repayments() {
           <div className="absolute inset-y-0 right-0 w-full sm:max-w-3xl bg-white dark:bg-gray-900 shadow-xl">
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="text-lg font-semibold">Loan Schedule</h3>
-              <button
-                className="px-3 py-1.5 rounded border hover:bg-gray-50"
-                onClick={() => setOpen(false)}
-              >
+              <button className="px-3 py-1.5 rounded border hover:bg-gray-50" onClick={() => setOpen(false)}>
                 Close
               </button>
             </div>
@@ -415,9 +438,7 @@ export default function Repayments() {
             ) : (
               <div className="p-4 space-y-4">
                 <div className="space-y-1">
-                  <h4 className="text-lg font-semibold">
-                    {activeLoan.reference || `L-${activeLoan.id}`}
-                  </h4>
+                  <h4 className="text-lg font-semibold">{activeLoan.reference || `L-${activeLoan.id}`}</h4>
                   <p className="text-sm text-gray-600">
                     {activeLoan.borrowerName || activeLoan.Borrower?.name} •{" "}
                     {activeLoan.currency || "TZS"} {money(activeLoan.principal || activeLoan.amount || 0)}

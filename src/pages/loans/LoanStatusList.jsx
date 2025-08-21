@@ -1,4 +1,3 @@
-// src/pages/loans/LoanStatusList.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api";
@@ -10,6 +9,8 @@ import { useToast } from "../../components/common/ToastProvider";
 
 /* ---------- constants ---------- */
 const CORE_STATUSES = ["pending", "approved", "rejected", "disbursed", "active", "closed"];
+// Only these should ever be sent as ?status= to backend (DB enum-backed)
+const BACKEND_ENUM_STATUSES = ["pending", "approved", "rejected", "disbursed", "closed"];
 
 const TITLE_MAP = {
   pending: "Pending Approval",
@@ -32,7 +33,7 @@ const TITLE_MAP = {
 export default function LoanStatusList() {
   const { status } = useParams(); // core status or a derived scope
   const navigate = useNavigate();
-  const { success, error, info } = useToast();
+  const { success, error } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [rows, setRows] = useState([]);
@@ -47,7 +48,7 @@ export default function LoanStatusList() {
   const [productId, setProductId] = useState(searchParams.get("productId") || "");
   const [officerId, setOfficerId] = useState(searchParams.get("officerId") || "");
   const [startDate, setStartDate] = useState(searchParams.get("startDate") || ""); // yyyy-mm-dd
-  const [endDate, setEndDate] = useState(searchParams.get("endDate") || "");     // yyyy-mm-dd
+  const [endDate, setEndDate] = useState(searchParams.get("endDate") || ""); // yyyy-mm-dd
   const [minAmt, setMinAmt] = useState(searchParams.get("minAmt") || "");
   const [maxAmt, setMaxAmt] = useState(searchParams.get("maxAmt") || "");
 
@@ -62,7 +63,13 @@ export default function LoanStatusList() {
   const [assignModal, setAssignModal] = useState({ open: false, loan: null, officerId: "" });
 
   // confirms
-  const [confirm, setConfirm] = useState({ open: false, title: "", description: "", destructive: false, onConfirm: null });
+  const [confirm, setConfirm] = useState({
+    open: false,
+    title: "",
+    description: "",
+    destructive: false,
+    onConfirm: null,
+  });
 
   const title = TITLE_MAP[status] || "Loans";
   const showActions = ["disbursed", "active"].includes(String(status || "").toLowerCase());
@@ -91,13 +98,16 @@ export default function LoanStatusList() {
   const load = async (opts = {}) => {
     setLoading(true);
     try {
-      const params = {
-        page,
-        pageSize,
-      };
+      const params = { page, pageSize };
 
+      // Only send DB-backed statuses as ?status=
       if (CORE_STATUSES.includes(String(status))) {
-        params.status = status;
+        if (BACKEND_ENUM_STATUSES.includes(String(status))) {
+          params.status = String(status);
+        } else {
+          // derived "active" -> hint as scope, or omit to avoid enum errors in DB
+          params.scope = String(status);
+        }
       } else if (status) {
         params.scope = status; // derived list hint for backend
       }
@@ -117,9 +127,18 @@ export default function LoanStatusList() {
         : Array.isArray(res.data?.items)
         ? res.data.items
         : [];
-      const total = res.data?.total ?? data.length;
+      let total = res.data?.total ?? data.length;
 
-      setRows(data);
+      // Client-side mapping for "active": treat as disbursed (and optionally still owing)
+      let dataAdj = data;
+      if (String(status).toLowerCase() === "active") {
+        dataAdj = data.filter(
+          (l) => String(l.status || l.state || "").toLowerCase() === "disbursed"
+        );
+        total = dataAdj.length;
+      }
+
+      setRows(dataAdj);
       setTotalCount(total);
     } catch (e) {
       console.error(e);
@@ -167,7 +186,11 @@ export default function LoanStatusList() {
       // product
       if (productId && String(l.productId) !== String(productId)) return false;
       // officer
-      if (officerId && String(l.officerId) !== String(officerId) && String(l.loanOfficerId) !== String(officerId)) return false;
+      if (
+        officerId &&
+        String(l.officerId || l.loanOfficerId) !== String(officerId)
+      )
+        return false;
       // amount
       const amt = Number(l.amount ?? l.principal ?? 0);
       if (minAmt && !(amt >= Number(minAmt))) return false;
@@ -206,14 +229,22 @@ export default function LoanStatusList() {
 
   /* ---------- totals ---------- */
   const totals = useMemo(() => {
-    let p = 0, i = 0, f = 0, pen = 0, t = 0;
+    let p = 0,
+      i = 0,
+      f = 0,
+      pen = 0,
+      t = 0;
     filtered.forEach((l) => {
       const op = Number(l.outstandingPrincipal || 0);
       const oi = Number(l.outstandingInterest || 0);
       const of = Number(l.outstandingFees || 0);
       const ope = Number(l.outstandingPenalty || 0);
       const tot = l.outstanding != null ? Number(l.outstanding) : op + oi + of + ope;
-      p += op; i += oi; f += of; pen += ope; t += tot;
+      p += op;
+      i += oi;
+      f += of;
+      pen += ope;
+      t += tot;
     });
     return { p, i, f, pen, t };
   }, [filtered]);
@@ -271,8 +302,7 @@ export default function LoanStatusList() {
   const exportExcel = () =>
     exportExcelHTMLFromRows(buildExportRows(), (TITLE_MAP[status] || "loans").toLowerCase().replace(/\s+/g, "-"));
 
-  const exportPDF = () =>
-    exportPDFPrintFromRows(buildExportRows(), TITLE_MAP[status] || "Loans");
+  const exportPDF = () => exportPDFPrintFromRows(buildExportRows(), TITLE_MAP[status] || "Loans");
 
   /* ---------- row actions ---------- */
   const viewLoan = (id) => navigate(`/loans/${id}`);
@@ -282,7 +312,8 @@ export default function LoanStatusList() {
       open: true,
       destructive: false,
       title: "Re-disburse this loan?",
-      description: "You will be taken to the disbursement screen to create a new disbursement tied to this loan.",
+      description:
+        "You will be taken to the disbursement screen to create a new disbursement tied to this loan.",
       onConfirm: () => navigate(`/loans/${id}/disburse`),
     });
   const recordRepayment = (id) => navigate(`/repayments/new?loanId=${id}`);
@@ -305,12 +336,17 @@ export default function LoanStatusList() {
         { label: "Principal", value: (r) => r.principal ?? 0 },
         { label: "Interest", value: (r) => r.interest ?? 0 },
         { label: "Penalty", value: (r) => r.penalty ?? 0 },
-        { label: "Total", value: (r) => r.total ?? ((r.principal || 0) + (r.interest || 0) + (r.penalty || 0)) },
+        {
+          label: "Total",
+          value: (r) => r.total ?? (Number(r.principal || 0) + Number(r.interest || 0) + Number(r.penalty || 0)),
+        },
         { label: "Balance", value: (r) => r.balance ?? "" },
       ];
       const head = columns.map((c) => `"${c.label.replace(/"/g, '""')}"`).join(",");
       const body = data
-        .map((row, i) => columns.map((c) => `"${String(c.value(row, i) ?? "").replace(/"/g, '""')}"`).join(","))
+        .map((row, i) =>
+          columns.map((c) => `"${String(c.value(row, i) ?? "").replace(/"/g, '""')}"`).join(",")
+        )
         .join("\n");
       const csv = `${head}\n${body}`;
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -380,15 +416,23 @@ export default function LoanStatusList() {
           <div className="text-sm text-gray-600">
             Total: {fmtNum(totalCount)}{" "}
             <span className="mx-2 text-gray-400">•</span>
-            <Link to="/loans" className="text-indigo-600 underline">All Loans</Link>
+            <Link to="/loans" className="text-indigo-600 underline">
+              All Loans
+            </Link>
           </div>
         </div>
 
         {/* export buttons */}
         <div className="flex flex-wrap gap-2">
-          <button onClick={exportCSV} className="px-3 py-2 rounded border hover:bg-gray-50">Export CSV</button>
-          <button onClick={exportExcel} className="px-3 py-2 rounded border hover:bg-gray-50">Export Excel</button>
-          <button onClick={exportPDF} className="px-3 py-2 rounded border hover:bg-gray-50">Export PDF</button>
+          <button onClick={exportCSV} className="px-3 py-2 rounded border hover:bg-gray-50">
+            Export CSV
+          </button>
+          <button onClick={exportExcel} className="px-3 py-2 rounded border hover:bg-gray-50">
+            Export Excel
+          </button>
+          <button onClick={exportPDF} className="px-3 py-2 rounded border hover:bg-gray-50">
+            Export PDF
+          </button>
         </div>
       </div>
 
@@ -396,7 +440,9 @@ export default function LoanStatusList() {
       <div className="bg-white rounded shadow border p-3">
         <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="md:col-span-2">
-            <label className="text-xs text-gray-600">Search (borrower / phone / product / loan #)</label>
+            <label className="text-xs text-gray-600">
+              Search (borrower / phone / product / loan #)
+            </label>
             <input
               className="w-full border rounded px-3 py-2"
               placeholder="e.g. Jane, 0712…, Business Loan"
@@ -415,7 +461,8 @@ export default function LoanStatusList() {
               <option value="">All</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}{p.code ? ` (${p.code})` : ""}
+                  {p.name}
+                  {p.code ? ` (${p.code})` : ""}
                 </option>
               ))}
             </select>
@@ -532,14 +579,18 @@ export default function LoanStatusList() {
             </tr>
           </thead>
 
-          <tbody ref={dropdownRef}>
+        <tbody ref={dropdownRef}>
             {loading ? (
               <tr>
-                <td colSpan={headCount} className="p-6 text-center text-gray-500">Loading…</td>
+                <td colSpan={15 + (showActions ? 1 : 0)} className="p-6 text-center text-gray-500">
+                  Loading…
+                </td>
               </tr>
             ) : paged.length === 0 ? (
               <tr>
-                <td colSpan={headCount} className="p-6 text-center text-gray-500">No loans found.</td>
+                <td colSpan={15 + (showActions ? 1 : 0)} className="p-6 text-center text-gray-500">
+                  No loans found.
+                </td>
               </tr>
             ) : (
               paged.map((l) => {
@@ -563,9 +614,11 @@ export default function LoanStatusList() {
                     : Number(op || 0) + Number(oi || 0) + Number(of || 0) + Number(ope || 0);
 
                 const annualRate =
-                  l.interestRateAnnual != null ? l.interestRateAnnual
-                  : l.interestRate != null ? l.interestRate
-                  : null;
+                  l.interestRateAnnual != null
+                    ? l.interestRateAnnual
+                    : l.interestRate != null
+                    ? l.interestRate
+                    : null;
 
                 const termMonths = l.termMonths ?? l.durationMonths ?? null;
 
@@ -606,25 +659,67 @@ export default function LoanStatusList() {
                           </button>
                           {menuOpenRow === l.id && (
                             <div className="absolute right-0 mt-1 w-56 bg-white border rounded shadow-lg z-10">
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); viewLoan(l.id); }}>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  viewLoan(l.id);
+                                }}
+                              >
                                 View (details & repayments)
                               </button>
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); editLoan(l.id); }}>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  editLoan(l.id);
+                                }}
+                              >
                                 Edit
                               </button>
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); recordRepayment(l.id); }}>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  recordRepayment(l.id);
+                                }}
+                              >
                                 Record Repayment
                               </button>
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={async () => { setMenuOpenRow(null); await downloadSchedule(l); }}>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={async () => {
+                                  setMenuOpenRow(null);
+                                  await downloadSchedule(l);
+                                }}
+                              >
                                 Download Schedule (CSV)
                               </button>
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); reschedule(l.id); }}>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  reschedule(l.id);
+                                }}
+                              >
                                 Reschedule Repayments
                               </button>
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); redisburse(l.id); }}>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  redisburse(l.id);
+                                }}
+                              >
                                 Re-disburse
                               </button>
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50" onClick={() => { setMenuOpenRow(null); openAssignOfficer(l); }}>
+                              <button
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                                onClick={() => {
+                                  setMenuOpenRow(null);
+                                  openAssignOfficer(l);
+                                }}
+                              >
                                 Assign Loan Officer
                               </button>
                             </div>
@@ -641,7 +736,9 @@ export default function LoanStatusList() {
           {!loading && filtered.length > 0 && (
             <tfoot>
               <tr className="bg-gray-50 font-semibold [&>td]:px-2 [&>td]:py-2 [&>td]:border">
-                <td colSpan={6} className="text-right">Totals:</td>
+                <td colSpan={6} className="text-right">
+                  Totals:
+                </td>
                 <td>{fmtTZS(totals.p)}</td>
                 <td>{fmtTZS(totals.i)}</td>
                 <td>{fmtTZS(totals.f)}</td>
@@ -660,7 +757,10 @@ export default function LoanStatusList() {
         pageSize={pageSize}
         total={totalCount || filtered.length}
         onPageChange={(p) => setPage(p)}
-        onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
       />
 
       {/* Assign officer modal */}
