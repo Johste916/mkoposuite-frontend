@@ -1,91 +1,122 @@
-// src/pages/repayments/UploadRepaymentsCSV.jsx
 import React, { useState } from "react";
-import { uploadRepaymentsCSV } from "../../api/repayments";
+import api from "../../api";
 
 export default function UploadRepaymentsCSV() {
   const [file, setFile] = useState(null);
-  const [dateFormat, setDateFormat] = useState("YYYY-MM-DD");
-  const [method, setMethod] = useState("");
-  const [waivePenalties, setWaivePenalties] = useState(false);
-  const [message, setMessage] = useState("");
+  const [dryRun, setDryRun] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    if (!file) return setMessage("Choose a CSV file.");
-    setLoading(true);
-    setMessage("");
+  const onFile = (e) => {
+    setFile(e.target.files?.[0] || null);
+    setResult(null);
+    setError("");
+  };
+
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    if (!file) return alert("Select a CSV file first.");
+    setUploading(true);
+    setError("");
     setResult(null);
     try {
-      const data = await uploadRepaymentsCSV(file, {
-        dateFormat,
-        method: method || undefined,
-        waivePenalties: waivePenalties ? "1" : "0",
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("dryRun", String(!!dryRun));
+      const { data } = await api.post("/repayments/upload-csv", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      setResult(data);
-      setMessage("Uploaded.");
-    } catch (e) {
-      setMessage(e?.response?.data?.error || "Upload failed");
+      setResult(data || { ok: true });
+    } catch (err) {
+      setError(err?.response?.data?.error || "Upload failed");
     } finally {
-      setLoading(false);
+      setUploading(false);
     }
+  };
+
+  const sample = `loanRef,amount,date,method,reference,notes
+L-10001,150000,2025-08-01,mobile_money,MPESA-ABC123,August part-payment
+L-10002,80000,2025-08-02,bank,DRN-89231,Branch cash deposit
+`;
+
+  const downloadSample = () => {
+    const blob = new Blob([sample], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "repayments_sample.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border rounded-xl shadow p-6">
-        <h2 className="text-xl font-semibold">Upload Repayments CSV</h2>
-        <p className="text-sm text-gray-500">CSV columns: loanReference (or loanId), amount, date, method, notes</p>
+      <div className="bg-white dark:bg-gray-800 rounded-lg border shadow p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Upload Repayments (CSV)</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Upload repayments in bulk. Columns supported: <code>loanRef</code> (or <code>loanId</code>),
+              <code>amount</code>, <code>date</code> (YYYY-MM-DD), <code>method</code>, <code>reference</code>, <code>notes</code>.
+            </p>
+          </div>
+          <button
+            onClick={downloadSample}
+            className="px-3 py-2 rounded border hover:bg-gray-50 text-sm"
+          >
+            Download Sample CSV
+          </button>
+        </div>
 
-        <form onSubmit={onSubmit} className="grid md:grid-cols-3 gap-4 mt-4">
-          <div className="space-y-1 md:col-span-2">
-            <label className="text-sm">CSV File</label>
-            <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0])} />
+        <form onSubmit={submit} className="mt-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <input type="file" accept=".csv,text/csv" onChange={onFile} />
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={dryRun}
+                onChange={(e) => setDryRun(e.target.checked)}
+              />
+              Dry run (validate only)
+            </label>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm">Date format</label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              value={dateFormat}
-              onChange={(e) => setDateFormat(e.target.value)}
-              placeholder="YYYY-MM-DD"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm">Default Method (optional)</label>
-            <select
-              className="w-full border rounded px-3 py-2"
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={!file || uploading}
+              className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
             >
-              <option value="">(use per-row)</option>
-              <option value="cash">Cash</option>
-              <option value="mobile_money">Mobile Money</option>
-              <option value="bank">Bank Transfer</option>
-            </select>
-          </div>
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={waivePenalties}
-              onChange={(e) => setWaivePenalties(e.target.checked)}
-            />
-            <span className="text-sm">Waive penalties for all rows</span>
-          </label>
-
-          <div className="md:col-span-3 flex gap-2 justify-end">
-            <button type="submit" className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-60" disabled={loading}>
-              {loading ? "Uploading…" : "Upload"}
+              {uploading ? "Uploading…" : "Upload"}
+            </button>
+            <button
+              type="button"
+              className="px-3 py-2 rounded border hover:bg-gray-50"
+              onClick={() => {
+                setFile(null);
+                setResult(null);
+                setError("");
+              }}
+            >
+              Reset
             </button>
           </div>
         </form>
 
-        {!!message && <div className="mt-3 text-sm">{message}</div>}
-        {!!result && (
-          <pre className="mt-3 p-3 bg-gray-50 border rounded text-xs overflow-auto">
-            {JSON.stringify(result, null, 2)}
-          </pre>
+        {error && (
+          <div className="mt-4 p-3 rounded bg-red-50 text-red-700 text-sm border border-red-200">
+            {error}
+          </div>
+        )}
+
+        {result && (
+          <div className="mt-6">
+            <h3 className="font-semibold">Result</h3>
+            <pre className="mt-2 p-3 text-sm bg-gray-50 dark:bg-gray-900 rounded border overflow-auto">
+{JSON.stringify(result, null, 2)}
+            </pre>
+          </div>
         )}
       </div>
     </div>

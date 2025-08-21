@@ -1,124 +1,194 @@
-// src/pages/repayments/BulkRepayments.jsx
 import React, { useState } from "react";
-import { createBulkRepayments } from "../../api/repayments";
+import api from "../../api";
 
-const emptyRow = () => ({
+const today = () => new Date().toISOString().slice(0, 10);
+
+const newRow = () => ({
   loanId: "",
-  loanReference: "",
-  date: new Date().toISOString().slice(0, 10),
   amount: "",
+  date: today(),
   method: "cash",
+  reference: "",
   notes: "",
-  waivePenalties: false,
 });
 
-const money = (v) => Number(v || 0).toLocaleString();
-
 export default function BulkRepayments() {
-  const [rows, setRows] = useState([emptyRow()]);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [rows, setRows] = useState([newRow()]);
+  const [posting, setPosting] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
 
-  const update = (i, patch) => {
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
-  };
+  const setCell = (i, key, val) =>
+    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
 
-  const addRow = () => setRows((r) => [...r, emptyRow()]);
-  const removeRow = (i) => setRows((r) => r.filter((_, idx) => idx !== i));
+  const addRow = () => setRows((rs) => [...rs, newRow()]);
+  const removeRow = (i) => setRows((rs) => rs.filter((_, idx) => idx !== i));
 
-  const submit = async () => {
-    setSaving(true);
-    setMessage("");
+  const post = async () => {
+    const items = rows
+      .map((r) => ({
+        loanId: r.loanId ? Number(r.loanId) : undefined,
+        amount: Number(r.amount || 0),
+        date: r.date,
+        method: r.method,
+        reference: r.reference || undefined,
+        notes: r.notes || undefined,
+      }))
+      .filter((x) => x.loanId && x.amount > 0 && x.date);
+
+    if (!items.length) return alert("Fill at least one valid row.");
+
+    setPosting(true);
+    setError("");
+    setResult(null);
     try {
-      // backend will accept either loanId or loanReference per row
-      const payload = rows.filter((r) => r.amount && (r.loanId || r.loanReference) && r.date);
-      const res = await createBulkRepayments(payload);
-      setMessage(`Saved ${res?.saved || payload.length} rows.`);
-      if (res?.errors?.length) setMessage((m) => `${m} ${res.errors.length} error(s) occurred.`);
+      const { data } = await api.post("/repayments/bulk", { items });
+      setResult(data || { ok: true });
     } catch (e) {
-      setMessage(e?.response?.data?.error || "Bulk save failed");
+      setError(e?.response?.data?.error || "Bulk posting failed");
     } finally {
-      setSaving(false);
+      setPosting(false);
     }
   };
 
-  const total = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
-
   return (
     <div className="space-y-6">
-      <div className="bg-white border rounded-xl shadow p-6 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Add Bulk Repayments</h2>
-          <div className="text-sm text-gray-600">Total: {money(total)}</div>
-        </div>
+      <div className="bg-white dark:bg-gray-800 rounded-lg border shadow p-6">
+        <h2 className="text-xl font-semibold">Add Bulk Repayments</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Enter multiple repayments and submit in a single batch.
+        </p>
 
-        <div className="overflow-x-auto border rounded-xl">
+        <div className="overflow-x-auto border rounded-xl mt-4">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-gray-50">
-                <th className="text-left p-2">Loan ID</th>
-                <th className="text-left p-2">Loan Ref</th>
-                <th className="text-left p-2">Date</th>
-                <th className="text-left p-2">Amount</th>
-                <th className="text-left p-2">Method</th>
-                <th className="text-left p-2">Notes</th>
-                <th className="text-left p-2">Waive Pen.</th>
-                <th className="text-right p-2">Actions</th>
+                <th className="p-3 text-left">Loan ID</th>
+                <th className="p-3 text-left">Date</th>
+                <th className="p-3 text-left">Amount</th>
+                <th className="p-3 text-left">Method</th>
+                <th className="p-3 text-left">Reference</th>
+                <th className="p-3 text-left">Notes</th>
+                <th className="p-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr key={i} className="border-t">
                   <td className="p-2">
-                    <input className="border rounded px-2 py-1 w-28"
-                      value={r.loanId} onChange={(e) => update(i, { loanId: e.target.value })} />
+                    <input
+                      className="border rounded px-2 py-1 w-28"
+                      value={r.loanId}
+                      onChange={(e) => setCell(i, "loanId", e.target.value)}
+                      placeholder="123"
+                    />
                   </td>
                   <td className="p-2">
-                    <input className="border rounded px-2 py-1 w-36"
-                      value={r.loanReference} onChange={(e) => update(i, { loanReference: e.target.value })} />
+                    <input
+                      type="date"
+                      className="border rounded px-2 py-1"
+                      value={r.date}
+                      onChange={(e) => setCell(i, "date", e.target.value)}
+                    />
                   </td>
                   <td className="p-2">
-                    <input type="date" className="border rounded px-2 py-1"
-                      value={r.date} onChange={(e) => update(i, { date: e.target.value })} />
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      className="border rounded px-2 py-1 w-28"
+                      value={r.amount}
+                      onChange={(e) => setCell(i, "amount", e.target.value)}
+                      placeholder="0.00"
+                    />
                   </td>
                   <td className="p-2">
-                    <input type="number" step="0.01" className="border rounded px-2 py-1 w-28"
-                      value={r.amount} onChange={(e) => update(i, { amount: e.target.value })} />
-                  </td>
-                  <td className="p-2">
-                    <select className="border rounded px-2 py-1"
-                      value={r.method} onChange={(e) => update(i, { method: e.target.value })}>
+                    <select
+                      className="border rounded px-2 py-1"
+                      value={r.method}
+                      onChange={(e) => setCell(i, "method", e.target.value)}
+                    >
                       <option value="cash">Cash</option>
                       <option value="mobile_money">Mobile Money</option>
                       <option value="bank">Bank</option>
+                      <option value="card">Card</option>
+                      <option value="adjustment">Adjustment</option>
                     </select>
                   </td>
                   <td className="p-2">
-                    <input className="border rounded px-2 py-1 w-56"
-                      value={r.notes} onChange={(e) => update(i, { notes: e.target.value })} />
+                    <input
+                      className="border rounded px-2 py-1"
+                      value={r.reference}
+                      onChange={(e) => setCell(i, "reference", e.target.value)}
+                      placeholder="MPESA-… / Bank txn"
+                    />
                   </td>
                   <td className="p-2">
-                    <input type="checkbox"
-                      checked={r.waivePenalties}
-                      onChange={(e) => update(i, { waivePenalties: e.target.checked })} />
+                    <input
+                      className="border rounded px-2 py-1 w-64"
+                      value={r.notes}
+                      onChange={(e) => setCell(i, "notes", e.target.value)}
+                      placeholder="optional"
+                    />
                   </td>
                   <td className="p-2 text-right">
-                    <button className="px-2 py-1 rounded border" onClick={() => removeRow(i)}>Remove</button>
+                    <button
+                      className="px-2 py-1 rounded border hover:bg-gray-50"
+                      onClick={() => removeRow(i)}
+                      disabled={rows.length === 1}
+                    >
+                      Remove
+                    </button>
                   </td>
                 </tr>
               ))}
+              <tr className="border-t">
+                <td colSpan={7} className="p-3">
+                  <button
+                    className="px-3 py-1.5 rounded border hover:bg-gray-50"
+                    onClick={addRow}
+                  >
+                    + Add Row
+                  </button>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
 
-        <div className="flex justify-between">
-          <button className="px-3 py-2 rounded border" onClick={addRow}>Add Row</button>
-          <button className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-60" disabled={saving} onClick={submit}>
-            {saving ? "Saving…" : "Save All"}
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={post}
+            disabled={posting}
+            className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {posting ? "Submitting…" : "Submit Bulk"}
+          </button>
+          <button
+            className="px-3 py-2 rounded border hover:bg-gray-50"
+            onClick={() => {
+              setRows([newRow()]);
+              setResult(null);
+              setError("");
+            }}
+          >
+            Reset
           </button>
         </div>
 
-        {!!message && <div className="text-sm mt-2">{message}</div>}
+        {error && (
+          <div className="mt-4 p-3 rounded bg-red-50 text-red-700 text-sm border border-red-200">
+            {error}
+          </div>
+        )}
+        {result && (
+          <div className="mt-4">
+            <h3 className="font-semibold">Result</h3>
+            <pre className="mt-2 p-3 text-sm bg-gray-50 dark:bg-gray-900 rounded border overflow-auto">
+{JSON.stringify(result, null, 2)}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );
