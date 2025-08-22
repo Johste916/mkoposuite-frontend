@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import api from "../../api";
+import repaymentsApi from "../../api/repayments";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 const newRow = () => ({
   loanId: "",
+  loanReference: "",
   amount: "",
   date: today(),
   method: "cash",
@@ -28,21 +29,23 @@ export default function BulkRepayments() {
     const items = rows
       .map((r) => ({
         loanId: r.loanId ? Number(r.loanId) : undefined,
+        loanReference: r.loanReference || undefined,
         amount: Number(r.amount || 0),
         date: r.date,
-        method: r.method,
+        method: r.method || "cash",
         reference: r.reference || undefined,
         notes: r.notes || undefined,
       }))
-      .filter((x) => x.loanId && x.amount > 0 && x.date);
+      .filter((x) => (x.loanId || x.loanReference) && x.amount > 0 && x.date);
 
-    if (!items.length) return alert("Fill at least one valid row.");
+    if (!items.length) return alert("Fill at least one valid row (loanId or loanReference, amount, date).");
 
     setPosting(true);
     setError("");
     setResult(null);
     try {
-      const { data } = await api.post("/repayments/bulk", { items });
+      // controller expects a raw array body
+      const { data } = await repaymentsApi.createBulk(items);
       setResult(data || { ok: true });
     } catch (e) {
       setError(e?.response?.data?.error || "Bulk posting failed");
@@ -56,7 +59,7 @@ export default function BulkRepayments() {
       <div className="bg-white dark:bg-gray-800 rounded-lg border shadow p-6">
         <h2 className="text-xl font-semibold">Add Bulk Repayments</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Enter multiple repayments and submit in a single batch.
+          Each row must include <code>loanId</code> <em>or</em> <code>loanReference</code>, plus <code>amount</code> and <code>date</code>.
         </p>
 
         <div className="overflow-x-auto border rounded-xl mt-4">
@@ -64,6 +67,7 @@ export default function BulkRepayments() {
             <thead>
               <tr className="bg-gray-50">
                 <th className="p-3 text-left">Loan ID</th>
+                <th className="p-3 text-left">Loan Ref</th>
                 <th className="p-3 text-left">Date</th>
                 <th className="p-3 text-left">Amount</th>
                 <th className="p-3 text-left">Method</th>
@@ -81,6 +85,14 @@ export default function BulkRepayments() {
                       value={r.loanId}
                       onChange={(e) => setCell(i, "loanId", e.target.value)}
                       placeholder="123"
+                    />
+                  </td>
+                  <td className="p-2">
+                    <input
+                      className="border rounded px-2 py-1 w-36"
+                      value={r.loanReference}
+                      onChange={(e) => setCell(i, "loanReference", e.target.value)}
+                      placeholder="LN-…"
                     />
                   </td>
                   <td className="p-2">
@@ -109,7 +121,7 @@ export default function BulkRepayments() {
                       onChange={(e) => setCell(i, "method", e.target.value)}
                     >
                       <option value="cash">Cash</option>
-                      <option value="mobile_money">Mobile Money</option>
+                      <option value="mobile">Mobile</option>
                       <option value="bank">Bank</option>
                       <option value="card">Card</option>
                       <option value="adjustment">Adjustment</option>
@@ -143,7 +155,7 @@ export default function BulkRepayments() {
                 </tr>
               ))}
               <tr className="border-t">
-                <td colSpan={7} className="p-3">
+                <td colSpan={8} className="p-3">
                   <button
                     className="px-3 py-1.5 rounded border hover:bg-gray-50"
                     onClick={addRow}

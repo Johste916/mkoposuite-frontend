@@ -1,54 +1,92 @@
 // src/api/repayments.js
-import client from "./client";
+import api from "./index";
 
-// Lists (supports filters/pagination)
-export const listRepayments = (params = {}) =>
-  client.get("/repayments", { params }).then((r) => r.data);
+// Build a querystring from a params object
+const qs = (params = {}) =>
+  Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
 
-// Repayments for a loan
-export const listLoanRepayments = (loanId, params = {}) =>
-  client.get(`/repayments/loan/${loanId}`, { params }).then((r) => r.data);
+const repaymentsApi = {
+  // LIST
+  list(params) {
+    return api.get(`/repayments${params ? "?" + qs(params) : ""}`);
+  },
 
-// Single receipt
-export const getRepayment = (id) =>
-  client.get(`/repayments/${id}`).then((r) => r.data);
+  // By loan
+  listByLoan(loanId, params) {
+    return api.get(`/repayments/loan/${loanId}${params ? "?" + qs(params) : ""}`);
+  },
 
-// Allocation preview
-export const previewAllocation = (payload) =>
-  client.post("/repayments/preview-allocation", payload).then((r) => r.data);
+  // Single
+  get(id) {
+    return api.get(`/repayments/${id}`);
+  },
 
-// Create manual repayment
-export const createRepayment = (payload) =>
-  client.post("/repayments/manual", payload).then((r) => r.data);
+  // Allocation preview
+  previewAllocation(payload) {
+    return api.post("/repayments/preview-allocation", payload);
+  },
 
-// Bulk
-export const createBulkRepayments = (rows = []) =>
-  client.post("/repayments/bulk", { rows }).then((r) => r.data);
+  // Manual create
+  create(payload) {
+    return api.post("/repayments/manual", payload);
+  },
 
-// Approvals
-export const approveRepayment = (id) =>
-  client.post(`/repayments/${id}/approve`).then((r) => r.data);
-export const rejectRepayment = (id, reason = "") =>
-  client.post(`/repayments/${id}/reject`, { reason }).then((r) => r.data);
+  // BULK JSON — controller expects a raw array body
+  createBulk(items = []) {
+    return api.post("/repayments/bulk", items);
+  },
 
-// CSV upload (multipart)
-export const uploadRepaymentsCSV = (file, extra = {}) => {
-  const fd = new FormData();
-  fd.append("file", file);
-  Object.entries(extra || {}).forEach(([k, v]) => fd.append(k, v));
-  return client.post("/repayments/upload-csv", fd, {
-    headers: { "Content-Type": "multipart/form-data" },
-  }).then((r) => r.data);
+  // CSV UPLOAD (multipart)
+  uploadCsv(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post("/repayments/csv", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  // APPROVALS
+  pendingApprovals() {
+    return api.get("/repayments/approvals/pending");
+  },
+  approve(id) {
+    return api.post(`/repayments/approvals/${id}/approve`);
+  },
+  reject(id, reason = "") {
+    return api.post(`/repayments/approvals/${id}/reject`, { reason });
+  },
+
+  // REPORTS
+  summary(params) {
+    return api.get(`/repayments/summary${params ? "?" + qs(params) : ""}`);
+  },
+  timeseries(params) {
+    return api.get(`/repayments/timeseries${params ? "?" + qs(params) : ""}`);
+  },
+
+  // EXPORT (returns URL you can open in a new tab)
+  exportCsvUrl(params) {
+    const base = api.defaults.baseURL?.replace(/\/+$/, "") || "";
+    return `${base}/repayments/export.csv${params ? "?" + qs(params) : ""}`;
+  },
 };
 
-export default {
-  listRepayments,
-  listLoanRepayments,
-  getRepayment,
+export default repaymentsApi;
+export const {
+  list,
+  listByLoan,
+  get,
   previewAllocation,
-  createRepayment,
-  createBulkRepayments,
-  approveRepayment,
-  rejectRepayment,
-  uploadRepaymentsCSV,
-};
+  create,
+  createBulk,
+  uploadCsv,
+  pendingApprovals,
+  approve,
+  reject,
+  summary,
+  timeseries,
+  exportCsvUrl,
+} = repaymentsApi;

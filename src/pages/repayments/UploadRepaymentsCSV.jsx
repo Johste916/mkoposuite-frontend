@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import api from "../../api";
+import repaymentsApi from "../../api/repayments";
 
 export default function UploadRepaymentsCSV() {
   const [file, setFile] = useState(null);
-  const [dryRun, setDryRun] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -21,12 +20,7 @@ export default function UploadRepaymentsCSV() {
     setError("");
     setResult(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("dryRun", String(!!dryRun));
-      const { data } = await api.post("/repayments/upload-csv", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const { data } = await repaymentsApi.uploadCsv(file);
       setResult(data || { ok: true });
     } catch (err) {
       setError(err?.response?.data?.error || "Upload failed");
@@ -35,9 +29,9 @@ export default function UploadRepaymentsCSV() {
     }
   };
 
-  const sample = `loanRef,amount,date,method,reference,notes
-L-10001,150000,2025-08-01,mobile_money,MPESA-ABC123,August part-payment
-L-10002,80000,2025-08-02,bank,DRN-89231,Branch cash deposit
+  const sample = `loanReference,amount,date,method,reference,notes
+LN-10001,150000,2025-08-01,mobile,MPESA-ABC123,August part-payment
+LN-10002,80000,2025-08-02,bank,DRN-89231,Branch cash deposit
 `;
 
   const downloadSample = () => {
@@ -57,8 +51,8 @@ L-10002,80000,2025-08-02,bank,DRN-89231,Branch cash deposit
           <div>
             <h2 className="text-xl font-semibold">Upload Repayments (CSV)</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Upload repayments in bulk. Columns supported: <code>loanRef</code> (or <code>loanId</code>),
-              <code>amount</code>, <code>date</code> (YYYY-MM-DD), <code>method</code>, <code>reference</code>, <code>notes</code>.
+              Columns supported: <code>loanReference</code>, <code>amount</code>, <code>date</code> (YYYY-MM-DD),
+              <code>method</code>, <code>reference</code>, <code>notes</code>.
             </p>
           </div>
           <button
@@ -72,14 +66,6 @@ L-10002,80000,2025-08-02,bank,DRN-89231,Branch cash deposit
         <form onSubmit={submit} className="mt-6 space-y-4">
           <div className="flex items-center gap-3">
             <input type="file" accept=".csv,text/csv" onChange={onFile} />
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={dryRun}
-                onChange={(e) => setDryRun(e.target.checked)}
-              />
-              Dry run (validate only)
-            </label>
           </div>
 
           <div className="flex gap-2">
