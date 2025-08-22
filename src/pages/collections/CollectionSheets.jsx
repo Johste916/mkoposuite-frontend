@@ -3,17 +3,11 @@ import { Link } from "react-router-dom";
 import usePaginatedFetch from "../../hooks/usePaginatedFetch";
 import ListShell from "../../components/ListShell";
 
-/**
- * CollectionSheets list page (final)
- * - Filters: status, type, dateFrom/dateTo, collector, loanOfficer
- * - CSV export reuses current filters & q
- * - Adds "New Collection Sheet" button + row actions (Edit)
- */
 export default function CollectionSheets() {
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
-  const [dateFrom, setDateFrom] = useState("");  // yyyy-mm-dd
-  const [dateTo, setDateTo] = useState("");      // yyyy-mm-dd
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [collector, setCollector] = useState("");
   const [loanOfficer, setLoanOfficer] = useState("");
 
@@ -26,21 +20,11 @@ export default function CollectionSheets() {
     if (collector) params.set("collector", collector);
     if (loanOfficer) params.set("loanOfficer", loanOfficer);
     const qs = params.toString();
-    return qs ? `/collections?${qs}` : "/collections";
+    return qs ? `/api/collections?${qs}` : "/api/collections";
   }, [status, type, dateFrom, dateTo, collector, loanOfficer]);
 
-  const {
-    rows,
-    total,
-    page,
-    setPage,
-    limit,
-    setLimit,
-    q,
-    setQ,
-    loading,
-    error,
-  } = usePaginatedFetch({ url: baseUrl });
+  const { rows, total, page, setPage, limit, setLimit, q, setQ, loading, error } =
+    usePaginatedFetch({ url: baseUrl });
 
   const columns = [
     { key: "date", title: "Date" },
@@ -48,7 +32,6 @@ export default function CollectionSheets() {
     { key: "collector", title: "Collector" },
     { key: "loanOfficer", title: "Loan Officer" },
     { key: "status", title: "Status" },
-    // If your ListShell supports a render cell/slot, add actions there.
   ];
 
   const exportHref = useMemo(() => {
@@ -61,7 +44,7 @@ export default function CollectionSheets() {
     if (collector) params.set("collector", collector);
     if (loanOfficer) params.set("loanOfficer", loanOfficer);
     params.set("export", "csv");
-    return `/collections?${params.toString()}`;
+    return `/api/collections?${params.toString()}`;
   }, [q, status, type, dateFrom, dateTo, collector, loanOfficer]);
 
   return (
@@ -127,12 +110,8 @@ export default function CollectionSheets() {
           </a>
         </div>
       }
-      // If ListShell supports row actions, you can pass a render prop like this:
       renderRowActions={(row) => (
-        <Link
-          to={`/collections/${row.id}/edit`}
-          className="text-blue-600 hover:underline text-sm"
-        >
+        <Link to={`/collections/${row.id}/edit`} className="text-blue-600 hover:underline text-sm">
           Edit
         </Link>
       )}
