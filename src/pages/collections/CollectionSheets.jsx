@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import usePaginatedFetch from "../../hooks/usePaginatedFetch";
 import ListShell from "../../components/ListShell";
+import api from "../../api"; // for API base in export link
 
 export default function CollectionSheets() {
   const [status, setStatus] = useState("");
@@ -11,6 +12,7 @@ export default function CollectionSheets() {
   const [collector, setCollector] = useState("");
   const [loanOfficer, setLoanOfficer] = useState("");
 
+  // Build the list endpoint (NO leading /api here; the hook + axios base will handle it)
   const baseUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
@@ -20,7 +22,7 @@ export default function CollectionSheets() {
     if (collector) params.set("collector", collector);
     if (loanOfficer) params.set("loanOfficer", loanOfficer);
     const qs = params.toString();
-    return qs ? `/api/collections?${qs}` : "/api/collections";
+    return qs ? `/collections?${qs}` : "/collections";
   }, [status, type, dateFrom, dateTo, collector, loanOfficer]);
 
   const { rows, total, page, setPage, limit, setLimit, q, setQ, loading, error } =
@@ -34,7 +36,9 @@ export default function CollectionSheets() {
     { key: "status", title: "Status" },
   ];
 
+  // Absolute export link using axios baseURL (avoids /api/api and wrong host)
   const exportHref = useMemo(() => {
+    const API_BASE = String(api?.defaults?.baseURL || "/api").replace(/\/+$/g, "");
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (status) params.set("status", status);
@@ -44,7 +48,7 @@ export default function CollectionSheets() {
     if (collector) params.set("collector", collector);
     if (loanOfficer) params.set("loanOfficer", loanOfficer);
     params.set("export", "csv");
-    return `/api/collections?${params.toString()}`;
+    return `${API_BASE}/collections?${params.toString()}`;
   }, [q, status, type, dateFrom, dateTo, collector, loanOfficer]);
 
   return (
@@ -110,11 +114,13 @@ export default function CollectionSheets() {
           </a>
         </div>
       }
-      renderRowActions={(row) => (
-        <Link to={`/collections/${row.id}/edit`} className="text-blue-600 hover:underline text-sm">
-          Edit
-        </Link>
-      )}
+      renderRowActions={(row) =>
+        row?.id ? (
+          <Link to={`/collections/${row.id}/edit`} className="text-blue-600 hover:underline text-sm">
+            Edit
+          </Link>
+        ) : null
+      }
     />
   );
 }
