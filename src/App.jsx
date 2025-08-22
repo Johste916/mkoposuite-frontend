@@ -78,6 +78,10 @@ const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
 const Assets = lazy(() => import("./pages/assets/Assets"));
 const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets"));
+// 👇 Added to align with finalized Collection Sheets module
+const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
+const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
+
 const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
 const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
@@ -234,6 +238,10 @@ function App() {
 
               {/* Collection Sheets */}
               <Route path="collections" element={<CollectionSheets />} />
+              {/* 👇 Added create/edit routes to close the module */}
+              <Route path="collections/new" element={<CollectionSheetCreate />} />
+              <Route path="collections/:id/edit" element={<CollectionSheetEdit />} />
+              {/* Optional legacy/aliases */}
               <Route path="collections/daily" element={<CollectionSheets />} />
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
