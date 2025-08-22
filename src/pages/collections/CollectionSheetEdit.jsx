@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import CollectionSheetForm from "../../components/collections/CollectionSheetForm";
+// ⬇️ fix the path — same folder
+import CollectionSheetForm from "./CollectionSheetForm";
 
 export default function CollectionSheetEdit() {
   const { id } = useParams();
@@ -15,7 +16,6 @@ export default function CollectionSheetEdit() {
         const res = await fetch(`/api/collections/${id}`);
         if (!res.ok) throw new Error("Failed to load");
         const data = await res.json();
-        // Normalize date to yyyy-mm-dd if it's ISO
         const date = data.date ? new Date(data.date).toISOString().slice(0, 10) : "";
         setValue({ ...data, date });
       } catch (err) {

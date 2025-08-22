@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import CollectionSheetForm from "../../components/collections/CollectionSheetForm";
+// ⬇️ fix the path — same folder
+import CollectionSheetForm from "./CollectionSheetForm";
 
 export default function CollectionSheetCreate() {
   const navigate = useNavigate();
