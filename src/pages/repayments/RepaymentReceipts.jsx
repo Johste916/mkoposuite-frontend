@@ -4,14 +4,29 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 const money = (v) => Number(v || 0).toLocaleString();
+const toISO = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0,10);
+const startDefault = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return toISO(d);
+};
+
+// Build a robust export URL using axios instance if available
+const buildApiUrl = (url, params = {}) => {
+  try {
+    if (typeof api.getUri === "function") return api.getUri({ url, params });
+  } catch {}
+  const base = api?.defaults?.baseURL || "";
+  const qs = new URLSearchParams(params).toString();
+  return `${base}${url}${qs ? `?${qs}` : ""}`;
+};
 
 export default function RepaymentReceipts() {
   // filters
   const [q, setQ] = useState("");
-  const [dateFrom, setDateFrom] = useState(() =>
-    new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().slice(0, 10)
-  );
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [status, setStatus] = useState("approved"); // approved|pending|rejected|all (client-side filter)
+  const [dateFrom, setDateFrom] = useState(startDefault());
+  const [dateTo, setDateTo] = useState(toISO(new Date()));
 
   // data
   const [rows, setRows] = useState([]);
@@ -39,12 +54,23 @@ export default function RepaymentReceipts() {
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
 
+      // Note: backend may ignore status; we filter client-side below
+      if (status && status !== "all") params.status = status;
+
       const { data } = await api.get("/repayments", { params });
-      const items = Array.isArray(data) ? data : data?.items || [];
+      let items = Array.isArray(data) ? data : data?.items || [];
+
+      // Client-side status filter to be safe
+      if (status && status !== "all") {
+        items = items.filter((r) => String(r.status || "").toLowerCase() === status);
+      }
+
       setRows(items);
       setTotal(Number(data?.total || items.length || 0));
     } catch (e) {
       console.error(e);
+      setRows([]);
+      setTotal(0);
       alert("Failed to load receipts");
     } finally {
       setLoading(false);
@@ -54,7 +80,7 @@ export default function RepaymentReceipts() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, dateFrom, dateTo]);
+  }, [page, pageSize, dateFrom, dateTo, status]);
 
   const onSearch = (e) => {
     e?.preventDefault?.();
@@ -73,32 +99,16 @@ export default function RepaymentReceipts() {
     }
   };
 
-  const exportCSV = () => {
-    if (!rows.length) return alert("Nothing to export");
-    const headers = ["Receipt No", "Date", "Loan Ref", "Borrower", "Method", "Amount", "Reference"];
-    const csv = [
-      headers.join(","),
-      ...rows.map((r) =>
-        [
-          r.receiptNo || `RCPT-${r.id}`,
-          r.date || r.createdAt || "",
-          r.Loan?.reference || r.loan?.reference || `L-${r.Loan?.id || r.loan?.id || ""}`,
-          `"${(r.Loan?.Borrower?.fullName || r.loan?.borrowerName || "").replace(/"/g, '""')}"`,
-          r.method || "cash",
-          r.amount,
-          r.reference || "",
-        ].join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `repayment-receipts_${dateFrom}_to_${dateTo}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportHref = useMemo(
+    () =>
+      buildApiUrl("/repayments/export", {
+        q: q || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+        status: status !== "all" ? status : undefined, // backend may ignore
+      }),
+    [q, dateFrom, dateTo, status]
+  );
 
   // --- PDF download of the open receipt ---
   const downloadPDF = async () => {
@@ -133,7 +143,6 @@ export default function RepaymentReceipts() {
       pdf.addImage(imgData, "PNG", 0, 0, imgW, imgH);
     } else {
       // multi-page
-      let remaining = imgH;
       const canvasPageHeight = (canvas.width * pageH) / pageW;
 
       const pageCanvas = document.createElement("canvas");
@@ -142,7 +151,8 @@ export default function RepaymentReceipts() {
       pageCanvas.height = canvasPageHeight;
 
       let sY = 0;
-      while (remaining > 0) {
+      let first = true;
+      while (sY < canvas.height) {
         pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
         pageCtx.drawImage(
           canvas,
@@ -156,15 +166,14 @@ export default function RepaymentReceipts() {
           pageCanvas.height
         );
         const pageImgData = pageCanvas.toDataURL("image/png");
-        if (y === 0) {
+        if (first) {
           pdf.addImage(pageImgData, "PNG", 0, 0, imgW, pageH);
+          first = false;
         } else {
           pdf.addPage();
           pdf.addImage(pageImgData, "PNG", 0, 0, imgW, pageH);
         }
         sY += canvasPageHeight;
-        remaining -= pageH;
-        y += pageH;
       }
     }
 
@@ -172,34 +181,76 @@ export default function RepaymentReceipts() {
     pdf.save(filename);
   };
 
+  const copyLink = async () => {
+    if (!receipt?.id) return;
+    const url = `${window.location.origin}/repayments/receipts?id=${receipt.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("Receipt link copied");
+    } catch {
+      alert(url);
+    }
+  };
+
+  const displayDate = (r) =>
+    (r.date || r.paymentDate || r.paidAt || r.createdAt || "").slice(0, 10);
+
+  const displayAmount = (r) => Number(r.amount ?? r.amountPaid ?? 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-5 flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Repayment Receipts</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            View, print or export receipts. Export respects your current filters.
+          </p>
         </div>
         <div className="flex gap-2">
           <button onClick={fetchData} disabled={loading} className="px-3 py-2 rounded border">
             {loading ? "Refreshing…" : "Refresh"}
           </button>
-          <button onClick={exportCSV} className="px-3 py-2 rounded bg-blue-600 text-white">
+          <a
+            href={exportHref}
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            title="Export filtered receipts as CSV"
+          >
             Export CSV
-          </button>
+          </a>
         </div>
       </div>
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-5">
-        <form onSubmit={onSearch} className="grid md:grid-cols-6 gap-4">
+        <form onSubmit={onSearch} className="grid md:grid-cols-7 gap-4">
           <div className="md:col-span-2">
             <label className="block text-sm mb-1">Search</label>
             <input
               className="w-full border rounded px-3 py-2"
-              placeholder="Borrower / Loan Ref / Receipt"
+              placeholder="Borrower / Phone / Loan Ref / Method / Receipt"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1">Status</label>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+              <option value="all">All</option>
+            </select>
           </div>
 
           <div>
@@ -245,12 +296,9 @@ export default function RepaymentReceipts() {
               className="px-3 py-2 rounded border"
               onClick={() => {
                 setQ("");
-                setDateFrom(
-                  new Date(new Date().setDate(new Date().getDate() - 30))
-                    .toISOString()
-                    .slice(0, 10)
-                );
-                setDateTo(new Date().toISOString().slice(0, 10));
+                setStatus("approved");
+                setDateFrom(startDefault());
+                setDateTo(toISO(new Date()));
                 setPage(1);
                 fetchData();
               }}
@@ -276,35 +324,54 @@ export default function RepaymentReceipts() {
                 <th className="p-3">Borrower</th>
                 <th className="p-3">Method</th>
                 <th className="p-3">Amount</th>
+                <th className="p-3">Status</th>
                 <th className="p-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody>
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td className="p-4 text-gray-500" colSpan={7}>
+                  <td className="p-4 text-gray-500" colSpan={8}>
                     No data.
                   </td>
                 </tr>
               )}
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="p-3">{r.receiptNo || `RCPT-${r.id}`}</td>
-                  <td className="p-3">{r.date || r.createdAt || ""}</td>
-                  <td className="p-3">{r.Loan?.reference || r.loan?.reference || `L-${r.Loan?.id || r.loan?.id || ""}`}</td>
-                  <td className="p-3">{r.Loan?.Borrower?.fullName || r.loan?.borrowerName || "—"}</td>
-                  <td className="p-3 capitalize">{r.method || "cash"}</td>
-                  <td className="p-3">{r.currency || "TZS"} {money(r.amount)}</td>
-                  <td className="p-3 text-right">
-                    <button className="px-3 py-1.5 rounded border" onClick={() => openReceipt(r)}>
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((r) => {
+                const loan = r.Loan || r.loan || {};
+                const borrower = loan.Borrower || {};
+                const currency = r.currency || loan.currency || "TZS";
+                const amount = displayAmount(r);
+
+                return (
+                  <tr key={r.id} className="border-t">
+                    <td className="p-3">{r.receiptNo || `RCPT-${r.id}`}</td>
+                    <td className="p-3">{displayDate(r)}</td>
+                    <td className="p-3">{loan.reference || `L-${loan.id || r.loanId || ""}`}</td>
+                    <td className="p-3">{borrower.name || borrower.fullName || "—"}</td>
+                    <td className="p-3 capitalize">{r.method || "cash"}</td>
+                    <td className="p-3">{currency} {money(amount)}</td>
+                    <td className="p-3">{(r.status || "").toUpperCase() || "—"}</td>
+                    <td className="p-3 text-right">
+                      <div className="flex gap-2 justify-end">
+                        <button className="px-3 py-1.5 rounded border" onClick={() => openReceipt(r)}>
+                          View
+                        </button>
+                        <a
+                          className="px-3 py-1.5 rounded border"
+                          href={`/repayments/receipts?id=${r.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open Page
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {loading && (
                 <tr>
-                  <td className="p-4" colSpan={7}>
+                  <td className="p-4" colSpan={8}>
                     Loading…
                   </td>
                 </tr>
@@ -356,6 +423,9 @@ export default function RepaymentReceipts() {
                 <button className="px-3 py-1.5 rounded border" onClick={downloadPDF}>
                   Download PDF
                 </button>
+                <button className="px-3 py-1.5 rounded border" onClick={copyLink}>
+                  Copy Link
+                </button>
                 <button
                   className="px-3 py-1.5 rounded bg-blue-600 text-white"
                   onClick={() => setOpen(false)}
@@ -368,18 +438,21 @@ export default function RepaymentReceipts() {
             <div className="grid md:grid-cols-2 gap-4 text-sm">
               <div>
                 <p>
-                  <span className="text-gray-500">Date:</span> {receipt.date}
+                  <span className="text-gray-500">Date:</span> {(receipt.date || "").slice(0,10)}
                 </p>
                 <p>
                   <span className="text-gray-500">Method:</span> {receipt.method || "cash"}
                 </p>
-                <p>
-                  <span className="text-gray-500">Reference:</span>{" "}
-                  {receipt.reference || "—"}
-                </p>
-                <p>
-                  <span className="text-gray-500">Notes:</span> {receipt.notes || "—"}
-                </p>
+                {receipt.reference && (
+                  <p>
+                    <span className="text-gray-500">Reference:</span> {receipt.reference}
+                  </p>
+                )}
+                {receipt.notes && (
+                  <p>
+                    <span className="text-gray-500">Notes:</span> {receipt.notes}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-gray-500">Amount</p>
@@ -394,8 +467,7 @@ export default function RepaymentReceipts() {
                 <span className="text-gray-500">Loan:</span> {receipt.loan?.reference}
               </p>
               <p>
-                <span className="text-gray-500">Borrower:</span>{" "}
-                {receipt.loan?.borrowerName}
+                <span className="text-gray-500">Borrower:</span> {receipt.loan?.borrowerName}
               </p>
             </div>
 
@@ -455,9 +527,26 @@ export default function RepaymentReceipts() {
                 </div>
               </div>
             )}
+
+            {/* Footer */}
+            <div className="mt-6 text-xs text-gray-500">
+              <p>
+                Posted by: {receipt.postedBy?.name || "—"}{" "}
+                {receipt.postedBy?.email ? `(${receipt.postedBy.email})` : ""}
+              </p>
+              <p className="mt-2">This is a system generated receipt.</p>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Print styles */}
+      <style>{`
+        @media print {
+          body { background: white; }
+          @page { margin: 12mm; }
+        }
+      `}</style>
     </div>
   );
 }

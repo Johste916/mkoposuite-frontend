@@ -184,6 +184,20 @@ export default function Repayments() {
             {loading ? "Refreshing…" : "Refresh"}
           </button>
           <button
+            className="px-3 py-2 rounded border hover:bg-gray-50"
+            onClick={() => navigate("/repayments/receipts")}
+            title="Open receipts list"
+          >
+            Receipts
+          </button>
+          <button
+            className="px-3 py-2 rounded border hover:bg-gray-50"
+            onClick={() => navigate("/repayments/charts")}
+            title="Open charts"
+          >
+            Charts
+          </button>
+          <button
             className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
             onClick={() => navigate("/repayments/new")}
           >
