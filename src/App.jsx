@@ -42,7 +42,6 @@ const DisbursementQueue = lazy(() => import("./pages/loans/DisbursementQueue"));
 const LoanProducts = lazy(() => import("./pages/loans/LoanProducts"));
 const LoanSchedulePage = lazy(() => import("./pages/loans/LoanSchedulePage"));
 const DisburseLoan = lazy(() => import("./pages/loans/DisburseLoan"));
-// NEW: Review Queue
 const LoanReview = lazy(() => import("./pages/loans/LoanReview"));
 
 // Repayments
@@ -75,10 +74,11 @@ const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
-const CollateralForm = lazy(() => import("./pages/collateral/CollateralForm")); // NEW
+const CollateralForm = lazy(() => import("./pages/collateral/CollateralForm")); // guarded below
 const Assets = lazy(() => import("./pages/assets/Assets"));
+
 const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets"));
-// Collection Sheets create/edit
+// guarded below
 const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
 const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
 
@@ -253,8 +253,22 @@ function App() {
 
               {/* Collection Sheets */}
               <Route path="collections" element={<CollectionSheets />} />
-              <Route path="collections/new" element={<CollectionSheetCreate />} />
-              <Route path="collections/:id/edit" element={<CollectionSheetEdit />} />
+              <Route
+                path="collections/new"
+                element={
+                  <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
+                    <CollectionSheetCreate />
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="collections/:id/edit"
+                element={
+                  <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
+                    <CollectionSheetEdit />
+                  </RoleProtectedRoute>
+                }
+              />
               {/* Optional legacy/aliases */}
               <Route path="collections/daily" element={<CollectionSheets />} />
               <Route path="collections/missed" element={<CollectionSheets />} />
