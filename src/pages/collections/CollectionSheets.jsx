@@ -1,10 +1,19 @@
 import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import usePaginatedFetch from "../../hooks/usePaginatedFetch";
 import ListShell from "../../components/ListShell";
-import api from "../../api"; // for API base in export link
+
+function useScopeFromPath() {
+  const { pathname } = useLocation();
+  if (pathname.endsWith("/daily")) return "daily";
+  if (pathname.endsWith("/missed")) return "missed";
+  if (pathname.endsWith("/past-maturity")) return "past-maturity";
+  return ""; // default list
+}
 
 export default function CollectionSheets() {
+  const scope = useScopeFromPath();
+
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -12,9 +21,19 @@ export default function CollectionSheets() {
   const [collector, setCollector] = useState("");
   const [loanOfficer, setLoanOfficer] = useState("");
 
-  // Build the list endpoint (NO leading /api here; the hook + axios base will handle it)
+  const description = useMemo(() => {
+    switch (scope) {
+      case "daily": return "Showing today’s collection sheets.";
+      case "missed": return "Sheets scheduled before today and not completed.";
+      case "past-maturity": return "Sheets older than 30 days and not completed.";
+      default: return "All collection sheets. Use filters to narrow results.";
+    }
+  }, [scope]);
+
   const baseUrl = useMemo(() => {
+    // Always hit the canonical endpoint and let the server scope via query
     const params = new URLSearchParams();
+    if (scope) params.set("scope", scope);
     if (status) params.set("status", status);
     if (type) params.set("type", type);
     if (dateFrom) params.set("dateFrom", dateFrom);
@@ -22,8 +41,8 @@ export default function CollectionSheets() {
     if (collector) params.set("collector", collector);
     if (loanOfficer) params.set("loanOfficer", loanOfficer);
     const qs = params.toString();
-    return qs ? `/collections?${qs}` : "/collections";
-  }, [status, type, dateFrom, dateTo, collector, loanOfficer]);
+    return qs ? `/api/collections?${qs}` : "/api/collections";
+  }, [scope, status, type, dateFrom, dateTo, collector, loanOfficer]);
 
   const { rows, total, page, setPage, limit, setLimit, q, setQ, loading, error } =
     usePaginatedFetch({ url: baseUrl });
@@ -36,10 +55,9 @@ export default function CollectionSheets() {
     { key: "status", title: "Status" },
   ];
 
-  // Absolute export link using axios baseURL (avoids /api/api and wrong host)
   const exportHref = useMemo(() => {
-    const API_BASE = String(api?.defaults?.baseURL || "/api").replace(/\/+$/g, "");
     const params = new URLSearchParams();
+    if (scope) params.set("scope", scope);
     if (q) params.set("q", q);
     if (status) params.set("status", status);
     if (type) params.set("type", type);
@@ -48,12 +66,22 @@ export default function CollectionSheets() {
     if (collector) params.set("collector", collector);
     if (loanOfficer) params.set("loanOfficer", loanOfficer);
     params.set("export", "csv");
-    return `${API_BASE}/collections?${params.toString()}`;
-  }, [q, status, type, dateFrom, dateTo, collector, loanOfficer]);
+    return `/api/collections?${params.toString()}`;
+  }, [scope, q, status, type, dateFrom, dateTo, collector, loanOfficer]);
+
+  const title = useMemo(() => {
+    switch (scope) {
+      case "daily": return "Daily Collection Sheet";
+      case "missed": return "Missed Repayment Sheet";
+      case "past-maturity": return "Past Maturity Loans";
+      default: return "Collection Sheets";
+    }
+  }, [scope]);
 
   return (
     <ListShell
-      title="Collection Sheets"
+      title={title}
+      subtitle={<span className="text-xs text-slate-500">{description}</span>}
       q={q}
       setQ={setQ}
       columns={columns}
@@ -77,10 +105,9 @@ export default function CollectionSheets() {
           <label className="text-sm">Status</label>
           <select className="border rounded px-2 py-1" value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">All</option>
-            <option value="PENDING">PENDING</option>
-            <option value="IN_PROGRESS">IN_PROGRESS</option>
-            <option value="COMPLETED">COMPLETED</option>
-            <option value="CANCELLED">CANCELLED</option>
+            <option value="pending">pending</option>
+            <option value="completed">completed</option>
+            <option value="cancelled">cancelled</option>
           </select>
 
           <label className="text-sm ml-3">Type</label>
@@ -114,13 +141,11 @@ export default function CollectionSheets() {
           </a>
         </div>
       }
-      renderRowActions={(row) =>
-        row?.id ? (
-          <Link to={`/collections/${row.id}/edit`} className="text-blue-600 hover:underline text-sm">
-            Edit
-          </Link>
-        ) : null
-      }
+      renderRowActions={(row) => (
+        <Link to={`/collections/${row.id}/edit`} className="text-blue-600 hover:underline text-sm">
+          Edit
+        </Link>
+      )}
     />
   );
 }
