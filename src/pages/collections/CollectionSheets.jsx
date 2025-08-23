@@ -1,3 +1,4 @@
+// frontend/src/pages/collections/CollectionSheets.jsx
 import React, { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import usePaginatedFetch from "../../hooks/usePaginatedFetch";
@@ -13,17 +14,23 @@ function useScopeFromPath() {
   return ""; // default list
 }
 
-/* naive role getter for UI gating (server enforces anyway) */
+/* UI-only role gate (server still enforces) */
 function useRole() {
   try {
     const raw = localStorage.getItem("auth") || localStorage.getItem("user") || "";
     const parsed = raw ? JSON.parse(raw) : {};
     return parsed?.role || parsed?.user?.role || "user";
-  } catch { return "user"; }
+  } catch {
+    return "user";
+  }
 }
-const canWriteRoles = new Set(["admin","director","branch_manager"]);
-const canCommsRoles = new Set(["admin","director","branch_manager","comms"]);
+const canWriteRoles = new Set(["admin", "director", "branch_manager"]);
+const canCommsRoles = new Set(["admin", "director", "branch_manager", "comms"]);
 
+/* Safe id getter */
+const getRowId = (row) => row?.id ?? row?.ID ?? row?._id ?? row?.uuid ?? null;
+
+/* Summary cards */
 function SummaryBar({ summary }) {
   if (!summary) return null;
   const { total = 0, byStatus = {}, byType = {} } = summary;
@@ -38,7 +45,9 @@ function SummaryBar({ summary }) {
         <div className="flex flex-wrap gap-2">
           {Object.keys(byStatus).length === 0 && <span className="text-xs text-slate-400">n/a</span>}
           {Object.entries(byStatus).map(([k, v]) => (
-            <span key={k} className="text-xs px-2 py-1 rounded-full border">{k}: {v}</span>
+            <span key={k} className="text-xs px-2 py-1 rounded-full border">
+              {k}: {v}
+            </span>
           ))}
         </div>
       </div>
@@ -47,7 +56,9 @@ function SummaryBar({ summary }) {
         <div className="flex flex-wrap gap-2">
           {Object.keys(byType).length === 0 && <span className="text-xs text-slate-400">n/a</span>}
           {Object.entries(byType).map(([k, v]) => (
-            <span key={k} className="text-xs px-2 py-1 rounded-full border">{k}: {v}</span>
+            <span key={k} className="text-xs px-2 py-1 rounded-full border">
+              {k}: {v}
+            </span>
           ))}
         </div>
       </div>
@@ -55,7 +66,7 @@ function SummaryBar({ summary }) {
   );
 }
 
-/* Simple modal */
+/* Tiny modal */
 function Modal({ open, onClose, children, title = "Dialog" }) {
   if (!open) return null;
   return (
@@ -66,7 +77,9 @@ function Modal({ open, onClose, children, title = "Dialog" }) {
           <div className="p-3 border-b font-semibold">{title}</div>
           <div className="p-4">{children}</div>
           <div className="p-3 border-t text-right">
-            <button onClick={onClose} className="px-3 py-1 text-sm border rounded hover:bg-gray-50">Close</button>
+            <button onClick={onClose} className="px-3 py-1 text-sm border rounded hover:bg-gray-50">
+              Close
+            </button>
           </div>
         </div>
       </div>
@@ -80,29 +93,39 @@ export default function CollectionSheets() {
   const canWrite = canWriteRoles.has(role);
   const canComms = canCommsRoles.has(role);
 
+  // Filters
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [collector, setCollector] = useState("");
   const [loanOfficer, setLoanOfficer] = useState("");
-  const [selected, setSelected] = useState({});     // id -> boolean
-  const [smsOpen, setSmsOpen] = useState(false);
-  const [smsTo, setSmsTo] = useState("collector");  // collector | loanOfficer | custom
+
+  // Selection + UI
+  const [selected, setSelected] = useState({}); // map of __rid -> boolean
+  const [toast, setToast] = useState("");
+
+  // Bulk SMS state (DECLARED ONCE)
+  const [smsTo, setSmsTo] = useState("collector"); // collector | loanOfficer | custom
   const [smsBody, setSmsBody] = useState("");
   const [customPhones, setCustomPhones] = useState("");
+  const [smsOpen, setSmsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState("");
 
   const description = useMemo(() => {
     switch (scope) {
-      case "daily": return "Showing today’s collection sheets.";
-      case "missed": return "Sheets scheduled before today and not completed.";
-      case "past-maturity": return "Sheets older than 30 days and not completed.";
-      default: return "All collection sheets. Use filters to narrow results.";
+      case "daily":
+        return "Showing today’s collection sheets.";
+      case "missed":
+        return "Sheets scheduled before today and not completed.";
+      case "past-maturity":
+        return "Sheets older than 30 days and not completed.";
+      default:
+        return "All collection sheets. Use filters to narrow results.";
     }
   }, [scope]);
 
+  // Build URL with filters
   const baseUrl = useMemo(() => {
     const params = new URLSearchParams();
     params.set("withSummary", "1");
@@ -117,29 +140,79 @@ export default function CollectionSheets() {
     return qs ? `/api/collections?${qs}` : "/api/collections";
   }, [scope, status, type, dateFrom, dateTo, collector, loanOfficer]);
 
-  const { rows, total, page, setPage, limit, setLimit, q, setQ, loading, error, summary } =
-    usePaginatedFetch({ url: baseUrl });
+  const {
+    rows: rawRows,
+    total,
+    page,
+    setPage,
+    limit,
+    setLimit,
+    q,
+    setQ,
+    loading,
+    error,
+    summary,
+  } = usePaginatedFetch({ url: baseUrl });
 
-  /* Columns with a leading checkbox for selection (for bulk SMS) */
-  const columns = [
-    { key: "__select__", title: "", render: (row) => (
-      <input
-        type="checkbox"
-        checked={!!selected[row.id]}
-        onChange={(e) => setSelected(s => ({ ...s, [row.id]: e.target.checked }))}
-      />
-    ), width: 30 },
-    { key: "date", title: "Date" },
-    { key: "type", title: "Type" },
-    { key: "collector", title: "Collector" },
-    { key: "loanOfficer", title: "Loan Officer" },
-    { key: "status", title: "Status" },
-    ...(canWrite ? [{ key: "__actions__", title: "Actions", render: (row) => (
-      <Link to={`/collections/${row.id}/edit`} className="text-blue-600 hover:underline text-sm">
-        Edit
-      </Link>
-    ) }] : []),
-  ];
+  // Normalize rows and attach a safe render id
+  const rows = useMemo(() => {
+    const arr = Array.isArray(rawRows) ? rawRows.filter(Boolean) : [];
+    return arr.map((r, idx) => {
+      const rid = getRowId(r);
+      return {
+        ...r,
+        __rid: rid || `tmp-${idx}`, // display-only id if real one is missing
+      };
+    });
+  }, [rawRows]);
+
+  const columns = useMemo(() => {
+    const base = [
+      {
+        key: "__select__",
+        title: "",
+        width: 30,
+        render: (row) => {
+          if (!row) return null;
+          const rid = row.__rid;
+          const selectable = rid && !String(rid).startsWith("tmp-");
+          return (
+            <input
+              type="checkbox"
+              disabled={!selectable}
+              checked={!!selected[rid]}
+              onChange={(e) => setSelected((s) => ({ ...s, [rid]: e.target.checked }))}
+            />
+          );
+        },
+      },
+      { key: "date", title: "Date" },
+      { key: "type", title: "Type" },
+      { key: "collector", title: "Collector" },
+      { key: "loanOfficer", title: "Loan Officer" },
+      { key: "status", title: "Status" },
+    ];
+
+    if (canWrite) {
+      base.push({
+        key: "__actions__",
+        title: "Actions",
+        render: (row) => {
+          if (!row) return null;
+          const rid = row.__rid;
+          const editable = rid && !String(rid).startsWith("tmp-");
+          return editable ? (
+            <Link to={`/collections/${rid}/edit`} className="text-blue-600 hover:underline text-sm">
+              Edit
+            </Link>
+          ) : (
+            <span className="text-slate-400 text-xs">No ID</span>
+          );
+        },
+      });
+    }
+    return base;
+  }, [canWrite, selected]);
 
   const exportHref = useMemo(() => {
     const params = new URLSearchParams();
@@ -157,32 +230,59 @@ export default function CollectionSheets() {
 
   const title = useMemo(() => {
     switch (scope) {
-      case "daily": return "Daily Collection Sheet";
-      case "missed": return "Missed Repayment Sheet";
-      case "past-maturity": return "Past Maturity Loans";
-      default: return "Collection Sheets";
+      case "daily":
+        return "Daily Collection Sheet";
+      case "missed":
+        return "Missed Repayment Sheet";
+      case "past-maturity":
+        return "Past Maturity Loans";
+      default:
+        return "Collection Sheets";
     }
   }, [scope]);
 
-  const selectedIds = useMemo(() => Object.entries(selected).filter(([,v]) => v).map(([k]) => k), [selected]);
+  const selectedIds = useMemo(
+    () =>
+      Object.entries(selected)
+        .filter(([rid, on]) => on && !String(rid).startsWith("tmp-"))
+        .map(([rid]) => rid),
+    [selected]
+  );
 
+  // Bulk SMS
   const sendBulkSms = async () => {
-    if (!canComms) { setToast("You do not have permission to send SMS."); return; }
-    if (smsTo !== "custom" && selectedIds.length === 0) { setToast("Select at least one row."); return; }
-    if (!smsBody.trim()) { setToast("Message cannot be empty."); return; }
-
+    if (!canComms) {
+      setToast("You do not have permission to send SMS.");
+      return;
+    }
+    if (smsTo !== "custom" && selectedIds.length === 0) {
+      setToast("Select at least one row.");
+      return;
+    }
+    if (!smsBody.trim()) {
+      setToast("Message cannot be empty.");
+      return;
+    }
     setBusy(true);
     try {
       const payload = {
         ids: selectedIds,
         to: smsTo,
         message: smsBody,
-        customPhones: smsTo === "custom"
-          ? customPhones.split(/[,\s;]+/).map(s => s.trim()).filter(Boolean)
-          : undefined,
+        customPhones:
+          smsTo === "custom"
+            ? customPhones
+                .split(/[,\s;]+/)
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : undefined,
       };
       const res = await api.post("/api/collections/bulk-sms", payload);
-      setToast(`Sent: ${res.data.sent} / ${res.data.total}${res.data.failed ? `, failed: ${res.data.failed}` : ""}`);
+      setToast(
+        `Sent: ${res.data.sent} / ${res.data.total}${
+          res.data.failed ? `, failed: ${res.data.failed}` : ""
+        }`
+      );
       setSmsOpen(false);
       setSelected({});
       setSmsBody("");
@@ -197,7 +297,9 @@ export default function CollectionSheets() {
   return (
     <>
       {toast && (
-        <div className="mb-2 text-sm p-2 rounded border bg-emerald-50 text-emerald-700">{toast}</div>
+        <div className="mb-2 text-sm p-2 rounded border bg-emerald-50 text-emerald-700">
+          {toast}
+        </div>
       )}
 
       <SummaryBar summary={summary} />
@@ -208,7 +310,7 @@ export default function CollectionSheets() {
         q={q}
         setQ={setQ}
         columns={columns}
-        rows={rows}
+        rows={rows}               // normalized rows with safe __rid
         loading={loading}
         error={error}
         page={page}
