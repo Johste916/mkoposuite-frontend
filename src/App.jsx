@@ -41,7 +41,6 @@ const LoanStatusList = lazy(() => import("./pages/loans/LoanStatusList"));
 const DisbursementQueue = lazy(() => import("./pages/loans/DisbursementQueue"));
 const LoanProducts = lazy(() => import("./pages/loans/LoanProducts"));
 const LoanSchedulePage = lazy(() => import("./pages/loans/LoanSchedulePage"));
-// REMOVED: LoanReports (moved under Reports module)
 const DisburseLoan = lazy(() => import("./pages/loans/DisburseLoan"));
 // NEW: Review Queue
 const LoanReview = lazy(() => import("./pages/loans/LoanReview"));
@@ -76,9 +75,10 @@ const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
+const CollateralForm = lazy(() => import("./pages/collateral/CollateralForm")); // NEW
 const Assets = lazy(() => import("./pages/assets/Assets"));
 const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets"));
-// 👇 Added to align with finalized Collection Sheets module
+// Collection Sheets create/edit
 const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
 const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
 
@@ -171,7 +171,6 @@ function App() {
               <Route path="loans/applications" element={<LoanApplications />} />
               <Route path="loans/add" element={<Navigate to="/loans/applications" replace />} />
               <Route path="loans/status/:status" element={<LoanStatusList />} />
-              {/* NEW: Review Queue (role-gated) */}
               <Route
                 path="loans/review-queue"
                 element={
@@ -235,10 +234,25 @@ function App() {
 
               {/* Collateral */}
               <Route path="collateral" element={<CollateralList />} />
+              <Route
+                path="collateral/new"
+                element={
+                  <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
+                    <CollateralForm mode="create" />
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="collateral/:id/edit"
+                element={
+                  <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
+                    <CollateralForm mode="edit" />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Collection Sheets */}
               <Route path="collections" element={<CollectionSheets />} />
-              {/* 👇 Added create/edit routes to close the module */}
               <Route path="collections/new" element={<CollectionSheetCreate />} />
               <Route path="collections/:id/edit" element={<CollectionSheetEdit />} />
               {/* Optional legacy/aliases */}
