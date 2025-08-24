@@ -4,14 +4,12 @@ import usePaginatedFetch from "../../hooks/usePaginatedFetch";
 import ListShell from "../../components/ListShell";
 
 export default function CollateralList() {
-  // filters
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [category, setCategory] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Build URL with filters (hook will avoid /api/api)
   const baseUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -23,17 +21,8 @@ export default function CollateralList() {
     return qs ? `/api/collateral?${qs}` : "/api/collateral";
   }, [q, status, category, dateFrom, dateTo]);
 
-  const {
-    rows,
-    total,
-    page,
-    setPage,
-    limit,
-    setLimit,
-    loading,
-    error,
-    refresh,
-  } = usePaginatedFetch({ url: baseUrl });
+  const { rows, total, page, setPage, limit, setLimit, loading, error, refresh } =
+    usePaginatedFetch({ url: baseUrl });
 
   // Normalize rows so renderers never explode
   const safeRows = useMemo(() => {
@@ -41,7 +30,7 @@ export default function CollateralList() {
     return list
       .filter(Boolean)
       .map((r, i) => ({
-        id: r?.id ?? `tmp-${i}`,
+        id: r?.id ?? null,           // NO fake ids; avoid "Edit" on invalid id
         itemName: r?.itemName ?? "-",
         category: r?.category ?? "-",
         model: r?.model ?? "-",
@@ -61,12 +50,9 @@ export default function CollateralList() {
     {
       key: "estValue",
       title: "Est. Value",
-      render: (rowArg) => {
-        // Support both styles: render(row) or render({ row })
-        const row = rowArg?.id ? rowArg : rowArg?.row ?? {};
+      render: ({ row }) => {
         const v = row?.estValue;
         if (v == null || v === "") return "-";
-        // format to TZS-like
         const n = Number(v);
         return Number.isFinite(n) ? n.toLocaleString() : String(v);
       },
@@ -74,8 +60,7 @@ export default function CollateralList() {
     {
       key: "status",
       title: "Status",
-      render: (rowArg) => {
-        const row = rowArg?.id ? rowArg : rowArg?.row ?? {};
+      render: ({ row }) => {
         const s = String(row?.status || "-").toUpperCase();
         const cls =
           s === "ACTIVE"
@@ -164,32 +149,26 @@ export default function CollateralList() {
             onChange={(e) => setDateTo(e.target.value)}
           />
 
-          <button
-            onClick={refresh}
-            className="ml-2 border rounded px-3 py-1 text-sm hover:bg-gray-50"
-          >
+          <button onClick={refresh} className="ml-2 border rounded px-3 py-1 text-sm hover:bg-gray-50">
             Refresh
           </button>
 
-          <a
-            href={exportHref}
-            className="ml-auto inline-flex items-center border rounded px-3 py-1 text-sm hover:bg-gray-50"
-          >
+          <a href={exportHref} className="ml-auto inline-flex items-center border rounded px-3 py-1 text-sm hover:bg-gray-50">
             Export CSV
           </a>
         </div>
       }
-      renderRowActions={(rowArg) => {
-        const row = rowArg?.id ? rowArg : rowArg?.row ?? {};
-        const id = row?.id;
-        return id ? (
+      renderRowActions={({ row }) =>
+        row?.id ? (
           <div className="flex gap-3">
-            <Link to={`/collateral/${id}/edit`} className="text-blue-600 hover:underline text-sm">
+            <Link to={`/collateral/${row.id}/edit`} className="text-blue-600 hover:underline text-sm">
               Edit
             </Link>
           </div>
-        ) : null;
-      }}
+        ) : (
+          <span className="text-xs text-gray-400">No ID</span>
+        )
+      }
     />
   );
 }

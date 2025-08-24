@@ -11,10 +11,18 @@ function Field({ label, children }) {
   );
 }
 
+// Avoid /api/api if baseURL already has /api
+const normalize = (u) => {
+  const base = api?.defaults?.baseURL || "";
+  const hasApiInBase = /\/api\/?$/.test(base);
+  return hasApiInBase && u.startsWith("/api/") ? u.slice(4) : u;
+};
+
 export default function CollateralForm({ mode = "create" }) {
   const navigate = useNavigate();
-  const { id } = useParams();
-  const isEdit = mode === "edit" || Boolean(id);
+  const { id: routeId } = useParams();
+  const safeId = routeId && routeId !== "new" ? routeId : null;
+  const isEdit = mode === "edit" || Boolean(safeId);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -36,12 +44,13 @@ export default function CollateralForm({ mode = "create" }) {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("ACTIVE");
 
-  // Load existing row when editing
+  // Load existing row when editing (only if we truly have an id)
   useEffect(() => {
-    if (!isEdit) return;
+    if (!isEdit || !safeId) return;
     setLoading(true);
-    api.get(`/api/collateral/${id}`)
-      .then(res => {
+    api
+      .get(normalize(`/api/collateral/${safeId}`))
+      .then((res) => {
         const r = res.data || {};
         setBorrowerId(r.borrowerId || "");
         setLoanId(r.loanId || "");
@@ -54,34 +63,55 @@ export default function CollateralForm({ mode = "create" }) {
         setNotes(r.notes || "");
         setStatus(r.status || "ACTIVE");
       })
-      .catch(e => setErr(e?.response?.data?.error || e.message))
+      .catch((e) => setErr(e?.response?.data?.error || e.message))
       .finally(() => setLoading(false));
-  }, [isEdit, id]);
+  }, [isEdit, safeId]);
 
   // Borrower search
   useEffect(() => {
-    if (!borrowerQuery || borrowerQuery.length < 2) { setBorrowerOptions([]); return; }
+    if (!borrowerQuery || borrowerQuery.length < 2) {
+      setBorrowerOptions([]);
+      return;
+    }
     let cancel = false;
-    api.get(`/api/collateral/helpers/borrower-search`, { params: { q: borrowerQuery } })
-      .then(res => {
+    api
+      .get(normalize(`/api/collateral/helpers/borrower-search`), {
+        params: { q: borrowerQuery },
+      })
+      .then((res) => {
         if (cancel) return;
         setBorrowerOptions(Array.isArray(res.data?.data) ? res.data.data : []);
-      }).catch(() => {}).finally(() => {});
-    return () => { cancel = true; };
+      })
+      .catch(() => {})
+      .finally(() => {});
+    return () => {
+      cancel = true;
+    };
   }, [borrowerQuery]);
 
   // When borrower changes, load open loans
   useEffect(() => {
-    if (!borrowerId) { setLoanOptions([]); setLoanId(""); return; }
+    if (!borrowerId) {
+      setLoanOptions([]);
+      setLoanId("");
+      return;
+    }
     let cancel = false;
-    api.get(`/api/collateral/helpers/open-loans`, { params: { borrowerId } })
-      .then(res => {
+    api
+      .get(normalize(`/api/collateral/helpers/open-loans`), {
+        params: { borrowerId },
+      })
+      .then((res) => {
         if (cancel) return;
         const data = Array.isArray(res.data?.data) ? res.data.data : [];
         setLoanOptions(data);
         if (data.length === 1) setLoanId(data[0].id); // auto-select single open loan
-      }).catch(() => {}).finally(() => {});
-    return () => { cancel = true; };
+      })
+      .catch(() => {})
+      .finally(() => {});
+    return () => {
+      cancel = true;
+    };
   }, [borrowerId]);
 
   const handleSubmit = (e) => {
@@ -100,15 +130,16 @@ export default function CollateralForm({ mode = "create" }) {
       location,
       notes,
       status: isEdit ? status : "ACTIVE",
-      autoDetectLoan: true, // try server-side auto attach when only one open loan
+      autoDetectLoan: true, // server will auto-attach if only one open loan
     };
 
     const req = isEdit
-      ? api.put(`/api/collateral/${id}`, payload)
-      : api.post(`/api/collateral`, payload);
+      ? api.put(normalize(`/api/collateral/${safeId}`), payload)
+      : api.post(normalize(`/api/collateral`), payload);
 
-    req.then(() => navigate("/collateral"))
-      .catch(e => setErr(e?.response?.data?.error || e.message))
+    req
+      .then(() => navigate("/collateral"))
+      .catch((e) => setErr(e?.response?.data?.error || e.message))
       .finally(() => setLoading(false));
   };
 
@@ -137,12 +168,17 @@ export default function CollateralForm({ mode = "create" }) {
           </Field>
           {borrowerOptions.length > 0 && (
             <div className="border rounded mb-2 max-h-48 overflow-auto">
-              {borrowerOptions.map(b => (
+              {borrowerOptions.map((b) => (
                 <button
                   key={b.id}
                   type="button"
-                  onClick={() => { setBorrowerId(b.id); setBorrowerQuery(`${b.name} — ${b.phone || ''}`); }}
-                  className={`w-full text-left px-3 py-2 hover:bg-gray-50 ${borrowerId === b.id ? 'bg-gray-50' : ''}`}
+                  onClick={() => {
+                    setBorrowerId(b.id);
+                    setBorrowerQuery(`${b.name}${b.phone ? ` — ${b.phone}` : ""}`);
+                  }}
+                  className={`w-full text-left px-3 py-2 hover:bg-gray-50 ${
+                    borrowerId === b.id ? "bg-gray-50" : ""
+                  }`}
                 >
                   <div className="font-medium">{b.name}</div>
                   <div className="text-xs text-gray-500">{b.phone}</div>
@@ -160,48 +196,67 @@ export default function CollateralForm({ mode = "create" }) {
             onChange={(e) => setLoanId(e.target.value || "")}
             disabled={!borrowerId}
           >
-            <option value="">— {loanOptions.length ? 'Select' : 'No open loans'} —</option>
+            <option value="">— {loanOptions.length ? "Select" : "No open loans"} —</option>
             {loanOptions.map((l) => (
               <option key={l.id} value={l.id}>
-                {l.id} • {l.status || 'open'}
+                {l.id} • {l.status || "open"}
               </option>
             ))}
           </select>
         </Field>
 
         <Field label="Item Name *">
-          <input className="w-full border rounded px-3 py-2" value={itemName} onChange={(e)=>setItemName(e.target.value)} />
+          <input
+            className="w-full border rounded px-3 py-2"
+            value={itemName}
+            onChange={(e) => setItemName(e.target.value)}
+          />
         </Field>
 
         <Field label="Category">
-          <input className="w-full border rounded px-3 py-2" value={category} onChange={(e)=>setCategory(e.target.value)} placeholder="Electronics / Vehicle…" />
+          <input
+            className="w-full border rounded px-3 py-2"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="Electronics / Vehicle…"
+          />
         </Field>
 
         <Field label="Model">
-          <input className="w-full border rounded px-3 py-2" value={model} onChange={(e)=>setModel(e.target.value)} />
+          <input className="w-full border rounded px-3 py-2" value={model} onChange={(e) => setModel(e.target.value)} />
         </Field>
 
         <Field label="Serial #">
-          <input className="w-full border rounded px-3 py-2" value={serialNumber} onChange={(e)=>setSerialNumber(e.target.value)} />
+          <input
+            className="w-full border rounded px-3 py-2"
+            value={serialNumber}
+            onChange={(e) => setSerialNumber(e.target.value)}
+          />
         </Field>
 
         <Field label="Est. Value">
-          <input className="w-full border rounded px-3 py-2" value={estValue} onChange={(e)=>setEstValue(e.target.value)} type="number" step="0.01" />
+          <input
+            className="w-full border rounded px-3 py-2"
+            value={estValue}
+            onChange={(e) => setEstValue(e.target.value)}
+            type="number"
+            step="0.01"
+          />
         </Field>
 
         <Field label="Location">
-          <input className="w-full border rounded px-3 py-2" value={location} onChange={(e)=>setLocation(e.target.value)} />
+          <input className="w-full border rounded px-3 py-2" value={location} onChange={(e) => setLocation(e.target.value)} />
         </Field>
 
         <div className="sm:col-span-2">
           <Field label="Notes">
-            <textarea className="w-full border rounded px-3 py-2" rows={3} value={notes} onChange={(e)=>setNotes(e.target.value)} />
+            <textarea className="w-full border rounded px-3 py-2" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
         </div>
 
         {isEdit && (
           <Field label="Status">
-            <select className="w-full border rounded px-3 py-2" value={status} onChange={(e)=>setStatus(e.target.value)}>
+            <select className="w-full border rounded px-3 py-2" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="ACTIVE">ACTIVE</option>
               <option value="RELEASED">RELEASED</option>
               <option value="DISPOSED">DISPOSED</option>
@@ -217,11 +272,7 @@ export default function CollateralForm({ mode = "create" }) {
           >
             {isEdit ? "Save Changes" : "Register Collateral"}
           </button>
-          <button
-            type="button"
-            className="px-4 py-2 rounded border"
-            onClick={() => navigate("/collateral")}
-          >
+          <button type="button" className="px-4 py-2 rounded border" onClick={() => navigate("/collateral")}>
             Cancel
           </button>
         </div>
