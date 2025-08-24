@@ -11,7 +11,7 @@ function useScopeFromPath() {
   if (pathname.endsWith("/daily")) return "daily";
   if (pathname.endsWith("/missed")) return "missed";
   if (pathname.endsWith("/past-maturity")) return "past-maturity";
-  return ""; // default list
+  return "";
 }
 
 /* UI-only role gate (server still enforces) */
@@ -73,7 +73,7 @@ function Modal({ open, onClose, children, title = "Dialog" }) {
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-xl shadow-xl border">
+        <div className="bg-white dark:bg-slate-900 w/full max-w-lg rounded-xl shadow-xl border">
           <div className="p-3 border-b font-semibold">{title}</div>
           <div className="p-4">{children}</div>
           <div className="p-3 border-t text-right">
@@ -105,7 +105,7 @@ export default function CollectionSheets() {
   const [selected, setSelected] = useState({}); // map of __rid -> boolean
   const [toast, setToast] = useState("");
 
-  // Bulk SMS state (DECLARED ONCE)
+  // Bulk SMS state
   const [smsTo, setSmsTo] = useState("collector"); // collector | loanOfficer | custom
   const [smsBody, setSmsBody] = useState("");
   const [customPhones, setCustomPhones] = useState("");
@@ -159,10 +159,7 @@ export default function CollectionSheets() {
     const arr = Array.isArray(rawRows) ? rawRows.filter(Boolean) : [];
     return arr.map((r, idx) => {
       const rid = getRowId(r);
-      return {
-        ...r,
-        __rid: rid || `tmp-${idx}`, // display-only id if real one is missing
-      };
+      return { ...r, __rid: rid || `tmp-${idx}` };
     });
   }, [rawRows]);
 
@@ -310,7 +307,7 @@ export default function CollectionSheets() {
         q={q}
         setQ={setQ}
         columns={columns}
-        rows={rows}               // normalized rows with safe __rid
+        rows={rows}
         loading={loading}
         error={error}
         page={page}
