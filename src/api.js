@@ -1,4 +1,3 @@
-// src/api.js
 import axios from "axios";
 
 /**
@@ -19,47 +18,31 @@ const api = axios.create({
   },
 });
 
-/** Normalize a path against baseURL
- * - If baseURL already ends with /api and path starts with /api, strip that leading /api
- * - Always ensure a single leading slash
- * - Leave absolute URLs untouched
- */
 function normalizePath(input) {
   if (!input) return "/";
-  if (/^https?:\/\//i.test(input)) return input; // absolute URL → pass-through
+  if (/^https?:\/\//i.test(input)) return input;
 
   const baseHasApi = /\/api$/i.test(api.defaults.baseURL || "");
   let url = String(input).trim();
 
   if (!url.startsWith("/")) url = `/${url}`;
-  if (baseHasApi && url.startsWith("/api/")) url = url.slice(4); // drop leading /api
-
-  // collapse duplicate slashes (but keep the protocol part in absolute URLs)
+  if (baseHasApi && url.startsWith("/api/")) url = url.slice(4);
   url = url.replace(/\/{2,}/g, "/");
   return url;
 }
 
-/** Runtime tenant override (optional).
- * If set, this ID takes precedence over anything in localStorage.
- */
 let overrideTenantId = null;
-
-// Optional toggle for timezone headers (defaults ON)
 const SEND_TZ_HEADERS =
   (import.meta.env.VITE_SEND_TZ_HEADERS ?? "1").toString() !== "0";
 
-/** Inject auth + multitenant headers; normalize URL */
 api.interceptors.request.use((config) => {
-  // Normalize path
   if (config.url && !/^https?:\/\//i.test(config.url)) {
     config.url = normalizePath(config.url);
   }
 
-  // Auth
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
-  // Tenant (override > activeTenantId > token user.tenantId)
   let tenantId = overrideTenantId;
   if (!tenantId) {
     tenantId =
@@ -75,31 +58,25 @@ api.interceptors.request.use((config) => {
   }
   if (tenantId) config.headers["x-tenant-id"] = tenantId;
 
-  // Branch context (optional)
   const activeBranchId = localStorage.getItem("activeBranchId");
   if (activeBranchId) config.headers["x-branch-id"] = activeBranchId;
 
-  // Timezone context (handy for server-side date handling)
   if (SEND_TZ_HEADERS) {
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (tz) config.headers["x-timezone"] = tz;
-    } catch {
-      /* noop */
-    }
+    } catch {}
     config.headers["x-tz-offset"] = String(new Date().getTimezoneOffset());
   }
 
   return config;
 });
 
-/** Only log out on 401; keep user on 403 and let pages show a friendly message */
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     const status = err?.response?.status;
 
-    // Normalize message for network/timeout cases so UI can show something intelligible
     if (!status) {
       err.normalizedMessage =
         err?.message === "Network Error"
@@ -123,18 +100,15 @@ api.interceptors.response.use(
         window.location.href = "/login";
       }
     }
-    // 403 will bubble up so your pages/components can render a friendly error
     return Promise.reject(err);
   }
 );
 
-// Convenience helpers that auto-normalize paths
 api.path = normalizePath;
 ["get", "post", "put", "patch", "delete"].forEach((m) => {
   api[`_${m}`] = (url, ...rest) => api[m](normalizePath(url), ...rest);
 });
 
-/** Tenant helpers (optional) */
 api.setTenantId = (id) => {
   overrideTenantId = id || null;
 };

@@ -87,6 +87,7 @@ const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
+const AddExpense = lazy(() => import("./pages/expenses/Add")); // ✅ new fully wired page
 const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
 // ACCOUNTING
@@ -309,7 +310,14 @@ function App() {
 
               {/* Expenses */}
               <Route path="expenses" element={<Expenses />} />
-              <Route path="expenses/add" element={<Stub title="Add Expense" />} />
+              <Route
+                path="expenses/add"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "accountant", "branch_manager"]}>
+                    <AddExpense />
+                  </RoleProtectedRoute>
+                }
+              />
               <Route path="expenses/csv" element={<Stub title="Upload Expenses CSV" />} />
 
               {/* Other Income */}

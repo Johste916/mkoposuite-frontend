@@ -1,148 +1,192 @@
-// frontend/src/pages/expenses/AddExpense.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api";
 
-function Field({ label, children }) {
-  return (
-    <label className="block mb-3">
-      <span className="block text-sm font-medium mb-1">{label}</span>
-      {children}
-    </label>
-  );
-}
+const TYPES = ["OPERATING", "ADMIN", "MARKETING", "OTHER"];
 
 export default function AddExpense() {
   const navigate = useNavigate();
 
+  // form state
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [type, setType] = useState("OPERATING"); // OPERATING | ADMIN | MARKETING | OTHER
+  const [type, setType] = useState("OPERATING");
   const [vendor, setVendor] = useState("");
   const [reference, setReference] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [branchId, setBranchId] = useState(localStorage.getItem("activeBranchId") || "");
 
-  const [err, setErr] = useState("");
+  // ui state
+  const [branches, setBranches] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // load branches for the dropdown (optional)
+  useEffect(() => {
+    let stop = false;
+    (async () => {
+      try {
+        const res = await api.get("/branches");
+        if (!stop) {
+          const list = Array.isArray(res.data) ? res.data : [];
+          setBranches(list);
+          if (!branchId && list.length) setBranchId(String(list[0].id));
+        }
+      } catch {
+        // non-fatal — just hide the dropdown if branches can’t load
+        setBranches([]);
+      }
+    })();
+    return () => { stop = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const canSubmit = useMemo(() => {
     const n = Number(amount);
-    return Boolean(date && type && Number.isFinite(n) && n > 0);
-  }, [date, type, amount]);
+    return date && type && Number.isFinite(n) && n > 0 && !saving;
+  }, [date, type, amount, saving]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErr("");
+    setError("");
     if (!canSubmit) return;
 
     setSaving(true);
     try {
       const payload = {
-        date,
-        type,
+        date,                         // YYYY-MM-DD
+        type,                         // ENUM-ish string
         vendor: vendor || null,
         reference: reference || null,
-        amount: Number(amount),
+        amount: String(amount).trim(),// send as string; backend stores DECIMAL
         note: note || null,
+        branchId: branchId || null,   // optional
       };
 
-      // attach active branch if you use it elsewhere in the app
-      const activeBranchId = localStorage.getItem("activeBranchId");
-      if (activeBranchId) payload.branchId = activeBranchId;
+      // Will include Authorization + x-tenant-id + x-branch-id via interceptor
+      await api._post("/expenses", payload);
 
-      await api.post("/api/expenses", payload);
+      // simple success UX: go back to list
       navigate("/expenses");
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to save expense");
+    } catch (err) {
+      setError(err?.response?.data?.error || err?.normalizedMessage || err?.message || "Failed to save expense.");
     } finally {
       setSaving(false);
     }
   };
 
+  const card = "bg-white dark:bg-slate-800 rounded-xl shadow p-4";
+  const label = "block text-sm font-medium mb-1";
+  const input = "w-full px-3 py-2 border rounded-md dark:bg-slate-700 dark:border-slate-600";
+  const select = input;
+  const textarea = "w-full px-3 py-2 border rounded-md h-28 resize-y dark:bg-slate-700 dark:border-slate-600";
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 max-w-2xl">
-      <h2 className="text-lg font-semibold mb-3">Add Expense</h2>
+    <div className={card}>
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold">Add Expense</h2>
+        <p className="text-xs opacity-70">Create a new operating/admin/marketing expense.</p>
+      </div>
 
-      {err && <div className="text-red-600 text-sm mb-3">Error: {err}</div>}
+      {error ? (
+        <div className="mb-3 text-sm text-rose-600 dark:text-rose-300">
+          Error: {String(error)}
+        </div>
+      ) : null}
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Date *">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className={label}>Date</label>
           <input
             type="date"
-            className="w-full border rounded px-3 py-2"
+            className={input}
             value={date}
             onChange={(e) => setDate(e.target.value)}
             required
           />
-        </Field>
+        </div>
 
-        <Field label="Type *">
-          <select
-            className="w-full border rounded px-3 py-2"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            required
-          >
-            <option value="OPERATING">OPERATING</option>
-            <option value="ADMIN">ADMIN</option>
-            <option value="MARKETING">MARKETING</option>
-            <option value="OTHER">OTHER</option>
+        <div>
+          <label className={label}>Type</label>
+          <select className={select} value={type} onChange={(e) => setType(e.target.value)} required>
+            {TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
           </select>
-        </Field>
+        </div>
 
-        <Field label="Vendor">
+        <div>
+          <label className={label}>Vendor (optional)</label>
           <input
-            className="w-full border rounded px-3 py-2"
+            type="text"
+            className={input}
             value={vendor}
             onChange={(e) => setVendor(e.target.value)}
-            placeholder="Vendor name"
+            placeholder="e.g. Office Supplies Ltd"
           />
-        </Field>
+        </div>
 
-        <Field label="Reference">
+        <div>
+          <label className={label}>Reference (optional)</label>
           <input
-            className="w-full border rounded px-3 py-2"
+            type="text"
+            className={input}
             value={reference}
             onChange={(e) => setReference(e.target.value)}
-            placeholder="PO/Invoice #"
+            placeholder="e.g. INV-001"
           />
-        </Field>
+        </div>
 
-        <Field label="Amount *">
+        <div>
+          <label className={label}>Amount</label>
           <input
             type="number"
             step="0.01"
-            className="w-full border rounded px-3 py-2"
+            min="0"
+            className={input}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
             required
           />
-        </Field>
-
-        <div className="sm:col-span-2">
-          <Field label="Note">
-            <textarea
-              rows={3}
-              className="w-full border rounded px-3 py-2"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional notes…"
-            />
-          </Field>
         </div>
 
-        <div className="sm:col-span-2 flex gap-2 pt-2">
+        {branches.length > 0 ? (
+          <div>
+            <label className={label}>Branch</label>
+            <select
+              className={select}
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+            >
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        <div className="md:col-span-2">
+          <label className={label}>Note (optional)</label>
+          <textarea
+            className={textarea}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Add details…"
+          />
+        </div>
+
+        <div className="md:col-span-2 flex items-center gap-2 pt-2">
           <button
             type="submit"
-            disabled={!canSubmit || saving}
-            className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+            disabled={!canSubmit}
+            className={`px-4 py-2 rounded text-white ${canSubmit ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-300 cursor-not-allowed"}`}
           >
             {saving ? "Saving…" : "Save Expense"}
           </button>
           <button
             type="button"
-            className="px-4 py-2 rounded border"
+            className="px-4 py-2 rounded border dark:border-slate-600"
             onClick={() => navigate("/expenses")}
           >
             Cancel
