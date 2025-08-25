@@ -44,6 +44,10 @@ function normalizePath(input) {
  */
 let overrideTenantId = null;
 
+// Optional toggle for timezone headers (defaults ON)
+const SEND_TZ_HEADERS =
+  (import.meta.env.VITE_SEND_TZ_HEADERS ?? "1").toString() !== "0";
+
 /** Inject auth + multitenant headers; normalize URL */
 api.interceptors.request.use((config) => {
   // Normalize path
@@ -76,13 +80,15 @@ api.interceptors.request.use((config) => {
   if (activeBranchId) config.headers["x-branch-id"] = activeBranchId;
 
   // Timezone context (handy for server-side date handling)
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz) config.headers["x-timezone"] = tz;
-  } catch {
-    // noop
+  if (SEND_TZ_HEADERS) {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) config.headers["x-timezone"] = tz;
+    } catch {
+      /* noop */
+    }
+    config.headers["x-tz-offset"] = String(new Date().getTimezoneOffset());
   }
-  config.headers["x-tz-offset"] = String(new Date().getTimezoneOffset());
 
   return config;
 });
