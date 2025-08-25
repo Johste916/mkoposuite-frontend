@@ -1,1 +1,0 @@
-import{j as s}from"./index-BAFAFUIz.js";const n=()=>s.jsxs("div",{className:"p-4",children:[s.jsx("h2",{className:"text-2xl font-bold mb-4",children:"Bank Transactions"}),s.jsx("p",{children:"This section will help manage bank deposits, withdrawals, and reconciliations."})]});export{n as default};
