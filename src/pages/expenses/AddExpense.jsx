@@ -1,50 +1,66 @@
+// src/pages/expenses/AddExpenses.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api";
 
 const TYPES = ["OPERATING", "ADMIN", "MARKETING", "OTHER"];
 
 export default function AddExpense() {
   const navigate = useNavigate();
+  const [search] = useSearchParams();
 
-  // form state
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [type, setType] = useState("OPERATING");
-  const [vendor, setVendor] = useState("");
-  const [reference, setReference] = useState("");
-  const [amount, setAmount] = useState("");
+  // --- form state ---
+  const [date, setDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [type, setType] = useState(search.get("type") || "OPERATING");
+  const [vendor, setVendor] = useState(search.get("vendor") || "");
+  const [reference, setReference] = useState(search.get("ref") || "");
+  const [amount, setAmount] = useState(search.get("amount") || "");
   const [note, setNote] = useState("");
-  const [branchId, setBranchId] = useState(localStorage.getItem("activeBranchId") || "");
+  const [branchId, setBranchId] = useState(
+    String(localStorage.getItem("activeBranchId") || "")
+  );
 
-  // ui state
+  // --- ui state ---
   const [branches, setBranches] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // load branches for the dropdown (optional)
+  // Load branches (optional dropdown)
   useEffect(() => {
     let stop = false;
     (async () => {
       try {
-        const res = await api.get("/branches");
-        if (!stop) {
-          const list = Array.isArray(res.data) ? res.data : [];
-          setBranches(list);
-          if (!branchId && list.length) setBranchId(String(list[0].id));
+        // use helper that normalizes paths to avoid /api//api issues
+        const res = await api._get("/branches");
+        if (stop) return;
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setBranches(list);
+        if (!branchId && list.length) {
+          setBranchId(String(list[0].id));
         }
       } catch {
-        // non-fatal — just hide the dropdown if branches can’t load
-        setBranches([]);
+        setBranches([]); // non-fatal
       }
     })();
-    return () => { stop = true; };
+    return () => {
+      stop = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Basic validation
   const canSubmit = useMemo(() => {
     const n = Number(amount);
-    return date && type && Number.isFinite(n) && n > 0 && !saving;
+    return Boolean(date && type && Number.isFinite(n) && n > 0 && !saving);
   }, [date, type, amount, saving]);
+
+  // Normalize money input on blur (keeps 2dp if valid, else leaves as-is)
+  const normalizeAmount = () => {
+    const n = Number(amount);
+    if (Number.isFinite(n)) setAmount(n.toFixed(2));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,39 +69,51 @@ export default function AddExpense() {
 
     setSaving(true);
     try {
+      // Send DECIMAL as string; backend stores DECIMAL(18,2)
       const payload = {
-        date,                         // YYYY-MM-DD
-        type,                         // ENUM-ish string
-        vendor: vendor || null,
-        reference: reference || null,
-        amount: String(amount).trim(),// send as string; backend stores DECIMAL
-        note: note || null,
-        branchId: branchId || null,   // optional
+        date, // YYYY-MM-DD
+        type,
+        vendor: vendor?.trim() || null,
+        reference: reference?.trim() || null,
+        amount: String(amount).trim(),
+        note: note?.trim() || null,
+        branchId: branchId || null, // optional
       };
 
-      // Will include Authorization + x-tenant-id + x-branch-id via interceptor
+      // Interceptor adds Authorization + x-tenant-id + x-branch-id
       await api._post("/expenses", payload);
 
-      // simple success UX: go back to list
+      // on success → back to list
       navigate("/expenses");
     } catch (err) {
-      setError(err?.response?.data?.error || err?.normalizedMessage || err?.message || "Failed to save expense.");
+      setError(
+        err?.response?.data?.error ||
+          err?.normalizedMessage ||
+          err?.message ||
+          "Failed to save expense."
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const card = "bg-white dark:bg-slate-800 rounded-xl shadow p-4";
+  // --- styles ---
+  const card =
+    "bg-white dark:bg-slate-800 rounded-xl shadow p-4";
   const label = "block text-sm font-medium mb-1";
-  const input = "w-full px-3 py-2 border rounded-md dark:bg-slate-700 dark:border-slate-600";
+  const input =
+    "w-full px-3 py-2 border rounded-md dark:bg-slate-700 dark:border-slate-600";
   const select = input;
-  const textarea = "w-full px-3 py-2 border rounded-md h-28 resize-y dark:bg-slate-700 dark:border-slate-600";
+  const textarea =
+    "w-full px-3 py-2 border rounded-md h-28 resize-y dark:bg-slate-700 dark:border-slate-600";
 
   return (
     <div className={card}>
       <div className="mb-4">
         <h2 className="text-lg font-semibold">Add Expense</h2>
-        <p className="text-xs opacity-70">Create a new operating/admin/marketing expense.</p>
+        <p className="text-xs opacity-70">
+          Create a new operating/admin/marketing expense.
+        </p>
       </div>
 
       {error ? (
@@ -94,7 +122,10 @@ export default function AddExpense() {
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <form
+        onSubmit={handleSubmit}
+        className="grid grid-cols-1 md:grid-cols-2 gap-4"
+      >
         <div>
           <label className={label}>Date</label>
           <input
@@ -108,9 +139,16 @@ export default function AddExpense() {
 
         <div>
           <label className={label}>Type</label>
-          <select className={select} value={type} onChange={(e) => setType(e.target.value)} required>
+          <select
+            className={select}
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            required
+          >
             {TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
           </select>
         </div>
@@ -146,6 +184,7 @@ export default function AddExpense() {
             className={input}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            onBlur={normalizeAmount}
             placeholder="0.00"
             required
           />
@@ -160,7 +199,9 @@ export default function AddExpense() {
               onChange={(e) => setBranchId(e.target.value)}
             >
               {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
               ))}
             </select>
           </div>
@@ -180,7 +221,11 @@ export default function AddExpense() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className={`px-4 py-2 rounded text-white ${canSubmit ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-300 cursor-not-allowed"}`}
+            className={`px-4 py-2 rounded text-white ${
+              canSubmit
+                ? "bg-blue-600 hover:bg-blue-700"
+                : "bg-blue-300 cursor-not-allowed"
+            }`}
           >
             {saving ? "Saving…" : "Save Expense"}
           </button>
