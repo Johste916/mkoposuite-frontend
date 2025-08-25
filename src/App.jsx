@@ -87,7 +87,10 @@ const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
-const AddExpense = lazy(() => import("./pages/expenses/Add")); // ✅ new fully wired page
+
+// 🔧 FIXED: point to the actual file name on disk (singular)
+const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
+
 const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
 // ACCOUNTING
