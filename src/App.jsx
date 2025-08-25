@@ -87,10 +87,8 @@ const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
-
-// 🔧 FIXED: point to the actual file name on disk (singular)
-const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
-
+const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));          // ✅ working add page
+const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV")); // ✅ new CSV page
 const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
 // ACCOUNTING
@@ -321,7 +319,14 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
-              <Route path="expenses/csv" element={<Stub title="Upload Expenses CSV" />} />
+              <Route
+                path="expenses/csv"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "accountant", "branch_manager"]}>
+                    <UploadExpensesCSV />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
