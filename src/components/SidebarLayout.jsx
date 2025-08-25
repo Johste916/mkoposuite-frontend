@@ -34,10 +34,9 @@ const NAV = () => [
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
       { label: "View All Loans", to: "/loans" },
       { label: "Add Loan", to: "/loans/applications" },
-      { label: "Review Queue", to: "/loans/review-queue" },      // stays in Loans
+      { label: "Review Queue", to: "/loans/review-queue" },
       { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
-      { label: "Disbursed Loans", to: "/loans/status/disbursed" }, // NEW per update
-      // REMOVED from sidebar (Admin-only via Admin hub): Loan Products, Loan Calculator
+      { label: "Disbursed Loans", to: "/loans/status/disbursed" },
       { label: "Due Loans", to: "/loans/due" },
       { label: "Missed Repayments", to: "/loans/missed" },
       { label: "Loans in Arrears", to: "/loans/arrears" },
@@ -46,7 +45,6 @@ const NAV = () => [
       { label: "Principal Outstanding", to: "/loans/principal-outstanding" },
       { label: "1 Month Late", to: "/loans/1-month-late" },
       { label: "3 Months Late", to: "/loans/3-months-late" },
-      // REMOVED earlier: Loan Reports, Guarantors, Loan Comments, Approve Loans
     ]
   },
 
@@ -182,7 +180,6 @@ const NAV = () => [
     ]
   },
 
-  // Legacy routes present in App.jsx
   {
     label: "Legacy", icon: <FiFileText />, to: "/legacy", children: [
       { label: "Disbursements (Legacy)", to: "/disbursements" },
@@ -274,12 +271,17 @@ const SidebarLayout = () => {
 
   const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState(null);
+
+  // ✅ NEW: tenant state (for multi-tenant header + API header)
+  const [tenant, setTenant] = useState(null);  // { id, name } recommended
+
   const [branches, setBranches] = useState([]);
   const [activeBranchId, setActiveBranchId] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Admin-driven feature config (authoritative)
-  const { loading: featuresLoading, features } = useFeatureConfig();
+  const featureCtx = useFeatureConfig();
+  const { loading: featuresLoading, features } = featureCtx;
 
   // Settings dropdown
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -293,7 +295,7 @@ const SidebarLayout = () => {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  /* theme + user load */
+  /* theme + user + tenant load */
   useEffect(() => {
     const storedDark = localStorage.getItem("darkMode");
     if (storedDark === "true") {
@@ -306,9 +308,48 @@ const SidebarLayout = () => {
     } catch {
       localStorage.removeItem("user");
     }
+
+    // ✅ load tenant from localStorage
+    try {
+      const rawTenant = localStorage.getItem("tenant"); // preferred: { id, name, ... }
+      if (rawTenant) {
+        const t = JSON.parse(rawTenant);
+        setTenant(t);
+        if (t?.id) api.defaults.headers.common["x-tenant-id"] = t.id;
+      } else {
+        const tenantId = localStorage.getItem("tenantId");
+        const tenantName = localStorage.getItem("tenantName");
+        if (tenantId || tenantName) {
+          const t = { id: tenantId || null, name: tenantName || "" };
+          setTenant(t);
+          if (tenantId) api.defaults.headers.common["x-tenant-id"] = tenantId;
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+
     const storedBranch = localStorage.getItem("activeBranchId");
     if (storedBranch) setActiveBranchId(storedBranch);
   }, []);
+
+  // keep API headers in sync with tenant & branch changes
+  useEffect(() => {
+    if (tenant?.id) {
+      api.defaults.headers.common["x-tenant-id"] = tenant.id;
+    } else {
+      delete api.defaults.headers.common["x-tenant-id"];
+    }
+  }, [tenant?.id]);
+
+  useEffect(() => {
+    if (activeBranchId) {
+      api.defaults.headers.common["x-branch-id"] = activeBranchId;
+      localStorage.setItem("activeBranchId", activeBranchId);
+    } else {
+      delete api.defaults.headers.common["x-branch-id"];
+    }
+  }, [activeBranchId]);
 
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode);
@@ -318,6 +359,8 @@ const SidebarLayout = () => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    // optional: clear tenant if you want a fresh login to choose tenant
+    // localStorage.removeItem("tenant");
     navigate("/login");
   };
 
@@ -333,17 +376,13 @@ const SidebarLayout = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (activeBranchId) localStorage.setItem("activeBranchId", activeBranchId);
-  }, [activeBranchId]);
-
   const userRole = (user?.role || "").toLowerCase();
 
-  // Build full NAV, then apply Admin filters/labels (authoritative)
+  // Build full NAV, then apply Admin filters/labels (authoritative + tenant entitlements)
   const computedNav = useMemo(() => {
     const base = NAV();
-    return filterNavByFeatures(base, features, userRole);
-  }, [features, userRole]);
+    return filterNavByFeatures(base, features, userRole, featureCtx);
+  }, [features, userRole, featureCtx]);
 
   /* close mobile when route changes & close settings */
   useEffect(() => {
@@ -369,6 +408,13 @@ const SidebarLayout = () => {
                 <span className="text-blue-600">Mkopo</span>
                 <span className="text-slate-800 dark:text-slate-200">Suite</span>
               </span>
+
+              {/* ✅ subtle tenant badge */}
+              {tenant?.name && (
+                <span className="ml-2 px-2 py-0.5 text-[11px] rounded-full border bg-slate-50 dark:bg-slate-800">
+                  {tenant.name}
+                </span>
+              )}
             </div>
 
             <div className="hidden md:flex items-center gap-2 min-w-[280px] max-w-[640px] w-full">
@@ -523,7 +569,7 @@ const SidebarLayout = () => {
               </button>
               <div className="grid grid-cols-1 gap-1">
                 <NavLink to="/settings/billing" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">Billing</NavLink>
-                <NavLink to="/settings/change-password" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">Change Password</NavLink>
+                <NavLink to="/settings/change-password" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hoverbg-slate-800 text-sm">Change Password</NavLink>
                 <NavLink to="/settings/2fa" onClick={() => setMobileOpen(false)} className="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm">Two-Factor Authentication</NavLink>
                 <button onClick={handleLogout} className="text-left px-3 py-2 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-sm text-rose-600 dark:text-rose-300">
                   <span className="inline-flex items-center gap-2"><FiLogOut /> Logout</span>
