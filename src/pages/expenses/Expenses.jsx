@@ -3,26 +3,28 @@ import usePaginatedFetch from "../../hooks/usePaginatedFetch";
 import ListShell from "../../components/ListShell";
 
 export default function Expenses() {
-  // Always call API on the /api path; hook will avoid double /api if baseURL already ends with /api
+  // Use "/expenses" (the hook will normalize and avoid double /api)
   const { rows, total, page, setPage, limit, setLimit, q, setQ, loading, error } =
-    usePaginatedFetch({ url: "/api/expenses" });
+    usePaginatedFetch({ url: "/expenses" });
 
-  const columns = useMemo(() => ([
-    { key: "date", title: "Date" },
-    { key: "type", title: "Type" },
-    { key: "vendor", title: "Vendor" },
-    { key: "reference", title: "Reference" },
-    {
-      key: "amount",
-      title: "Amount",
-      render: (row) => {
-        const v = row?.amount;
-        const n = Number(v);
-        return Number.isFinite(n) ? n.toLocaleString() : (v ?? "—");
-      }
-    },
-    { key: "note", title: "Note" },
-  ]), []);
+  const columns = useMemo(
+    () => [
+      { key: "date", title: "Date" },
+      { key: "type", title: "Type" },
+      { key: "vendor", title: "Vendor" },
+      { key: "reference", title: "Reference" },
+      {
+        key: "amount",
+        title: "Amount",
+        render: ({ value }) => {
+          const n = Number(value);
+          return Number.isFinite(n) ? n.toLocaleString() : value ?? "—";
+        },
+      },
+      { key: "note", title: "Note" },
+    ],
+    []
+  );
 
   return (
     <ListShell

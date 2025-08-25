@@ -15,9 +15,9 @@ export default function ListShell({
   limit,
   setLimit,
   total,
-  toolbar,                // NEW: custom toolbar (filters/buttons)
-  renderActions,          // legacy actions(row)
-  renderRowActions,       // NEW: actions(row) — alias
+  toolbar,
+  renderActions,
+  renderRowActions,
 }) {
   const hasActions = Boolean(renderActions || renderRowActions);
 
@@ -32,23 +32,19 @@ export default function ListShell({
     const value = row?.[col.key];
 
     if (typeof col.render === "function") {
-      // Be tolerant to different render signatures:
-      // 1) render({ row, value, column }) — robust new style
-      // 2) render(value, row) — your current style
-      // 3) render(row) — some older tables
+      // Try flexible render signatures
       try {
         const resA = col.render({ row, value, column: col, rowIndex, colIndex });
         if (typeof resA !== "undefined") return resA;
-      } catch (_) {}
+      } catch {}
       try {
         return col.render(value, row);
-      } catch (_) {}
+      } catch {}
       try {
         return col.render(row);
-      } catch (_) {}
+      } catch {}
     }
 
-    // Default fallback
     if (value === null || typeof value === "undefined" || value === "") return "—";
     return String(value);
   };
@@ -64,7 +60,6 @@ export default function ListShell({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
         <h3 className="text-lg font-semibold">{title}</h3>
 
-        {/* Search (only if q+setQ are provided) */}
         {(typeof q !== "undefined" && typeof setQ === "function") && (
           <input
             value={q}
@@ -75,13 +70,12 @@ export default function ListShell({
         )}
       </div>
 
-      {/* Optional toolbar row (filters, buttons, etc.) */}
-      {toolbar ? (
-        <div className="mb-3">{toolbar}</div>
-      ) : null}
+      {toolbar ? <div className="mb-3">{toolbar}</div> : null}
 
       {error && (
-        <div className="text-red-500 text-sm mb-3">Error: {String(error)}</div>
+        <div className="text-red-500 text-sm mb-3">
+          Error: {String(error)}
+        </div>
       )}
 
       {loading ? (
