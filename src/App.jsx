@@ -74,21 +74,17 @@ const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
-const CollateralForm = lazy(() => import("./pages/collateral/CollateralForm")); // guarded below
+const CollateralForm = lazy(() => import("./pages/collateral/CollateralForm"));
 const Assets = lazy(() => import("./pages/assets/Assets"));
 
 const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets"));
-// guarded below
 const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
 const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
 
-// ✅ Savings module (combined)
+// ✅ Savings (combined)
 const Savings = lazy(() => import("./pages/Savings"));
 const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
-// new nested pages (hook them up if present)
-const SavingsUploadCSV = lazy(() => import("./pages/savings/UploadCSV"));
-const StaffReport = lazy(() => import("./pages/savings/StaffReport"));
-const ApproveSavings = lazy(() => import("./pages/savings/ApproveTransactions"));
+const UploadSavingsCSV = lazy(() => import("./pages/savings/UploadCSV")); // ⬅️ new
 
 const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
@@ -106,7 +102,6 @@ const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
-// Tiny inline placeholder
 const Stub = ({ title = "Coming soon" }) => (
   <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
     <h1 className="text-lg font-semibold">{title}</h1>
@@ -291,20 +286,20 @@ function App() {
               <Route path="savings/fees" element={<Stub title="Savings Fee Report" />} />
               <Route path="savings/cash-safe" element={<Stub title="Cash Safe Management" />} />
 
-              {/* Savings → Transactions (nested under /savings) */}
+              {/* Savings → Transactions */}
               <Route path="savings/transactions" element={<SavingsTransactions />} />
-              <Route path="savings/transactions/csv" element={<SavingsUploadCSV />} />
-              <Route path="savings/transactions/staff-report" element={<StaffReport />} />
               <Route
-                path="savings/transactions/approve"
+                path="savings/transactions/csv"
                 element={
-                  <RoleProtectedRoute allow={["admin", "director", "branch_manager"]}>
-                    <ApproveSavings />
+                  <RoleProtectedRoute allow={["admin", "director", "accountant", "branch_manager"]}>
+                    <UploadSavingsCSV />
                   </RoleProtectedRoute>
                 }
               />
+              <Route path="savings/transactions/staff-report" element={<Stub title="Staff Transactions Report" />} />
+              <Route path="savings/transactions/approve" element={<Stub title="Approve Savings Transactions" />} />
 
-              {/* 🔁 Back-compat redirects from old /savings-transactions paths */}
+              {/* Back-compat redirects */}
               <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
               <Route path="savings-transactions/*" element={<Navigate to="/savings/transactions" replace />} />
 
