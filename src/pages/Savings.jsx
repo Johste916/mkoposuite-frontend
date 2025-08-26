@@ -3,6 +3,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { CSVLink } from 'react-csv';
 import api from '../api';
+import BorrowerAutoComplete from '../components/inputs/BorrowerAutoComplete';
 
 const Savings = () => {
   const [transactions, setTransactions] = useState([]);
@@ -19,36 +20,28 @@ const Savings = () => {
   const fetchData = async () => {
     setError('');
     try {
-      // Only fetch when borrowerId is provided
       if (!filter.borrowerId) {
-        setTransactions([]);
-        setBalance(0);
-        setTotals({});
-        return;
+        setTransactions([]); setBalance(0); setTotals({}); return;
       }
-      const params = new URLSearchParams();
-      if (filter.type) params.set('type', filter.type);
-      const res = await api._get(`/savings/borrower/${filter.borrowerId}?${params.toString()}`);
+      const p = new URLSearchParams();
+      if (filter.type) p.set('type', filter.type);
+      const res = await api._get(`/savings/borrower/${filter.borrowerId}?${p.toString()}`);
       setTransactions(res.data.transactions || []);
       setBalance(res.data.balance || 0);
       setTotals(res.data.totals || {});
     } catch (err) {
-      setError(err?.response?.data?.error || err?.normalizedMessage || 'Failed to load savings.');
+      setError(err?.response?.data?.error || err?.normalizedMessage || 'Failed to fetch savings');
     }
   };
 
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter.borrowerId, filter.type]);
+  useEffect(() => { fetchData(); /* eslint-disable-next-line */ }, [filter.borrowerId, filter.type]);
 
   const handleAddTransaction = async () => {
     setError('');
     try {
       const payload = { ...newTx };
       if (!payload.borrowerId || !payload.type || !payload.amount || !payload.date) {
-        setError('Borrower, type, amount and date are required.');
-        return;
+        setError('Borrower, type, amount and date are required.'); return;
       }
       await api._post('/savings', payload);
       setShowModal(false);
@@ -102,13 +95,10 @@ const Savings = () => {
       <div className={`${card} mb-4`}>
         <div className="flex flex-wrap gap-3 items-end">
           <div>
-            <label className="block text-xs font-medium mb-1">Borrower ID</label>
-            <input
-              type="number"
-              placeholder="Borrower ID"
-              value={filter.borrowerId}
-              onChange={e => setFilter({ ...filter, borrowerId: e.target.value })}
-              className="border px-3 py-2 rounded w-48 dark:bg-slate-700 dark:border-slate-600"
+            <label className="block text-xs font-medium mb-1">Borrower</label>
+            <BorrowerAutoComplete
+              value={filter.borrowerId || null}
+              onChange={(id) => setFilter((f) => ({ ...f, borrowerId: id }))}
             />
           </div>
           <div>
@@ -139,16 +129,8 @@ const Savings = () => {
 
       {/* Export */}
       <div className="flex gap-3 mb-3">
-        <CSVLink
-          data={csvData}
-          filename="savings.csv"
-          className="bg-green-600 text-white px-4 py-2 rounded"
-        >
-          Export CSV
-        </CSVLink>
-        <button onClick={exportPDF} className="bg-red-600 text-white px-4 py-2 rounded">
-          Export PDF
-        </button>
+        <CSVLink data={csvData} filename="savings.csv" className="bg-green-600 text-white px-4 py-2 rounded">Export CSV</CSVLink>
+        <button onClick={exportPDF} className="bg-red-600 text-white px-4 py-2 rounded">Export PDF</button>
       </div>
 
       {/* Table */}
@@ -168,7 +150,7 @@ const Savings = () => {
             {transactions.map(tx => (
               <tr key={tx.id}>
                 <td className="border p-2">{tx.date}</td>
-                <td className="border p-2">{tx.type}</td>
+                <td className="border p-2 capitalize">{tx.type}</td>
                 <td className="border p-2">{tx.amount}</td>
                 <td className="border p-2">{tx.notes || '-'}</td>
                 <td className="border p-2">{tx.reversed ? 'Yes' : 'No'}</td>
@@ -186,7 +168,7 @@ const Savings = () => {
             {!transactions.length && (
               <tr>
                 <td className="p-4 text-sm text-slate-500" colSpan={isAdmin ? 6 : 5}>
-                  {filter.borrowerId ? 'No transactions found.' : 'Enter a Borrower ID to view transactions.'}
+                  {filter.borrowerId ? 'No transactions found.' : 'Search and select a borrower to view transactions.'}
                 </td>
               </tr>
             )}
@@ -200,12 +182,10 @@ const Savings = () => {
           <div className="bg-white dark:bg-slate-900 p-6 rounded shadow-md w-full max-w-md">
             <h3 className="text-lg font-bold mb-4">Add Transaction</h3>
             <div className="space-y-3">
-              <input
-                type="number"
-                placeholder="Borrower ID"
-                value={newTx.borrowerId}
-                onChange={e => setNewTx({ ...newTx, borrowerId: e.target.value })}
-                className="border px-3 py-2 w-full rounded dark:bg-slate-800 dark:border-slate-700"
+              <BorrowerAutoComplete
+                value={newTx.borrowerId || null}
+                onChange={(id) => setNewTx((t) => ({ ...t, borrowerId: id }))}
+                placeholder="Pick borrower…"
               />
               <select
                 value={newTx.type}

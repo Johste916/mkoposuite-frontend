@@ -85,6 +85,10 @@ const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionShe
 // ✅ Savings module (combined)
 const Savings = lazy(() => import("./pages/Savings"));
 const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
+// new nested pages (hook them up if present)
+const SavingsUploadCSV = lazy(() => import("./pages/savings/UploadCSV"));
+const StaffReport = lazy(() => import("./pages/savings/StaffReport"));
+const ApproveSavings = lazy(() => import("./pages/savings/ApproveTransactions"));
 
 const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
@@ -289,9 +293,16 @@ function App() {
 
               {/* Savings → Transactions (nested under /savings) */}
               <Route path="savings/transactions" element={<SavingsTransactions />} />
-              <Route path="savings/transactions/csv" element={<Stub title="Upload Savings CSV" />} />
-              <Route path="savings/transactions/staff-report" element={<Stub title="Staff Transactions Report" />} />
-              <Route path="savings/transactions/approve" element={<Stub title="Approve Savings Transactions" />} />
+              <Route path="savings/transactions/csv" element={<SavingsUploadCSV />} />
+              <Route path="savings/transactions/staff-report" element={<StaffReport />} />
+              <Route
+                path="savings/transactions/approve"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "branch_manager"]}>
+                    <ApproveSavings />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* 🔁 Back-compat redirects from old /savings-transactions paths */}
               <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
