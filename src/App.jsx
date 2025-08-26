@@ -1,23 +1,17 @@
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
-// Auth/public
 const Login = lazy(() => import("./pages/Login"));
 
-// Shell
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import SidebarLayout from "./components/SidebarLayout";
 
-// Feature config provider (Admin-controlled)
 import { FeatureConfigProvider } from "./context/FeatureConfigContext";
-// Toasts
 import { ToastProvider } from "./components/common/ToastProvider";
 
-// Core
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 
-// Borrowers
 const Borrowers = lazy(() => import("./pages/Borrowers"));
 const BorrowerDetails = lazy(() => import("./pages/BorrowerDetails"));
 const AddBorrower = lazy(() => import("./pages/borrowers/AddBorrower"));
@@ -26,14 +20,12 @@ const Blacklist = lazy(() => import("./pages/borrowers/Blacklist"));
 const BorrowerImports = lazy(() => import("./pages/borrowers/Imports"));
 const BorrowerReports = lazy(() => import("./pages/borrowers/Reports"));
 
-// Groups
 const BorrowerGroups = lazy(() => import("./pages/borrowers/groups/Groups"));
 const AddGroup = lazy(() => import("./pages/borrowers/groups/AddGroup"));
 const GroupDetails = lazy(() => import("./pages/borrowers/groups/GroupDetails"));
 const GroupImports = lazy(() => import("./pages/borrowers/groups/GroupImports"));
 const GroupReports = lazy(() => import("./pages/borrowers/groups/GroupReports"));
 
-// Loans
 const Loans = lazy(() => import("./pages/Loans"));
 const LoanDetails = lazy(() => import("./pages/LoanDetails"));
 const LoanApplications = lazy(() => import("./pages/loans/LoanApplications"));
@@ -44,7 +36,6 @@ const LoanSchedulePage = lazy(() => import("./pages/loans/LoanSchedulePage"));
 const DisburseLoan = lazy(() => import("./pages/loans/DisburseLoan"));
 const LoanReview = lazy(() => import("./pages/loans/LoanReview"));
 
-// Repayments
 const Repayments = lazy(() => import("./pages/Repayments"));
 const ManualRepayment = lazy(() => import("./pages/repayments/ManualRepayment"));
 const RepaymentReceipts = lazy(() => import("./pages/repayments/RepaymentReceipts"));
@@ -53,13 +44,11 @@ const BulkRepayments = lazy(() => import("./pages/repayments/BulkRepayments"));
 const RepaymentCharts = lazy(() => import("./pages/repayments/RepaymentCharts"));
 const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayments"));
 
-// Misc Existing (legacy)
 const Reports = lazy(() => import("./pages/Reports"));
 const Disbursements = lazy(() => import("./pages/Disbursements"));
 const Sms = lazy(() => import("./pages/Sms"));
 const Bank = lazy(() => import("./pages/Bank"));
 
-// User management
 const Users = lazy(() => import("./pages/user-management/Users"));
 const Roles = lazy(() => import("./pages/user-management/Roles"));
 const Permissions = lazy(() => import("./pages/user-management/Permissions"));
@@ -67,12 +56,10 @@ const Permissions = lazy(() => import("./pages/user-management/Permissions"));
 const Branches = lazy(() => import("./pages/Branches"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-// Admin hub + account
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 
-// NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
 const CollateralForm = lazy(() => import("./pages/collateral/CollateralForm"));
 const Assets = lazy(() => import("./pages/assets/Assets"));
@@ -81,10 +68,10 @@ const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets
 const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
 const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
 
-// ✅ Savings (combined)
+/* ✅ Savings (combined) */
 const Savings = lazy(() => import("./pages/Savings"));
 const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
-const UploadSavingsCSV = lazy(() => import("./pages/savings/UploadCSV")); // ⬅️ new
+const UploadSavingsCSV = lazy(() => import("./pages/savings/UploadCSV"));
 
 const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
@@ -94,7 +81,6 @@ const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
 const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV"));
 const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
-// ACCOUNTING
 const ChartOfAccounts = lazy(() => import("./pages/accounting/ChartOfAccounts"));
 const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
 const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
@@ -115,10 +101,8 @@ function App() {
       <ToastProvider>
         <FeatureConfigProvider>
           <Routes>
-            {/* Public */}
             <Route path="/login" element={<Login />} />
 
-            {/* Protected shell */}
             <Route
               path="/"
               element={
@@ -127,10 +111,8 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Dashboard */}
               <Route index element={<Dashboard />} />
 
-              {/* ===== Admin hub ===== */}
               <Route
                 path="admin"
                 element={
@@ -143,10 +125,8 @@ function App() {
                 <Route path=":slug" element={<AdminRouter />} />
               </Route>
 
-              {/* Account quick panel */}
               <Route path="account/settings" element={<AccountSettings />} />
 
-              {/* Settings */}
               <Route path="settings/billing" element={<Stub title="Billing Settings" />} />
               <Route path="settings/change-password" element={<AccountSettings />} />
               <Route path="settings/2fa" element={<Stub title="Two-Factor Authentication" />} />
@@ -185,7 +165,6 @@ function App() {
               />
               <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
 
-              {/* Admin-only: Loan products management */}
               <Route
                 path="loans/products"
                 element={
@@ -195,7 +174,6 @@ function App() {
                 }
               />
 
-              {/* Calculator & schedule */}
               <Route
                 path="loans/calculator"
                 element={
@@ -216,7 +194,6 @@ function App() {
               <Route path="loans/:id" element={<LoanDetails />} />
               <Route path="loans/:id/disburse" element={<DisburseLoan />} />
 
-              {/* Loans aliases */}
               <Route path="loans/due" element={<Navigate to="/loans/status/due" replace />} />
               <Route path="loans/missed" element={<Navigate to="/loans/status/missed" replace />} />
               <Route path="loans/arrears" element={<Navigate to="/loans/status/arrears" replace />} />
@@ -282,9 +259,7 @@ function App() {
               <Route path="savings" element={<Savings />} />
               <Route path="savings/charts" element={<Stub title="Savings Charts" />} />
               <Route path="savings/report" element={<Stub title="Savings Report" />} />
-              <Route path="savings/products" element={<Stub title="Savings Products Report" />} />
-              <Route path="savings/fees" element={<Stub title="Savings Fee Report" />} />
-              <Route path="savings/cash-safe" element={<Stub title="Cash Safe Management" />} />
+              {/* ⛔️ Removed /savings/products, /savings/fees, /savings/cash-safe */}
 
               {/* Savings → Transactions */}
               <Route path="savings/transactions" element={<SavingsTransactions />} />
@@ -359,7 +334,6 @@ function App() {
                 <Route path="permissions" element={<Permissions />} />
               </Route>
 
-              {/* Branches */}
               <Route path="branches" element={<Branches />} />
 
               {/* Reports */}
@@ -384,15 +358,12 @@ function App() {
               <Route path="reports/at-a-glance" element={<Reports />} />
               <Route path="reports/all" element={<Reports />} />
 
-              {/* Legacy */}
               <Route path="disbursements" element={<Disbursements />} />
               <Route path="bank" element={<Bank />} />
 
-              {/* 404 inside shell */}
               <Route path="*" element={<NotFound />} />
             </Route>
 
-            {/* Hard 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </FeatureConfigProvider>

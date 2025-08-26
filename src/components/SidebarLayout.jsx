@@ -71,23 +71,20 @@ const NAV = () => [
     ]
   },
 
-  /* ✅ Combined Savings module (accounts + transactions nested here) */
+  /* ✅ Savings combined (transactions nested here; removed products/fees/cash-safe) */
   {
     label: "Savings", icon: <BsBank />, to: "/savings", children: [
-      { label: "View Accounts", to: "/savings" },
-      { label: "View Transactions", to: "/savings/transactions" },
+      { label: "View Savings", to: "/savings" },
+      { label: "Transactions", to: "/savings/transactions" },
       { label: "Upload CSV", to: "/savings/transactions/csv" },
       { label: "Staff Transactions Report", to: "/savings/transactions/staff-report" },
       { label: "Approve Transactions", to: "/savings/transactions/approve" },
       { label: "Savings Charts", to: "/savings/charts" },
       { label: "Savings Report", to: "/savings/report" },
-      { label: "Products Report", to: "/savings/products" },
-      { label: "Fee Report", to: "/savings/fees" },
-      { label: "Cash Safe Management", to: "/savings/cash-safe" },
     ]
   },
 
-  /* ❌ Removed the separate “Savings Transactions” top-level group */
+  /* ⛔️ Removed the separate "Savings Transactions" module entirely */
 
   {
     label: "Investors", icon: <FiUsers />, to: "/investors", children: [
@@ -267,18 +264,14 @@ const SidebarLayout = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState(null);
 
-  // ✅ NEW: tenant state (for multi-tenant header + API header)
-  const [tenant, setTenant] = useState(null);  // { id, name } recommended
-
+  const [tenant, setTenant] = useState(null);
   const [branches, setBranches] = useState([]);
   const [activeBranchId, setActiveBranchId] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Admin-driven feature config (authoritative)
   const featureCtx = useFeatureConfig();
   const { loading: featuresLoading, features } = featureCtx;
 
-  // Settings dropdown
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
   React.useEffect(() => {
@@ -303,10 +296,8 @@ const SidebarLayout = () => {
     } catch {
       localStorage.removeItem("user");
     }
-
-    // ✅ load tenant from localStorage
     try {
-      const rawTenant = localStorage.getItem("tenant"); // preferred: { id, name, ... }
+      const rawTenant = localStorage.getItem("tenant");
       if (rawTenant) {
         const t = JSON.parse(rawTenant);
         setTenant(t);
@@ -320,15 +311,12 @@ const SidebarLayout = () => {
           if (tenantId) api.defaults.headers.common["x-tenant-id"] = tenantId;
         }
       }
-    } catch {
-      // ignore parse errors
-    }
+    } catch {}
 
     const storedBranch = localStorage.getItem("activeBranchId");
     if (storedBranch) setActiveBranchId(storedBranch);
   }, []);
 
-  // keep API headers in sync with tenant & branch changes
   useEffect(() => {
     if (tenant?.id) {
       api.defaults.headers.common["x-tenant-id"] = tenant.id;
@@ -371,13 +359,11 @@ const SidebarLayout = () => {
 
   const userRole = (user?.role || "").toLowerCase();
 
-  // Build full NAV, then apply Admin filters/labels (authoritative + tenant entitlements)
   const computedNav = useMemo(() => {
     const base = NAV();
     return filterNavByFeatures(base, features, userRole, featureCtx);
   }, [features, userRole, featureCtx]);
 
-  /* close mobile when route changes & close settings */
   useEffect(() => {
     setMobileOpen(false);
     setSettingsOpen(false);
@@ -402,7 +388,6 @@ const SidebarLayout = () => {
                 <span className="text-slate-800 dark:text-slate-200">Suite</span>
               </span>
 
-              {/* ✅ subtle tenant badge */}
               {tenant?.name && (
                 <span className="ml-2 px-2 py-0.5 text-[11px] rounded-full border bg-slate-50 dark:bg-slate-800">
                   {tenant.name}
@@ -441,7 +426,6 @@ const SidebarLayout = () => {
                 {darkMode ? <FiSun /> : <FiMoon />}
               </button>
 
-              {/* Admin hub button */}
               <button
                 onClick={() => navigate("/admin")}
                 className="hidden md:inline-flex items-center gap-2 h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
@@ -450,7 +434,6 @@ const SidebarLayout = () => {
                 <FiSettings /> Admin
               </button>
 
-              {/* Settings dropdown */}
               <div className="relative" ref={settingsRef}>
                 <button
                   onClick={() => setSettingsOpen((v) => !v)}
@@ -492,7 +475,6 @@ const SidebarLayout = () => {
                 )}
               </div>
 
-              {/* Avatar */}
               <div className="flex items-center gap-2 pl-1">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
                   {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
@@ -504,9 +486,7 @@ const SidebarLayout = () => {
         </div>
       </header>
 
-      {/* Shell: left sidebar + main content */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
-        {/* Sidebar */}
         <aside className="hidden lg:block border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <div className="h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
             <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -530,13 +510,11 @@ const SidebarLayout = () => {
           </div>
         </aside>
 
-        {/* Main content */}
         <main className="min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
           <Outlet />
         </main>
       </div>
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-[60] lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
@@ -552,7 +530,6 @@ const SidebarLayout = () => {
               </button>
             </div>
 
-            {/* Quick Admin + Settings on mobile */}
             <div className="mt-3 space-y-2">
               <button
                 onClick={() => { setMobileOpen(false); navigate("/admin"); }}
