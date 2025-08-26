@@ -220,6 +220,7 @@ const Section = ({ item, currentPath, onNavigate }) => {
             ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
             : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
         } w-full justify-between`}
+        aria-expanded={open}
       >
         <span className="inline-flex items-center gap-2">
           <span className="shrink-0">{item.icon}</span>
@@ -450,6 +451,7 @@ const SidebarLayout = () => {
                   onClick={() => setSettingsOpen((v) => !v)}
                   className="inline-flex items-center gap-2 h-9 px-3 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Settings"
+                  aria-expanded={settingsOpen}
                 >
                   <FiSettings /> Settings <FiChevronDown className="opacity-70" />
                 </button>

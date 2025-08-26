@@ -84,6 +84,8 @@ const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionShe
 // ✅ Savings module (combined)
 const Savings = lazy(() => import("./pages/Savings"));
 const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
+const UploadSavingsCSV = lazy(() => import("./pages/savings/UploadCSV"));
+const ApproveSavingsTx = lazy(() => import("./pages/savings/ApproveTransactions"));
 
 const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
@@ -143,7 +145,7 @@ function App() {
                 <Route path=":slug" element={<AdminRouter />} />
               </Route>
 
-              {/* Account quick panel */}
+              {/* Account */}
               <Route path="account/settings" element={<AccountSettings />} />
 
               {/* Settings */}
@@ -185,7 +187,7 @@ function App() {
               />
               <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
 
-              {/* Admin-only: Loan products management */}
+              {/* Admin-only: Loan products */}
               <Route
                 path="loans/products"
                 element={
@@ -278,24 +280,16 @@ function App() {
               <Route path="collections/sms" element={<Sms />} />
               <Route path="collections/email" element={<Stub title="Send Collection Emails" />} />
 
-              {/* ✅ Savings (combined) */}
+              {/* ✅ Savings */}
               <Route path="savings" element={<Savings />} />
-
-              {/* Charts + Report now point to real pages (no stub).
-                 For now we reuse the Savings screen which already shows
-                 balances/summary + export; this removes the scaffold message. */}
-              <Route path="savings/charts" element={<Savings />} />
               <Route path="savings/report" element={<Savings />} />
 
               {/* Savings → Transactions */}
               <Route path="savings/transactions" element={<SavingsTransactions />} />
-              <Route path="savings/transactions/csv" element={<Stub title="Upload Savings CSV" />} />
+              <Route path="savings/transactions/csv" element={<UploadSavingsCSV />} />
+              <Route path="savings/transactions/approve" element={<ApproveSavingsTx />} />
 
-              {/* Approvals wired to the same list for now (backend has no approval state).
-                 You can enhance SavingsTransactions to show an Approve action based on this mode. */}
-              <Route path="savings/transactions/approve" element={<SavingsTransactions mode="approve" />} />
-
-              {/* 🔁 Back-compat redirects from old /savings-transactions paths */}
+              {/* Back-compat redirects from old /savings-transactions paths */}
               <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
               <Route path="savings-transactions/*" element={<Navigate to="/savings/transactions" replace />} />
 
