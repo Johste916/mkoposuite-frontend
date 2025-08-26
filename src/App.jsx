@@ -300,13 +300,19 @@ function App() {
               <Route path="investors/email" element={<Stub title="Send Email to Investors" />} />
               <Route path="investors/invite" element={<Stub title="Invite Investors" />} />
 
-              {/* E-Signatures */}
+              {/* E-Signatures (kept routable; removed from sidebar) */}
               <Route path="esignatures" element={<ESignatures />} />
 
-              {/* Payroll */}
+              {/* HR & Payroll */}
               <Route path="payroll" element={<Payroll />} />
               <Route path="payroll/add" element={<Stub title="Add Payroll" />} />
               <Route path="payroll/report" element={<Stub title="Payroll Report" />} />
+              {/* New HR stubs so sidebar links won’t 404 */}
+              <Route path="hr" element={<Stub title="HR" />} />
+              <Route path="hr/employees" element={<Stub title="Employees" />} />
+              <Route path="hr/attendance" element={<Stub title="Attendance" />} />
+              <Route path="hr/leave" element={<Stub title="Leave Management" />} />
+              <Route path="hr/contracts" element={<Stub title="Contracts" />} />
 
               {/* Expenses */}
               <Route path="expenses" element={<Expenses />} />
@@ -347,7 +353,7 @@ function App() {
                 <Route path="users" element={<Users />} />
                 <Route path="roles" element={<Roles />} />
                 <Route path="permissions" element={<Permissions />} />
-              </Route>
+              </Route >
 
               {/* Branches */}
               <Route path="branches" element={<Branches />} />
@@ -374,7 +380,7 @@ function App() {
               <Route path="reports/at-a-glance" element={<Reports />} />
               <Route path="reports/all" element={<Reports />} />
 
-              {/* Legacy */}
+              {/* Legacy (kept routable; removed from sidebar) */}
               <Route path="disbursements" element={<Disbursements />} />
               <Route path="bank" element={<Bank />} />
 

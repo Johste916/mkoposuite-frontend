@@ -92,13 +92,18 @@ const NAV = () => [
     ]
   },
 
-  { label: "E-Signatures", icon: <FiFileText />, to: "/esignatures" },
+  // ❌ E-Signatures removed from sidebar (route still exists)
 
   {
-    label: "Payroll", icon: <FiUserCheck />, to: "/payroll", children: [
+    label: "HR & Payroll", icon: <FiUserCheck />, to: "/payroll", children: [
       { label: "View Payroll", to: "/payroll" },
       { label: "Add Payroll", to: "/payroll/add" },
       { label: "Payroll Report", to: "/payroll/report" },
+      // New HR entries (routes are stubs so they won’t 404)
+      { label: "Employees", to: "/hr/employees" },
+      { label: "Attendance", to: "/hr/attendance" },
+      { label: "Leave Management", to: "/hr/leave" },
+      { label: "Contracts", to: "/hr/contracts" },
     ]
   },
 
@@ -168,12 +173,7 @@ const NAV = () => [
     ]
   },
 
-  {
-    label: "Legacy", icon: <FiFileText />, to: "/legacy", children: [
-      { label: "Disbursements (Legacy)", to: "/disbursements" },
-      { label: "Bank (Legacy)", to: "/bank" },
-    ]
-  },
+  // ❌ Legacy removed from sidebar (routes still exist)
 ];
 
 /* ---------- Helpers ---------- */
