@@ -53,7 +53,7 @@ const BulkRepayments = lazy(() => import("./pages/repayments/BulkRepayments"));
 const RepaymentCharts = lazy(() => import("./pages/repayments/RepaymentCharts"));
 const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayments"));
 
-// Misc Existing (legacy)
+// Misc (legacy)
 const Reports = lazy(() => import("./pages/Reports"));
 const Disbursements = lazy(() => import("./pages/Disbursements"));
 const Sms = lazy(() => import("./pages/Sms"));
@@ -81,7 +81,7 @@ const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets
 const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
 const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
 
-// ✅ Savings module (combined)
+// ✅ Savings
 const Savings = lazy(() => import("./pages/Savings"));
 const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
 const UploadSavingsCSV = lazy(() => import("./pages/savings/UploadCSV"));
@@ -101,15 +101,11 @@ const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
 const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
 const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
 
-const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
+// ✅ NEW: real Settings pages
+const SettingsBilling = lazy(() => import("./pages/settings/Billing"));
+const SettingsTwoFA = lazy(() => import("./pages/settings/TwoFactor"));
 
-// Tiny inline placeholder
-const Stub = ({ title = "Coming soon" }) => (
-  <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
-    <h1 className="text-lg font-semibold">{title}</h1>
-    <p className="text-sm text-slate-500 mt-1">This screen is scaffolded and will be wired up next.</p>
-  </div>
-);
+const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
 function App() {
   return (
@@ -148,10 +144,10 @@ function App() {
               {/* Account */}
               <Route path="account/settings" element={<AccountSettings />} />
 
-              {/* Settings */}
-              <Route path="settings/billing" element={<Stub title="Billing Settings" />} />
+              {/* ✅ Settings (wired) */}
+              <Route path="settings/billing" element={<SettingsBilling />} />
               <Route path="settings/change-password" element={<AccountSettings />} />
-              <Route path="settings/2fa" element={<Stub title="Two-Factor Authentication" />} />
+              <Route path="settings/2fa" element={<SettingsTwoFA />} />
 
               {/* Borrowers */}
               <Route path="borrowers" element={<Borrowers />} />
@@ -162,8 +158,8 @@ function App() {
               <Route path="borrowers/reports" element={<BorrowerReports />} />
               <Route path="borrowers/:id" element={<BorrowerDetails />} />
               <Route path="borrowers/sms" element={<Sms />} />
-              <Route path="borrowers/email" element={<Stub title="Send Email to Borrowers" />} />
-              <Route path="borrowers/invite" element={<Stub title="Invite Borrowers" />} />
+              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Send Email to Borrowers</div>} />
+              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Invite Borrowers</div>} />
 
               {/* Groups */}
               <Route path="borrowers/groups" element={<BorrowerGroups />} />
@@ -278,7 +274,7 @@ function App() {
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
               <Route path="collections/sms" element={<Sms />} />
-              <Route path="collections/email" element={<Stub title="Send Collection Emails" />} />
+              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Send Collection Emails</div>} />
 
               {/* ✅ Savings */}
               <Route path="savings" element={<Savings />} />
@@ -289,30 +285,29 @@ function App() {
               <Route path="savings/transactions/csv" element={<UploadSavingsCSV />} />
               <Route path="savings/transactions/approve" element={<ApproveSavingsTx />} />
 
-              {/* Back-compat redirects from old /savings-transactions paths */}
+              {/* Back-compat redirects */}
               <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
               <Route path="savings-transactions/*" element={<Navigate to="/savings/transactions" replace />} />
 
               {/* Investors */}
               <Route path="investors" element={<Investors />} />
-              <Route path="investors/add" element={<Stub title="Add Investor" />} />
+              <Route path="investors/add" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Add Investor</div>} />
               <Route path="investors/sms" element={<Sms />} />
-              <Route path="investors/email" element={<Stub title="Send Email to Investors" />} />
-              <Route path="investors/invite" element={<Stub title="Invite Investors" />} />
+              <Route path="investors/email" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Send Email to Investors</div>} />
+              <Route path="investors/invite" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Invite Investors</div>} />
 
               {/* E-Signatures (kept routable; removed from sidebar) */}
               <Route path="esignatures" element={<ESignatures />} />
 
               {/* HR & Payroll */}
               <Route path="payroll" element={<Payroll />} />
-              <Route path="payroll/add" element={<Stub title="Add Payroll" />} />
-              <Route path="payroll/report" element={<Stub title="Payroll Report" />} />
-              {/* New HR stubs so sidebar links won’t 404 */}
-              <Route path="hr" element={<Stub title="HR" />} />
-              <Route path="hr/employees" element={<Stub title="Employees" />} />
-              <Route path="hr/attendance" element={<Stub title="Attendance" />} />
-              <Route path="hr/leave" element={<Stub title="Leave Management" />} />
-              <Route path="hr/contracts" element={<Stub title="Contracts" />} />
+              <Route path="payroll/add" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Add Payroll</div>} />
+              <Route path="payroll/report" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Payroll Report</div>} />
+              <Route path="hr" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">HR</div>} />
+              <Route path="hr/employees" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Employees</div>} />
+              <Route path="hr/attendance" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Attendance</div>} />
+              <Route path="hr/leave" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Leave Management</div>} />
+              <Route path="hr/contracts" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Contracts</div>} />
 
               {/* Expenses */}
               <Route path="expenses" element={<Expenses />} />
@@ -335,12 +330,12 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route path="other-income/add" element={<Stub title="Add Other Income" />} />
-              <Route path="other-income/csv" element={<Stub title="Upload Other Income CSV" />} />
+              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Add Other Income</div>} />
+              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Upload Other Income CSV</div>} />
 
               {/* Asset Management */}
               <Route path="assets" element={<Assets />} />
-              <Route path="assets/add" element={<Stub title="Add Asset" />} />
+              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Add Asset</div>} />
 
               {/* ACCOUNTING */}
               <Route path="accounting/chart-of-accounts" element={<ChartOfAccounts />} />
@@ -353,7 +348,7 @@ function App() {
                 <Route path="users" element={<Users />} />
                 <Route path="roles" element={<Roles />} />
                 <Route path="permissions" element={<Permissions />} />
-              </Route >
+              </Route>
 
               {/* Branches */}
               <Route path="branches" element={<Branches />} />
@@ -380,7 +375,7 @@ function App() {
               <Route path="reports/at-a-glance" element={<Reports />} />
               <Route path="reports/all" element={<Reports />} />
 
-              {/* Legacy (kept routable; removed from sidebar) */}
+              {/* Legacy (still routable) */}
               <Route path="disbursements" element={<Disbursements />} />
               <Route path="bank" element={<Bank />} />
 

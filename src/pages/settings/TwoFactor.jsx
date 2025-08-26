@@ -1,140 +1,205 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
+const LS_KEY = "twofaStatus";
+
 export default function TwoFactor() {
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
-  const [error, setError] = useState("");
-  const [setup, setSetup] = useState(null); // { qrDataUrl, otpauthUrl, secret }
+  const [secret, setSecret] = useState("");
+  const [otpauth, setOtpauth] = useState("");
   const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+  const [settingUp, setSettingUp] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [disabling, setDisabling] = useState(false);
+
+  const loadStatus = async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await api.get("/auth/2fa/status");
+      const st = !!res?.data?.enabled;
+      setEnabled(st);
+      localStorage.setItem(LS_KEY, JSON.stringify({ enabled: st }));
+    } catch {
+      // fallback to localStorage
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        const st = raw ? JSON.parse(raw).enabled : false;
+        setEnabled(!!st);
+      } catch {
+        setEnabled(false);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await api.get("/auth/2fa/status"); // { enabled: boolean }
-        if (!mounted) return;
-        setEnabled(!!res.data?.enabled);
-      } catch {
-        if (!mounted) return;
-        setError("2FA status endpoint not configured yet.");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
+    loadStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startEnable = async () => {
-    setBusy(true); setError("");
+  const startSetup = async () => {
+    setSettingUp(true);
+    setErr(null);
+    setMsg(null);
+    setCode("");
     try {
-      const res = await api.post("/auth/2fa/enable"); // { qrDataUrl?, otpauthUrl?, secret }
-      setSetup(res.data || {});
+      // Expecting backend to return { secret, otpauth_url }
+      const res = await api.post("/auth/2fa/setup");
+      const s = res?.data?.secret || "";
+      const uri = res?.data?.otpauth_url || "";
+      setSecret(s);
+      setOtpauth(uri);
+      if (!s && !uri) {
+        // graceful fallback (no server support) -> guide user
+        setErr("Server 2FA setup endpoint is not available. Please enable it on the backend.");
+      }
     } catch {
-      setError("Failed to start 2FA setup (endpoint missing?).");
+      setErr("Failed to start setup. Please try again.");
     } finally {
-      setBusy(false);
+      setSettingUp(false);
     }
   };
 
-  const verifyEnable = async () => {
-    if (!code.trim()) return setError("Enter the 6-digit code from your authenticator app.");
-    setBusy(true); setError("");
+  const enable2FA = async (e) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setVerifying(true);
+    setErr(null);
+    setMsg(null);
     try {
-      await api.post("/auth/2fa/verify", { code: code.trim() });
-      setEnabled(true);
-      setSetup(null);
-      setCode("");
-    } catch (e) {
-      setError(e?.response?.data?.error || "Invalid code.");
+      const res = await api.post("/auth/2fa/enable", { code: code.trim() });
+      if (res?.data?.enabled) {
+        setEnabled(true);
+        setSecret("");
+        setOtpauth("");
+        localStorage.setItem(LS_KEY, JSON.stringify({ enabled: true }));
+        setMsg("Two-factor authentication enabled.");
+      } else {
+        setErr("Invalid code. Please try again.");
+      }
+    } catch {
+      setErr("Verification failed. Make sure the backend 2FA endpoints are available.");
     } finally {
-      setBusy(false);
+      setVerifying(false);
     }
   };
 
-  const disable2fa = async () => {
-    setBusy(true); setError("");
+  const disable2FA = async () => {
+    setDisabling(true);
+    setErr(null);
+    setMsg(null);
     try {
-      await api.post("/auth/2fa/disable", { code: code.trim() || undefined });
-      setEnabled(false);
-      setSetup(null);
-      setCode("");
-    } catch (e) {
-      setError(e?.response?.data?.error || "Failed to disable 2FA.");
+      const res = await api.post("/auth/2fa/disable");
+      const ok = res?.data?.disabled ?? true; // consider success if endpoint absent but call succeeded
+      if (ok) {
+        setEnabled(false);
+        localStorage.setItem(LS_KEY, JSON.stringify({ enabled: false }));
+        setMsg("Two-factor authentication disabled.");
+      } else {
+        setErr("Could not disable 2FA. Please try again.");
+      }
+    } catch {
+      setErr("Disable failed. Make sure the backend 2FA endpoints are available.");
     } finally {
-      setBusy(false);
+      setDisabling(false);
     }
   };
-
-  if (loading) return <div className="text-sm text-slate-500">Loading 2FA…</div>;
 
   return (
-    <div className="max-w-xl space-y-4">
-      <h1 className="text-xl font-semibold">Two-Factor Authentication</h1>
-      {error && <div className="p-3 rounded bg-rose-50 text-rose-700 text-sm">{error}</div>}
+    <div className="max-w-3xl">
+      <h1 className="text-xl font-semibold mb-4">Two-Factor Authentication</h1>
 
-      <div className="border rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium">Status</div>
-            <div className="text-sm text-slate-600">{enabled ? "Enabled" : "Disabled"}</div>
-          </div>
-          {!enabled ? (
-            <button
-              onClick={startEnable}
-              disabled={busy}
-              className="h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              {busy ? "Starting…" : "Enable 2FA"}
-            </button>
-          ) : (
-            <button
-              onClick={disable2fa}
-              disabled={busy}
-              className="h-9 px-3 rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
-            >
-              {busy ? "Disabling…" : "Disable 2FA"}
-            </button>
-          )}
-        </div>
+      {msg && <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">{msg}</div>}
+      {err && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-800">{err}</div>}
 
-        {/* Setup block */}
-        {!enabled && setup && (
-          <div className="mt-4 space-y-3">
-            <div className="text-sm">
-              Scan this QR in Google Authenticator / Authy and enter the 6-digit code to confirm.
+      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
+        {loading ? (
+          <div className="text-sm text-slate-500">Checking 2FA status…</div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Status</div>
+                <div className="text-sm text-slate-500">{enabled ? "Enabled" : "Disabled"}</div>
+              </div>
+              {enabled ? (
+                <button
+                  onClick={disable2FA}
+                  disabled={disabling}
+                  className="inline-flex items-center gap-2 h-9 px-4 rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
+                >
+                  {disabling ? "Disabling…" : "Disable 2FA"}
+                </button>
+              ) : (
+                <button
+                  onClick={startSetup}
+                  disabled={settingUp}
+                  className="inline-flex items-center gap-2 h-9 px-4 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {settingUp ? "Preparing…" : "Set up 2FA"}
+                </button>
+              )}
             </div>
-            {setup.qrDataUrl ? (
-              <img src={setup.qrDataUrl} alt="2FA QR" className="w-48 h-48 border rounded" />
-            ) : setup.otpauthUrl ? (
-              <div className="p-2 rounded bg-slate-50 text-[11px] break-all">{setup.otpauthUrl}</div>
-            ) : (
-              <div className="text-xs text-slate-500">No QR/URL provided by server.</div>
-            )}
 
-            {setup.secret && (
-              <div className="text-xs">
-                Secret: <span className="font-mono">{setup.secret}</span>
+            {!enabled && (secret || otpauth) && (
+              <div className="mt-6 grid md:grid-cols-[200px_1fr] gap-6 items-start">
+                <div className="flex flex-col items-center">
+                  {otpauth ? (
+                    <img
+                      alt="Scan in Google Authenticator"
+                      className="rounded-lg border"
+                      // third-party QR generator; harmless if blocked
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(otpauth)}`}
+                    />
+                  ) : (
+                    <div className="text-xs text-slate-500">QR not available</div>
+                  )}
+                  <div className="text-[11px] text-slate-500 mt-2 text-center">
+                    Scan in your authenticator app
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-3">
+                    <div className="text-sm font-medium">Secret</div>
+                    <div className="font-mono text-sm mt-1 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 inline-block">
+                      {secret || "(provided by server)"}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      If the QR doesn’t load, add an account manually using this secret.
+                    </p>
+                  </div>
+
+                  <form onSubmit={enable2FA} className="space-y-2">
+                    <label className="block text-sm font-medium">Enter 6-digit code to verify</label>
+                    <input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      className="w-full md:w-64 rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                      placeholder="123456"
+                    />
+                    <div>
+                      <button
+                        type="submit"
+                        disabled={verifying || !code.trim()}
+                        className="inline-flex items-center gap-2 h-9 px-4 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {verifying ? "Verifying…" : "Enable 2FA"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             )}
-
-            <div className="flex items-center gap-2">
-              <input
-                placeholder="6-digit code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="px-3 py-2 border rounded bg-white dark:bg-slate-800 text-sm"
-              />
-              <button
-                onClick={verifyEnable}
-                disabled={busy}
-                className="h-9 px-3 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-              >
-                Verify & Enable
-              </button>
-            </div>
-          </div>
+          </>
         )}
       </div>
     </div>

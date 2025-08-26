@@ -71,7 +71,7 @@ const NAV = () => [
     ]
   },
 
-  /* ✅ Savings menu (trimmed, no Staff Transactions Report) */
+  /* ✅ Savings menu */
   {
     label: "Savings", icon: <BsBank />, to: "/savings", children: [
       { label: "View Savings", to: "/savings" },
@@ -92,14 +92,13 @@ const NAV = () => [
     ]
   },
 
-  // ❌ E-Signatures removed from sidebar (route still exists)
+  // ❌ E-Signatures removed from the sidebar (route still exists)
 
   {
     label: "HR & Payroll", icon: <FiUserCheck />, to: "/payroll", children: [
       { label: "View Payroll", to: "/payroll" },
       { label: "Add Payroll", to: "/payroll/add" },
       { label: "Payroll Report", to: "/payroll/report" },
-      // New HR entries (routes are stubs so they won’t 404)
       { label: "Employees", to: "/hr/employees" },
       { label: "Attendance", to: "/hr/attendance" },
       { label: "Leave Management", to: "/hr/leave" },
@@ -173,7 +172,7 @@ const NAV = () => [
     ]
   },
 
-  // ❌ Legacy removed from sidebar (routes still exist)
+  // ❌ Legacy removed from the sidebar (routes still exist)
 ];
 
 /* ---------- Helpers ---------- */
@@ -300,7 +299,7 @@ const SidebarLayout = () => {
 
     // ✅ load tenant from localStorage
     try {
-      const rawTenant = localStorage.getItem("tenant"); // preferred: { id, name, ... }
+      const rawTenant = localStorage.getItem("tenant");
       if (rawTenant) {
         const t = JSON.parse(rawTenant);
         setTenant(t);
@@ -314,9 +313,7 @@ const SidebarLayout = () => {
           if (tenantId) api.defaults.headers.common["x-tenant-id"] = tenantId;
         }
       }
-    } catch {
-      // ignore parse errors
-    }
+    } catch {}
 
     const storedBranch = localStorage.getItem("activeBranchId");
     if (storedBranch) setActiveBranchId(storedBranch);
@@ -404,7 +401,7 @@ const SidebarLayout = () => {
               )}
             </div>
 
-            <div className="hidden md:flex items-center gap-2 min-w-[280px] max-w-[640px] w-full">
+            <div className="hidden md:flex items-center gap-2 min-w={[280]} max-w-[640px] w-full">
               <div className="relative w-full">
                 <FiSearch className="absolute left-3 top-3 text-slate-400" />
                 <input
@@ -531,8 +528,7 @@ const SidebarLayout = () => {
         </main>
       </div>
 
-      {/* Mobile drawer */}
-      {/* (unchanged; omitted for brevity) */}
+      {/* Mobile drawer (unchanged) */}
     </div>
   );
 };

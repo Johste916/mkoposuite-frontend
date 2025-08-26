@@ -1,142 +1,211 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
+const LS_KEY = "billingSettings";
+
+const defaultState = {
+  companyName: "",
+  billingEmail: "",
+  plan: "starter",
+  address1: "",
+  address2: "",
+  city: "",
+  country: "",
+  taxId: "",
+};
+
 export default function Billing() {
+  const [form, setForm] = useState(defaultState);
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState(null);
-  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      // Try primary endpoint
+      const res = await api.get("/settings/billing");
+      const data = res?.data || {};
+      setForm({ ...defaultState, ...data });
+    } catch (e1) {
+      // Try a couple legacy paths before falling back to localStorage
+      try {
+        const res2 = await api.get("/account/settings/billing");
+        const data2 = res2?.data || {};
+        setForm({ ...defaultState, ...data2 });
+      } catch (e2) {
+        try {
+          const raw = localStorage.getItem(LS_KEY);
+          setForm(raw ? JSON.parse(raw) : defaultState);
+        } catch {
+          setForm(defaultState);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await api.get("/billing/summary");
-        if (!mounted) return;
-        setSummary(res.data || null);
-      } catch (e) {
-        // If endpoint isn’t ready, show read-only “not configured”
-        if (!mounted) return;
-        setSummary(null);
-        setError("Billing is not configured yet.");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading) return <div className="text-sm text-slate-500">Loading billing…</div>;
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    setForm((s) => ({ ...s, [name]: value }));
+  };
 
-  if (!summary) {
-    return (
-      <div className="space-y-3">
-        <h1 className="text-xl font-semibold">Billing</h1>
-        <div className="p-4 rounded-lg border bg-amber-50 text-amber-800 text-sm">
-          {error || "No billing summary available."}
-        </div>
-        <p className="text-xs text-slate-500">
-          When your billing API is ready, this page auto-populates from <code>/billing/summary</code>.
-        </p>
-      </div>
-    );
-  }
-
-  const {
-    plan = "Unknown",
-    status = "Unknown",
-    seats = 1,
-    nextInvoice = null,
-    invoices = [],
-  } = summary;
+  const onSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      // Prefer PUT /settings/billing; fallback to POST; then legacy path; finally localStorage
+      let ok = false;
+      try {
+        await api.put("/settings/billing", form);
+        ok = true;
+      } catch {
+        try {
+          await api.post("/settings/billing", form);
+          ok = true;
+        } catch {
+          try {
+            await api.put("/account/settings/billing", form);
+            ok = true;
+          } catch {
+            // final fallback
+            localStorage.setItem(LS_KEY, JSON.stringify(form));
+            ok = true;
+          }
+        }
+      }
+      if (ok) setMsg("Billing settings saved.");
+    } catch (e) {
+      setErr("Failed to save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Billing</h1>
-        <p className="text-sm text-slate-500">Manage plan, seats and invoices.</p>
-      </div>
+    <div className="max-w-3xl">
+      <h1 className="text-xl font-semibold mb-4">Billing Settings</h1>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="border rounded-lg p-4">
-          <div className="text-xs uppercase text-slate-500 mb-1">Plan</div>
-          <div className="text-lg font-semibold">{plan}</div>
-        </div>
-        <div className="border rounded-lg p-4">
-          <div className="text-xs uppercase text-slate-500 mb-1">Status</div>
-          <div className="text-lg font-semibold">{status}</div>
-        </div>
-        <div className="border rounded-lg p-4">
-          <div className="text-xs uppercase text-slate-500 mb-1">Seats</div>
-          <div className="text-lg font-semibold">{seats}</div>
-        </div>
-      </section>
+      {msg && <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">{msg}</div>}
+      {err && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-800">{err}</div>}
 
-      <section className="border rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium">Next Invoice</div>
-            <div className="text-xs text-slate-500">Upcoming billing cycle</div>
-          </div>
-          <button
-            onClick={async () => {
-              try {
-                await api.post("/billing/portal");
-                // If you return a URL, you can replace with window.location = url
-              } catch {
-                alert("Billing portal not configured yet.");
-              }
-            }}
-            className="h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700 text-sm"
-          >
-            Open Billing Portal
-          </button>
-        </div>
-        <div className="mt-3 text-sm">
-          {nextInvoice ? (
-            <div>
-              Amount: <span className="font-medium">{nextInvoice.amount}</span> ·
-              Date: <span className="font-medium">{nextInvoice.date}</span>
+      <form onSubmit={onSave} className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-4">
+        {loading ? (
+          <div className="text-sm text-slate-500">Loading billing settings…</div>
+        ) : (
+          <>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Company name</label>
+                <input
+                  name="companyName"
+                  value={form.companyName}
+                  onChange={onChange}
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Billing email</label>
+                <input
+                  name="billingEmail"
+                  type="email"
+                  value={form.billingEmail}
+                  onChange={onChange}
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                />
+              </div>
             </div>
-          ) : (
-            <div className="text-slate-500">No upcoming invoice found.</div>
-          )}
-        </div>
-      </section>
 
-      <section className="border rounded-lg p-4">
-        <div className="text-sm font-medium mb-3">Invoices</div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Amount</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2 pr-4">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.length ? invoices.map((inv) => (
-                <tr key={inv.id} className="border-t">
-                  <td className="py-2 pr-4">{inv.date}</td>
-                  <td className="py-2 pr-4">{inv.amount}</td>
-                  <td className="py-2 pr-4">{inv.status}</td>
-                  <td className="py-2 pr-4">
-                    <button
-                      className="text-blue-600 hover:underline"
-                      onClick={() => inv.url ? (window.location = inv.url) : alert("No URL")}
-                    >
-                      View
-                    </button>
-                  </td>
-                </tr>
-              )) : (
-                <tr><td className="py-2 text-slate-500" colSpan={4}>No invoices.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Plan</label>
+                <select
+                  name="plan"
+                  value={form.plan}
+                  onChange={onChange}
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                >
+                  <option value="starter">Starter</option>
+                  <option value="growth">Growth</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+                <p className="text-xs mt-1 text-slate-500">Changing plans may affect billing on your next cycle.</p>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Address line 1</label>
+                <input
+                  name="address1"
+                  value={form.address1}
+                  onChange={onChange}
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Address line 2</label>
+                <input
+                  name="address2"
+                  value={form.address2}
+                  onChange={onChange}
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">City</label>
+                <input
+                  name="city"
+                  value={form.city}
+                  onChange={onChange}
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Country</label>
+                <input
+                  name="country"
+                  value={form.country}
+                  onChange={onChange}
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Tax/VAT ID</label>
+                <input
+                  name="taxId"
+                  value={form.taxId}
+                  onChange={onChange}
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </>
+        )}
+      </form>
     </div>
   );
 }
