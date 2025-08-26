@@ -1,4 +1,3 @@
-// src/components/SidebarLayout.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -72,10 +71,14 @@ const NAV = () => [
     ]
   },
 
+  /* ✅ Combined Savings module (accounts + transactions nested here) */
   {
     label: "Savings", icon: <BsBank />, to: "/savings", children: [
       { label: "View Accounts", to: "/savings" },
-      { label: "Add Account", to: "/savings/add" },
+      { label: "View Transactions", to: "/savings/transactions" },
+      { label: "Upload CSV", to: "/savings/transactions/csv" },
+      { label: "Staff Transactions Report", to: "/savings/transactions/staff-report" },
+      { label: "Approve Transactions", to: "/savings/transactions/approve" },
       { label: "Savings Charts", to: "/savings/charts" },
       { label: "Savings Report", to: "/savings/report" },
       { label: "Products Report", to: "/savings/products" },
@@ -84,15 +87,7 @@ const NAV = () => [
     ]
   },
 
-  {
-    label: "Savings Transactions", icon: <FiDatabase />, to: "/savings-transactions", children: [
-      { label: "View Transactions", to: "/savings-transactions" },
-      { label: "Add Bulk Transactions", to: "/savings-transactions/bulk" },
-      { label: "Upload CSV", to: "/savings-transactions/csv" },
-      { label: "Staff Transactions Report", to: "/savings-transactions/staff-report" },
-      { label: "Approve Transactions", to: "/savings-transactions/approve" },
-    ]
-  },
+  /* ❌ Removed the separate “Savings Transactions” top-level group */
 
   {
     label: "Investors", icon: <FiUsers />, to: "/investors", children: [
@@ -359,8 +354,6 @@ const SidebarLayout = () => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    // optional: clear tenant if you want a fresh login to choose tenant
-    // localStorage.removeItem("tenant");
     navigate("/login");
   };
 

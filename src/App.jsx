@@ -82,13 +82,16 @@ const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets
 const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
 const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
 
+// ✅ Savings module (combined)
+const Savings = lazy(() => import("./pages/Savings"));
 const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
+
 const Investors = lazy(() => import("./pages/investors/Investors"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
-const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));          // ✅ working add page
-const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV")); // ✅ new CSV page
+const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
+const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV"));
 const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
 // ACCOUNTING
@@ -193,8 +196,7 @@ function App() {
                 }
               />
 
-              {/* Calculator restricted to Admin/Director.
-                  Rescheduling for staff uses /loans/schedule?loanId=… (gated to branch_manager+admin+director) */}
+              {/* Calculator & schedule */}
               <Route
                 path="loans/calculator"
                 element={
@@ -271,28 +273,29 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
-              {/* Optional legacy/aliases */}
               <Route path="collections/daily" element={<CollectionSheets />} />
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
               <Route path="collections/sms" element={<Sms />} />
               <Route path="collections/email" element={<Stub title="Send Collection Emails" />} />
 
-              {/* Savings */}
-              <Route path="savings" element={<Navigate to="/savings-transactions" replace />} />
-              <Route path="savings/add" element={<Stub title="Add Savings Account" />} />
+              {/* ✅ Savings (combined) */}
+              <Route path="savings" element={<Savings />} />
               <Route path="savings/charts" element={<Stub title="Savings Charts" />} />
               <Route path="savings/report" element={<Stub title="Savings Report" />} />
               <Route path="savings/products" element={<Stub title="Savings Products Report" />} />
               <Route path="savings/fees" element={<Stub title="Savings Fee Report" />} />
               <Route path="savings/cash-safe" element={<Stub title="Cash Safe Management" />} />
 
-              {/* Savings Transactions */}
-              <Route path="savings-transactions" element={<SavingsTransactions />} />
-              <Route path="savings-transactions/bulk" element={<Stub title="Add Bulk Savings Transactions" />} />
-              <Route path="savings-transactions/csv" element={<Stub title="Upload Savings CSV" />} />
-              <Route path="savings-transactions/staff-report" element={<Stub title="Staff Transactions Report" />} />
-              <Route path="savings-transactions/approve" element={<Stub title="Approve Savings Transactions" />} />
+              {/* Savings → Transactions (nested under /savings) */}
+              <Route path="savings/transactions" element={<SavingsTransactions />} />
+              <Route path="savings/transactions/csv" element={<Stub title="Upload Savings CSV" />} />
+              <Route path="savings/transactions/staff-report" element={<Stub title="Staff Transactions Report" />} />
+              <Route path="savings/transactions/approve" element={<Stub title="Approve Savings Transactions" />} />
+
+              {/* 🔁 Back-compat redirects from old /savings-transactions paths */}
+              <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
+              <Route path="savings-transactions/*" element={<Navigate to="/savings/transactions" replace />} />
 
               {/* Investors */}
               <Route path="investors" element={<Investors />} />

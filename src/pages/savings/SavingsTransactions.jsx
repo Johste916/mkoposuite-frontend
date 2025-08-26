@@ -3,8 +3,9 @@ import usePaginatedFetch from "../../hooks/usePaginatedFetch";
 import ListShell from "../../components/ListShell";
 
 export default function SavingsTransactions() {
+  // point to the combined nested API alias for clarity
   const { rows, total, page, setPage, limit, setLimit, q, setQ, loading, error } =
-    usePaginatedFetch({ url: "/savings-transactions" });
+    usePaginatedFetch({ url: "/savings/transactions" });
 
   const columns = [
     { key: "type", title: "Type" },

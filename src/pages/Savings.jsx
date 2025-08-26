@@ -1,58 +1,71 @@
-// src/pages/Savings.jsx
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { CSVLink } from 'react-csv';
+import api from '../api';
 
 const Savings = () => {
-  const API = import.meta.env.VITE_API_BASE_URL;
   const [transactions, setTransactions] = useState([]);
   const [totals, setTotals] = useState({});
   const [balance, setBalance] = useState(0);
-  const [filter, setFilter] = useState({ borrowerId: '', type: '', startDate: '', endDate: '' });
+  const [filter, setFilter] = useState({ borrowerId: '', type: '' });
   const [showModal, setShowModal] = useState(false);
   const [newTx, setNewTx] = useState({ borrowerId: '', type: 'deposit', amount: '', date: '', notes: '' });
+  const [error, setError] = useState('');
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const isAdmin = user?.role?.toLowerCase() === 'admin';
+  const isAdmin = (user?.role || '').toLowerCase() === 'admin';
 
   const fetchData = async () => {
+    setError('');
     try {
-      let query = `?`;
-      if (filter.borrowerId) query += `borrowerId=${filter.borrowerId}&`;
-      if (filter.type) query += `type=${filter.type}&`;
-      const res = await axios.get(`${API}/savings/borrower/${filter.borrowerId || 1}${query}`);
+      // Only fetch when borrowerId is provided
+      if (!filter.borrowerId) {
+        setTransactions([]);
+        setBalance(0);
+        setTotals({});
+        return;
+      }
+      const params = new URLSearchParams();
+      if (filter.type) params.set('type', filter.type);
+      const res = await api._get(`/savings/borrower/${filter.borrowerId}?${params.toString()}`);
       setTransactions(res.data.transactions || []);
       setBalance(res.data.balance || 0);
       setTotals(res.data.totals || {});
     } catch (err) {
-      console.error('Error loading savings:', err);
+      setError(err?.response?.data?.error || err?.normalizedMessage || 'Failed to load savings.');
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, [filter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter.borrowerId, filter.type]);
 
   const handleAddTransaction = async () => {
+    setError('');
     try {
-      await axios.post(`${API}/savings`, newTx);
+      const payload = { ...newTx };
+      if (!payload.borrowerId || !payload.type || !payload.amount || !payload.date) {
+        setError('Borrower, type, amount and date are required.');
+        return;
+      }
+      await api._post('/savings', payload);
       setShowModal(false);
       setNewTx({ borrowerId: '', type: 'deposit', amount: '', date: '', notes: '' });
       fetchData();
     } catch (err) {
-      alert('Failed to save');
+      setError(err?.response?.data?.error || err?.normalizedMessage || 'Failed to save.');
     }
   };
 
   const handleReverse = async (id) => {
     if (!window.confirm('Reverse this transaction?')) return;
     try {
-      await axios.patch(`${API}/savings/${id}/reverse`);
+      await api._patch(`/savings/transactions/${id}/reverse`);
       fetchData();
     } catch (err) {
-      alert('Failed to reverse');
+      setError(err?.response?.data?.error || err?.normalizedMessage || 'Failed to reverse.');
     }
   };
 
@@ -76,41 +89,52 @@ const Savings = () => {
     ]),
   ];
 
+  const card = "bg-white dark:bg-slate-800 rounded-xl shadow p-4";
+
   return (
-    <div className="p-4">
+    <div className="p-0">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Savings</h2>
         <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded">+ Add Transaction</button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <input
-          type="number"
-          placeholder="Borrower ID"
-          value={filter.borrowerId}
-          onChange={e => setFilter({ ...filter, borrowerId: e.target.value })}
-          className="border px-2 py-1 rounded"
-        />
-        <select
-          value={filter.type}
-          onChange={e => setFilter({ ...filter, type: e.target.value })}
-          className="border px-2 py-1 rounded"
-        >
-          <option value="">All Types</option>
-          <option value="deposit">Deposit</option>
-          <option value="withdrawal">Withdrawal</option>
-          <option value="charge">Charge</option>
-          <option value="interest">Interest</option>
-        </select>
+      <div className={`${card} mb-4`}>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-xs font-medium mb-1">Borrower ID</label>
+            <input
+              type="number"
+              placeholder="Borrower ID"
+              value={filter.borrowerId}
+              onChange={e => setFilter({ ...filter, borrowerId: e.target.value })}
+              className="border px-3 py-2 rounded w-48 dark:bg-slate-700 dark:border-slate-600"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">Type</label>
+            <select
+              value={filter.type}
+              onChange={e => setFilter({ ...filter, type: e.target.value })}
+              className="border px-3 py-2 rounded w-48 dark:bg-slate-700 dark:border-slate-600"
+            >
+              <option value="">All Types</option>
+              <option value="deposit">Deposit</option>
+              <option value="withdrawal">Withdrawal</option>
+              <option value="charge">Charge</option>
+              <option value="interest">Interest</option>
+            </select>
+          </div>
+        </div>
+        {error && <div className="text-sm text-rose-600 mt-3">Error: {error}</div>}
       </div>
 
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-        <div className="p-4 bg-white shadow rounded">Balance: <strong>{balance}</strong></div>
-        <div className="p-4 bg-white shadow rounded">Deposits: <strong>{totals.deposits}</strong></div>
-        <div className="p-4 bg-white shadow rounded">Withdrawals: <strong>{totals.withdrawals}</strong></div>
-        <div className="p-4 bg-white shadow rounded">Charges: <strong>{totals.charges}</strong></div>
+        <div className={card}>Balance: <strong>{balance}</strong></div>
+        <div className={card}>Deposits: <strong>{totals.deposits || 0}</strong></div>
+        <div className={card}>Withdrawals: <strong>{totals.withdrawals || 0}</strong></div>
+        <div className={card}>Charges: <strong>{totals.charges || 0}</strong></div>
       </div>
 
       {/* Export */}
@@ -128,9 +152,9 @@ const Savings = () => {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border rounded shadow">
-          <thead className="bg-gray-100">
+      <div className="overflow-x-auto bg-white dark:bg-slate-800 border rounded shadow">
+        <table className="min-w-full">
+          <thead className="bg-gray-100 dark:bg-slate-700">
             <tr>
               <th className="p-2 border">Date</th>
               <th className="p-2 border">Type</th>
@@ -146,7 +170,7 @@ const Savings = () => {
                 <td className="border p-2">{tx.date}</td>
                 <td className="border p-2">{tx.type}</td>
                 <td className="border p-2">{tx.amount}</td>
-                <td className="border p-2">{tx.notes}</td>
+                <td className="border p-2">{tx.notes || '-'}</td>
                 <td className="border p-2">{tx.reversed ? 'Yes' : 'No'}</td>
                 {isAdmin && (
                   <td className="border p-2">
@@ -159,6 +183,13 @@ const Savings = () => {
                 )}
               </tr>
             ))}
+            {!transactions.length && (
+              <tr>
+                <td className="p-4 text-sm text-slate-500" colSpan={isAdmin ? 6 : 5}>
+                  {filter.borrowerId ? 'No transactions found.' : 'Enter a Borrower ID to view transactions.'}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -166,7 +197,7 @@ const Savings = () => {
       {/* Add Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded shadow-md w-full max-w-md">
             <h3 className="text-lg font-bold mb-4">Add Transaction</h3>
             <div className="space-y-3">
               <input
@@ -174,12 +205,12 @@ const Savings = () => {
                 placeholder="Borrower ID"
                 value={newTx.borrowerId}
                 onChange={e => setNewTx({ ...newTx, borrowerId: e.target.value })}
-                className="border px-3 py-2 w-full rounded"
+                className="border px-3 py-2 w-full rounded dark:bg-slate-800 dark:border-slate-700"
               />
               <select
                 value={newTx.type}
                 onChange={e => setNewTx({ ...newTx, type: e.target.value })}
-                className="border px-3 py-2 w-full rounded"
+                className="border px-3 py-2 w-full rounded dark:bg-slate-800 dark:border-slate-700"
               >
                 <option value="deposit">Deposit</option>
                 <option value="withdrawal">Withdrawal</option>
@@ -191,25 +222,26 @@ const Savings = () => {
                 placeholder="Amount"
                 value={newTx.amount}
                 onChange={e => setNewTx({ ...newTx, amount: e.target.value })}
-                className="border px-3 py-2 w-full rounded"
+                className="border px-3 py-2 w-full rounded dark:bg-slate-800 dark:border-slate-700"
               />
               <input
                 type="date"
                 value={newTx.date}
                 onChange={e => setNewTx({ ...newTx, date: e.target.value })}
-                className="border px-3 py-2 w-full rounded"
+                className="border px-3 py-2 w-full rounded dark:bg-slate-800 dark:border-slate-700"
               />
               <input
                 type="text"
                 placeholder="Notes"
                 value={newTx.notes}
                 onChange={e => setNewTx({ ...newTx, notes: e.target.value })}
-                className="border px-3 py-2 w-full rounded"
+                className="border px-3 py-2 w-full rounded dark:bg-slate-800 dark:border-slate-700"
               />
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowModal(false)} className="px-4 py-2 bg-gray-300 rounded">Cancel</button>
                 <button onClick={handleAddTransaction} className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
               </div>
+              {error && <div className="text-sm text-rose-600">Error: {error}</div>}
             </div>
           </div>
         </div>
