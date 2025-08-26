@@ -78,7 +78,6 @@ const NAV = () => [
       { label: "Transactions", to: "/savings/transactions" },
       { label: "Upload CSV", to: "/savings/transactions/csv" },
       { label: "Approve Transactions", to: "/savings/transactions/approve" },
-      { label: "Savings Charts", to: "/savings/charts" },
       { label: "Savings Report", to: "/savings/report" },
     ]
   },
