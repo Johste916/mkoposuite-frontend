@@ -86,8 +86,7 @@ const NAV = () => [
     label: "Investors", icon: <FiUsers />, to: "/investors", children: [
       { label: "View Investors", to: "/investors" },
       { label: "Add Investor", to: "/investors/add" },
-      { label: "Send SMS to All", to: "/investors/sms" },
-      { label: "Send Email to All", to: "/investors/email" },
+      // Removed: Send SMS to All, Send Email to All
       { label: "Invite Investors", to: "/investors/invite" },
     ]
   },
@@ -352,7 +351,7 @@ const SidebarLayout = () => {
     (async () => {
       try {
         const res = await api.get("/branches");
-        const list = Array.isArray(res.data) ? res.data : [];
+        const list = Array.isArray(res.data) ? res.data : (res.data?.data || []); // ✅ tolerate both shapes
         setBranches(list);
         if (list.length && !activeBranchId) setActiveBranchId(String(list[0].id));
       } catch {}

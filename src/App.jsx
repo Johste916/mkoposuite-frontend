@@ -89,6 +89,7 @@ const ApproveSavingsTx = lazy(() => import("./pages/savings/ApproveTransactions"
 
 // Biz ops
 const Investors = lazy(() => import("./pages/investors/Investors"));
+const AddInvestor = lazy(() => import("./pages/investors/AddInvestor")); // ✅ real add page
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
@@ -307,15 +308,8 @@ function App() {
 
               {/* Investors */}
               <Route path="investors" element={<Investors />} />
-              <Route
-                path="investors/add"
-                element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Add Investor</div>}
-              />
-              <Route path="investors/sms" element={<Sms />} />
-              <Route
-                path="investors/email"
-                element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Send Email to Investors</div>}
-              />
+              <Route path="investors/add" element={<AddInvestor />} />  {/* ✅ real add route */}
+              {/* Removed investors/sms and investors/email as requested */}
               <Route
                 path="investors/invite"
                 element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Invite Investors</div>}
