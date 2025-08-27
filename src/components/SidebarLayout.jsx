@@ -401,7 +401,7 @@ const SidebarLayout = () => {
               )}
             </div>
 
-            <div className="hidden md:flex items-center gap-2 min-w={[280]} max-w-[640px] w-full">
+            <div className="hidden md:flex items-center gap-2 min-w-[280px] max-w-[640px] w-full">
               <div className="relative w-full">
                 <FiSearch className="absolute left-3 top-3 text-slate-400" />
                 <input
@@ -454,21 +454,21 @@ const SidebarLayout = () => {
                 {settingsOpen && (
                   <div className="absolute right-0 mt-2 w-60 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 z-[60] p-2">
                     <NavLink
-                      to="/settings/billing"
+                      to="/billing"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                       onClick={() => setSettingsOpen(false)}
                     >
                       Billing
                     </NavLink>
                     <NavLink
-                      to="/settings/change-password"
+                      to="/change-password"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                       onClick={() => setSettingsOpen(false)}
                     >
                       Change Password
                     </NavLink>
                     <NavLink
-                      to="/settings/2fa"
+                      to="/2fa"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                       onClick={() => setSettingsOpen(false)}
                     >

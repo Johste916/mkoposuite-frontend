@@ -67,7 +67,7 @@ const Permissions = lazy(() => import("./pages/user-management/Permissions"));
 const Branches = lazy(() => import("./pages/Branches"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-// Admin hub + account
+// Admin hub + account hub
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
@@ -102,9 +102,10 @@ const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
 const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
 const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
 
-// ✅ NEW: real Settings pages (aligns with backend /api/account & /api/auth/2fa)
-const SettingsBilling = lazy(() => import("./pages/settings/Billing"));
-const SettingsTwoFA = lazy(() => import("./pages/settings/TwoFactor"));
+// ✅ Canonical account pages (match your actual files under /pages/account/*)
+const Billing = lazy(() => import("./pages/account/Billing"));
+const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
+const TwoFactor = lazy(() => import("./pages/account/TwoFactor"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
@@ -142,13 +143,18 @@ function App() {
                 <Route path=":slug" element={<AdminRouter />} />
               </Route>
 
-              {/* Account */}
+              {/* Account hub (tiles) */}
               <Route path="account/settings" element={<AccountSettings />} />
 
-              {/* ✅ Settings (wired to real pages) */}
-              <Route path="settings/billing" element={<SettingsBilling />} />
-              <Route path="settings/change-password" element={<AccountSettings />} />
-              <Route path="settings/2fa" element={<SettingsTwoFA />} />
+              {/* ✅ Canonical account routes */}
+              <Route path="billing" element={<Billing />} />
+              <Route path="change-password" element={<ChangePassword />} />
+              <Route path="2fa" element={<TwoFactor />} />
+
+              {/* ✅ Back-compat for any /settings/* links */}
+              <Route path="settings/billing" element={<Navigate to="/billing" replace />} />
+              <Route path="settings/change-password" element={<Navigate to="/change-password" replace />} />
+              <Route path="settings/2fa" element={<Navigate to="/2fa" replace />} />
 
               {/* Borrowers */}
               <Route path="borrowers" element={<Borrowers />} />
