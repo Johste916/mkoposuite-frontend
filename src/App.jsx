@@ -89,7 +89,8 @@ const ApproveSavingsTx = lazy(() => import("./pages/savings/ApproveTransactions"
 
 // Biz ops
 const Investors = lazy(() => import("./pages/investors/Investors"));
-const AddInvestor = lazy(() => import("./pages/investors/AddInvestor")); // ✅ real add page
+const AddInvestor = lazy(() => import("./pages/investors/AddInvestor"));
+const InvestorDetails = lazy(() => import("./pages/investors/InvestorDetails")); // ✅ details page
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
@@ -103,7 +104,7 @@ const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
 const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
 const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
 
-// ✅ Canonical account pages (match your actual files under /pages/account/*)
+// ✅ Canonical account pages
 const Billing = lazy(() => import("./pages/account/Billing"));
 const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const TwoFactor = lazy(() => import("./pages/account/TwoFactor"));
@@ -308,12 +309,9 @@ function App() {
 
               {/* Investors */}
               <Route path="investors" element={<Investors />} />
-              <Route path="investors/add" element={<AddInvestor />} />  {/* ✅ real add route */}
-              {/* Removed investors/sms and investors/email as requested */}
-              <Route
-                path="investors/invite"
-                element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Invite Investors</div>}
-              />
+              <Route path="investors/add" element={<AddInvestor />} />
+              <Route path="investors/:id" element={<InvestorDetails />} />
+              {/* ❌ removed investors/sms, investors/email, investors/invite */}
 
               {/* E-Signatures (route kept; you can hide it in sidebar) */}
               <Route path="esignatures" element={<ESignatures />} />
