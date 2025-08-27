@@ -1,25 +1,28 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import api from '../../api';
 
 export default function ChangePassword() {
-  const [oldPassword, setOld] = useState('');
-  const [newPassword, setNew] = useState('');
+  const [currentPassword, setCurrent] = useState('');
+  const [newPassword, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [msg, setMsg] = useState('');
-  const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
 
   const submit = async (e) => {
     e.preventDefault();
-    setMsg(''); setErr('');
-    if (newPassword !== confirm) return setErr('Passwords do not match');
-    if (newPassword.length < 8) return setErr('New password must be at least 8 characters');
+    setMsg(null); setErr(null);
+
+    if (newPassword !== confirm) {
+      setErr('New password and confirmation do not match.');
+      return;
+    }
 
     setSaving(true);
     try {
-      await api.post('/account/change-password', { oldPassword, newPassword });
-      setMsg('Password updated successfully');
-      setOld(''); setNew(''); setConfirm('');
+      const { data } = await api.post('/account/change-password', { currentPassword, newPassword });
+      setMsg(data?.message || 'Password updated.');
+      setCurrent(''); setNext(''); setConfirm('');
     } catch (e) {
       setErr(e?.response?.data?.message || 'Failed to change password');
     } finally {
@@ -28,22 +31,54 @@ export default function ChangePassword() {
   };
 
   return (
-    <div className="p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 max-w-md">
+    <div className="max-w-md bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
       <h1 className="text-lg font-semibold">Change Password</h1>
-      {msg && <div className="mt-2 text-sm text-emerald-600">{msg}</div>}
-      {err && <div className="mt-2 text-sm text-rose-600">{err}</div>}
-      <form className="mt-4 space-y-3" onSubmit={submit}>
-        <input className="w-full border rounded px-3 py-2 text-sm"
-               type="password" placeholder="Current password"
-               value={oldPassword} onChange={e=>setOld(e.target.value)} />
-        <input className="w-full border rounded px-3 py-2 text-sm"
-               type="password" placeholder="New password"
-               value={newPassword} onChange={e=>setNew(e.target.value)} />
-        <input className="w-full border rounded px-3 py-2 text-sm"
-               type="password" placeholder="Confirm new password"
-               value={confirm} onChange={e=>setConfirm(e.target.value)} />
-        <button disabled={saving}
-                className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
+      <p className="text-sm text-slate-500 mt-1">Set a strong password to keep your account secure.</p>
+
+      {msg && <div className="mt-3 text-sm text-emerald-600">{msg}</div>}
+      {err && <div className="mt-3 text-sm text-rose-600">{err}</div>}
+
+      <form onSubmit={submit} className="mt-4 space-y-3">
+        <div>
+          <label className="text-sm block mb-1">Current password</label>
+          <input
+            type="password"
+            className="w-full border rounded px-3 py-2 text-sm"
+            value={currentPassword}
+            onChange={(e) => setCurrent(e.target.value)}
+            required
+          />
+        </div>
+
+        <div>
+          <label className="text-sm block mb-1">New password</label>
+          <input
+            type="password"
+            className="w-full border rounded px-3 py-2 text-sm"
+            value={newPassword}
+            onChange={(e) => setNext(e.target.value)}
+            required
+            minLength={8}
+          />
+          <div className="text-xs text-slate-500 mt-1">Minimum 8 characters.</div>
+        </div>
+
+        <div>
+          <label className="text-sm block mb-1">Confirm new password</label>
+          <input
+            type="password"
+            className="w-full border rounded px-3 py-2 text-sm"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            required
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+        >
           {saving ? 'Saving…' : 'Update Password'}
         </button>
       </form>
