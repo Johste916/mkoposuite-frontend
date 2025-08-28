@@ -54,7 +54,6 @@ const RepaymentCharts = lazy(() => import("./pages/repayments/RepaymentCharts"))
 const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayments"));
 
 // Misc (legacy/back-compat)
-const Reports = lazy(() => import("./pages/Reports"));
 const Disbursements = lazy(() => import("./pages/Disbursements"));
 const Sms = lazy(() => import("./pages/Sms"));
 const Bank = lazy(() => import("./pages/Bank"));
@@ -108,6 +107,27 @@ const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
 const Billing = lazy(() => import("./pages/account/Billing"));
 const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const TwoFactor = lazy(() => import("./pages/account/TwoFactor"));
+
+/** Reports — dedicated pages */
+const BorrowersReport = lazy(() => import("./pages/reports/BorrowersReport"));
+const LoanReport = lazy(() => import("./pages/reports/LoanReport"));
+const ArrearsAging = lazy(() => import("./pages/reports/ArrearsAging"));
+const CollectionsReport = lazy(() => import("./pages/reports/CollectionsReport"));
+const CollectorReport = lazy(() => import("./pages/reports/CollectorReport"));
+const DeferredIncome = lazy(() => import("./pages/reports/DeferredIncome"));
+const DeferredIncomeMonthly = lazy(() => import("./pages/reports/DeferredIncomeMonthly"));
+const ProRataCollections = lazy(() => import("./pages/reports/ProRataCollections"));
+const DisbursementReport = lazy(() => import("./pages/reports/DisbursementReport"));
+const FeesReport = lazy(() => import("./pages/reports/FeesReport"));
+const LoanOfficerReport = lazy(() => import("./pages/reports/LoanOfficerReport"));
+const LoanProductsReport = lazy(() => import("./pages/reports/LoanProductsReport"));
+const MfrsRatios = lazy(() => import("./pages/reports/MfrsRatios"));
+const DailyReport = lazy(() => import("./pages/reports/DailyReport"));
+const MonthlyReport = lazy(() => import("./pages/reports/MonthlyReport"));
+const OutstandingReport = lazy(() => import("./pages/reports/OutstandingReport"));
+const ParReport = lazy(() => import("./pages/reports/ParReport"));
+const AtAGlance = lazy(() => import("./pages/reports/AtAGlance"));
+const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
@@ -382,27 +402,31 @@ function App() {
               {/* Branches */}
               <Route path="branches" element={<Branches />} />
 
-              {/* Reports */}
-              <Route path="reports" element={<Reports />} />
-              <Route path="reports/borrowers" element={<Reports />} />
-              <Route path="reports/loans" element={<Reports />} />
-              <Route path="reports/arrears-aging" element={<Reports />} />
-              <Route path="reports/collections" element={<Reports />} />
-              <Route path="reports/collector" element={<Reports />} />
-              <Route path="reports/deferred-income" element={<Reports />} />
-              <Route path="reports/deferred-income-monthly" element={<Reports />} />
-              <Route path="reports/pro-rata" element={<Reports />} />
-              <Route path="reports/disbursement" element={<Reports />} />
-              <Route path="reports/fees" element={<Reports />} />
-              <Route path="reports/loan-officer" element={<Reports />} />
-              <Route path="reports/loan-products" element={<Reports />} />
-              <Route path="reports/mfrs" element={<Reports />} />
-              <Route path="reports/daily" element={<Reports />} />
-              <Route path="reports/monthly" element={<Reports />} />
-              <Route path="reports/outstanding" element={<Reports />} />
-              <Route path="reports/par" element={<Reports />} />
-              <Route path="reports/at-a-glance" element={<Reports />} />
-              <Route path="reports/all" element={<Reports />} />
+              {/* Reports (NEW: dedicated routes) */}
+              <Route path="reports" element={<Outlet />}>
+                {/* Default report when clicking “Reports” */}
+                <Route index element={<BorrowersReport />} />
+
+                <Route path="borrowers" element={<BorrowersReport />} />
+                <Route path="loans" element={<LoanReport />} />
+                <Route path="arrears-aging" element={<ArrearsAging />} />
+                <Route path="collections" element={<CollectionsReport />} />
+                <Route path="collector" element={<CollectorReport />} />
+                <Route path="deferred-income" element={<DeferredIncome />} />
+                <Route path="deferred-income-monthly" element={<DeferredIncomeMonthly />} />
+                <Route path="pro-rata" element={<ProRataCollections />} />
+                <Route path="disbursement" element={<DisbursementReport />} />
+                <Route path="fees" element={<FeesReport />} />
+                <Route path="loan-officer" element={<LoanOfficerReport />} />
+                <Route path="loan-products" element={<LoanProductsReport />} />
+                <Route path="mfrs" element={<MfrsRatios />} />
+                <Route path="daily" element={<DailyReport />} />
+                <Route path="monthly" element={<MonthlyReport />} />
+                <Route path="outstanding" element={<OutstandingReport />} />
+                <Route path="par" element={<ParReport />} />
+                <Route path="at-a-glance" element={<AtAGlance />} />
+                <Route path="all" element={<AllEntries />} />
+              </Route>
 
               {/* Legacy (still routable for back-compat) */}
               <Route path="disbursements" element={<Disbursements />} />
