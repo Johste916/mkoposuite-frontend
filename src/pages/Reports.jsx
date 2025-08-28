@@ -48,17 +48,20 @@ const Reports = () => {
   const [loanSummary, setLoanSummary] = useState(null);
   const [trends, setTrends] = useState([]);
   const [year] = useState(new Date().getFullYear());
+
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [branchId, setBranchId] = useState('');
   const [officerId, setOfficerId] = useState('');
   const [timeRange, setTimeRange] = useState('');
+
   const [loadingLoanSummary, setLoadingLoanSummary] = useState(true);
 
   useEffect(() => {
     fetchFilters();
     fetchSummary();
     fetchTrends();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -68,14 +71,14 @@ const Reports = () => {
 
   const fetchFilters = async () => {
     try {
-      const [branchesRes, officersRes] = await Promise.all([
-        api.get('/branches'),
-        api.get('/users', { params: { role: 'loan_officer' } }),
-      ]);
-      setBranches(Array.isArray(branchesRes.data) ? branchesRes.data : (branchesRes.data?.data || []));
-      setOfficers(Array.isArray(officersRes.data) ? officersRes.data : (officersRes.data?.data || []));
+      const res = await api.get('/reports/filters');
+      const data = res.data || {};
+      setBranches(Array.isArray(data.branches) ? data.branches : []);
+      setOfficers(Array.isArray(data.officers) ? data.officers : []);
     } catch (err) {
       console.error('Error loading filters:', err);
+      setBranches([]);
+      setOfficers([]);
     }
   };
 
@@ -85,6 +88,7 @@ const Reports = () => {
       setSummary(res.data || {});
     } catch (err) {
       console.error('Error loading summary:', err);
+      setSummary({});
     }
   };
 
@@ -109,6 +113,7 @@ const Reports = () => {
       setTrends(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Error loading trends:', err);
+      setTrends([]);
     }
   };
 
@@ -202,7 +207,7 @@ const Reports = () => {
         <select value={officerId} onChange={e => setOfficerId(e.target.value)} className="border rounded px-3 py-2">
           <option value="">All Loan Officers</option>
           {officers.map(officer => (
-            <option key={officer.id} value={officer.id}>{officer.name || officer.email}</option>
+            <option key={officer.id} value={officer.id}>{officer.name}</option>
           ))}
         </select>
 
@@ -263,7 +268,16 @@ const Reports = () => {
       {/* Chart */}
       <div className="bg-white rounded shadow p-4">
         <h2 className="text-lg font-semibold mb-2">Monthly Trend - {year}</h2>
-        <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, elements: { point: { radius: 2 } } }} height={260} />
+        <Line
+          data={chartData}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            elements: { point: { radius: 2 } }
+          }}
+          height={260}
+        />
       </div>
 
       {/* Export Buttons */}
