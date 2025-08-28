@@ -1,5 +1,6 @@
 // src/pages/Reports.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../api';
 import { format } from 'date-fns';
 import { Line } from 'react-chartjs-2';
@@ -16,7 +17,33 @@ import { Download, FileText } from 'lucide-react';
 
 ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Legend, Tooltip);
 
+const TITLE_BY_PATH = {
+  '/reports': 'Reports',
+  '/reports/borrowers': 'Borrowers Report',
+  '/reports/loans': 'Loan Report',
+  '/reports/arrears-aging': 'Loan Arrears Aging',
+  '/reports/collections': 'Collections Report',
+  '/reports/collector': 'Collector Report',
+  '/reports/deferred-income': 'Deferred Income',
+  '/reports/deferred-income-monthly': 'Deferred Income (Monthly)',
+  '/reports/pro-rata': 'Pro-Rata Collections',
+  '/reports/disbursement': 'Disbursement Report',
+  '/reports/fees': 'Fees Report',
+  '/reports/loan-officer': 'Loan Officer Report',
+  '/reports/loan-products': 'Loan Products Report',
+  '/reports/mfrs': 'MFRS Ratios',
+  '/reports/daily': 'Daily Report',
+  '/reports/monthly': 'Monthly Report',
+  '/reports/outstanding': 'Outstanding Report',
+  '/reports/par': 'Portfolio At Risk (PAR)',
+  '/reports/at-a-glance': 'At a Glance',
+  '/reports/all': 'All Entries',
+};
+
 const Reports = () => {
+  const location = useLocation();
+  const pageTitle = TITLE_BY_PATH[location.pathname] || 'Reports';
+
   const [summary, setSummary] = useState({});
   const [loanSummary, setLoanSummary] = useState(null);
   const [trends, setTrends] = useState([]);
@@ -36,16 +63,17 @@ const Reports = () => {
 
   useEffect(() => {
     fetchLoanSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, officerId, timeRange]);
 
   const fetchFilters = async () => {
     try {
       const [branchesRes, officersRes] = await Promise.all([
         api.get('/branches'),
-        api.get('/users?role=loan_officer'),
+        api.get('/users', { params: { role: 'loan_officer' } }),
       ]);
-      setBranches(branchesRes.data);
-      setOfficers(officersRes.data);
+      setBranches(Array.isArray(branchesRes.data) ? branchesRes.data : (branchesRes.data?.data || []));
+      setOfficers(Array.isArray(officersRes.data) ? officersRes.data : (officersRes.data?.data || []));
     } catch (err) {
       console.error('Error loading filters:', err);
     }
@@ -54,7 +82,7 @@ const Reports = () => {
   const fetchSummary = async () => {
     try {
       const res = await api.get('/reports/summary');
-      setSummary(res.data);
+      setSummary(res.data || {});
     } catch (err) {
       console.error('Error loading summary:', err);
     }
@@ -64,7 +92,7 @@ const Reports = () => {
     setLoadingLoanSummary(true);
     try {
       const res = await api.get('/reports/loan-summary', {
-        params: { branchId, officerId, timeRange },
+        params: { branchId: branchId || undefined, officerId: officerId || undefined, timeRange: timeRange || undefined },
       });
       setLoanSummary(res.data);
     } catch (err) {
@@ -77,19 +105,32 @@ const Reports = () => {
 
   const fetchTrends = async () => {
     try {
-      const res = await api.get(`/reports/trends?year=${year}`);
-      setTrends(res.data);
+      const res = await api.get(`/reports/trends`, { params: { year } });
+      setTrends(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Error loading trends:', err);
     }
   };
 
+  // Build export URLs using the same filters
+  const exportParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (branchId) params.set('branchId', branchId);
+    if (officerId) params.set('officerId', officerId);
+    if (timeRange) params.set('timeRange', timeRange);
+    return params.toString();
+  }, [branchId, officerId, timeRange]);
+
   const exportCSV = () => {
-    window.open(`${import.meta.env.VITE_API_BASE_URL}/reports/export-csv`, '_blank');
+    const base = import.meta.env.VITE_API_BASE_URL || api.defaults.baseURL || '';
+    const qs = exportParams ? `?${exportParams}` : '';
+    window.open(`${base}/reports/export/csv${qs}`, '_blank');
   };
 
   const exportPDF = () => {
-    window.open(`${import.meta.env.VITE_API_BASE_URL}/reports/export-pdf`, '_blank');
+    const base = import.meta.env.VITE_API_BASE_URL || api.defaults.baseURL || '';
+    const qs = exportParams ? `?${exportParams}` : '';
+    window.open(`${base}/reports/export/pdf${qs}`, '_blank');
   };
 
   const chartData = {
@@ -115,7 +156,7 @@ const Reports = () => {
 
     const csvRows = [
       ['Metric', 'Value'],
-      ...Object.entries(loanSummary).map(([key, val]) => [key, val]),
+      ...Object.entries(loanSummary).map(([key, val]) => [key, typeof val === 'number' ? val : JSON.stringify(val)]),
     ];
 
     const csvContent = csvRows.map(row => row.join(',')).join('\n');
@@ -130,7 +171,7 @@ const Reports = () => {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold flex items-center gap-2">
         <FileText className="w-6 h-6 text-blue-600" />
-        Reports
+        {pageTitle}
       </h1>
 
       {/* Top Summary Boxes */}
@@ -207,7 +248,7 @@ const Reports = () => {
                   <tr key={key} className="border-t hover:bg-gray-50">
                     <td className="px-4 py-2 capitalize">{key.replace(/([A-Z])/g, ' $1')}</td>
                     <td className="px-4 py-2 font-medium text-gray-800">
-                      {typeof value === 'number' ? `TZS ${value.toLocaleString()}` : value}
+                      {typeof value === 'number' ? `TZS ${value.toLocaleString()}` : typeof value === 'object' ? JSON.stringify(value) : String(value)}
                     </td>
                   </tr>
                 ))}
@@ -222,7 +263,7 @@ const Reports = () => {
       {/* Chart */}
       <div className="bg-white rounded shadow p-4">
         <h2 className="text-lg font-semibold mb-2">Monthly Trend - {year}</h2>
-        <Line data={chartData} />
+        <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, elements: { point: { radius: 2 } } }} height={260} />
       </div>
 
       {/* Export Buttons */}
