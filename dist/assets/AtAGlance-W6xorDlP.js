@@ -1,0 +1,1 @@
+import{j as t}from"./index-BM4plt0o.js";import{R as e}from"./ReportShell-lgJNF6AV.js";function a(){return t.jsx(e,{title:"At a Glance",endpoint:"/reports/at-a-glance",columns:[]})}export{a as default};

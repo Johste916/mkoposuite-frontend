@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../api';
-import { format } from 'date-fns';
+import {
+  format,
+  startOfWeek, endOfWeek,
+  startOfMonth, endOfMonth,
+  startOfQuarter, endOfQuarter,
+  startOfYear, endOfYear
+} from 'date-fns';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -15,13 +21,71 @@ import { Download, FileText } from 'lucide-react';
 
 ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Legend, Tooltip);
 
+const ymd = (d) => format(d, 'yyyy-MM-dd');
 const currency = (n) => `TZS ${Number(n || 0).toLocaleString()}`;
 
+/** compute start/end based on the selected quick period */
+function computeRange(range) {
+  const today = new Date();
+  switch (range) {
+    case 'today':
+      return { startDate: ymd(today), endDate: ymd(today) };
+    case 'week':
+      return { startDate: ymd(startOfWeek(today, { weekStartsOn: 1 })), endDate: ymd(endOfWeek(today, { weekStartsOn: 1 })) };
+    case 'month':
+      return { startDate: ymd(startOfMonth(today)), endDate: ymd(endOfMonth(today)) };
+    case 'quarter':
+      return { startDate: ymd(startOfQuarter(today)), endDate: ymd(endOfQuarter(today)) };
+    case 'semiAnnual': {
+      // Current half-year (Jan–Jun or Jul–Dec)
+      const m = today.getMonth(); // 0..11
+      if (m <= 5) return { startDate: `${today.getFullYear()}-01-01`, endDate: `${today.getFullYear()}-06-30` };
+      return { startDate: `${today.getFullYear()}-07-01`, endDate: `${today.getFullYear()}-12-31` };
+    }
+    case 'annual':
+      return { startDate: ymd(startOfYear(today)), endDate: ymd(endOfYear(today)) };
+    default:
+      return { startDate: '', endDate: '' };
+  }
+}
+
+/** normalize the /reports/borrowers/loan-summary payload into flat metrics for the table */
+function normalizeLoanSummaryPayload(data) {
+  if (!data) return null;
+
+  // summary cards at top come from data.summary
+  const top = {
+    loanCount: Number(data?.summary?.loanCount || 0),
+    totalRepayments: Number(data?.summary?.totalRepayments || 0),
+    defaulterCount: Number(data?.summary?.defaulterCount || 0),
+  };
+
+  // detailed table = data.table.rows => [{metric, value, currency?}]
+  const rows = Array.isArray(data?.table?.rows) ? data.table.rows : [];
+  const get = (name) => {
+    const r = rows.find((x) => String(x.metric).toLowerCase() === String(name).toLowerCase());
+    return r?.value ?? 0;
+  };
+
+  const flat = {
+    totalLoansCount: Number(get('Total Loans Count')),
+    totalDisbursed: Number(get('Total Disbursed')),
+    totalRepayments: Number(get('Total Repayments')),
+    outstandingBalance: Number(get('Outstanding Balance')),
+    arrearsCount: Number(get('Arrears Count') || 0),
+    arrearsAmount: Number(get('Arrears Amount') || 0),
+    period: data?.table?.period || data?.period || '',
+    scope: data?.table?.scope || data?.scope || '',
+  };
+
+  return { top, flat };
+}
+
 const Reports = () => {
-  // high-level summary cards
+  // summary cards
   const [summary, setSummary] = useState({ loanCount: 0, totalRepayments: 0, defaulterCount: 0 });
 
-  // trends chart
+  // trends
   const [trends, setTrends] = useState([]);
   const [year] = useState(new Date().getFullYear());
 
@@ -45,9 +109,19 @@ const Reports = () => {
   // ---------- load base data ----------
   useEffect(() => {
     fetchFilters();
-    fetchSummary();
+    fetchSummary();  // uses the same endpoint as the table, just reads .summary
     fetchTrends();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // set derived dates when timeRange changes (except custom)
+  useEffect(() => {
+    if (timeRange && timeRange !== 'custom') {
+      const { startDate: s, endDate: e } = computeRange(timeRange);
+      setStartDate(s);
+      setEndDate(e);
+    }
+  }, [timeRange]);
 
   // re-fetch loan summary when scope changes
   useEffect(() => {
@@ -57,7 +131,7 @@ const Reports = () => {
 
   const fetchFilters = async () => {
     try {
-      const res = await api.get('/reports/filters');
+      const res = await api.get('/reports/filters'); // -> {branches, officers, borrowers, products}
       setBranches(res.data?.branches || []);
       setOfficers(res.data?.officers || []);
       setBorrowers(res.data?.borrowers || []);
@@ -66,25 +140,41 @@ const Reports = () => {
     }
   };
 
+  // Summary cards come from the same endpoint as the table: /reports/borrowers/loan-summary
   const fetchSummary = async () => {
     try {
-      const res = await api.get('/reports/summary');
-      setSummary(res.data || {});
+      const res = await api.get('/reports/borrowers/loan-summary');
+      const norm = normalizeLoanSummaryPayload(res.data);
+      if (norm) setSummary(norm.top);
     } catch (err) {
       console.error('Error loading summary:', err);
     }
   };
 
+  const makeParams = () => {
+    const p = {
+      branchId: branchId || undefined,
+      officerId: officerId || undefined,
+      borrowerId: borrowerId || undefined,
+    };
+    if (timeRange === 'custom') {
+      if (startDate) p.startDate = startDate;
+      if (endDate) p.endDate = endDate;
+    } else if (timeRange) {
+      const { startDate: s, endDate: e } = computeRange(timeRange);
+      if (s) p.startDate = s;
+      if (e) p.endDate = e;
+    }
+    return p;
+    };
+
   const fetchLoanSummary = async () => {
     setLoadingLoanSummary(true);
     try {
-      const params = { branchId, officerId, borrowerId, timeRange };
-      if (timeRange === 'custom') {
-        params.startDate = startDate || '';
-        params.endDate = endDate || '';
-      }
-      const res = await api.get('/reports/loan-summary', { params });
-      setLoanSummary(res.data);
+      const res = await api.get('/reports/borrowers/loan-summary', { params: makeParams() });
+      const norm = normalizeLoanSummaryPayload(res.data);
+      setLoanSummary(norm?.flat || null);
+      if (norm?.top) setSummary(norm.top); // keep top cards in sync
     } catch (err) {
       console.error('Error loading loan summary:', err);
       setLoanSummary(null);
@@ -95,7 +185,7 @@ const Reports = () => {
 
   const fetchTrends = async () => {
     try {
-      const res = await api.get(`/reports/trends?year=${year}`);
+      const res = await api.get(`/reports/loans/trends`, { params: { year } });
       setTrends(res.data || []);
     } catch (err) {
       console.error('Error loading trends:', err);
@@ -103,12 +193,15 @@ const Reports = () => {
   };
 
   const exportCSV = () => {
-    // canonical path; server also exposes back-compat /reports/export-csv
-    window.open(`${import.meta.env.VITE_API_BASE_URL}/reports/export/csv`, '_blank');
+    const base = import.meta.env.VITE_API_BASE_URL || '';
+    const qs = new URLSearchParams(makeParams()).toString();
+    window.open(`${base}/reports/loans/export/csv${qs ? `?${qs}` : ''}`, '_blank');
   };
 
   const exportPDF = () => {
-    window.open(`${import.meta.env.VITE_API_BASE_URL}/reports/export/pdf`, '_blank');
+    const base = import.meta.env.VITE_API_BASE_URL || '';
+    const qs = new URLSearchParams(makeParams()).toString();
+    window.open(`${base}/reports/loans/export/pdf${qs ? `?${qs}` : ''}`, '_blank');
   };
 
   const chartData = useMemo(() => ({
@@ -160,7 +253,7 @@ const Reports = () => {
           <label className="block text-xs text-slate-500 mb-1">Branch</label>
           <select value={branchId} onChange={e => setBranchId(e.target.value)} className="border rounded px-3 py-2 min-w-[180px]">
             <option value="">All Branches</option>
-            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name || `#${b.id}`}</option>)}
           </select>
         </div>
 
@@ -168,7 +261,7 @@ const Reports = () => {
           <label className="block text-xs text-slate-500 mb-1">Loan Officer</label>
           <select value={officerId} onChange={e => setOfficerId(e.target.value)} className="border rounded px-3 py-2 min-w-[200px]">
             <option value="">All Loan Officers</option>
-            {officers.map(o => <option key={o.id} value={o.id}>{o.name || o.email}</option>)}
+            {officers.map(o => <option key={o.id} value={o.id}>{o.name || o.email || `#${o.id}`}</option>)}
           </select>
         </div>
 
@@ -176,7 +269,7 @@ const Reports = () => {
           <label className="block text-xs text-slate-500 mb-1">Borrower</label>
           <select value={borrowerId} onChange={e => setBorrowerId(e.target.value)} className="border rounded px-3 py-2 min-w-[220px]">
             <option value="">All Borrowers</option>
-            {borrowers.map(br => <option key={br.id} value={br.id}>{br.name}</option>)}
+            {borrowers.map(br => <option key={br.id} value={br.id}>{br.name || `#${br.id}`}</option>)}
           </select>
         </div>
 
@@ -283,7 +376,6 @@ const Reports = () => {
                 </tr>
                 <tr className="border-t hover:bg-gray-50">
                   <td className="px-4 py-2">Scope</td>
-                  {/* FIX: show pretty scope text, not a JSON blob */}
                   <td className="px-4 py-2 font-medium">{loanSummary.scope || ''}</td>
                 </tr>
               </tbody>
