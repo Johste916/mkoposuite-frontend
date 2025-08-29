@@ -70,6 +70,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
+const Organization = lazy(() => import("./pages/account/Organization")); // ⬅️ NEW
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -102,8 +103,7 @@ const ChartOfAccounts = lazy(() => import("./pages/accounting/ChartOfAccounts"))
 const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
 const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
 const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
-// ✅ NEW: Manual Journal
-const ManualJournal = lazy(() => import("./pages/accounting/ManualJournal"));
+const ManualJournal = lazy(() => import("./pages/accounting/ManualJournal")); // ⬅️ NEW
 
 // ✅ Canonical account pages
 const Billing = lazy(() => import("./pages/account/Billing"));
@@ -169,6 +169,7 @@ function App() {
 
               {/* Account hub (tiles) */}
               <Route path="account/settings" element={<AccountSettings />} />
+              <Route path="account/organization" element={<Organization />} /> {/* ⬅️ NEW */}
 
               {/* ✅ Canonical account routes */}
               <Route path="billing" element={<Billing />} />
