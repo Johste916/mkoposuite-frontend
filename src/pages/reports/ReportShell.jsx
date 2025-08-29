@@ -23,7 +23,6 @@ const isPlainObject = (x) =>
 
 function stringifyMaybe(val) {
   if (val == null) return "";
-  // keep numbers/bools/strings as-is; stringify nested objects/arrays
   if (typeof val === "number" || typeof val === "boolean") return String(val);
   if (typeof val === "string") return val;
   try {
@@ -33,6 +32,7 @@ function stringifyMaybe(val) {
   }
 }
 
+/** ⬅️ FIX: CSV now stringifies objects/arrays instead of outputting [object Object] */
 function toCSV(rows) {
   if (!rows || !rows.length) return "";
   const cols = Array.from(
@@ -42,7 +42,7 @@ function toCSV(rows) {
     }, new Set())
   );
   const esc = (x) => {
-    const s = x == null ? "" : String(x);
+    const s = stringifyMaybe(x);
     return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return [
@@ -66,29 +66,19 @@ function extractServerColumns(raw) {
   return null;
 }
 
-/** Normalize API payloads into { rows, columns, meta }
- *  Priority:
- *    1) table.rows (+ table.columns) → metric or list table
- *    2) rows/items/buckets array
- *    3) object → collapse to [{metric,value}]
- */
+/** Normalize API payloads into { rows, columns, meta } */
 function normalizeData(raw, columnsProp) {
   let rows = [];
   let meta = isPlainObject(raw) ? raw : {};
-  // Server-specified columns win; else prop; else infer later
   let columns =
     extractServerColumns(raw) ||
     (Array.isArray(columnsProp) ? columnsProp.slice() : []);
 
-  // 1) Standard: table.rows
   if (Array.isArray(raw?.table?.rows)) {
     rows = raw.table.rows;
-  }
-  // 2) Common containers
-  else if (Array.isArray(raw?.rows)) rows = raw.rows;
+  } else if (Array.isArray(raw?.rows)) rows = raw.rows;
   else if (Array.isArray(raw?.items)) rows = raw.items;
   else if (Array.isArray(raw?.buckets)) rows = raw.buckets;
-  // 3) Collapse object to metric/value rows
   else if (raw && typeof raw === "object") {
     const entries = Object.entries(raw).filter(
       ([k]) => !["rows", "items", "buckets", "table", "columns"].includes(k)
@@ -100,13 +90,13 @@ function normalizeData(raw, columnsProp) {
         {
           key: "value",
           label: "Value",
-          fmt: (val) => (typeof val === "number" ? fmtTZS(val) : stringifyMaybe(val)),
+          fmt: (val) =>
+            typeof val === "number" ? fmtTZS(val) : stringifyMaybe(val),
         },
       ];
     }
   }
 
-  // If we still don’t have columns but we have object rows, infer from keys
   if (!columns.length && rows?.length && isPlainObject(rows[0])) {
     const keys = Object.keys(rows[0]).slice(0, 12);
     columns = keys.map((k) => ({ key: k, label: startCase(k) }));
@@ -136,24 +126,18 @@ function composeScopeLabel(params, meta) {
 /** ─── component ─────────────────────────────────────────────────────────── */
 export default function ReportShell({
   title = "Report",
-  endpoint,              // e.g. "/reports/loans/summary"
-  columns = [],          // optional: [{key,label,fmt?}]
-  exportCsvPath = "",    // optional server CSV path; fallback to client CSV
-  mode = "auto",         // "auto" | "snapshot" (hides filter block)
-  filters = {            // toggle filter controls per page
-    date: true,
-    branch: true,
-    officer: true,
-    borrower: true,
-  },
-  extraParams = {},      // constant query params to include
-  onAfterLoad,           // optional callback(data)
+  endpoint,
+  columns = [],
+  exportCsvPath = "",
+  mode = "auto",
+  filters = { date: true, branch: true, officer: true, borrower: true },
+  extraParams = {},
+  onAfterLoad,
 }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [raw, setRaw] = useState(null);
 
-  // Filters
   const todayISO = new Date().toISOString().slice(0, 10);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -162,7 +146,6 @@ export default function ReportShell({
   const [borrowerId, setBorrowerId] = useState("");
   const [borrowerQ, setBorrowerQ] = useState("");
 
-  // Options
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [borrowerSuggestions, setBorrowerSuggestions] = useState([]);
@@ -170,16 +153,14 @@ export default function ReportShell({
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
 
-  // Fetch options (non-blocking; server is multi-tenant safe)
+  // Fetch options
   useEffect(() => {
     (async () => {
       try {
         const { data } = await api.get("/reports/filters");
         setBranches(data?.branches || []);
         setOfficers(data?.officers || []);
-      } catch {
-        // optional, keep quiet
-      }
+      } catch {}
     })();
   }, []);
 
@@ -210,7 +191,6 @@ export default function ReportShell({
     [extraParams, startDate, endDate, branchId, officerId, borrowerId, filters]
   );
 
-  /** Load report */
   const load = async () => {
     if (!endpoint) return;
     setLoading(true);
@@ -230,8 +210,7 @@ export default function ReportShell({
     }
   };
 
-  // initial + when endpoint changes
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [endpoint]);
+  useEffect(() => { load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [endpoint]);
 
   const { rows, columns: cols, meta } = useMemo(
     () => normalizeData(raw, columns),
@@ -239,10 +218,18 @@ export default function ReportShell({
   );
   const scopeLabel = useMemo(() => composeScopeLabel(params, meta), [params, meta]);
 
-  /** Export CSV
-   *  - If exportCsvPath provided → open server exporter (tenanted)
-   *  - Else → build from normalized rows
-   */
+  /** Cell renderer with currency/percent hints support */
+  const renderCell = (c, r) => {
+    const val = r?.[c.key];
+    const isCurrency = r?.currency && (c.key === "value" || /amount|total|balance|olp/i.test(c.key));
+    const isPercent  = r?.percent  && (c.key === "value" || /par|ratio|yield|efficiency|achievement/i.test(c.key));
+
+    if (c.fmt) return c.fmt(val, r);
+    if (isPercent) return fmtPercent(Number(val || 0));
+    if (isCurrency && typeof val === "number") return fmtTZS(val);
+    return stringifyMaybe(val);
+  };
+
   const doExportCSV = () => {
     if (exportCsvPath) {
       const base = import.meta.env.VITE_API_BASE_URL || "";
@@ -267,21 +254,6 @@ export default function ReportShell({
     setOfficerId("");
     setBorrowerId("");
     setBorrowerQ("");
-  };
-
-  /** Cell renderer with currency/percent hints support */
-  const renderCell = (c, r) => {
-    const val = r?.[c.key];
-    // Metric tables often have flags on each row
-    const isCurrency = r?.currency && (c.key === "value" || /amount|total|balance|olp/i.test(c.key));
-    const isPercent  = r?.percent  && (c.key === "value" || /par|ratio|yield|efficiency|achievement/i.test(c.key));
-
-    if (c.fmt) return c.fmt(val, r);
-    if (isPercent) return fmtPercent(Number(val || 0));
-    if (isCurrency && typeof val === "number") return fmtTZS(val);
-
-    // Generic: avoid [object Object]
-    return stringifyMaybe(val);
   };
 
   return (
@@ -468,7 +440,15 @@ export default function ReportShell({
                   >
                     {cols.map((c) => (
                       <td key={c.key} className="px-3 py-2">
-                        {renderCell(c, r)}
+                        {(() => {
+                          const val = r?.[c.key];
+                          const isCurrency = r?.currency && (c.key === "value" || /amount|total|balance|olp/i.test(c.key));
+                          const isPercent  = r?.percent  && (c.key === "value" || /par|ratio|yield|efficiency|achievement/i.test(c.key));
+                          if (c.fmt) return c.fmt(val, r);
+                          if (isPercent) return fmtPercent(Number(val || 0));
+                          if (isCurrency && typeof val === "number") return fmtTZS(val);
+                          return stringifyMaybe(val);
+                        })()}
                       </td>
                     ))}
                   </tr>
@@ -479,7 +459,6 @@ export default function ReportShell({
         )}
       </div>
 
-      {/* Foot note (period/scope) */}
       {(meta?.period || meta?.scope) && (
         <div className="text-[12px] text-slate-500">
           {meta?.period ? `Period: ${meta.period}` : ""}{" "}
