@@ -81,12 +81,30 @@ function rowsFromSummary(summaryObj = {}) {
   };
 }
 
+/** Build rows from an At-a-Glance cards array */
+function rowsFromCards(cards = []) {
+  const rows = cards.map((c) => ({
+    metric: c?.title ?? "—",
+    value: c?.value ?? 0,
+    currency: !!c?.currency,
+    percent: !!c?.percent,
+  }));
+  return {
+    columns: [
+      { key: "metric", label: "Metric" },
+      { key: "value", label: "Value" },
+    ],
+    rows,
+  };
+}
+
 /** Normalize API payloads into { rows, columns, meta }
  *  Priority:
- *    1) table.rows (+ table.columns) → metric or list table
- *    2) summary → expand to {metric,value} rows
- *    3) rows/items/buckets array
- *    4) object → collapse to [{metric,value}]
+ *    1) table.rows (+ table.columns)
+ *    2) cards      → expand to {metric,value}
+ *    3) summary    → expand to {metric,value}
+ *    4) rows/items/buckets
+ *    5) object     → collapse to [{metric,value}] excluding non-row keys
  */
 function normalizeData(raw, columnsProp) {
   let rows = [];
@@ -106,21 +124,30 @@ function normalizeData(raw, columnsProp) {
   if (Array.isArray(raw?.table?.rows)) {
     rows = raw.table.rows;
   }
-  // 2) summary -> expand to metric/value rows
+  // 2) At-a-Glance cards
+  else if (Array.isArray(raw?.cards)) {
+    const out = rowsFromCards(raw.cards);
+    rows = out.rows;
+    if (!columns.length) columns = out.columns;
+  }
+  // 3) summary -> expand to metric/value rows
   else if (isPlainObject(raw?.summary)) {
     const out = rowsFromSummary(raw.summary);
     rows = out.rows;
     if (!columns.length) columns = out.columns;
   }
-  // 3) Common containers
+  // 4) Common containers
   else if (Array.isArray(raw?.rows)) rows = raw.rows;
   else if (Array.isArray(raw?.items)) rows = raw.items;
   else if (Array.isArray(raw?.buckets)) rows = raw.buckets;
-  // 4) Collapse object (excluding known non-row keys)
+  // 5) Collapse object (excluding known non-row keys)
   else if (raw && typeof raw === "object") {
-    const entries = Object.entries(raw).filter(
-      ([k]) => !["rows", "items", "buckets", "table", "columns", "summary", "period", "scope", "welcome", "asOf"].includes(k)
-    );
+    const EXCLUDE = new Set([
+      "rows", "items", "buckets", "table", "columns",
+      "summary", "period", "scope", "welcome", "asOf",
+      "cards", "trends", "totals", "ratios"
+    ]);
+    const entries = Object.entries(raw).filter(([k]) => !EXCLUDE.has(k));
     rows = entries.map(([k, v]) => ({ metric: startCase(k), value: v }));
     if (!columns.length) {
       columns = [
