@@ -1,9 +1,9 @@
 // src/pages/reports/ReportShell.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../api";
 import { FiDownload, FiRefreshCw, FiSearch } from "react-icons/fi";
 
-/** Small helpers */
+/** ─── helpers ──────────────────────────────────────────────────────────── */
 const startCase = (s) =>
   String(s || "")
     .replace(/[_\-]+/g, " ")
@@ -13,6 +13,25 @@ const startCase = (s) =>
     .replace(/^./, (c) => c.toUpperCase());
 
 const fmtTZS = (v) => `TZS ${Number(v || 0).toLocaleString()}`;
+const fmtPercent = (v) =>
+  typeof v === "number"
+    ? `${(v > 1 ? v : v * 100).toFixed(2)}%`
+    : String(v ?? "");
+
+const isPlainObject = (x) =>
+  Object.prototype.toString.call(x) === "[object Object]";
+
+function stringifyMaybe(val) {
+  if (val == null) return "";
+  // keep numbers/bools/strings as-is; stringify nested objects/arrays
+  if (typeof val === "number" || typeof val === "boolean") return String(val);
+  if (typeof val === "string") return val;
+  try {
+    return JSON.stringify(val);
+  } catch {
+    return String(val);
+  }
+}
 
 function toCSV(rows) {
   if (!rows || !rows.length) return "";
@@ -26,31 +45,53 @@ function toCSV(rows) {
     const s = x == null ? "" : String(x);
     return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
+  return [
+    cols.join(","),
+    ...rows.map((r) => cols.map((c) => esc(r[c])).join(",")),
+  ].join("\n");
 }
 
-/** Normalize whatever the API returns into { rows, columns, meta } */
+/** Prefer server columns when available. Accepts:
+ *  - raw.columns = [{key,label,fmt?}] or string[]
+ *  - raw.table.columns = same
+ */
+function extractServerColumns(raw) {
+  const srvCols = raw?.columns || raw?.table?.columns;
+  if (!srvCols) return null;
+  if (Array.isArray(srvCols)) {
+    return srvCols.map((c) =>
+      typeof c === "string" ? { key: c, label: startCase(c) } : c
+    );
+  }
+  return null;
+}
+
+/** Normalize API payloads into { rows, columns, meta }
+ *  Priority:
+ *    1) table.rows (+ table.columns) → metric or list table
+ *    2) rows/items/buckets array
+ *    3) object → collapse to [{metric,value}]
+ */
 function normalizeData(raw, columnsProp) {
   let rows = [];
-  let columns = Array.isArray(columnsProp) ? columnsProp.slice() : [];
-  let meta = typeof raw === "object" && raw && !Array.isArray(raw) ? raw : {};
+  let meta = isPlainObject(raw) ? raw : {};
+  // Server-specified columns win; else prop; else infer later
+  let columns =
+    extractServerColumns(raw) ||
+    (Array.isArray(columnsProp) ? columnsProp.slice() : []);
 
-  // 1) If it's already an array, use it
-  if (Array.isArray(raw)) {
-    rows = raw;
+  // 1) Standard: table.rows
+  if (Array.isArray(raw?.table?.rows)) {
+    rows = raw.table.rows;
   }
   // 2) Common containers
-  else if (Array.isArray(raw?.rows)) {
-    rows = raw.rows;
-  } else if (Array.isArray(raw?.items)) {
-    rows = raw.items;
-  } else if (Array.isArray(raw?.buckets)) {
-    rows = raw.buckets;
-  }
-  // 3) Plain object summary => turn into Metric/Value rows
+  else if (Array.isArray(raw?.rows)) rows = raw.rows;
+  else if (Array.isArray(raw?.items)) rows = raw.items;
+  else if (Array.isArray(raw?.buckets)) rows = raw.buckets;
+  // 3) Collapse object to metric/value rows
   else if (raw && typeof raw === "object") {
     const entries = Object.entries(raw).filter(
-      ([k]) => !["rows", "items", "buckets"].includes(k)
+      ([k]) => !["rows", "items", "buckets", "table", "columns"].includes(k)
     );
     rows = entries.map(([k, v]) => ({ metric: startCase(k), value: v }));
     if (!columns.length) {
@@ -59,23 +100,22 @@ function normalizeData(raw, columnsProp) {
         {
           key: "value",
           label: "Value",
-          fmt: (val) => (typeof val === "number" ? fmtTZS(val) : String(val ?? "")),
+          fmt: (val) => (typeof val === "number" ? fmtTZS(val) : stringifyMaybe(val)),
         },
       ];
     }
   }
 
   // If we still don’t have columns but we have object rows, infer from keys
-  if (!columns.length && rows && rows.length && typeof rows[0] === "object") {
-    const keys = Object.keys(rows[0]).slice(0, 10);
+  if (!columns.length && rows?.length && isPlainObject(rows[0])) {
+    const keys = Object.keys(rows[0]).slice(0, 12);
     columns = keys.map((k) => ({ key: k, label: startCase(k) }));
   }
 
-  // Guarantee arrays
   return { rows: Array.isArray(rows) ? rows : [], columns, meta };
 }
 
-/** Formats the "scope" text shown above the table */
+/** Compose a friendly scope line */
 function composeScopeLabel(params, meta) {
   if (meta?.scope && String(meta.scope).trim()) return String(meta.scope);
 
@@ -83,7 +123,6 @@ function composeScopeLabel(params, meta) {
   parts.push(params.branchId ? `Branch #${params.branchId}` : "All branches");
   parts.push(params.officerId ? `Officer #${params.officerId}` : "All officers");
   parts.push(params.borrowerId ? `Borrower #${params.borrowerId}` : "All borrowers");
-
   if (params.startDate || params.endDate) {
     const a = params.startDate || "…";
     const b = params.endDate || "…";
@@ -94,13 +133,21 @@ function composeScopeLabel(params, meta) {
   return parts.join(" · ");
 }
 
-/** Main component */
+/** ─── component ─────────────────────────────────────────────────────────── */
 export default function ReportShell({
   title = "Report",
-  endpoint,                    // e.g. "/reports/loans/summary"
-  columns = [],                // optional array of { key, label, fmt? }
-  exportCsvPath = "",          // optional server path for CSV, falls back to client CSV
-  mode = "auto",               // "auto" | "snapshot" (UI slightly simplified)
+  endpoint,              // e.g. "/reports/loans/summary"
+  columns = [],          // optional: [{key,label,fmt?}]
+  exportCsvPath = "",    // optional server CSV path; fallback to client CSV
+  mode = "auto",         // "auto" | "snapshot" (hides filter block)
+  filters = {            // toggle filter controls per page
+    date: true,
+    branch: true,
+    officer: true,
+    borrower: true,
+  },
+  extraParams = {},      // constant query params to include
+  onAfterLoad,           // optional callback(data)
 }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -115,39 +162,33 @@ export default function ReportShell({
   const [borrowerId, setBorrowerId] = useState("");
   const [borrowerQ, setBorrowerQ] = useState("");
 
-  // Filter options
+  // Options
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [borrowerSuggestions, setBorrowerSuggestions] = useState([]);
 
-  // Fetch options (non-blocking)
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
+
+  // Fetch options (non-blocking; server is multi-tenant safe)
   useEffect(() => {
     (async () => {
       try {
-        const [{ data: brs }, { data: ofs }] = await Promise.allSettled([
-          api.get("/branches"),
-          api.get("/users", { params: { role: "loan_officer", limit: 200 } }),
-        ]).then((settled) =>
-          settled.map((r) => (r.status === "fulfilled" ? r.value : { data: [] }))
-        );
-        setBranches(Array.isArray(brs) ? brs : brs?.data || []);
-        setOfficers(Array.isArray(ofs) ? ofs : ofs?.data || []);
+        const { data } = await api.get("/reports/filters");
+        setBranches(data?.branches || []);
+        setOfficers(data?.officers || []);
       } catch {
-        // harmless
+        // optional, keep quiet
       }
     })();
   }, []);
 
-  // Borrower typeahead (very lightweight)
+  // Borrower typeahead
   useEffect(() => {
     const q = borrowerQ.trim();
-    if (!q) {
-      setBorrowerSuggestions([]);
-      return;
-    }
+    if (!q) { setBorrowerSuggestions([]); return; }
     const t = setTimeout(async () => {
       try {
-        // you have a dedicated search router mounted at /api/borrowers/search
         const { data } = await api.get("/borrowers/search", { params: { q } });
         setBorrowerSuggestions(Array.isArray(data) ? data.slice(0, 8) : []);
       } catch {
@@ -159,44 +200,49 @@ export default function ReportShell({
 
   const params = useMemo(
     () => ({
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      branchId: branchId || undefined,
-      officerId: officerId || undefined,
-      borrowerId: borrowerId || undefined,
+      ...extraParams,
+      startDate: filters.date ? (startDate || undefined) : undefined,
+      endDate: filters.date ? (endDate || undefined) : undefined,
+      branchId: filters.branch ? (branchId || undefined) : undefined,
+      officerId: filters.officer ? (officerId || undefined) : undefined,
+      borrowerId: filters.borrower ? (borrowerId || undefined) : undefined,
     }),
-    [startDate, endDate, branchId, officerId, borrowerId]
+    [extraParams, startDate, endDate, branchId, officerId, borrowerId, filters]
   );
 
-  // Fetch data
+  /** Load report */
   const load = async () => {
     if (!endpoint) return;
     setLoading(true);
     setErr("");
     try {
       const { data } = await api.get(endpoint, { params });
+      if (!mounted.current) return;
       setRaw(data);
+      if (typeof onAfterLoad === "function") onAfterLoad(data);
     } catch (e) {
+      if (!mounted.current) return;
       console.error("Report load error:", e);
       setErr(e?.response?.data?.error || e?.message || "Failed to load report");
-      setRaw([]);
+      setRaw({ table: { rows: [] } });
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint]);
+  // initial + when endpoint changes
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [endpoint]);
 
   const { rows, columns: cols, meta } = useMemo(
     () => normalizeData(raw, columns),
     [raw, columns]
   );
-
   const scopeLabel = useMemo(() => composeScopeLabel(params, meta), [params, meta]);
 
+  /** Export CSV
+   *  - If exportCsvPath provided → open server exporter (tenanted)
+   *  - Else → build from normalized rows
+   */
   const doExportCSV = () => {
     if (exportCsvPath) {
       const base = import.meta.env.VITE_API_BASE_URL || "";
@@ -223,6 +269,21 @@ export default function ReportShell({
     setBorrowerQ("");
   };
 
+  /** Cell renderer with currency/percent hints support */
+  const renderCell = (c, r) => {
+    const val = r?.[c.key];
+    // Metric tables often have flags on each row
+    const isCurrency = r?.currency && (c.key === "value" || /amount|total|balance|olp/i.test(c.key));
+    const isPercent  = r?.percent  && (c.key === "value" || /par|ratio|yield|efficiency|achievement/i.test(c.key));
+
+    if (c.fmt) return c.fmt(val, r);
+    if (isPercent) return fmtPercent(Number(val || 0));
+    if (isCurrency && typeof val === "number") return fmtTZS(val);
+
+    // Generic: avoid [object Object]
+    return stringifyMaybe(val);
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -231,6 +292,18 @@ export default function ReportShell({
           <div>
             <h1 className="text-xl font-bold">{title}</h1>
             <div className="text-[12px] text-slate-500">{scopeLabel}</div>
+            {meta?.welcome && (
+              <div className="text-[12px] text-emerald-700 dark:text-emerald-400 mt-1">
+                {meta.welcome}
+              </div>
+            )}
+            {(meta?.asOf || meta?.period) && (
+              <div className="text-[12px] text-slate-500 mt-1">
+                {meta?.asOf ? `As Of: ${String(meta.asOf).slice(0, 10)}` : ""}
+                {meta?.asOf && meta?.period ? " · " : ""}
+                {meta?.period ? `Period: ${meta.period}` : ""}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -253,101 +326,119 @@ export default function ReportShell({
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <div className="flex items-center gap-2">
-            <label className="w-24 text-sm text-slate-600 dark:text-slate-300">Start</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              max={endDate || todayISO}
-              className="flex-1 px-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="w-24 text-sm text-slate-600 dark:text-slate-300">End</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              min={startDate || ""}
-              max={todayISO}
-              className="flex-1 px-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="w-24 text-sm text-slate-600 dark:text-slate-300">Branch</label>
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="flex-1 px-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
-            >
-              <option value="">All</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name || `#${b.id}`}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="w-24 text-sm text-slate-600 dark:text-slate-300">Officer</label>
-            <select
-              value={officerId}
-              onChange={(e) => setOfficerId(e.target.value)}
-              className="flex-1 px-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
-            >
-              <option value="">All</option>
-              {officers.map((o) => (
-                <option key={o.id} value={o.id}>{o.name || o.email || `#${o.id}`}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Borrower search + choose */}
-          <div className="md:col-span-2 flex items-center gap-2">
-            <label className="w-24 text-sm text-slate-600 dark:text-slate-300">Borrower</label>
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-3 top-3 text-slate-400" />
-              <input
-                value={borrowerQ}
-                onChange={(e) => setBorrowerQ(e.target.value)}
-                placeholder="Type to search borrowers…"
-                className="w-full pl-9 pr-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
-              />
-              {borrowerQ && borrowerSuggestions.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-slate-900 border rounded shadow max-h-56 overflow-auto">
-                  {borrowerSuggestions.map((b) => (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => {
-                        setBorrowerId(String(b.id));
-                        setBorrowerQ(b.name || b.phone || b.email || `Borrower #${b.id}`);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-                    >
-                      {(b.name || `Borrower #${b.id}`)}{" "}
-                      <span className="opacity-60">{b.phone || b.email || ""}</span>
-                    </button>
-                  ))}
+      {mode !== "snapshot" && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {filters.date && (
+              <>
+                <div className="flex items-center gap-2">
+                  <label className="w-24 text-sm text-slate-600 dark:text-slate-300">Start</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    max={endDate || new Date().toISOString().slice(0, 10)}
+                    className="flex-1 px-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
+                  />
                 </div>
-              )}
-            </div>
-            <button
-              onClick={() => load()}
-              className="h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
-            >
-              Apply
-            </button>
-            <button
-              onClick={clearFilters}
-              className="h-9 px-3 rounded border hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
-              Clear
-            </button>
+                <div className="flex items-center gap-2">
+                  <label className="w-24 text-sm text-slate-600 dark:text-slate-300">End</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    min={startDate || ""}
+                    max={todayISO}
+                    className="flex-1 px-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
+                  />
+                </div>
+              </>
+            )}
+
+            {filters.branch && (
+              <div className="flex items-center gap-2">
+                <label className="w-24 text-sm text-slate-600 dark:text-slate-300">Branch</label>
+                <select
+                  value={branchId}
+                  onChange={(e) => setBranchId(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
+                >
+                  <option value="">All</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name || `#${b.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {filters.officer && (
+              <div className="flex items-center gap-2">
+                <label className="w-24 text-sm text-slate-600 dark:text-slate-300">Officer</label>
+                <select
+                  value={officerId}
+                  onChange={(e) => setOfficerId(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
+                >
+                  <option value="">All</option>
+                  {(Array.isArray(officers) ? officers : []).map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name || o.email || `#${o.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Borrower search + choose */}
+            {filters.borrower && (
+              <div className="md:col-span-2 flex items-center gap-2">
+                <label className="w-24 text-sm text-slate-600 dark:text-slate-300">Borrower</label>
+                <div className="relative flex-1">
+                  <FiSearch className="absolute left-3 top-3 text-slate-400" />
+                  <input
+                    value={borrowerQ}
+                    onChange={(e) => setBorrowerQ(e.target.value)}
+                    placeholder="Type to search borrowers…"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded border bg-white dark:bg-slate-800"
+                  />
+                  {borrowerQ && borrowerSuggestions.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-white dark:bg-slate-900 border rounded shadow max-h-56 overflow-auto">
+                      {borrowerSuggestions.map((b) => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => {
+                            setBorrowerId(String(b.id));
+                            setBorrowerQ(b.name || b.phone || b.email || `Borrower #${b.id}`);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                        >
+                          {b.name || `Borrower #${b.id}`}{" "}
+                          <span className="opacity-60">{b.phone || b.email || ""}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => load()}
+                  className="h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={clearFilters}
+                  className="h-9 px-3 rounded border hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Results */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
@@ -371,15 +462,15 @@ export default function ReportShell({
               </thead>
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={i} className="border-t border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                    {cols.map((c) => {
-                      const val = r?.[c.key];
-                      return (
-                        <td key={c.key} className="px-3 py-2">
-                          {c.fmt ? c.fmt(val, r) : String(val ?? "")}
-                        </td>
-                      );
-                    })}
+                  <tr
+                    key={i}
+                    className="border-t border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                  >
+                    {cols.map((c) => (
+                      <td key={c.key} className="px-3 py-2">
+                        {renderCell(c, r)}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -388,10 +479,11 @@ export default function ReportShell({
         )}
       </div>
 
-      {/* Small foot note when server sends period/scope */}
+      {/* Foot note (period/scope) */}
       {(meta?.period || meta?.scope) && (
         <div className="text-[12px] text-slate-500">
-          {meta?.period ? `Period: ${meta.period}` : ""} {meta?.scope ? `· Scope: ${meta.scope}` : ""}
+          {meta?.period ? `Period: ${meta.period}` : ""}{" "}
+          {meta?.scope ? `· Scope: ${meta.scope}` : ""}
         </div>
       )}
     </div>
