@@ -1,15 +1,25 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
+const fmt = (n) => Number(n || 0).toLocaleString();
+
 export default function Cashflow() {
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = () => {
-    api.get("/accounting/cashflow-monthly", { params: { year } })
-      .then(res => setRows(res.data || []))
-      .catch(e => setError(e?.response?.data?.error || e.message));
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await api.get("/accounting/cashflow-monthly", { params: { year } });
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []); // initial
@@ -26,28 +36,35 @@ export default function Cashflow() {
           <button onClick={load} className="px-3 py-2 rounded bg-blue-600 text-white text-sm">Run</button>
         </div>
       </div>
+
       {error && <div className="text-red-500 text-sm mb-3">Error: {error}</div>}
-      <div className="overflow-auto">
-        <table className="w-full text-sm">
-          <thead><tr className="text-left border-b dark:border-gray-700">
-            <th className="px-3 py-2">Month</th>
-            <th className="px-3 py-2">Inflow</th>
-            <th className="px-3 py-2">Outflow</th>
-            <th className="px-3 py-2">Net</th>
-          </tr></thead>
-          <tbody>
-          {rows.map(r => (
-            <tr key={r.month} className="border-b dark:border-gray-700">
-              <td className="px-3 py-2">{r.month}</td>
-              <td className="px-3 py-2">{Number(r.inflow || 0).toLocaleString()}</td>
-              <td className="px-3 py-2">{Number(r.outflow || 0).toLocaleString()}</td>
-              <td className="px-3 py-2">{Number(r.net || 0).toLocaleString()}</td>
-            </tr>
-          ))}
-          {rows.length === 0 && <tr><td colSpan={4} className="px-3 py-8 text-center opacity-70">No data</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      {loading ? (
+        <div className="py-10 text-center opacity-70">Loading…</div>
+      ) : (
+        <div className="overflow-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b dark:border-gray-700">
+                <th className="px-3 py-2">Month</th>
+                <th className="px-3 py-2">Inflow</th>
+                <th className="px-3 py-2">Outflow</th>
+                <th className="px-3 py-2">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.month} className="border-b dark:border-gray-700">
+                  <td className="px-3 py-2">{r.month}</td>
+                  <td className="px-3 py-2">{fmt(r.inflow)}</td>
+                  <td className="px-3 py-2">{fmt(r.outflow)}</td>
+                  <td className="px-3 py-2">{fmt(r.net)}</td>
+                </tr>
+              ))}
+              {rows.length === 0 && <tr><td colSpan={4} className="px-3 py-8 text-center opacity-70">No data</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
