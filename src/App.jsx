@@ -1,3 +1,4 @@
+// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -92,6 +93,12 @@ const Investors = lazy(() => import("./pages/investors/Investors"));
 const AddInvestor = lazy(() => import("./pages/investors/AddInvestor"));
 const InvestorDetails = lazy(() => import("./pages/investors/InvestorDetails"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
+
+// 🔧 Expenses / Other Income (RESTORED to fix runtime error)
+const Expenses = lazy(() => import("./pages/expenses/Expenses"));
+const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
+const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV"));
+const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
 // HR & Payroll (real pages)
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
@@ -194,8 +201,14 @@ function App() {
               <Route path="borrowers/reports" element={<BorrowerReports />} />
               <Route path="borrowers/:id" element={<BorrowerDetails />} />
               <Route path="borrowers/sms" element={<Sms />} />
-              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>} />
-              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>} />
+              <Route
+                path="borrowers/email"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>}
+              />
+              <Route
+                path="borrowers/invite"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>}
+              />
 
               {/* Groups */}
               <Route path="borrowers/groups" element={<BorrowerGroups />} />
@@ -309,7 +322,10 @@ function App() {
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
               <Route path="collections/sms" element={<Sms />} />
-              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>} />
+              <Route
+                path="collections/email"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>}
+              />
 
               {/* ✅ Savings */}
               <Route path="savings" element={<Savings />} />
@@ -395,12 +411,21 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
-              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
+              <Route
+                path="other-income/add"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>}
+              />
+              <Route
+                path="other-income/csv"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>}
+              />
 
               {/* Asset Management */}
               <Route path="assets" element={<Assets />} />
-              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
+              <Route
+                path="assets/add"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>}
+              />
 
               {/* ── ACCOUNTING (grouped) ───────────────────────────────── */}
               <Route
