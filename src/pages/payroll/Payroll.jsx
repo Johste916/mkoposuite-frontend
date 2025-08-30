@@ -16,22 +16,21 @@ export default function Payroll() {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState("");
 
-  const isAdmin = useMemo(() => canAll(me), [me]);
+  // default to admin in dev if /auth/me is missing
+  const isAdmin = useMemo(() => (me ? canAll(me) : true), [me]);
 
   useEffect(() => {
     let unsub = false;
     (async () => {
       try {
-        const [{ data: meRes }, { data: empRes }] = await Promise.all([
+        const [meReq, empReq] = await Promise.allSettled([
           api.get("/auth/me"),
           api.get("/hr/employees", { params: { limit: 500 } }),
         ]);
         if (unsub) return;
-        setMe(meRes);
-        setEmployees(empRes?.items || []);
-      } catch (e) {
-        // soft-fail
-      }
+        if (meReq.status === "fulfilled") setMe(meReq.value.data || null);
+        if (empReq.status === "fulfilled") setEmployees(empReq.value.data?.items || []);
+      } catch { /* soft */ }
     })();
     return () => (unsub = true);
   }, []);
@@ -44,27 +43,24 @@ export default function Payroll() {
       if (!isAdmin) params.scope = "me";
       if (isAdmin && employeeId) params.employeeId = employeeId;
 
-      const [{ data: listRes }, { data: statsRes }] = await Promise.all([
+      const [listRes, statsRes] = await Promise.all([
         api.get("/hr/payroll/runs", { params }),
         api.get("/hr/payroll/stats", { params }),
       ]);
-      setRuns(listRes?.items || []);
-      setStats(statsRes || null);
+      setRuns(listRes?.data?.items || []);
+      setStats(statsRes?.data || null);
     } catch (e) {
       setError(
         e?.response?.data?.message ||
           e?.message ||
-          "Failed to load payroll. If this is a fresh environment, run backend DB migrations."
+          "Failed to load payroll."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchRuns(); // initial
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  useEffect(() => { fetchRuns(); /* initial */ }, [/* eslint-disable-line */ isAdmin]);
 
   return (
     <div className="space-y-4">
@@ -82,7 +78,6 @@ export default function Payroll() {
         </div>
       </header>
 
-      {/* filters */}
       <div className="bg-white border rounded-xl p-3 flex flex-wrap gap-2 items-end">
         <div>
           <label className="block text-xs text-gray-500">From</label>
@@ -106,7 +101,6 @@ export default function Payroll() {
         <button onClick={fetchRuns} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">Apply</button>
       </div>
 
-      {/* mini dashboard */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KPI title="Employees" value={stats.employees} tone="indigo" />
@@ -116,7 +110,6 @@ export default function Payroll() {
         </div>
       )}
 
-      {/* table */}
       <div className="bg-white border rounded-xl overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
@@ -139,22 +132,18 @@ export default function Payroll() {
               <tr><td className="p-3 text-gray-500" colSpan={7}>No payroll found.</td></tr>
             ) : (
               runs.map((r)=>(
-                <tr key={r.id} className="border-b">
+                <tr key={r.id || r.runId} className="border-b">
                   <td className="py-2 px-3">{r.periodLabel || `${r.periodFrom} → ${r.periodTo}`}</td>
-                  <td className="py-2 px-3">{r.employee?.name || r.employeeName}</td>
-                  <td className="py-2 px-3">TZS {Number(r.gross||0).toLocaleString()}</td>
-                  <td className="py-2 px-3">TZS {Number(r.deductions||0).toLocaleString()}</td>
-                  <td className="py-2 px-3 font-medium">TZS {Number(r.net||0).toLocaleString()}</td>
+                  <td className="py-2 px-3">{r.employee?.name || r.employeeName || '—'}</td>
+                  <td className="py-2 px-3">TZS {Number(r.totalGross || r.gross || 0).toLocaleString()}</td>
+                  <td className="py-2 px-3">TZS {Number(r.deductions || 0).toLocaleString()}</td>
+                  <td className="py-2 px-3 font-medium">TZS {Number(r.totalNet || r.net || 0).toLocaleString()}</td>
                   <td className="py-2 px-3">{r.status || "finalized"}</td>
                   <td className="py-2 px-3">
                     <div className="flex gap-2">
                       <a className="text-blue-600 underline text-xs" href={r.payslipUrl || "#"} target="_blank" rel="noreferrer">Payslip</a>
-                      {isAdmin && (
-                        <>
-                          <Link className="text-xs border rounded px-2 py-0.5" to={`/payroll/report?runId=${r.runId || r.batchId}`}>Run report</Link>
-                          <Link className="text-xs border rounded px-2 py-0.5" to={`/payroll/add?clone=${r.runId || r.batchId}`}>Clone</Link>
-                        </>
-                      )}
+                      <Link className="text-xs border rounded px-2 py-0.5" to={`/payroll/report?runId=${r.runId || r.id}`}>Run report</Link>
+                      <Link className="text-xs border rounded px-2 py-0.5" to={`/payroll/add?clone=${r.runId || r.id}`}>Clone</Link>
                     </div>
                   </td>
                 </tr>

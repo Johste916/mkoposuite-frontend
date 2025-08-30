@@ -17,19 +17,20 @@ export default function AddPayroll() {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
 
-  const allowed = useMemo(()=>canRun(me),[me]);
+  // Default-allow when /auth/me isn’t wired in dev
+  const allowed = useMemo(()=> me ? canRun(me) : true ,[me]);
 
   useEffect(() => {
     let cancel = false;
     (async () => {
       try {
-        const [{ data: meRes }, { data: empRes }] = await Promise.all([
+        const [meReq, empReq] = await Promise.allSettled([
           api.get("/auth/me"),
           api.get("/hr/employees", { params: { active: 1, limit: 1000 } }),
         ]);
         if (cancel) return;
-        setMe(meRes);
-        const items = (empRes?.items || []).map((e) => ({
+        if (meReq.status === "fulfilled") setMe(meReq.value.data || null);
+        const items = (empReq.status === "fulfilled" ? (empReq.value.data?.items || []) : []).map((e) => ({
           employeeId: e.id,
           name: `${e.firstName} ${e.lastName}`,
           base: Number(e.baseSalary || 0),
@@ -40,7 +41,7 @@ export default function AddPayroll() {
           savings: 0,
           loans: 0,
         }));
-        setEmployees(empRes?.items || []);
+        setEmployees(empReq.status === "fulfilled" ? (empReq.value.data?.items || []) : []);
         setLines(items);
       } catch (e) {
         setErr(e?.response?.data?.message || e.message);
@@ -52,14 +53,13 @@ export default function AddPayroll() {
   }, []);
 
   useEffect(()=>{
-    // cloning a previous run (optional)
     const clone = sp.get("clone");
     if (!clone) return;
     (async () => {
       try {
         const { data } = await api.get(`/hr/payroll/runs/${clone}`);
-        setFrom(data?.periodFrom || "");
-        setTo(data?.periodTo || "");
+        setFrom(data?.periodFrom || data?.periodStart || "");
+        setTo(data?.periodTo || data?.periodEnd || "");
         if (Array.isArray(data?.lines)) setLines(data.lines);
       } catch {}
     })();
