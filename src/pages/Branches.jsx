@@ -1,123 +1,191 @@
-import React, { useEffect, useState } from 'react';
-import api from '../api';
+import { useEffect, useMemo, useState } from "react";
+import api from "../api";
 
-const Branches = () => {
-  const [branches, setBranches] = useState([]);
-  const [newBranch, setNewBranch] = useState('');
-  const [showModal, setShowModal] = useState(false);
+const canManage = (me) =>
+  !!me && (
+    me.role === "admin" ||
+    me.role === "director" ||
+    me.role === "branch_manager" ||
+    me.permissions?.includes?.("branches:manage")
+  );
+
+export default function Branches() {
+  const [me, setMe] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [q, setQ] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: "", code: "", email: "", phone: "", address: "", status: "active" });
   const [editId, setEditId] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  const fetchBranches = async () => {
-    setLoading(true);
+  const allowed = useMemo(() => canManage(me), [me]);
+
+  const load = async () => {
+    setError("");
     try {
-      const res = await api.get('/branches');
-      // API returns { data: [...], meta: {...} }; but keep compat if array
-      const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
-      setBranches(list);
-    } finally {
-      setLoading(false);
+      const [{ data: meRes }, { data: listRes }] = await Promise.all([
+        api.get("/auth/me"),
+        api.get("/branches/list", { params: { q } }), // NOTE: uses /api/branches/list via baseURL
+      ]);
+      setMe(meRes);
+      setRows(listRes?.items || []);
+    } catch (e) {
+      const m = e?.response?.data?.error || e?.response?.data?.message || e.message;
+      setError(
+        (m || "").includes("Required table is missing")
+          ? "Required table is missing. Create the branches table (see backend SQL)."
+          : m
+      );
     }
   };
 
-  const handleSubmit = async () => {
-    if (!newBranch) return alert('Please enter branch name');
-    if (editId) {
-      await api.put(`/branches/${editId}`, { name: newBranch });
-    } else {
-      await api.post('/branches', { name: newBranch }); // code auto-generated backend
-    }
-    setNewBranch('');
-    setEditId(null);
-    setShowModal(false);
-    fetchBranches();
-  };
-
-  const handleEdit = (branch) => {
-    setNewBranch(branch.name);
-    setEditId(branch.id);
-    setShowModal(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (window.confirm('Delete this branch?')) {
-      await api.delete(`/branches/${id}`);
-      fetchBranches();
-    }
-  };
-
+  useEffect(() => { load(); /* initial */ }, []);
   useEffect(() => {
-    fetchBranches();
-  }, []);
+    const t = setTimeout(() => { if (q !== undefined) load(); }, 350);
+    return () => clearTimeout(t);
+  }, [q]); // debounce search
+
+  const submit = async () => {
+    if (!allowed) return;
+    if (!form.name || !form.code) { setError("Name and Code are required."); return; }
+    setSaving(true); setError("");
+    try {
+      if (editId) {
+        await api.put(`/branches/${editId}`, form);
+      } else {
+        await api.post("/branches", form);
+      }
+      setForm({ name: "", code: "", email: "", phone: "", address: "", status: "active" });
+      setEditId(null);
+      await load();
+    } catch (e) {
+      setError(e?.response?.data?.error || e?.response?.data?.message || e.message);
+    } finally { setSaving(false); }
+  };
+
+  const startEdit = (b) => {
+    setEditId(b.id);
+    setForm({
+      name: b.name || "",
+      code: b.code || "",
+      email: b.email || "",
+      phone: b.phone || "",
+      address: b.address || "",
+      status: b.status || "active",
+    });
+  };
+
+  const remove = async (id) => {
+    if (!allowed) return;
+    if (!window.confirm("Archive this branch?")) return;
+    try { await api.delete(`/branches/${id}`); await load(); }
+    catch (e) { setError(e?.response?.data?.error || e.message); }
+  };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Branches</h2>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-1 rounded">
-          + Add Branch
-        </button>
-      </div>
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Branches</h1>
+        <div className="flex items-center gap-2">
+          <input
+            className="border rounded-lg px-3 py-2 text-sm"
+            placeholder="Search name or code…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+      </header>
 
-      {loading ? (
-        <div className="text-sm text-slate-500">Loading…</div>
-      ) : (
-        <table className="min-w-full bg-white border rounded">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-4 py-2 text-left">Name</th>
-              <th className="px-4 py-2 text-left">Code</th>
-              <th className="px-4 py-2 text-left">City</th>
-              <th className="px-4 py-2 text-left">Phone</th>
-              <th className="px-4 py-2 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {branches.map((b) => (
-              <tr key={b.id} className="border-t">
-                <td className="px-4 py-2">{b.name}</td>
-                <td className="px-4 py-2">{b.code || '-'}</td>
-                <td className="px-4 py-2">{b.city || '-'}</td>
-                <td className="px-4 py-2">{b.phone || '-'}</td>
-                <td className="px-4 py-2 text-right space-x-2">
-                  <button onClick={() => handleEdit(b)} className="text-blue-600 hover:underline">Edit</button>
-                  <button onClick={() => handleDelete(b.id)} className="text-rose-600 hover:underline">Delete</button>
-                </td>
-              </tr>
-            ))}
-            {!branches.length && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">
-                  No branches yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
+      {error && <div className="text-sm text-red-600">{error}</div>}
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded w-full max-w-md shadow-md">
-            <h3 className="text-lg font-bold mb-4">{editId ? 'Edit Branch' : 'New Branch'}</h3>
-            <input
-              value={newBranch}
-              onChange={(e) => setNewBranch(e.target.value)}
-              className="w-full border px-3 py-2 mb-4 rounded"
-              placeholder="Branch name"
-            />
-            <div className="flex justify-end space-x-2">
-              <button onClick={() => setShowModal(false)} className="px-4 py-1 rounded border">Cancel</button>
-              <button onClick={handleSubmit} className="bg-blue-600 text-white px-4 py-1 rounded">
-                {editId ? 'Update' : 'Save'}
+      {/* Create / Edit */}
+      <div className={`bg-white border rounded-xl p-3 ${allowed ? "" : "opacity-60 pointer-events-none"}`}>
+        <div className="grid gap-2 md:grid-cols-6 items-end">
+          <div className="md:col-span-2">
+            <label className="block text-xs text-gray-500">Name</label>
+            <input className="border rounded px-2 py-1 text-sm w-full" value={form.name}
+                   onChange={(e)=>setForm(s=>({...s, name: e.target.value}))}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500">Code</label>
+            <input className="border rounded px-2 py-1 text-sm w-full" value={form.code}
+                   onChange={(e)=>setForm(s=>({...s, code: e.target.value}))}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500">Email</label>
+            <input className="border rounded px-2 py-1 text-sm w-full" value={form.email}
+                   onChange={(e)=>setForm(s=>({...s, email: e.target.value}))}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500">Phone</label>
+            <input className="border rounded px-2 py-1 text-sm w-full" value={form.phone}
+                   onChange={(e)=>setForm(s=>({...s, phone: e.target.value}))}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500">Status</label>
+            <select className="border rounded px-2 py-1 text-sm w-full" value={form.status}
+                    onChange={(e)=>setForm(s=>({...s, status: e.target.value}))}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+          <div className="md:col-span-3">
+            <label className="block text-xs text-gray-500">Address</label>
+            <input className="border rounded px-2 py-1 text-sm w-full" value={form.address}
+                   onChange={(e)=>setForm(s=>({...s, address: e.target.value}))}/>
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={submit} disabled={saving}
+                    className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">
+              {saving ? (editId ? "Saving…" : "Adding…") : (editId ? "Save" : "Add")}
+            </button>
+            {editId && (
+              <button onClick={()=>{ setEditId(null); setForm({ name:"", code:"", email:"", phone:"", address:"", status:"active" }); }}
+                      className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">
+                Cancel
               </button>
-            </div>
+            )}
           </div>
         </div>
-      )}
+        {!allowed && <p className="text-xs text-gray-500 mt-2">Only Admin / Director / Branch Manager can add or edit branches.</p>}
+      </div>
+
+      {/* List */}
+      <div className="bg-white border rounded-xl overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+          <tr className="text-left text-gray-600 border-b">
+            <th className="py-2 px-3">Name</th>
+            <th className="py-2 px-3">Code</th>
+            <th className="py-2 px-3">Phone</th>
+            <th className="py-2 px-3">Email</th>
+            <th className="py-2 px-3">Status</th>
+            <th className="py-2 px-3">Actions</th>
+          </tr>
+          </thead>
+          <tbody>
+          {rows.length === 0 ? (
+            <tr><td colSpan={6} className="p-3 text-gray-500">No branches.</td></tr>
+          ) : rows.map((b) => (
+            <tr key={b.id} className="border-b">
+              <td className="py-2 px-3">{b.name}</td>
+              <td className="py-2 px-3">{b.code}</td>
+              <td className="py-2 px-3">{b.phone || "—"}</td>
+              <td className="py-2 px-3">{b.email || "—"}</td>
+              <td className="py-2 px-3">{b.status || "active"}</td>
+              <td className="py-2 px-3">
+                <div className={`flex gap-2 ${allowed ? "" : "opacity-50 pointer-events-none"}`}>
+                  <button className="text-xs border rounded px-2 py-0.5" onClick={()=>startEdit(b)}>Edit</button>
+                  <button className="text-xs border rounded px-2 py-0.5" onClick={()=>remove(b.id)}>Archive</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
-};
-
-export default Branches;
+}

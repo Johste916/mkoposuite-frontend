@@ -1,1 +1,0 @@
-import{j as o}from"./index-Iq-s2r8X.js";import{R as t}from"./ReportShell-BdpQ1GZJ.js";function l(){return o.jsx(t,{title:"Pro-Rata Collections",endpoint:"/reports/pro-rata-collections",columns:[]})}export{l as default};
