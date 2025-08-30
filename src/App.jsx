@@ -10,7 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import SidebarLayout from "./components/SidebarLayout";
 
-// Feature config provider (Admin-controlled)
+// Admin-controlled feature flags
 import { FeatureConfigProvider } from "./context/FeatureConfigContext";
 // Toasts
 import { ToastProvider } from "./components/common/ToastProvider";
@@ -88,13 +88,11 @@ const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactio
 const UploadSavingsCSV = lazy(() => import("./pages/savings/UploadCSV"));
 const ApproveSavingsTx = lazy(() => import("./pages/savings/ApproveTransactions"));
 
-// Biz ops
+// Biz ops (MAKE SURE THESE ARE IMPORTED)
 const Investors = lazy(() => import("./pages/investors/Investors"));
 const AddInvestor = lazy(() => import("./pages/investors/AddInvestor"));
 const InvestorDetails = lazy(() => import("./pages/investors/InvestorDetails"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
-
-// 🔧 Expenses / Other Income (RESTORED to fix runtime error)
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
 const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
 const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV"));
@@ -178,16 +176,16 @@ function App() {
                 <Route path=":slug" element={<AdminRouter />} />
               </Route>
 
-              {/* Account hub (tiles) */}
+              {/* Account hub */}
               <Route path="account/settings" element={<AccountSettings />} />
               <Route path="account/organization" element={<Organization />} />
 
-              {/* ✅ Canonical account routes */}
+              {/* Canonical account */}
               <Route path="billing" element={<Billing />} />
               <Route path="change-password" element={<ChangePassword />} />
               <Route path="2fa" element={<TwoFactor />} />
 
-              {/* ✅ Back-compat for any /settings/* links */}
+              {/* Back-compat for /settings/* */}
               <Route path="settings/billing" element={<Navigate to="/billing" replace />} />
               <Route path="settings/change-password" element={<Navigate to="/change-password" replace />} />
               <Route path="settings/2fa" element={<Navigate to="/2fa" replace />} />
@@ -201,14 +199,8 @@ function App() {
               <Route path="borrowers/reports" element={<BorrowerReports />} />
               <Route path="borrowers/:id" element={<BorrowerDetails />} />
               <Route path="borrowers/sms" element={<Sms />} />
-              <Route
-                path="borrowers/email"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>}
-              />
-              <Route
-                path="borrowers/invite"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>}
-              />
+              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>} />
+              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>} />
 
               {/* Groups */}
               <Route path="borrowers/groups" element={<BorrowerGroups />} />
@@ -231,8 +223,6 @@ function App() {
                 }
               />
               <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
-
-              {/* Admin-only: Loan products */}
               <Route
                 path="loans/products"
                 element={
@@ -241,8 +231,6 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
-
-              {/* Calculator & schedule */}
               <Route
                 path="loans/calculator"
                 element={
@@ -261,8 +249,7 @@ function App() {
               />
               <Route path="loans/:id" element={<LoanDetails />} />
               <Route path="loans/:id/disburse" element={<DisburseLoan />} />
-
-              {/* Loans aliases */}
+              {/* Loan aliases */}
               <Route path="loans/due" element={<Navigate to="/loans/status/due" replace />} />
               <Route path="loans/missed" element={<Navigate to="/loans/status/missed" replace />} />
               <Route path="loans/arrears" element={<Navigate to="/loans/status/arrears" replace />} />
@@ -322,10 +309,7 @@ function App() {
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
               <Route path="collections/sms" element={<Sms />} />
-              <Route
-                path="collections/email"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>}
-              />
+              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>} />
 
               {/* ✅ Savings */}
               <Route path="savings" element={<Savings />} />
@@ -362,6 +346,7 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
+
               <Route path="hr" element={<Navigate to="/hr/employees" replace />} />
               <Route
                 path="hr/employees"
@@ -379,7 +364,7 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
-              {/* Leave: staff can open; approvals handled server-side */}
+              {/* Leave visible to staff; server enforces approvals */}
               <Route path="hr/leave" element={<HRLeave />} />
               <Route
                 path="hr/contracts"
@@ -411,21 +396,12 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route
-                path="other-income/add"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>}
-              />
-              <Route
-                path="other-income/csv"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>}
-              />
+              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
+              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
 
               {/* Asset Management */}
               <Route path="assets" element={<Assets />} />
-              <Route
-                path="assets/add"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>}
-              />
+              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
 
               {/* ── ACCOUNTING (grouped) ───────────────────────────────── */}
               <Route
@@ -458,7 +434,7 @@ function App() {
               {/* Branches */}
               <Route path="branches" element={<Branches />} />
 
-              {/* Reports (NEW: dedicated routes) */}
+              {/* Reports */}
               <Route path="reports" element={<Outlet />}>
                 <Route index element={<BorrowersReport />} />
                 <Route path="borrowers" element={<BorrowersReport />} />
@@ -482,7 +458,7 @@ function App() {
                 <Route path="all" element={<AllEntries />} />
               </Route>
 
-              {/* Legacy (still routable for back-compat) */}
+              {/* Legacy */}
               <Route path="disbursements" element={<Disbursements />} />
               <Route path="bank" element={<Bank />} />
 
