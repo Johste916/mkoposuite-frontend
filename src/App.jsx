@@ -70,7 +70,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
-const Organization = lazy(() => import("./pages/account/Organization")); // ⬅️ NEW
+const Organization = lazy(() => import("./pages/account/Organization"));
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -92,26 +92,22 @@ const Investors = lazy(() => import("./pages/investors/Investors"));
 const AddInvestor = lazy(() => import("./pages/investors/AddInvestor"));
 const InvestorDetails = lazy(() => import("./pages/investors/InvestorDetails"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
-const Payroll = lazy(() => import("./pages/payroll/Payroll"));
-const AddPayroll = lazy(() => import("./pages/payroll/AddPayroll"));        // ⬅️ NEW
-const PayrollReport = lazy(() => import("./pages/payroll/PayrollReport"));  // ⬅️ NEW
-const Expenses = lazy(() => import("./pages/expenses/Expenses"));
-const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
-const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV"));
-const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
-// HR (NEW)
-const HREmployees = lazy(() => import("./pages/hr/Employees"));   // ⬅️ NEW
-const HRAttendance = lazy(() => import("./pages/hr/Attendance")); // ⬅️ NEW
-const HRLeave = lazy(() => import("./pages/hr/Leave"));           // ⬅️ NEW
-const HRContracts = lazy(() => import("./pages/hr/Contracts"));   // ⬅️ NEW
+// HR & Payroll (real pages)
+const Payroll = lazy(() => import("./pages/payroll/Payroll"));
+const AddPayroll = lazy(() => import("./pages/payroll/AddPayroll"));
+const PayrollReport = lazy(() => import("./pages/payroll/PayrollReport"));
+const HREmployees = lazy(() => import("./pages/hr/Employees"));
+const HRAttendance = lazy(() => import("./pages/hr/Attendance"));
+const HRLeave = lazy(() => import("./pages/hr/Leave"));
+const HRContracts = lazy(() => import("./pages/hr/Contracts"));
 
 // ACCOUNTING
 const ChartOfAccounts = lazy(() => import("./pages/accounting/ChartOfAccounts"));
 const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
 const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
 const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
-const ManualJournal = lazy(() => import("./pages/accounting/ManualJournal")); // ⬅️ NEW
+const ManualJournal = lazy(() => import("./pages/accounting/ManualJournal"));
 
 // ✅ Canonical account pages
 const Billing = lazy(() => import("./pages/account/Billing"));
@@ -177,7 +173,7 @@ function App() {
 
               {/* Account hub (tiles) */}
               <Route path="account/settings" element={<AccountSettings />} />
-              <Route path="account/organization" element={<Organization />} /> {/* ⬅️ NEW */}
+              <Route path="account/organization" element={<Organization />} />
 
               {/* ✅ Canonical account routes */}
               <Route path="billing" element={<Billing />} />
@@ -332,15 +328,51 @@ function App() {
               {/* E-Signatures */}
               <Route path="esignatures" element={<ESignatures />} />
 
-              {/* HR & Payroll (NOW REAL PAGES) */}
+              {/* HR & Payroll */}
               <Route path="payroll" element={<Payroll />} />
-              <Route path="payroll/add" element={<AddPayroll />} />
-              <Route path="payroll/report" element={<PayrollReport />} />
+              <Route
+                path="payroll/add"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin"]}>
+                    <AddPayroll />
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="payroll/report"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin"]}>
+                    <PayrollReport />
+                  </RoleProtectedRoute>
+                }
+              />
               <Route path="hr" element={<Navigate to="/hr/employees" replace />} />
-              <Route path="hr/employees" element={<HREmployees />} />
-              <Route path="hr/attendance" element={<HRAttendance />} />
+              <Route
+                path="hr/employees"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
+                    <HREmployees />
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="hr/attendance"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
+                    <HRAttendance />
+                  </RoleProtectedRoute>
+                }
+              />
+              {/* Leave: staff can open; approvals handled server-side */}
               <Route path="hr/leave" element={<HRLeave />} />
-              <Route path="hr/contracts" element={<HRContracts />} />
+              <Route
+                path="hr/contracts"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
+                    <HRContracts />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Expenses */}
               <Route path="expenses" element={<Expenses />} />

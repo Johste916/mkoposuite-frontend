@@ -1,79 +1,100 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../../api";
 
-const money = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? `TZS ${n.toLocaleString()}` : "TZS —";
-};
-
 export default function PayrollReport() {
+  const [sp] = useSearchParams();
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [employees, setEmployees] = useState([]);
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+  const [sum, setSum] = useState({ gross:0, deductions:0, net:0 });
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true); setErr("");
-      try {
-        const { data } = await api.get("/payroll");
-        const items = Array.isArray(data) ? data : data?.items || data?.data || [];
-        setRows(items);
-      } catch (e) {
-        setErr(e?.response?.data?.error || e?.message || "Failed to load report.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const runId = sp.get("runId") || "";
 
-  const byPeriod = useMemo(() => {
-    const map = new Map();
-    for (const r of rows) {
-      const k = r.period || "—";
-      const prev = map.get(k) || { period: k, staff: 0, total: 0, count: 0 };
-      prev.staff += Number(r.staffCount) || 0;
-      prev.total += Number(r.total) || 0;
-      prev.count += 1;
-      map.set(k, prev);
+  useEffect(()=>{ (async()=>{
+    try {
+      const { data } = await api.get("/hr/employees", { params:{ limit:500 } });
+      setEmployees(data?.items || []);
+    } catch {}
+  })(); },[]);
+
+  const fetchReport = async ()=>{
+    setError("");
+    try{
+      const params = { from: from||undefined, to: to||undefined, employeeId: employeeId||undefined, runId: runId||undefined };
+      const { data } = await api.get("/hr/payroll/report", { params });
+      setRows(data?.items || []);
+      setSum(data?.summary || {gross:0,deductions:0,net:0});
+    }catch(e){
+      setError(e?.response?.data?.message || e.message);
     }
-    return Array.from(map.values()).sort((a, b) => (a.period > b.period ? -1 : 1));
-  }, [rows]);
+  };
+
+  useEffect(()=>{ if(runId) fetchReport(); /* auto if runId present */},[runId]);
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-        <h1 className="text-xl md:text-2xl font-semibold text-slate-900 dark:text-slate-100">Payroll Report</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400">Aggregated totals by period.</p>
+    <div className="space-y-3">
+      <h1 className="text-xl font-semibold">Payroll Report</h1>
+      <div className="bg-white border rounded-xl p-3 flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs text-gray-500">From</label>
+          <input type="date" className="border rounded px-2 py-1 text-sm" value={from} onChange={(e)=>setFrom(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500">To</label>
+          <input type="date" className="border rounded px-2 py-1 text-sm" value={to} onChange={(e)=>setTo(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500">Employee</label>
+          <select className="border rounded px-2 py-1 text-sm min-w-[220px]" value={employeeId} onChange={(e)=>setEmployeeId(e.target.value)}>
+            <option value="">All</option>
+            {employees.map(e=>(
+              <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>
+            ))}
+          </select>
+        </div>
+        <button onClick={fetchReport} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">Run</button>
       </div>
 
-      {err && <div className="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 p-3 text-sm">{err}</div>}
+      {error && <div className="text-red-600 text-sm">{error}</div>}
 
-      {loading ? (
-        <div className="h-24 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
-      ) : (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                <th className="py-2 px-3">Period</th>
-                <th className="py-2 px-3">Records</th>
-                <th className="py-2 px-3">Staff (sum)</th>
-                <th className="py-2 px-3">Total (sum)</th>
+      <div className="bg-white border rounded-xl overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-600 border-b">
+              <th className="py-2 px-3">Employee</th>
+              <th className="py-2 px-3">Period</th>
+              <th className="py-2 px-3">Gross</th>
+              <th className="py-2 px-3">Deductions</th>
+              <th className="py-2 px-3">Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length===0 ? (
+              <tr><td className="p-3 text-gray-500" colSpan={5}>No data</td></tr>
+            ) : rows.map(r=>(
+              <tr key={r.id} className="border-b">
+                <td className="py-2 px-3">{r.employee?.name || r.employeeName}</td>
+                <td className="py-2 px-3">{r.periodLabel || `${r.periodFrom} → ${r.periodTo}`}</td>
+                <td className="py-2 px-3">TZS {Number(r.gross||0).toLocaleString()}</td>
+                <td className="py-2 px-3">TZS {Number(r.deductions||0).toLocaleString()}</td>
+                <td className="py-2 px-3 font-medium">TZS {Number(r.net||0).toLocaleString()}</td>
               </tr>
-            </thead>
-            <tbody>
-              {byPeriod.map((r) => (
-                <tr key={r.period} className="border-b border-slate-100 dark:border-slate-800">
-                  <td className="py-2 px-3 font-medium text-slate-900 dark:text-slate-100">{r.period}</td>
-                  <td className="py-2 px-3">{r.count.toLocaleString()}</td>
-                  <td className="py-2 px-3">{r.staff.toLocaleString()}</td>
-                  <td className="py-2 px-3">{money(r.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="font-semibold">
+              <td className="py-2 px-3" colSpan={2}>Totals</td>
+              <td className="py-2 px-3">TZS {Number(sum.gross||0).toLocaleString()}</td>
+              <td className="py-2 px-3">TZS {Number(sum.deductions||0).toLocaleString()}</td>
+              <td className="py-2 px-3">TZS {Number(sum.net||0).toLocaleString()}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }

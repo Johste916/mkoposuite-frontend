@@ -1,172 +1,181 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiPlus, FiRefreshCw } from "react-icons/fi";
 import api from "../../api";
 
-const fmtMoney = (v) => {
-  const num = Number(v);
-  if (!Number.isFinite(num)) return "TZS —";
-  return `TZS ${num.toLocaleString()}`;
-};
-const fmtDate = (iso) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
-};
+const canAll = (u) =>
+  !!u && (u.role === "admin" || u.role === "director" || u.permissions?.includes("payroll:read_all"));
 
 export default function Payroll() {
+  const [me, setMe] = useState(null);
+  const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [employees, setEmployees] = useState([]);
+  const [stats, setStats] = useState(null);
   const [error, setError] = useState("");
-  const [items, setItems] = useState([]);
-  const [q, setQ] = useState("");
 
-  const load = async () => {
+  const isAdmin = useMemo(() => canAll(me), [me]);
+
+  useEffect(() => {
+    let unsub = false;
+    (async () => {
+      try {
+        const [{ data: meRes }, { data: empRes }] = await Promise.all([
+          api.get("/auth/me"),
+          api.get("/hr/employees", { params: { limit: 500 } }),
+        ]);
+        if (unsub) return;
+        setMe(meRes);
+        setEmployees(empRes?.items || []);
+      } catch (e) {
+        // soft-fail
+      }
+    })();
+    return () => (unsub = true);
+  }, []);
+
+  const fetchRuns = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await api.get("/payroll");
-      const data = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.data || [];
-      setItems(data);
+      const params = { from: from || undefined, to: to || undefined };
+      if (!isAdmin) params.scope = "me";
+      if (isAdmin && employeeId) params.employeeId = employeeId;
+
+      const [{ data: listRes }, { data: statsRes }] = await Promise.all([
+        api.get("/hr/payroll/runs", { params }),
+        api.get("/hr/payroll/stats", { params }),
+      ]);
+      setRuns(listRes?.items || []);
+      setStats(statsRes || null);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || "Failed to load payroll data.");
+      setError(
+        e?.response?.data?.message ||
+          e?.message ||
+          "Failed to load payroll. If this is a fresh environment, run backend DB migrations."
+      );
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter((p) =>
-      String(p.period || "").toLowerCase().includes(needle) ||
-      String(p.notes || "").toLowerCase().includes(needle) ||
-      String(p.branchName || "").toLowerCase().includes(needle)
-    );
-  }, [items, q]);
-
-  const totals = useMemo(() => {
-    let staff = 0, total = 0;
-    for (const r of filtered) {
-      staff += Number(r.staffCount) || 0;
-      total += Number(r.total) || 0;
-    }
-    return { staff, total };
-  }, [filtered]);
+  useEffect(() => {
+    fetchRuns(); // initial
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <h1 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-100">Payroll</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">Review payroll periods, headcount and totals.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Filter by period (YYYY-MM) or text…"
-              className="w-64 max-w-[70vw] px-3 py-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
-            />
-            <button onClick={load} className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-sm">
-              <FiRefreshCw /> Refresh
-            </button>
-            <Link to="/payroll/add" className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-sm">
-              <FiPlus /> Add Payroll
+      <header className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">View Payroll</h1>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <Link
+              to="/payroll/add"
+              className="px-3 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50"
+            >
+              Run Payroll
             </Link>
-          </div>
+          )}
         </div>
+      </header>
+
+      {/* filters */}
+      <div className="bg-white border rounded-xl p-3 flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs text-gray-500">From</label>
+          <input type="date" className="border rounded px-2 py-1 text-sm" value={from} onChange={(e)=>setFrom(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500">To</label>
+          <input type="date" className="border rounded px-2 py-1 text-sm" value={to} onChange={(e)=>setTo(e.target.value)} />
+        </div>
+        {isAdmin && (
+          <div>
+            <label className="block text-xs text-gray-500">Employee</label>
+            <select className="border rounded px-2 py-1 text-sm min-w-[220px]" value={employeeId} onChange={(e)=>setEmployeeId(e.target.value)}>
+              <option value="">All employees</option>
+              {employees.map((e)=>(
+                <option key={e.id} value={e.id}>{e.firstName} {e.lastName} {e.staffNo ? `(${e.staffNo})`:""}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <button onClick={fetchRuns} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">Apply</button>
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 p-3 text-sm">
-          {error}
+      {/* mini dashboard */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KPI title="Employees" value={stats.employees} tone="indigo" />
+          <KPI title="On Leave" value={stats.onLeave} tone="amber" />
+          <KPI title="Active Contracts" value={stats.activeContracts} tone="emerald" />
+          <KPI title="This Period Net" value={`TZS ${Number(stats.netThisPeriod||0).toLocaleString()}`} tone="blue" />
         </div>
       )}
 
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-sm text-slate-600 dark:text-slate-400">
-          No payroll records found.
-        </div>
-      ) : (
-        <>
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">Periods</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{filtered.length.toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 dark:text-slate-400">Staff (sum)</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.staff.toLocaleString()}</div>
-              </div>
-              <div className="col-span-2">
-                <div className="text-slate-500 dark:text-slate-400">Total (sum)</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{fmtMoney(totals.total)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Mobile cards */}
-          <div className="grid gap-3 md:hidden">
-            {filtered.map((p) => (
-              <div key={p.id || p.period} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm">
-                    <div className="font-semibold text-slate-900 dark:text-slate-100">Period: {p.period || "—"}</div>
-                    <div className="text-slate-600 dark:text-slate-400">Staff: {(Number(p.staffCount) || 0).toLocaleString()}</div>
-                  </div>
-                  <div className="text-right text-sm font-semibold text-slate-900 dark:text-slate-100">{fmtMoney(p.total)}</div>
-                </div>
-                {(p.processedAt || p.paidAt) && (
-                  <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    {p.processedAt && <>Processed: {fmtDate(p.processedAt)} </>}
-                    {p.paidAt && <span className="ml-2">Paid: {fmtDate(p.paidAt)}</span>}
-                  </div>
-                )}
-                {p.notes && <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{p.notes}</div>}
-              </div>
-            ))}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden md:block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                  <th className="py-2 px-3">Period</th>
-                  <th className="py-2 px-3">Staff</th>
-                  <th className="py-2 px-3">Total</th>
-                  <th className="py-2 px-3">Processed</th>
-                  <th className="py-2 px-3">Paid</th>
-                  <th className="py-2 px-3">Branch</th>
-                  <th className="py-2 px-3">Notes</th>
+      {/* table */}
+      <div className="bg-white border rounded-xl overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-600 border-b">
+              <th className="py-2 px-3">Period</th>
+              <th className="py-2 px-3">Employee</th>
+              <th className="py-2 px-3">Gross</th>
+              <th className="py-2 px-3">Deductions</th>
+              <th className="py-2 px-3">Net</th>
+              <th className="py-2 px-3">Status</th>
+              <th className="py-2 px-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td className="p-3 text-gray-500" colSpan={7}>Loading…</td></tr>
+            ) : error ? (
+              <tr><td className="p-3 text-red-600" colSpan={7}>{error}</td></tr>
+            ) : runs.length === 0 ? (
+              <tr><td className="p-3 text-gray-500" colSpan={7}>No payroll found.</td></tr>
+            ) : (
+              runs.map((r)=>(
+                <tr key={r.id} className="border-b">
+                  <td className="py-2 px-3">{r.periodLabel || `${r.periodFrom} → ${r.periodTo}`}</td>
+                  <td className="py-2 px-3">{r.employee?.name || r.employeeName}</td>
+                  <td className="py-2 px-3">TZS {Number(r.gross||0).toLocaleString()}</td>
+                  <td className="py-2 px-3">TZS {Number(r.deductions||0).toLocaleString()}</td>
+                  <td className="py-2 px-3 font-medium">TZS {Number(r.net||0).toLocaleString()}</td>
+                  <td className="py-2 px-3">{r.status || "finalized"}</td>
+                  <td className="py-2 px-3">
+                    <div className="flex gap-2">
+                      <a className="text-blue-600 underline text-xs" href={r.payslipUrl || "#"} target="_blank" rel="noreferrer">Payslip</a>
+                      {isAdmin && (
+                        <>
+                          <Link className="text-xs border rounded px-2 py-0.5" to={`/payroll/report?runId=${r.runId || r.batchId}`}>Run report</Link>
+                          <Link className="text-xs border rounded px-2 py-0.5" to={`/payroll/add?clone=${r.runId || r.batchId}`}>Clone</Link>
+                        </>
+                      )}
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => (
-                  <tr key={p.id || p.period} className="border-b border-slate-100 dark:border-slate-800">
-                    <td className="py-2 px-3 font-medium text-slate-900 dark:text-slate-100">{p.period || "—"}</td>
-                    <td className="py-2 px-3">{(Number(p.staffCount) || 0).toLocaleString()}</td>
-                    <td className="py-2 px-3">{fmtMoney(p.total)}</td>
-                    <td className="py-2 px-3">{fmtDate(p.processedAt)}</td>
-                    <td className="py-2 px-3">{fmtDate(p.paidAt)}</td>
-                    <td className="py-2 px-3">{p.branchName || "—"}</td>
-                    <td className="py-2 px-3 whitespace-pre-wrap max-w-[420px]">{p.notes || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function KPI({ title, value, tone="indigo" }) {
+  const tones = {
+    indigo:"text-indigo-600 bg-indigo-50", amber:"text-amber-600 bg-amber-50",
+    emerald:"text-emerald-600 bg-emerald-50", blue:"text-blue-600 bg-blue-50"
+  }[tone] || "text-slate-600 bg-slate-50";
+  return (
+    <div className="bg-white border rounded-xl p-3 flex items-center gap-3">
+      <div className={`px-2 py-1 rounded ${tones}`}>{title}</div>
+      <div className="font-semibold">{value ?? "—"}</div>
     </div>
   );
 }
