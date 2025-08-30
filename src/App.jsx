@@ -93,10 +93,18 @@ const AddInvestor = lazy(() => import("./pages/investors/AddInvestor"));
 const InvestorDetails = lazy(() => import("./pages/investors/InvestorDetails"));
 const ESignatures = lazy(() => import("./pages/esignatures/ESignatures"));
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
+const AddPayroll = lazy(() => import("./pages/payroll/AddPayroll"));        // ⬅️ NEW
+const PayrollReport = lazy(() => import("./pages/payroll/PayrollReport"));  // ⬅️ NEW
 const Expenses = lazy(() => import("./pages/expenses/Expenses"));
 const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
 const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV"));
 const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
+
+// HR (NEW)
+const HREmployees = lazy(() => import("./pages/hr/Employees"));   // ⬅️ NEW
+const HRAttendance = lazy(() => import("./pages/hr/Attendance")); // ⬅️ NEW
+const HRLeave = lazy(() => import("./pages/hr/Leave"));           // ⬅️ NEW
+const HRContracts = lazy(() => import("./pages/hr/Contracts"));   // ⬅️ NEW
 
 // ACCOUNTING
 const ChartOfAccounts = lazy(() => import("./pages/accounting/ChartOfAccounts"));
@@ -324,15 +332,15 @@ function App() {
               {/* E-Signatures */}
               <Route path="esignatures" element={<ESignatures />} />
 
-              {/* HR & Payroll */}
+              {/* HR & Payroll (NOW REAL PAGES) */}
               <Route path="payroll" element={<Payroll />} />
-              <Route path="payroll/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Payroll</div>} />
-              <Route path="payroll/report" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Payroll Report</div>} />
-              <Route path="hr" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">HR</div>} />
-              <Route path="hr/employees" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Employees</div>} />
-              <Route path="hr/attendance" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Attendance</div>} />
-              <Route path="hr/leave" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Leave Management</div>} />
-              <Route path="hr/contracts" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Contracts</div>} />
+              <Route path="payroll/add" element={<AddPayroll />} />
+              <Route path="payroll/report" element={<PayrollReport />} />
+              <Route path="hr" element={<Navigate to="/hr/employees" replace />} />
+              <Route path="hr/employees" element={<HREmployees />} />
+              <Route path="hr/attendance" element={<HRAttendance />} />
+              <Route path="hr/leave" element={<HRLeave />} />
+              <Route path="hr/contracts" element={<HRContracts />} />
 
               {/* Expenses */}
               <Route path="expenses" element={<Expenses />} />

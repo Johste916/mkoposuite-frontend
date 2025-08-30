@@ -1,21 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { FiPlus, FiRefreshCw } from "react-icons/fi";
-import api from "../../api"; // ✅ default import (fixes build)
-
-/**
- * Payroll list page
- * - Fetches from GET /api/payroll
- * - Renders mobile cards + desktop table
- * - Dark-mode safe styling
- */
+import api from "../../api";
 
 const fmtMoney = (v) => {
   const num = Number(v);
   if (!Number.isFinite(num)) return "TZS —";
   return `TZS ${num.toLocaleString()}`;
 };
-
 const fmtDate = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -26,48 +18,35 @@ export default function Payroll() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [items, setItems] = useState([]);
-  const [q, setQ] = useState(""); // simple client-side filter (period or text)
+  const [q, setQ] = useState("");
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
       const res = await api.get("/payroll");
-      const data = Array.isArray(res.data)
-        ? res.data
-        : res.data?.items || res.data?.data || [];
+      const data = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.data || [];
       setItems(data);
     } catch (e) {
-      setError(
-        e?.response?.data?.error ||
-          e?.message ||
-          "Failed to load payroll data."
-      );
+      setError(e?.response?.data?.error || e?.message || "Failed to load payroll data.");
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return items;
-    return items.filter((p) => {
-      const period = String(p.period || "").toLowerCase();
-      const notes = String(p.notes || "").toLowerCase();
-      const branch = String(p.branchName || "").toLowerCase();
-      return (
-        period.includes(needle) || notes.includes(needle) || branch.includes(needle)
-      );
-    });
+    return items.filter((p) =>
+      String(p.period || "").toLowerCase().includes(needle) ||
+      String(p.notes || "").toLowerCase().includes(needle) ||
+      String(p.branchName || "").toLowerCase().includes(needle)
+    );
   }, [items, q]);
 
   const totals = useMemo(() => {
-    let staff = 0;
-    let total = 0;
+    let staff = 0, total = 0;
     for (const r of filtered) {
       staff += Number(r.staffCount) || 0;
       total += Number(r.total) || 0;
@@ -77,57 +56,39 @@ export default function Payroll() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <h1 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-100">
-              Payroll
-            </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Review payroll periods, headcount and totals.
-            </p>
+            <h1 className="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-100">Payroll</h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Review payroll periods, headcount and totals.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Filter by period (YYYY-MM) or text…"
-                className="w-64 max-w-[70vw] px-3 py-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
-              />
-            </div>
-            <button
-              onClick={load}
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-sm"
-            >
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Filter by period (YYYY-MM) or text…"
+              className="w-64 max-w-[70vw] px-3 py-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+            />
+            <button onClick={load} className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-sm">
               <FiRefreshCw /> Refresh
             </button>
-            <Link
-              to="/payroll/add"
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-sm"
-            >
+            <Link to="/payroll/add" className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-sm">
               <FiPlus /> Add Payroll
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-200 p-3 text-sm">
           {error}
         </div>
       )}
 
-      {/* Loading skeleton */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-24 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"
-            />
+            <div key={i} className="h-24 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -136,26 +97,19 @@ export default function Payroll() {
         </div>
       ) : (
         <>
-          {/* Totals strip */}
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
               <div>
                 <div className="text-slate-500 dark:text-slate-400">Periods</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  {filtered.length.toLocaleString()}
-                </div>
+                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{filtered.length.toLocaleString()}</div>
               </div>
               <div>
                 <div className="text-slate-500 dark:text-slate-400">Staff (sum)</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  {totals.staff.toLocaleString()}
-                </div>
+                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{totals.staff.toLocaleString()}</div>
               </div>
-              <div className="col-span-2 md:col-span-2">
+              <div className="col-span-2">
                 <div className="text-slate-500 dark:text-slate-400">Total (sum)</div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  {fmtMoney(totals.total)}
-                </div>
+                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{fmtMoney(totals.total)}</div>
               </div>
             </div>
           </div>
@@ -163,36 +117,21 @@ export default function Payroll() {
           {/* Mobile cards */}
           <div className="grid gap-3 md:hidden">
             {filtered.map((p) => (
-              <div
-                key={p.id || p.period}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"
-              >
+              <div key={p.id || p.period} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
                 <div className="flex items-center justify-between">
                   <div className="text-sm">
-                    <div className="font-semibold text-slate-900 dark:text-slate-100">
-                      Period: {p.period || "—"}
-                    </div>
-                    <div className="text-slate-600 dark:text-slate-400">
-                      Staff: {Number(p.staffCount || 0).toLocaleString()}
-                    </div>
+                    <div className="font-semibold text-slate-900 dark:text-slate-100">Period: {p.period || "—"}</div>
+                    <div className="text-slate-600 dark:text-slate-400">Staff: {(Number(p.staffCount) || 0).toLocaleString()}</div>
                   </div>
-                  <div className="text-right text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {fmtMoney(p.total)}
-                  </div>
+                  <div className="text-right text-sm font-semibold text-slate-900 dark:text-slate-100">{fmtMoney(p.total)}</div>
                 </div>
-                {p.processedAt || p.paidAt ? (
+                {(p.processedAt || p.paidAt) && (
                   <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                     {p.processedAt && <>Processed: {fmtDate(p.processedAt)} </>}
-                    {p.paidAt && (
-                      <span className="ml-2">Paid: {fmtDate(p.paidAt)}</span>
-                    )}
-                  </div>
-                ) : null}
-                {p.notes && (
-                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
-                    {p.notes}
+                    {p.paidAt && <span className="ml-2">Paid: {fmtDate(p.paidAt)}</span>}
                   </div>
                 )}
+                {p.notes && <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{p.notes}</div>}
               </div>
             ))}
           </div>
@@ -213,21 +152,14 @@ export default function Payroll() {
               </thead>
               <tbody>
                 {filtered.map((p) => (
-                  <tr
-                    key={p.id || p.period}
-                    className="border-b border-slate-100 dark:border-slate-800"
-                  >
-                    <td className="py-2 px-3 font-medium text-slate-900 dark:text-slate-100">
-                      {p.period || "—"}
-                    </td>
-                    <td className="py-2 px-3">{Number(p.staffCount || 0).toLocaleString()}</td>
+                  <tr key={p.id || p.period} className="border-b border-slate-100 dark:border-slate-800">
+                    <td className="py-2 px-3 font-medium text-slate-900 dark:text-slate-100">{p.period || "—"}</td>
+                    <td className="py-2 px-3">{(Number(p.staffCount) || 0).toLocaleString()}</td>
                     <td className="py-2 px-3">{fmtMoney(p.total)}</td>
                     <td className="py-2 px-3">{fmtDate(p.processedAt)}</td>
                     <td className="py-2 px-3">{fmtDate(p.paidAt)}</td>
                     <td className="py-2 px-3">{p.branchName || "—"}</td>
-                    <td className="py-2 px-3 whitespace-pre-wrap max-w-[420px]">
-                      {p.notes || "—"}
-                    </td>
+                    <td className="py-2 px-3 whitespace-pre-wrap max-w-[420px]">{p.notes || "—"}</td>
                   </tr>
                 ))}
               </tbody>
