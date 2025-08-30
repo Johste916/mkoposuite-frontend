@@ -14,7 +14,26 @@ import api from '../api';
 const LS_KEY = 'ms_dash_filters_v1';
 const LS_AUTO = 'ms_dash_auto_refresh_v1';
 
+/** Observe the <html> class list so charts can re-theme instantly */
+const useIsDarkMode = () => {
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  );
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const el = document.documentElement;
+    const obs = new MutationObserver(() => {
+      setIsDark(el.classList.contains('dark'));
+    });
+    obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return isDark;
+};
+
 const Dashboard = () => {
+  const isDark = useIsDarkMode();
+
   // ======= STATE =======
   const [summary, setSummary] = useState(null);
 
@@ -288,18 +307,20 @@ const Dashboard = () => {
     const pct = m > 0 ? Math.round((v / m) * 100) : 0;
     return (
       <div className="space-y-1">
-        <div className="flex justify-between text-xs text-gray-500">
+        <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
           <span>{label}</span>
           <span>{v.toLocaleString()}</span>
         </div>
-        <div className="h-2 w-full bg-gray-100 rounded">
+        <div className="h-2 w-full bg-gray-100 dark:bg-slate-800 rounded">
           <div className="h-2 rounded" style={{ width: `${pct}%`, backgroundColor: 'currentColor' }} />
         </div>
       </div>
     );
   };
 
-  const Skeleton = ({ className }) => <div className={`animate-pulse bg-gray-100 rounded ${className}`} />;
+  const Skeleton = ({ className }) => (
+    <div className={`animate-pulse bg-gray-100 dark:bg-slate-800/50 rounded ${className}`} />
+  );
 
   // Download all attachments from ticker
   const downloadAllAttachments = () => {
@@ -314,23 +335,48 @@ const Dashboard = () => {
   // Dashboard curated message
   const dashMsg = summary?.dashboardMessage;
 
+  // Chart palette that adapts to theme
+  const chartColors = isDark
+    ? {
+        grid: '#334155',      // slate-700
+        axis: '#94a3b8',      // slate-400
+        legend: '#e2e8f0',    // slate-200
+        tooltipBg: '#0f172a', // slate-900
+        tooltipText: '#e2e8f0',
+        bar1: '#60a5fa',      // blue-400
+        bar2: '#34d399',      // emerald-400
+      }
+    : {
+        grid: '#e2e8f0',      // slate-200
+        axis: '#475569',      // slate-600
+        legend: '#334155',    // slate-700
+        tooltipBg: '#ffffff',
+        tooltipText: '#0f172a', // slate-900
+        bar1: '#2563eb',      // blue-600
+        bar2: '#10b981',      // emerald-500
+      };
+
   // ---------- RENDER ----------
   return (
     <div className="space-y-6">
       {/* Gradient header band */}
-      <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 p-4 md:p-6">
+      <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 border border-blue-100 dark:border-slate-700 p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">
               Dashboard
             </h1>
-            <p className="text-sm text-slate-600 mt-1">
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
               Quick snapshot of borrowers, loans, repayments and savings.
             </p>
           </div>
           {/* Filters */}
           <div className="flex flex-wrap gap-2">
-            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="border rounded-lg px-3 py-2 bg-white">
+            <select
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              className="border rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+            >
               <option value="">All Branches</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -339,7 +385,11 @@ const Dashboard = () => {
               ))}
             </select>
 
-            <select value={officerId} onChange={(e) => setOfficerId(e.target.value)} className="border rounded-lg px-3 py-2 bg-white">
+            <select
+              value={officerId}
+              onChange={(e) => setOfficerId(e.target.value)}
+              className="border rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+            >
               <option value="">All Loan Officers</option>
               {officers.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -348,7 +398,11 @@ const Dashboard = () => {
               ))}
             </select>
 
-            <select value={timeRange} onChange={(e) => setTimeRange(e.target.value)} className="border rounded-lg px-3 py-2 bg-white">
+            <select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="border rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+            >
               <option value="">All Time</option>
               <option value="today">Today</option>
               <option value="week">This Week</option>
@@ -361,7 +415,7 @@ const Dashboard = () => {
             <select
               value={autoRefresh}
               onChange={(e) => setAutoRefresh(Number(e.target.value))}
-              className="border rounded-lg px-3 py-2 bg-white"
+              className="border rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
             >
               <option value={0}>No Auto-Refresh</option>
               <option value={1}>Every 1 min</option>
@@ -370,7 +424,7 @@ const Dashboard = () => {
             </select>
 
             <button
-              className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50"
+              className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700"
               onClick={() => {
                 const ac = new AbortController();
                 Promise.all([
@@ -386,6 +440,7 @@ const Dashboard = () => {
                   .catch(() => pushToast('Refresh failed', 'error'))
                   .finally(() => ac.abort());
               }}
+              aria-label="Refresh dashboard"
             >
               Refresh
             </button>
@@ -409,7 +464,7 @@ const Dashboard = () => {
 
       {/* Important Notice */}
       {summary?.importantNotice && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-4">
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 p-4">
           <div className="flex gap-2 items-start">
             <Info className="w-5 h-5 mt-0.5" />
             <div>
@@ -422,7 +477,7 @@ const Dashboard = () => {
 
       {/* Company Message */}
       {summary?.companyMessage ? (
-        <div className="rounded-xl border-l-4 border-blue-500 bg-blue-50 text-blue-700 p-4">
+        <div className="rounded-xl border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 text-blue-700 dark:text-blue-200 p-4">
           <div className="flex items-center gap-2">
             <Info className="w-5 h-5" />
             <p className="text-sm font-medium">{summary.companyMessage}</p>
@@ -434,14 +489,14 @@ const Dashboard = () => {
 
       {/* Dashboard Message (curated) */}
       {dashMsg && (
-        <div className="bg-white border rounded-xl shadow-sm p-4">
+        <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-sm p-4">
           <div className="flex items-start justify-between gap-2">
             <div>
-              {dashMsg.title && <h3 className="text-sm font-semibold text-gray-800">{dashMsg.title}</h3>}
-              {dashMsg.text && <p className="text-sm text-gray-700 mt-1">{dashMsg.text}</p>}
+              {dashMsg.title && <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100">{dashMsg.title}</h3>}
+              {dashMsg.text && <p className="text-sm text-gray-700 dark:text-slate-300 mt-1">{dashMsg.text}</p>}
               {Array.isArray(dashMsg.attachments) && dashMsg.attachments.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-[11px] text-gray-500 mb-1">Attachments</p>
+                  <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-1">Attachments</p>
                   <div className="flex flex-wrap gap-3">
                     {dashMsg.attachments.map((a) => (
                       <a
@@ -449,7 +504,7 @@ const Dashboard = () => {
                         href={a.fileUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs text-blue-600 underline"
+                        className="text-xs text-blue-600 dark:text-blue-300 underline"
                         title={a.fileName}
                       >
                         {a.fileName || 'Attachment'}
@@ -466,7 +521,7 @@ const Dashboard = () => {
                     if (a.fileUrl) setTimeout(() => window.open(a.fileUrl, '_blank', 'noopener,noreferrer'), i * 150);
                   });
                 }}
-                className="text-xs flex items-center gap-1 border rounded px-2 py-1 h-8"
+                className="text-xs flex items-center gap-1 border rounded px-2 py-1 h-8 dark:border-slate-700 dark:hover:bg-slate-800"
                 title="Open all attachments"
               >
                 <Download className="w-3 h-3" /> Open all
@@ -478,13 +533,13 @@ const Dashboard = () => {
 
       {/* General Communications Ticker */}
       {(comms?.length ?? 0) > 0 && (
-        <div className="bg-white border rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
-            <div className="text-xs font-medium text-gray-600">General Communications</div>
+        <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 dark:bg-slate-800/40 dark:border-slate-700">
+            <div className="text-xs font-medium text-gray-600 dark:text-slate-300">General Communications</div>
             {comms.some((c) => Array.isArray(c.attachments) && c.attachments.length > 0) && (
               <button
                 onClick={downloadAllAttachments}
-                className="text-xs flex items-center gap-1 border rounded px-2 py-1"
+                className="text-xs flex items-center gap-1 border rounded px-2 py-1 dark:border-slate-700 dark:hover:bg-slate-800"
                 title="Open all attachments"
               >
                 <Download className="w-3 h-3" /> Download all
@@ -494,18 +549,28 @@ const Dashboard = () => {
           <div className="relative h-10">
             <style>{`@keyframes ms-marquee{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
             <div
-              className="absolute whitespace-nowrap will-change-transform text-sm text-gray-700 flex items-center gap-8 px-3"
+              className="absolute whitespace-nowrap will-change-transform text-sm text-gray-700 dark:text-slate-200 flex items-center gap-8 px-3"
               style={{ animation: 'ms-marquee 18s linear infinite' }}
             >
               {comms.map((c) => (
                 <span key={c.id || c.text} className="inline-flex items-center gap-2">
-                  {c.type && <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50">{c.type}</span>}
-                  {c.priority && <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50">{c.priority}</span>}
+                  {c.type && (
+                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
+                      {c.type}
+                    </span>
+                  )}
+                  {c.priority && (
+                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
+                      {c.priority}
+                    </span>
+                  )}
                   {c.audienceRole && (
-                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50">role: {c.audienceRole}</span>
+                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
+                      role: {c.audienceRole}
+                    </span>
                   )}
                   {typeof c.audienceBranchId !== 'undefined' && c.audienceBranchId !== null && (
-                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50">
+                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
                       {branchNameById(c.audienceBranchId)}
                     </span>
                   )}
@@ -520,13 +585,22 @@ const Dashboard = () => {
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
-        <Link to="/loans/add" className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 shadow-sm">
+        <Link
+          to="/loans/add"
+          className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 shadow-sm"
+        >
           <PlusCircle className="w-4 h-4" /> Add Loan
         </Link>
-        <Link to="/borrowers/add" className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 shadow-sm">
+        <Link
+          to="/borrowers/add"
+          className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 shadow-sm"
+        >
           <PlusCircle className="w-4 h-4" /> Add Borrower
         </Link>
-        <Link to="/repayments/new" className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 shadow-sm">
+        <Link
+          to="/repayments/new"
+          className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 shadow-sm"
+        >
           <PlusCircle className="w-4 h-4" /> Record Repayment
         </Link>
       </div>
@@ -569,10 +643,10 @@ const Dashboard = () => {
 
               {/* Monthly Trends */}
               {trends && (
-                <div className="bg-white rounded-2xl shadow-sm border p-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <BarChart2 className="w-5 h-5 text-indigo-600" />
-                    <h3 className="font-semibold text-gray-800">
+                    <BarChart2 className="w-5 h-5 text-indigo-600 dark:text-indigo-300" />
+                    <h3 className="font-semibold text-gray-800 dark:text-slate-100">
                       Monthly Trends{(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}
                     </h3>
                   </div>
@@ -586,12 +660,15 @@ const Dashboard = () => {
                           { name: 'Repayments', value: n(trends.monthlyRepayments) },
                         ]}
                       >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="value" />
+                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                        <XAxis dataKey="name" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
+                          wrapperStyle={{ outline: 'none' }}
+                        />
+                        <Legend wrapperStyle={{ color: chartColors.legend }} />
+                        <Bar dataKey="value" fill={chartColors.bar1} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -601,13 +678,13 @@ const Dashboard = () => {
                     const max = Math.max(...vals);
                     return (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="text-indigo-600">
+                        <div className="text-indigo-600 dark:text-indigo-400">
                           <MiniBar label="Loans (count)" value={n(trends.monthlyLoans)} max={max} />
                         </div>
-                        <div className="text-emerald-600">
+                        <div className="text-emerald-600 dark:text-emerald-400">
                           <MiniBar label="Deposits (TZS)" value={n(trends.monthlyDeposits)} max={max} />
                         </div>
-                        <div className="text-blue-600">
+                        <div className="text-blue-600 dark:text-blue-400">
                           <MiniBar label="Repayments (TZS)" value={n(trends.monthlyRepayments)} max={max} />
                         </div>
                       </div>
@@ -618,21 +695,21 @@ const Dashboard = () => {
 
               {/* Top Borrowers / Upcoming Repayments */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-2xl shadow-sm border p-4 overflow-x-auto">
-                  <h3 className="font-semibold mb-2">Top Borrowers</h3>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 overflow-x-auto">
+                  <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Top Borrowers</h3>
                   {topBorrowers.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No data available.</p>
+                    <p className="text-gray-500 dark:text-slate-400 text-sm">No data available.</p>
                   ) : (
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="text-left text-gray-600">
+                        <tr className="text-left text-gray-600 dark:text-slate-300">
                           <th className="py-1 pr-4">Name</th>
                           <th className="py-1 pr-4">Outstanding</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="text-slate-800 dark:text-slate-200">
                         {topBorrowers.map((b) => (
-                          <tr key={b.id} className="border-t">
+                          <tr key={b.id} className="border-t border-slate-200 dark:border-slate-700">
                             <td className="py-1 pr-4">{b.name}</td>
                             <td className="py-1 pr-4">{money(b.outstanding)}</td>
                           </tr>
@@ -642,22 +719,22 @@ const Dashboard = () => {
                   )}
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-sm border p-4 overflow-x-auto">
-                  <h3 className="font-semibold mb-2">Upcoming Repayments</h3>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 overflow-x-auto">
+                  <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Upcoming Repayments</h3>
                   {upcomingRepayments.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No data available.</p>
+                    <p className="text-gray-500 dark:text-slate-400 text-sm">No data available.</p>
                   ) : (
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="text-left text-gray-600">
+                        <tr className="text-left text-gray-600 dark:text-slate-300">
                           <th className="py-1 pr-4">Borrower</th>
                           <th className="py-1 pr-4">Due Date</th>
                           <th className="py-1 pr-4">Amount</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="text-slate-800 dark:text-slate-200">
                         {upcomingRepayments.map((r) => (
-                          <tr key={r.id} className="border-t">
+                          <tr key={r.id} className="border-t border-slate-200 dark:border-slate-700">
                             <td className="py-1 pr-4">{r.borrower}</td>
                             <td className="py-1 pr-4">{r.dueDate}</td>
                             <td className="py-1 pr-4">{money(r.amount)}</td>
@@ -671,39 +748,45 @@ const Dashboard = () => {
 
               {/* Performance charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-2xl shadow-sm border p-4">
-                  <h3 className="font-semibold mb-2">Branch Performance</h3>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+                  <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Branch Performance</h3>
                   {branchPerformance.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No data available.</p>
+                    <p className="text-gray-500 dark:text-slate-400 text-sm">No data available.</p>
                   ) : (
                     <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={branchPerformance}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="branch" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="disbursed" />
-                        <Bar dataKey="repayments" />
+                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                        <XAxis dataKey="branch" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
+                          wrapperStyle={{ outline: 'none' }}
+                        />
+                        <Legend wrapperStyle={{ color: chartColors.legend }} />
+                        <Bar dataKey="disbursed" fill={chartColors.bar1} />
+                        <Bar dataKey="repayments" fill={chartColors.bar2} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-sm border p-4">
-                  <h3 className="font-semibold mb-2">Officer Performance</h3>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+                  <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Officer Performance</h3>
                   {officerPerformance.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No data available.</p>
+                    <p className="text-gray-500 dark:text-slate-400 text-sm">No data available.</p>
                   ) : (
                     <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={officerPerformance}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="officer" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="loans" />
-                        <Bar dataKey="collections" />
+                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                        <XAxis dataKey="officer" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
+                          wrapperStyle={{ outline: 'none' }}
+                        />
+                        <Legend wrapperStyle={{ color: chartColors.legend }} />
+                        <Bar dataKey="loans" fill={chartColors.bar1} />
+                        <Bar dataKey="collections" fill={chartColors.bar2} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -715,28 +798,28 @@ const Dashboard = () => {
 
         {/* RIGHT Sidebar: Recent Activity */}
         <aside className="lg:sticky lg:top-4 self-start">
-          <div className="bg-white rounded-2xl shadow-sm border p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
             <div className="flex items-center gap-2 mb-3">
-              <ClipboardList className="w-5 h-5 text-indigo-600" />
-              <h2 className="font-semibold text-gray-800">Recent Activity</h2>
+              <ClipboardList className="w-5 h-5 text-indigo-600 dark:text-indigo-300" />
+              <h2 className="font-semibold text-gray-800 dark:text-slate-100">Recent Activity</h2>
             </div>
 
             {/* Date search */}
             <div className="grid grid-cols-2 gap-2 mb-3">
               <input
                 type="date"
-                className="border rounded px-2 py-1 text-sm"
+                className="border rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="border rounded px-2 py-1 text-sm"
+                className="border rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
               />
               <button
-                className="col-span-2 border rounded px-2 py-1 text-sm"
+                className="col-span-2 border rounded px-2 py-1 text-sm bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700"
                 onClick={() => {
                   setActivityPage(1);
                   fetchActivity({ page: 1 });
@@ -748,19 +831,19 @@ const Dashboard = () => {
 
             {/* Scroll list with fade */}
             <div className="relative">
-              <div className="absolute inset-x-0 top-0 h-6 pointer-events-none bg-gradient-to-b from-white to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-white to-transparent" />
+              <div className="absolute inset-x-0 top-0 h-6 pointer-events-none bg-gradient-to-b from-white to-transparent dark:from-slate-900" />
+              <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-white to-transparent dark:from-slate-900" />
               <div className="max-h-[520px] overflow-y-auto pr-1 space-y-3">
                 {activity.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No activity.</p>
+                  <p className="text-gray-500 dark:text-slate-400 text-sm">No activity.</p>
                 ) : (
                   activity.map((a) => (
-                    <div key={a.id} className="border rounded p-3">
-                      <p className="text-sm font-medium text-gray-800">
+                    <div key={a.id} className="border rounded p-3 border-slate-200 dark:border-slate-700">
+                      <p className="text-sm font-medium text-gray-800 dark:text-slate-100">
                         {a.type} • {a.entityType} #{a.entityId}
                       </p>
-                      <p className="text-xs text-gray-600">{a.message}</p>
-                      <p className="text-[11px] text-gray-400 mt-1">
+                      <p className="text-xs text-gray-600 dark:text-slate-300">{a.message}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-1">
                         by {a.createdBy?.name || a.createdBy?.email} • {new Date(a.createdAt).toLocaleString()}
                       </p>
 
@@ -768,9 +851,9 @@ const Dashboard = () => {
                       {Array.isArray(a.comments) && a.comments.length > 0 && (
                         <div className="mt-2 space-y-1">
                           {a.comments.map((c) => (
-                            <div key={c.id} className="bg-gray-50 border rounded p-2">
-                              <p className="text-xs text-gray-800">{c.comment}</p>
-                              <p className="text-[11px] text-gray-400 mt-0.5">
+                            <div key={c.id} className="bg-gray-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-2">
+                              <p className="text-xs text-gray-800 dark:text-slate-200">{c.comment}</p>
+                              <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-0.5">
                                 — {c.createdBy?.name || c.createdBy?.email} • {new Date(c.createdAt).toLocaleString()}
                               </p>
                             </div>
@@ -784,12 +867,12 @@ const Dashboard = () => {
                           value={commentDraft[a.id] || ''}
                           onChange={(e) => setCommentDraft((d) => ({ ...d, [a.id]: e.target.value }))}
                           placeholder="Reply…"
-                          className="flex-1 border rounded px-2 py-1 text-xs"
+                          className="flex-1 border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                         />
                         <button
                           onClick={() => submitComment(a.id)}
                           disabled={submitting[`c-${a.id}`]}
-                          className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1"
+                          className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 disabled:opacity-50 flex items-center gap-1"
                         >
                           <MessageSquare className="w-3 h-3" /> Reply
                         </button>
@@ -801,7 +884,7 @@ const Dashboard = () => {
                           onChange={(e) =>
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), assigneeId: e.target.value } }))
                           }
-                          className="col-span-2 border rounded px-2 py-1 text-xs"
+                          className="col-span-2 border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                         >
                           <option value="">Assign to…</option>
                           {officers.map((o) => (
@@ -816,12 +899,12 @@ const Dashboard = () => {
                           onChange={(e) =>
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), dueDate: e.target.value } }))
                           }
-                          className="border rounded px-2 py-1 text-xs"
+                          className="border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                         />
                         <button
                           onClick={() => submitAssignment(a.id)}
                           disabled={submitting[`a-${a.id}`]}
-                          className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1 justify-center"
+                          className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 disabled:opacity-50 flex items-center gap-1 justify-center"
                         >
                           <UserPlus className="w-3 h-3" /> Assign
                         </button>
@@ -831,7 +914,7 @@ const Dashboard = () => {
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), note: e.target.value } }))
                           }
                           placeholder="Note…"
-                          className="col-span-4 border rounded px-2 py-1 text-xs"
+                          className="col-span-4 border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                         />
                       </div>
                     </div>
@@ -842,7 +925,7 @@ const Dashboard = () => {
 
             {/* pagination */}
             {activityTotal > activityPageSize && (
-              <div className="flex justify-between items-center mt-3 text-xs">
+              <div className="flex justify-between items-center mt-3 text-xs text-slate-700 dark:text-slate-300">
                 <span>{Math.min(activityPage * activityPageSize, activityTotal)} of {activityTotal}</span>
                 <div className="flex gap-2">
                   <button
@@ -852,7 +935,7 @@ const Dashboard = () => {
                       fetchActivity({ page: p });
                     }}
                     disabled={activityPage === 1}
-                    className="px-2 py-1 border rounded disabled:opacity-50"
+                    className="px-2 py-1 border rounded disabled:opacity-50 bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700"
                   >
                     Prev
                   </button>
@@ -865,7 +948,7 @@ const Dashboard = () => {
                       }
                     }}
                     disabled={activityPage * activityPageSize >= activityTotal}
-                    className="px-2 py-1 border rounded disabled:opacity-50"
+                    className="px-2 py-1 border rounded disabled:opacity-50 bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700"
                   >
                     Next
                   </button>
@@ -881,25 +964,26 @@ const Dashboard = () => {
 
 /** KPI card with subtle tone color accents */
 const SummaryCard = ({ title, value, icon, tone = 'indigo' }) => {
-  const tones = {
-    indigo:  { ring: 'ring-indigo-100',  icon: 'text-indigo-600 bg-indigo-50' },
-    sky:     { ring: 'ring-sky-100',     icon: 'text-sky-600 bg-sky-50' },
-    blue:    { ring: 'ring-blue-100',    icon: 'text-blue-600 bg-blue-50' },
-    emerald: { ring: 'ring-emerald-100', icon: 'text-emerald-600 bg-emerald-50' },
-    cyan:    { ring: 'ring-cyan-100',    icon: 'text-cyan-600 bg-cyan-50' },
-    amber:   { ring: 'ring-amber-100',   icon: 'text-amber-600 bg-amber-50' },
-    violet:  { ring: 'ring-violet-100',  icon: 'text-violet-600 bg-violet-50' },
-    rose:    { ring: 'ring-rose-100',    icon: 'text-rose-600 bg-rose-50' },
-    slate:   { ring: 'ring-slate-100',   icon: 'text-slate-600 bg-slate-50' },
-  }[tone] || { ring: 'ring-slate-100', icon: 'text-slate-600 bg-slate-50' };
+  const tones =
+    {
+      indigo:  { ring: 'ring-indigo-100 dark:ring-indigo-900/40',  icon: 'text-indigo-600 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-950/40' },
+      sky:     { ring: 'ring-sky-100 dark:ring-sky-900/40',        icon: 'text-sky-600 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/40' },
+      blue:    { ring: 'ring-blue-100 dark:ring-blue-900/40',      icon: 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-950/40' },
+      emerald: { ring: 'ring-emerald-100 dark:ring-emerald-900/40',icon: 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' },
+      cyan:    { ring: 'ring-cyan-100 dark:ring-cyan-900/40',      icon: 'text-cyan-600 bg-cyan-50 dark:text-cyan-300 dark:bg-cyan-950/40' },
+      amber:   { ring: 'ring-amber-100 dark:ring-amber-900/40',    icon: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' },
+      violet:  { ring: 'ring-violet-100 dark:ring-violet-900/40',  icon: 'text-violet-600 bg-violet-50 dark:text-violet-300 dark:bg-violet-950/40' },
+      rose:    { ring: 'ring-rose-100 dark:ring-rose-900/40',      icon: 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40' },
+      slate:   { ring: 'ring-slate-100 dark:ring-slate-800',       icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' },
+    }[tone] || { ring: 'ring-slate-100 dark:ring-slate-800', icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' };
 
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border p-4 ring-1 ${tones.ring}`}>
+    <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring}`}>
       <div className="flex items-center gap-3">
         <div className={`p-2 rounded-full ${tones.icon}`}>{icon}</div>
         <div>
-          <h3 className="text-xs font-medium text-gray-500">{title}</h3>
-          <p className="text-xl font-semibold text-gray-900">{value ?? '—'}</p>
+          <h3 className="text-xs font-medium text-gray-500 dark:text-slate-400">{title}</h3>
+          <p className="text-xl font-semibold text-gray-900 dark:text-white">{value ?? '—'}</p>
         </div>
       </div>
     </div>

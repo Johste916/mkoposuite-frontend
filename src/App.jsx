@@ -190,8 +190,8 @@ function App() {
               <Route path="borrowers/reports" element={<BorrowerReports />} />
               <Route path="borrowers/:id" element={<BorrowerDetails />} />
               <Route path="borrowers/sms" element={<Sms />} />
-              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Send Email to Borrowers</div>} />
-              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Invite Borrowers</div>} />
+              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>} />
+              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>} />
 
               {/* Groups */}
               <Route path="borrowers/groups" element={<BorrowerGroups />} />
@@ -305,7 +305,7 @@ function App() {
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
               <Route path="collections/sms" element={<Sms />} />
-              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Send Collection Emails</div>} />
+              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>} />
 
               {/* ✅ Savings */}
               <Route path="savings" element={<Savings />} />
@@ -326,13 +326,13 @@ function App() {
 
               {/* HR & Payroll */}
               <Route path="payroll" element={<Payroll />} />
-              <Route path="payroll/add" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Add Payroll</div>} />
-              <Route path="payroll/report" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Payroll Report</div>} />
-              <Route path="hr" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">HR</div>} />
-              <Route path="hr/employees" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Employees</div>} />
-              <Route path="hr/attendance" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Attendance</div>} />
-              <Route path="hr/leave" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Leave Management</div>} />
-              <Route path="hr/contracts" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Contracts</div>} />
+              <Route path="payroll/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Payroll</div>} />
+              <Route path="payroll/report" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Payroll Report</div>} />
+              <Route path="hr" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">HR</div>} />
+              <Route path="hr/employees" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Employees</div>} />
+              <Route path="hr/attendance" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Attendance</div>} />
+              <Route path="hr/leave" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Leave Management</div>} />
+              <Route path="hr/contracts" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Contracts</div>} />
 
               {/* Expenses */}
               <Route path="expenses" element={<Expenses />} />
@@ -355,12 +355,12 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Add Other Income</div>} />
-              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Upload Other Income CSV</div>} />
+              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
+              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
 
               {/* Asset Management */}
               <Route path="assets" element={<Assets />} />
-              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">Add Asset</div>} />
+              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
 
               {/* ── ACCOUNTING (grouped) ───────────────────────────────── */}
               <Route

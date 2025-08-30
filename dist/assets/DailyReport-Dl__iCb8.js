@@ -1,1 +1,0 @@
-import{j as t}from"./index-COGYnaBm.js";import{R as o}from"./ReportShell-D2cBFPeV.js";function p(){return t.jsx(o,{title:"Daily Report",endpoint:"/reports/daily",mode:"snapshot",columns:[]})}export{p as default};

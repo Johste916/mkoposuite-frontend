@@ -1,0 +1,1 @@
+import{j as e}from"./index-DcWjOlD8.js";import{R as o}from"./ReportShell-D9B3R0vX.js";function n(){return e.jsx(o,{title:"Deferred Income Monthly",endpoint:"/reports/deferred-income/monthly",columns:[]})}export{n as default};

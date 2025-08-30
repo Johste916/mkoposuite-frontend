@@ -1,1 +1,0 @@
-import{j as o}from"./index-COGYnaBm.js";import{R as t}from"./ReportShell-D2cBFPeV.js";function s(){return o.jsx(t,{title:"Collections Report",endpoint:"/reports/collections/summary",columns:[]})}export{s as default};

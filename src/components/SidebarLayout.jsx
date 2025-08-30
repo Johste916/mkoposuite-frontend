@@ -375,7 +375,7 @@ const SidebarLayout = () => {
   return (
     <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-white/90 dark:bg-slate-900/90 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
         <div className="px-3 md:px-4">
           <div className="h-14 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -393,7 +393,7 @@ const SidebarLayout = () => {
 
               {/* ✅ subtle tenant badge */}
               {tenant?.name && (
-                <span className="ml-2 px-2 py-0.5 text-[11px] rounded-full border bg-slate-50 dark:bg-slate-800">
+                <span className="ml-2 px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                   {tenant.name}
                 </span>
               )}
@@ -405,14 +405,14 @@ const SidebarLayout = () => {
                 <input
                   type="text"
                   placeholder="Search borrowers, loans, receipts…"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
                 />
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <select
-                className="hidden md:block px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-sm border border-slate-200 dark:border-slate-700"
+                className="hidden md:block px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 dark:text-slate-200 text-sm border border-slate-200 dark:border-slate-700"
                 value={activeBranchId}
                 onChange={(e) => setActiveBranchId(e.target.value)}
               >
@@ -526,7 +526,36 @@ const SidebarLayout = () => {
         </main>
       </div>
 
-      {/* Mobile drawer (unchanged) */}
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-[70] flex">
+          <div className="w-72 max-w-[80vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
+            <div className="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800">
+              <span className="font-semibold">Menu</span>
+              <button className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setMobileOpen(false)} aria-label="Close">
+                <FiX />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 py-3">
+              {featuresLoading ? (
+                <div className="px-3 py-2 text-xs text-slate-500">Loading menu…</div>
+              ) : (
+                <nav className="space-y-1">
+                  {computedNav.map((item) => (
+                    <Section
+                      key={item.label + item.to}
+                      item={item}
+                      currentPath={location.pathname}
+                      onNavigate={() => setMobileOpen(false)}
+                    />
+                  ))}
+                </nav>
+              )}
+            </div>
+          </div>
+          <button className="flex-1 bg-black/40" aria-label="Close overlay" onClick={() => setMobileOpen(false)} />
+        </div>
+      )}
     </div>
   );
 };
