@@ -1,0 +1,1 @@
+import{j as o}from"./index-OAb_JalT.js";import{R as t}from"./ReportShell-oVuL2lqd.js";function e(){return o.jsx(t,{title:"Portfolio At Risk (PAR)",endpoint:"/reports/par/summary",mode:"snapshot",columns:[]})}export{e as default};

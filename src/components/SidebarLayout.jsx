@@ -86,7 +86,6 @@ const NAV = () => [
     label: "Investors", icon: <FiUsers />, to: "/investors", children: [
       { label: "View Investors", to: "/investors" },
       { label: "Add Investor", to: "/investors/add" },
-      // ❌ Removed: Send SMS to All, Send Email to All, Invite Investors
     ]
   },
 
@@ -169,11 +168,8 @@ const NAV = () => [
       { label: "All Entries", to: "/reports/all" },
     ]
   },
-
-  // ❌ Legacy removed from the sidebar (routes still exist)
 ];
 
-/* ---------- Helpers ---------- */
 const pathIsIn = (pathname, base) => pathname === base || pathname.startsWith(base + "/");
 
 const Section = ({ item, currentPath, onNavigate }) => {
@@ -281,6 +277,17 @@ const SidebarLayout = () => {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  const handleLogout = () => {
+    try {
+      delete api.defaults.headers.common.Authorization;
+      localStorage.removeItem("token");
+      localStorage.removeItem("jwt");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
+    } catch {}
+    navigate("/login");
+  };
+
   /* theme + user + tenant load */
   useEffect(() => {
     const storedDark = localStorage.getItem("darkMode");
@@ -288,6 +295,11 @@ const SidebarLayout = () => {
       setDarkMode(true);
       document.documentElement.classList.add("dark");
     }
+
+    // inject Authorization header from local storage (works even if api.ts forgets)
+    const tok = localStorage.getItem("token") || localStorage.getItem("jwt") || localStorage.getItem("access_token");
+    if (tok) api.defaults.headers.common.Authorization = `Bearer ${tok}`;
+
     try {
       const storedUser = localStorage.getItem("user");
       if (storedUser) setUser(JSON.parse(storedUser));
@@ -340,12 +352,22 @@ const SidebarLayout = () => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/login");
-  };
+  // ✅ Fetch current user from real API and keep localStorage in sync
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/auth/me");
+        setUser(data);
+        localStorage.setItem("user", JSON.stringify(data));
+      } catch (e) {
+        // if backend says unauthorized, dump auth and go to login
+        if (e?.response?.status === 401) handleLogout();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Branch list (real)
   useEffect(() => {
     (async () => {
       try {
@@ -353,7 +375,9 @@ const SidebarLayout = () => {
         const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
         setBranches(list);
         if (list.length && !activeBranchId) setActiveBranchId(String(list[0].id));
-      } catch {}
+      } catch (e) {
+        if (e?.response?.status === 401) handleLogout();
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
