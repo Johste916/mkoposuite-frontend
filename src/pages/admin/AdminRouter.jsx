@@ -1,6 +1,7 @@
 // src/pages/admin/AdminRouter.jsx
 import React, { lazy, Suspense } from "react";
 import { useParams, Navigate } from "react-router-dom";
+import ErrorBoundary from "../../components/ErrorBoundary";
 
 /* Admin pages (yours) */
 const GeneralSettings         = lazy(() => import("./GeneralSettings"));
@@ -43,118 +44,128 @@ const LoanProducts            = lazy(() => import("../loans/LoanProducts"));
 /* NEW: generic KV settings page for many remaining slugs */
 const KVPageRouter            = lazy(() => import("./KVPageRouter"));
 
-const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
+const Fallback = () => (
+  <div className="p-6 text-sm text-gray-600">Loading…</div>
+);
 
-/** Registry maps slug -> Component. */
+/** Keep slug logic consistent with the Admin list */
+const normalize = (s = "") =>
+  s
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+
+/** Registry maps normalized slug -> Component. */
 const registry = {
   // General
-  "general": GeneralSettings,
-  "general-settings": GeneralSettings,
+  [normalize("general")]: GeneralSettings,
+  [normalize("general-settings")]: GeneralSettings,
 
   // Email/SMS
-  "email": EmailAccounts,
-  "email-accounts": EmailAccounts,
-  "email-settings": EmailAccounts,
-  "sms": SmsSettings,
-  "sms-settings": SmsSettings,
-  "bulk-sms-settings": BulkSmsSettings,
+  [normalize("email")]: EmailAccounts,
+  [normalize("email-accounts")]: EmailAccounts,
+  [normalize("email-settings")]: EmailAccounts,
+  [normalize("sms")]: SmsSettings,
+  [normalize("sms-settings")]: SmsSettings,
+  [normalize("bulk-sms-settings")]: BulkSmsSettings,
 
   // Existing controllers
-  "loan-categories": LoanCategories,
-  "loan-settings":   LoanSettings,
-  "penalty-settings": PenaltySettings,
-  "loan-penalty-settings": PenaltySettings,
-  "integration-settings": IntegrationSettings,
-  "branch-settings": BranchSettings,
-  "branches": BranchSettings,
-  "borrower-settings": BorrowerSettings,
-  "user-management": UserManagementSettings,
-  "saving-settings": SavingSettings,
-  "payroll-settings": PayrollSettings,
-  "payment-settings": PaymentSettings,
-  "comment-settings": CommentSettings,
-  "dashboard-settings": DashboardSettings,
-  "loan-sector-settings": LoanSectorSettings,
-  "income-source-settings": IncomeSourceSettings,
-  "holiday-settings": HolidaySettings,
-  "branch-holidays": HolidaySettings,
-  "communications": Communications,
+  [normalize("loan-categories")]: LoanCategories,
+  [normalize("loan-settings")]: LoanSettings,
+  [normalize("penalty-settings")]: PenaltySettings,
+  [normalize("loan-penalty-settings")]: PenaltySettings,
+  [normalize("integration-settings")]: IntegrationSettings,
+  [normalize("branch-settings")]: BranchSettings,
+  [normalize("branches")]: BranchSettings,
+  [normalize("borrower-settings")]: BorrowerSettings,
+  [normalize("user-management")]: UserManagementSettings,
+  [normalize("saving-settings")]: SavingSettings,
+  [normalize("payroll-settings")]: PayrollSettings,
+  [normalize("payment-settings")]: PaymentSettings,
+  [normalize("comment-settings")]: CommentSettings,
+  [normalize("dashboard-settings")]: DashboardSettings,
+  [normalize("loan-sector-settings")]: LoanSectorSettings,
+  [normalize("income-source-settings")]: IncomeSourceSettings,
+  [normalize("holiday-settings")]: HolidaySettings,
+  [normalize("branch-holidays")]: HolidaySettings,
+  [normalize("communications")]: Communications,
 
   // NEW — Loans batch
-  "loan-fees": LoanFees,
-  "loan-repayment-cycles": LoanRepaymentCycles,
-  "loan-reminder-settings": LoanReminderSettings,
-  "loan-templates-applications-agreements": LoanTemplates,
-  "manage-loan-status-and-approvals": LoanApprovals,
+  [normalize("loan-fees")]: LoanFees,
+  [normalize("loan-repayment-cycles")]: LoanRepaymentCycles,
+  [normalize("loan-reminder-settings")]: LoanReminderSettings,
+  [normalize("loan-templates-applications-agreements")]: LoanTemplates,
+  [normalize("manage-loan-status-and-approvals")]: LoanApprovals,
 
   // NEW — Manage Staff batch
-  "staff": Staff,
-  "staff-roles-and-permissions": StaffRolesPermissions,
-  "staff-email-notifications": StaffEmailNotifications,
-  "audit-management": AuditManagement,
+  [normalize("staff")]: Staff,
+  [normalize("staff-roles-and-permissions")]: StaffRolesPermissions,
+  [normalize("staff-email-notifications")]: StaffEmailNotifications,
+  [normalize("audit-management")]: AuditManagement,
 
   // Module page
-  "loan-products": LoanProducts,
+  [normalize("loan-products")]: LoanProducts,
 
   /* ---------- KV-backed pages (now real editors) ---------- */
-  "format-borrower-reports": KVPageRouter,
-  "rename-borrower-reports": KVPageRouter,
-  "rename-collection-sheet-headings": KVPageRouter,
-  "invite-borrowers-settings": KVPageRouter,
-  "modify-add-borrower-fields": KVPageRouter,
+  [normalize("format-borrower-reports")]: KVPageRouter,
+  [normalize("rename-borrower-reports")]: KVPageRouter,
+  [normalize("rename-collection-sheet-headings")]: KVPageRouter,
+  [normalize("invite-borrowers-settings")]: KVPageRouter,
+  [normalize("modify-add-borrower-fields")]: KVPageRouter,
 
-  "loan-repayment-methods": KVPageRouter,
-  "manage-collectors": KVPageRouter,
+  [normalize("loan-repayment-methods")]: KVPageRouter,
+  [normalize("manage-collectors")]: KVPageRouter,
 
-  "collateral-types": KVPageRouter,
-  "payroll-templates": KVPageRouter,
+  [normalize("collateral-types")]: KVPageRouter,
+  [normalize("payroll-templates")]: KVPageRouter,
 
-  "upload-borrowers-from-csv-file": KVPageRouter,            // shows info JSON placeholder
-  "upload-loans-from-csv-file": KVPageRouter,
-  "upload-repayments-from-csv-file": KVPageRouter,
-  "upload-expenses-from-csv-file": KVPageRouter,
-  "upload-other-income-from-csv-file": KVPageRouter,
-  "upload-savings-accounts-from-csv-file": KVPageRouter,
-  "upload-savings-transactions-from-csv-file": KVPageRouter,
-  "upload-loan-schedule-from-csv-file": KVPageRouter,
-  "upload-inter-bank-transfer-from-csv-file": KVPageRouter,
+  [normalize("upload-borrowers-from-csv-file")]: KVPageRouter,
+  [normalize("upload-loans-from-csv-file")]: KVPageRouter,
+  [normalize("upload-repayments-from-csv-file")]: KVPageRouter,
+  [normalize("upload-expenses-from-csv-file")]: KVPageRouter,
+  [normalize("upload-other-income-from-csv-file")]: KVPageRouter,
+  [normalize("upload-savings-accounts-from-csv-file")]: KVPageRouter,
+  [normalize("upload-savings-transactions-from-csv-file")]: KVPageRouter,
+  [normalize("upload-loan-schedule-from-csv-file")]: KVPageRouter,
+  [normalize("upload-inter-bank-transfer-from-csv-file")]: KVPageRouter,
 
-  "other-income-types": KVPageRouter,
-  "expense-types": KVPageRouter,
-  "asset-management-types": KVPageRouter,
+  [normalize("other-income-types")]: KVPageRouter,
+  [normalize("expense-types")]: KVPageRouter,
+  [normalize("asset-management-types")]: KVPageRouter,
 
-  "sms-credits": KVPageRouter,
-  "sender-id": KVPageRouter,
-  "sms-templates": KVPageRouter,
-  "auto-send-sms": KVPageRouter,
-  "collection-sheets-sms-template": KVPageRouter,
+  [normalize("sms-credits")]: KVPageRouter,
+  [normalize("sender-id")]: KVPageRouter,
+  [normalize("sms-templates")]: KVPageRouter,
+  [normalize("auto-send-sms")]: KVPageRouter,
+  [normalize("collection-sheets-sms-template")]: KVPageRouter,
 
-  "email-templates": KVPageRouter,
-  "auto-send-emails": KVPageRouter,
-  "collection-sheets-email-template": KVPageRouter,
+  [normalize("email-templates")]: KVPageRouter,
+  [normalize("auto-send-emails")]: KVPageRouter,
+  [normalize("collection-sheets-email-template")]: KVPageRouter,
 
-  "savings-products": KVPageRouter,
-  "savings-fees": KVPageRouter,
-  "savings-transaction-types": KVPageRouter,
+  [normalize("savings-products")]: KVPageRouter,
+  [normalize("savings-fees")]: KVPageRouter,
+  [normalize("savings-transaction-types")]: KVPageRouter,
 
-  "e-signature-settings": KVPageRouter,
-  "email-templates-for-e-signature": KVPageRouter,
+  [normalize("e-signature-settings")]: KVPageRouter,
+  [normalize("email-templates-for-e-signature")]: KVPageRouter,
 
-  "investor-products": KVPageRouter,
-  "loan-investment-products": KVPageRouter,
-  "investor-fees": KVPageRouter,
-  "format-investor-report": KVPageRouter,
-  "rename-investor-report": KVPageRouter,
-  "invite-investors-settings": KVPageRouter,
-  "investor-transaction-types": KVPageRouter,
+  [normalize("investor-products")]: KVPageRouter,
+  [normalize("loan-investment-products")]: KVPageRouter,
+  [normalize("investor-fees")]: KVPageRouter,
+  [normalize("format-investor-report")]: KVPageRouter,
+  [normalize("rename-investor-report")]: KVPageRouter,
+  [normalize("invite-investors-settings")]: KVPageRouter,
+  [normalize("investor-transaction-types")]: KVPageRouter,
 
-  "settings": KVPageRouter,                 // accounting -> settings
-  "bank-accounts": KVPageRouter,
-  "taxes": KVPageRouter,
-  "opening-balances": KVPageRouter,
+  [normalize("settings")]: KVPageRouter, // accounting -> settings
+  [normalize("bank-accounts")]: KVPageRouter,
+  [normalize("taxes")]: KVPageRouter,
+  [normalize("opening-balances")]: KVPageRouter,
 
-  "backup-settings": KVPageRouter,
-  "download-backups": KVPageRouter,
+  [normalize("backup-settings")]: KVPageRouter,
+  [normalize("download-backups")]: KVPageRouter,
 };
 
 const ComingSoon = ({ title }) => (
@@ -170,9 +181,10 @@ export default function AdminRouter() {
   const { slug } = useParams();
   if (!slug) return <Navigate to="/admin/general-settings" replace />;
 
-  const Component = registry[slug];
+  const key = normalize(slug);
+  const Component = registry[key];
 
-  const title = slug
+  const title = key
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
@@ -180,8 +192,10 @@ export default function AdminRouter() {
   if (!Component) return <ComingSoon title={title} />;
 
   return (
-    <Suspense fallback={<Fallback />}>
-      <Component />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<Fallback />}>
+        <Component />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
