@@ -43,7 +43,7 @@ function Field({ f, value, onChange }) {
 /**
  * props:
  * - title: string
- * - prefix: string (filters keys, e.g. "sms." or "email.smtp.")
+ * - prefix: string (e.g. "sms." or "email.smtp.")
  * - fields: [{key,label,type,help,options?,placeholder?}]
  */
 export default function SettingsEditor({ title, prefix, fields }) {
@@ -55,7 +55,8 @@ export default function SettingsEditor({ title, prefix, fields }) {
     (async () => {
       setErr("");
       try {
-        const { data } = await api.get("/admin/settings");
+        // NOTE: this matches your backend mount at /api/settings
+        const { data } = await api.get("/settings");
         setRows(Array.isArray(data) ? data : []);
       } catch (e) {
         setErr(e?.response?.data?.error || e.message);
@@ -88,7 +89,8 @@ export default function SettingsEditor({ title, prefix, fields }) {
     setSaving(true); setErr("");
     try {
       const payload = fields.map(f => ({ key: prefix ? `${prefix}${f.key}` : f.key, value: values[f.key] }));
-      await api.put("/admin/settings", payload);
+      // NOTE: this matches your backend mount at /api/settings
+      await api.put("/settings", payload);
     } catch (e) {
       setErr(e?.response?.data?.error || e.message);
     }

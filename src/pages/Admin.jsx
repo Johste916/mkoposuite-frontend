@@ -15,167 +15,48 @@ const slug = (s) =>
 const linkFor = (label) => `/admin/${slug(label)}`;
 
 const SECTIONS = [
-  {
-    title: "General",
-    icon: <FiSettings className="opacity-70" />,
-    items: [
-      "General Settings",
-    ],
-  },
-  {
-    title: "Manage Staff",
-    icon: <FiUsers className="opacity-70" />,
-    items: [
-      "Staff",
-      "Staff Roles and Permissions",
-      "Staff Email Notifications",
-      "Audit Management",
-    ],
-  },
-  {
-    title: "Loans",
-    icon: <FiCreditCard className="opacity-70" />,
-    items: [
-      "Loan Products",
-      "Loan Penalty Settings",
-      "Loan Fees",
-      "Loan Repayment Cycles",
-      "Loan Reminder Settings",
-      "Loan Templates: Applications/Agreements",
-      "Manage Loan Status and Approvals",
-    ],
-  },
-  {
-    title: "Manage Branches",
-    icon: <FiList className="opacity-70" />,
-    items: [
-      "Branches",
-      "Branch Holidays",
-    ],
-  },
-  {
-    title: "Borrowers",
-    icon: <FiTrendingUp className="opacity-70" />,
-    items: [
-      "Download Statements/Schedules",
-      "Format Borrower Reports",
-      "Rename Borrower Reports",
-      "Rename Collection Sheet Headings",
-      "Manage Loan Officers",
-      "Invite Borrowers Settings",
-      "Bulk Update Borrowers With Loan Officers",
-      "Bulk Move Borrowers to Another Branch",
-      "Modify Add Borrower Fields",
-      "Borrower Settings",
-    ],
-  },
-  {
-    title: "Repayments",
-    icon: <FiBarChart2 className="opacity-70" />,
-    items: ["Loan Repayment Methods", "Manage Collectors"],
-  },
-  {
-    title: "Collateral",
-    icon: <FiBriefcase className="opacity-70" />,
-    items: ["Collateral Types"],
-  },
-  {
-    title: "Payroll",
-    icon: <FiBriefcase className="opacity-70" />,
-    items: ["Payroll Templates"],
-  },
-  {
-    title: "Bulk Upload",
-    icon: <FiDatabase className="opacity-70" />,
-    items: [
-      "Upload Borrowers from CSV file",
-      "Upload Loans from CSV file",
-      "Upload Repayments from CSV file",
-      "Upload Expenses from CSV file",
-      "Upload Other Income from CSV file",
-      "Upload Savings Accounts from CSV file",
-      "Upload Savings Transactions from CSV file",
-      "Upload Loan Schedule from CSV file",
-      "Upload Inter Bank Transfer from CSV file",
-    ],
-  },
-  {
-    title: "Other Income",
-    icon: <FiList className="opacity-70" />,
-    items: ["Other Income Types"],
-  },
-  {
-    title: "Expenses",
-    icon: <FiList className="opacity-70" />,
-    items: ["Expense Types"],
-  },
-  {
-    title: "Asset Management",
-    icon: <FiBriefcase className="opacity-70" />,
-    items: ["Asset Management Types"],
-  },
-  {
-    title: "SMS Settings",
-    icon: <FiGlobe className="opacity-70" />,
-    items: [
-      "SMS Credits",
-      "Sender ID",
-      "SMS Templates",
-      "Auto Send SMS",
-      "Collection Sheets - SMS Template",
-      "SMS Logs",
-      "SMS Settings",
-    ],
-  },
-  {
-    title: "Email Settings",
-    icon: <FiGlobe className="opacity-70" />,
-    items: [
-      "Email Accounts",
-      "Email Templates",
-      "Auto Send Emails",
-      "Collection Sheets - Email Template",
-      "Email Logs",
-      "Email Settings",
-    ],
-  },
-  {
-    title: "Savings",
-    icon: <FiBriefcase className="opacity-70" />,
-    items: ["Savings Products", "Savings Fees", "Savings Transaction Types"],
-  },
-  {
-    title: "E-Signature",
-    icon: <FiShield className="opacity-70" />,
-    items: [
-      "E-Signature Settings",
-      "Email Templates for E-Signature",
-      "E-Signature Email Logs",
-    ],
-  },
-  {
-    title: "Investors",
-    icon: <FiTrendingUp className="opacity-70" />,
-    items: [
-      "Investor Products",
-      "Loan Investment Products",
-      "Investor Fees",
-      "Format Investor Report",
-      "Rename Investor Report",
-      "Invite Investors Settings",
-      "Investor Transaction Types",
-    ],
-  },
-  {
-    title: "Accounting",
-    icon: <FiList className="opacity-70" />,
-    items: ["Settings", "Bank Accounts", "Taxes", "Opening Balances"],
-  },
-  {
-    title: "Backups",
-    icon: <FiDatabase className="opacity-70" />,
-    items: ["Backup Settings", "Download Backups"],
-  },
+  { title: "General", icon: <FiSettings className="opacity-70" />, items: ["General Settings"] },
+  { title: "Manage Staff", icon: <FiUsers className="opacity-70" />, items: [
+      "Staff","Staff Roles and Permissions","Staff Email Notifications","Audit Management",
+    ]},
+  { title: "Loans", icon: <FiCreditCard className="opacity-70" />, items: [
+      "Loan Products","Loan Penalty Settings","Loan Fees","Loan Repayment Cycles","Loan Reminder Settings",
+      "Loan Templates: Applications/Agreements","Manage Loan Status and Approvals",
+    ]},
+  { title: "Manage Branches", icon: <FiList className="opacity-70" />, items: ["Branches","Branch Holidays"]},
+  { title: "Borrowers", icon: <FiTrendingUp className="opacity-70" />, items: [
+      "Download Statements/Schedules","Format Borrower Reports","Rename Borrower Reports",
+      "Rename Collection Sheet Headings","Manage Loan Officers","Invite Borrowers Settings",
+      "Bulk Update Borrowers With Loan Officers","Bulk Move Borrowers to Another Branch",
+      "Modify Add Borrower Fields","Borrower Settings",
+    ]},
+  { title: "Repayments", icon: <FiBarChart2 className="opacity-70" />, items: ["Loan Repayment Methods","Manage Collectors"]},
+  { title: "Collateral", icon: <FiBriefcase className="opacity-70" />, items: ["Collateral Types"]},
+  { title: "Payroll", icon: <FiBriefcase className="opacity-70" />, items: ["Payroll Templates"]},
+  { title: "Bulk Upload", icon: <FiDatabase className="opacity-70" />, items: [
+      "Upload Borrowers from CSV file","Upload Loans from CSV file","Upload Repayments from CSV file",
+      "Upload Expenses from CSV file","Upload Other Income from CSV file","Upload Savings Accounts from CSV file",
+      "Upload Savings Transactions from CSV file","Upload Loan Schedule from CSV file","Upload Inter Bank Transfer from CSV file",
+    ]},
+  { title: "Other Income", icon: <FiList className="opacity-70" />, items: ["Other Income Types"]},
+  { title: "Expenses", icon: <FiList className="opacity-70" />, items: ["Expense Types"]},
+  { title: "Asset Management", icon: <FiBriefcase className="opacity-70" />, items: ["Asset Management Types"]},
+  { title: "SMS Settings", icon: <FiGlobe className="opacity-70" />, items: [
+      "SMS Credits","Sender ID","SMS Templates","Auto Send SMS","Collection Sheets - SMS Template","SMS Logs","SMS Settings",
+    ]},
+  { title: "Email Settings", icon: <FiGlobe className="opacity-70" />, items: [
+      "Email Accounts","Email Templates","Auto Send Emails","Collection Sheets - Email Template","Email Logs","Email Settings",
+    ]},
+  { title: "Savings", icon: <FiBriefcase className="opacity-70" />, items: ["Savings Products","Savings Fees","Savings Transaction Types"]},
+  { title: "E-Signature", icon: <FiShield className="opacity-70" />, items: [
+      "E-Signature Settings","Email Templates for E-Signature","E-Signature Email Logs",
+    ]},
+  { title: "Investors", icon: <FiTrendingUp className="opacity-70" />, items: [
+      "Investor Products","Loan Investment Products","Investor Fees","Format Investor Report","Rename Investor Report",
+      "Invite Investors Settings","Investor Transaction Types",
+    ]},
+  { title: "Accounting", icon: <FiList className="opacity-70" />, items: ["Settings","Bank Accounts","Taxes","Opening Balances"]},
+  { title: "Backups", icon: <FiDatabase className="opacity-70" />, items: ["Backup Settings","Download Backups"]},
 ];
 
 export default function Admin() {
@@ -183,10 +64,9 @@ export default function Admin() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return SECTIONS;
-    return SECTIONS.map((sec) => {
-      const items = sec.items.filter((label) => label.toLowerCase().includes(term));
-      return { ...sec, items };
-    }).filter((sec) => sec.items.length > 0);
+    return SECTIONS
+      .map((sec) => ({ ...sec, items: sec.items.filter((label) => label.toLowerCase().includes(term)) }))
+      .filter((sec) => sec.items.length > 0);
   }, [q]);
 
   return (
@@ -195,9 +75,7 @@ export default function Admin() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Manage configuration, staff, integrations, security, and more.
-            </p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Manage configuration, staff, integrations, security, and more.</p>
           </div>
           <div className="w-full md:w-96">
             <div className="relative">
