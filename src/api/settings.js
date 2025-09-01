@@ -1,185 +1,161 @@
 // src/api/settings.js
 import api from "../api";
 
-/* ---------------------------------------------------------
-   Smart helpers: try multiple paths; treat 404 as "keep trying".
-   For GET, if all paths fail and last error was 404 => return {}.
---------------------------------------------------------- */
+/** Helper that tries multiple endpoints for maximum compatibility. */
 async function smartGet(paths, params) {
   let lastErr;
   for (const p of paths) {
     try {
       const { data } = await api.get(p, { params });
       return data;
-    } catch (e) {
-      if (e?.response?.status === 404) { lastErr = e; continue; }
-      lastErr = e;
-    }
+    } catch (e) { lastErr = e; }
   }
-  // Generic editors are fine starting from an empty object
-  if (lastErr?.response?.status === 404) return {};
   throw lastErr || new Error("All GET paths failed");
 }
-
 async function smartPut(paths, body) {
   let lastErr;
   for (const p of paths) {
     try {
       const { data } = await api.put(p, body);
       return data;
-    } catch (e) {
-      if (e?.response?.status === 404) { lastErr = e; continue; }
-      lastErr = e;
-    }
+    } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error("All PUT paths failed");
 }
-
 async function smartPost(paths, body) {
   let lastErr;
   for (const p of paths) {
     try {
       const { data } = await api.post(p, body);
       return data;
-    } catch (e) {
-      if (e?.response?.status === 404) { lastErr = e; continue; }
-      lastErr = e;
-    }
+    } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error("All POST paths failed");
 }
-
 async function smartDelete(paths) {
   let lastErr;
   for (const p of paths) {
     try {
       const { data } = await api.delete(p);
       return data;
-    } catch (e) {
-      if (e?.response?.status === 404) { lastErr = e; continue; }
-      lastErr = e;
-    }
+    } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error("All DELETE paths failed");
 }
 
-/* ---------------------------------------------------------
-   Generic /api/settings key store (works with your Setting model)
-   GET /api/settings/:key  -> returns raw JSON for key
-   PUT /api/settings/:key  -> accepts body {key,value} or just value
-   PATCH /api/settings/:key-> accepts body {patch} or patch object
-   Also supports ?key= when hitting /api/settings
---------------------------------------------------------- */
-const settingsGet = (key) =>
-  smartGet([`/api/settings/${encodeURIComponent(key)}`, `/api/settings`], { key });
+/**
+ * Generic KV endpoints — do NOT collide with named routes.
+ * We use /api/settings/kv/:key specifically to avoid catching everything (like /loan-settings).
+ */
+const kvGet = (key) => api.get(`/api/settings/kv/${encodeURIComponent(key)}`).then(r => r.data);
+const kvPut = (key, value) => api.put(`/api/settings/kv/${encodeURIComponent(key)}`, { value }).then(r => r.data);
 
-const settingsPut = (key, value) =>
-  smartPut([`/api/settings/${encodeURIComponent(key)}`, `/api/settings`], { key, value });
+/** Generic handlers for settings keys with fallbacks to REAL controllers first */
+const settingsGet = (key, controllerPaths = []) =>
+  smartGet([...controllerPaths, `/api/settings/kv/${key}`]);
 
-/* ---------------------------------------------------------
-   Public API
---------------------------------------------------------- */
+const settingsPut = (key, value, controllerPaths = []) =>
+  smartPut([...controllerPaths, `/api/settings/kv/${key}`], { value });
+
+/* ------------------ BASIC SETTINGS (JSON blobs) ------------------ */
 export const SettingsAPI = {
   // General
-  getGeneral: () => settingsGet("general"),
-  saveGeneral: (v) => settingsPut("general", v),
+  getGeneral: () => settingsGet("general", ["/api/settings/general"]),
+  saveGeneral: (v) => settingsPut("general", v, ["/api/settings/general"]),
 
   // Email
-  getEmail: () => smartGet([`/api/email/accounts`, `/api/settings/email`]),
-  saveEmail: (v) => smartPut([`/api/email/accounts`, `/api/settings/email`], v),
+  getEmail: () => smartGet([`/api/email/accounts`, `/api/settings/email`, `/api/settings/kv/email`]),
+  saveEmail: (v) => smartPut([`/api/email/accounts`, `/api/settings/email`, `/api/settings/kv/email`], v),
 
   // SMS
-  getSms: () => smartGet([`/api/sms/settings`, `/api/settings/sms`]),
-  saveSms: (v) => smartPut([`/api/sms/settings`, `/api/settings/sms`], v),
+  getSms: () => smartGet([`/api/sms/settings`, `/api/settings/sms`, `/api/settings/kv/sms`]),
+  saveSms: (v) => smartPut([`/api/sms/settings`, `/api/settings/sms`, `/api/settings/kv/sms`], v),
 
   // Borrower
-  getBorrower: () => settingsGet("borrower"),
-  saveBorrower: (v) => settingsPut("borrower", v),
+  getBorrower: () => settingsGet("borrower", ["/api/settings/borrower-settings"]),
+  saveBorrower: (v) => settingsPut("borrower", v, ["/api/settings/borrower-settings"]),
 
-  // Comments
-  getCommentSettings: () => settingsGet("comments"),
-  saveCommentSettings: (v) => settingsPut("comments", v),
+  // Comment
+  getCommentSettings: () => settingsGet("comments", ["/api/settings/comment-settings"]),
+  saveCommentSettings: (v) => settingsPut("comments", v, ["/api/settings/comment-settings"]),
 
   // Dashboard
-  getDashboardSettings: () => settingsGet("dashboard"),
-  saveDashboardSettings: (v) => settingsPut("dashboard", v),
+  getDashboardSettings: () => settingsGet("dashboard", ["/api/settings/dashboard-settings"]),
+  saveDashboardSettings: (v) => settingsPut("dashboard", v, ["/api/settings/dashboard-settings"]),
 
-  // Holidays
-  getHolidaySettings: () => settingsGet("holidays"),
-  saveHolidaySettings: (v) => settingsPut("holidays", v),
+  // Holiday
+  getHolidaySettings: () => settingsGet("holidays", ["/api/settings/holiday-settings"]),
+  saveHolidaySettings: (v) => settingsPut("holidays", v, ["/api/settings/holiday-settings"]),
 
-  // Income sources
-  getIncomeSourceSettings: () => settingsGet("income-sources"),
-  saveIncomeSourceSettings: (v) => settingsPut("income-sources", v),
+  // Income source
+  getIncomeSourceSettings: () => settingsGet("income-sources", ["/api/settings/income-source-settings"]),
+  saveIncomeSourceSettings: (v) => settingsPut("income-sources", v, ["/api/settings/income-source-settings"]),
 
-  // Integrations
-  getIntegrationSettings: () => settingsGet("integrations"),
-  saveIntegrationSettings: (v) => settingsPut("integrations", v),
+  // Integration
+  getIntegrationSettings: () => settingsGet("integrations", ["/api/settings/integration-settings"]),
+  saveIntegrationSettings: (v) => settingsPut("integrations", v, ["/api/settings/integration-settings"]),
 
   // Loan approvals / statuses
-  getLoanApprovals: () => settingsGet("loan-approvals"),
-  saveLoanApprovals: (v) => settingsPut("loan-approvals", v),
+  getLoanApprovals: () => settingsGet("loan-approvals", ["/api/settings/loan-approvals"]),
+  saveLoanApprovals: (v) => settingsPut("loan-approvals", v, ["/api/settings/loan-approvals"]),
 
   // Loan templates
-  getLoanTemplates: () => settingsGet("loan-templates"),
-  saveLoanTemplates: (v) => settingsPut("loan-templates", v),
+  getLoanTemplates: () => settingsGet("loan-templates", ["/api/settings/loan-templates"]),
+  saveLoanTemplates: (v) => settingsPut("loan-templates", v, ["/api/settings/loan-templates"]),
 
-  // Loan settings
-  getLoanSettings: () => smartGet([`/api/loans/settings`, `/api/settings/loans`]),
-  saveLoanSettings: (v) => smartPut([`/api/loans/settings`, `/api/settings/loans`], v),
+  // Loan settings (singleton)
+  getLoanSettings: () => smartGet([`/api/loans/settings`, `/api/settings/loan-settings`]),
+  saveLoanSettings: (v) => smartPut([`/api/loans/settings`, `/api/settings/loan-settings`], v),
 
   // Loan penalties
-  getPenaltySettings: () => smartGet([`/api/loans/penalties`, `/api/settings/loan-penalties`]),
-  savePenaltySettings: (v) => smartPut([`/api/loans/penalties`, `/api/settings/loan-penalties`], v),
+  getPenaltySettings: () => smartGet([`/api/loans/penalties`, `/api/settings/penalty-settings`, `/api/settings/kv/loan-penalties`]),
+  savePenaltySettings: (v) => smartPut([`/api/loans/penalties`, `/api/settings/penalty-settings`, `/api/settings/kv/loan-penalties`], v),
 
   // Loan fees
-  getLoanFees: () => smartGet([`/api/loans/fees`, `/api/settings/loan-fees`]),
-  saveLoanFees: (v) => smartPut([`/api/loans/fees`, `/api/settings/loan-fees`], v),
+  getLoanFees: () => smartGet([`/api/loans/fees`, `/api/settings/loan-fees`, `/api/settings/kv/loan-fees`]),
+  saveLoanFees: (v) => smartPut([`/api/loans/fees`, `/api/settings/loan-fees`, `/api/settings/kv/loan-fees`], v),
 
   // Loan repayment cycles
-  getLoanCycles: () => smartGet([`/api/loans/repayment-cycles`, `/api/settings/loan-cycles`]),
-  saveLoanCycles: (v) => smartPut([`/api/loans/repayment-cycles`, `/api/settings/loan-cycles`], v),
+  getLoanCycles: () => smartGet([`/api/loans/repayment-cycles`, `/api/settings/loan-repayment-cycles`, `/api/settings/kv/loan-cycles`]),
+  saveLoanCycles: (v) => smartPut([`/api/loans/repayment-cycles`, `/api/settings/loan-repayment-cycles`, `/api/settings/kv/loan-cycles`], v),
 
   // Loan reminders
-  getLoanReminders: () => smartGet([`/api/loans/reminders`, `/api/settings/loan-reminders`]),
-  saveLoanReminders: (v) => smartPut([`/api/loans/reminders`, `/api/settings/loan-reminders`], v),
+  getLoanReminders: () => smartGet([`/api/loans/reminders`, `/api/settings/loan-reminders`, `/api/settings/kv/loan-reminders`]),
+  saveLoanReminders: (v) => smartPut([`/api/loans/reminders`, `/api/settings/loan-reminders`, `/api/settings/kv/loan-reminders`], v),
 
   // Loan sectors
-  getLoanSectorSettings: () => settingsGet("loan-sectors"),
-  saveLoanSectorSettings: (v) => settingsPut("loan-sectors", v),
+  getLoanSectorSettings: () => settingsGet("loan-sectors", ["/api/settings/loan-sector-settings"]),
+  saveLoanSectorSettings: (v) => settingsPut("loan-sectors", v, ["/api/settings/loan-sector-settings"]),
 
   // Payment settings
-  getPaymentSettings: () => settingsGet("payments"),
-  savePaymentSettings: (v) => settingsPut("payments", v),
+  getPaymentSettings: () => settingsGet("payments", ["/api/settings/payment-settings"]),
+  savePaymentSettings: (v) => settingsPut("payments", v, ["/api/settings/payment-settings"]),
 
-  // Payroll
-  getPayrollSettings: () => smartGet([`/api/hr/payroll/settings`, `/api/settings/payroll`]),
-  savePayrollSettings: (v) => smartPut([`/api/hr/payroll/settings`, `/api/settings/payroll`], v),
+  // Payroll (singleton controller if present, else KV)
+  getPayrollSettings: () => smartGet([`/api/hr/payroll/settings`, `/api/settings/payroll-settings`, `/api/settings/kv/payroll`]),
+  savePayrollSettings: (v) => smartPut([`/api/hr/payroll/settings`, `/api/settings/payroll-settings`, `/api/settings/kv/payroll`], v),
 
-  // Savings
-  getSavingSettings: () => settingsGet("savings"),
-  saveSavingSettings: (v) => settingsPut("savings", v),
+  // Saving
+  getSavingSettings: () => settingsGet("savings", ["/api/settings/saving-settings"]),
+  saveSavingSettings: (v) => settingsPut("savings", v, ["/api/settings/saving-settings"]),
 
   // Users
-  getUsersSettings: () => settingsGet("users"),
-  saveUsersSettings: (v) => settingsPut("users", v),
+  getUsersSettings: () => settingsGet("users", ["/api/settings/user-management"]),
+  saveUsersSettings: (v) => settingsPut("users", v, ["/api/settings/user-management"]),
 
-  /* -------- Live resources -------- */
-  listBranches: () => api.get(`/api/branches`).then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+  /* ------------- Branch management (live resources) ------------- */
+  listBranches: () => api.get(`/api/branches`).then(r => r.data),
   createBranch: (body) => api.post(`/api/branches`, body).then(r => r.data),
-  updateBranch: (id, body) => api.put(`/api/branches/${encodeURIComponent(id)}`, body).then(r => r.data),
-  deleteBranch: (id) => api.delete(`/api/branches/${encodeURIComponent(id)}`).then(r => r.data),
+  updateBranch: (id, body) => api.put(`/api/branches/${id}`, body).then(r => r.data),
+  deleteBranch: (id) => api.delete(`/api/branches/${id}`).then(r => r.data),
 
-  /* -------- Loan categories (live) -------- */
+  /* ------------- Loan categories (live resources) -------------- */
   getLoanCategories: () =>
-    smartGet([`/api/loans/categories`, `/api/settings/loan-categories`]).then(x =>
-      Array.isArray(x?.items) ? x.items : x
-    ),
-  createLoanCategory: (body) => smartPost([`/api/loans/categories`, `/api/settings/loan-categories`], body),
-  updateLoanCategory: (id, body) =>
-    smartPut([`/api/loans/categories/${encodeURIComponent(id)}`, `/api/settings/loan-categories/${encodeURIComponent(id)}`], body),
-  deleteLoanCategory: (id) =>
-    smartDelete([`/api/loans/categories/${encodeURIComponent(id)}`, `/api/settings/loan-categories/${encodeURIComponent(id)}`]),
+    smartGet([`/api/loans/categories`, `/api/settings/loan-categories`])
+      .then(x => Array.isArray(x?.items) ? x.items : x),
+  createLoanCategory: (body) => smartPost([`/api/loans/categories`], body),
+  updateLoanCategory: (id, body) => smartPut([`/api/loans/categories/${id}`], body),
+  deleteLoanCategory: (id) => smartDelete([`/api/loans/categories/${id}`]),
 };
 
 export default SettingsAPI;
