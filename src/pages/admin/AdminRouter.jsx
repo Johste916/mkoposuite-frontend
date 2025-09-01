@@ -2,7 +2,7 @@
 import React, { lazy, Suspense } from "react";
 import { useParams, Navigate } from "react-router-dom";
 
-/* Admin pages */
+// --- Admin pages (concrete editors) ---
 const GeneralSettings         = lazy(() => import("./GeneralSettings"));
 const EmailAccounts           = lazy(() => import("./EmailAccounts"));
 const SmsSettings             = lazy(() => import("./SmsSettings"));
@@ -24,49 +24,49 @@ const PayrollSettings         = lazy(() => import("./PayrollSettings"));
 const SavingSettings          = lazy(() => import("./SavingSettings"));
 const UserManagementSettings  = lazy(() => import("./UserManagementSettings"));
 
-/* NEW Loan settings pages */
+// NEW: Loans
 const LoanFees                = lazy(() => import("./LoanFees"));
 const LoanRepaymentCycles     = lazy(() => import("./LoanRepaymentCycles"));
 const LoanReminderSettings    = lazy(() => import("./LoanReminderSettings"));
 const LoanTemplates           = lazy(() => import("./LoanTemplates"));
 const LoanApprovals           = lazy(() => import("./LoanApprovals"));
 
-/* NEW Manage Staff pages */
+// Staff
 const Staff                   = lazy(() => import("./Staff"));
 const StaffRolesPermissions   = lazy(() => import("./StaffRolesPermissions"));
 const StaffEmailNotifications = lazy(() => import("./StaffEmailNotifications"));
 const AuditManagement         = lazy(() => import("./AuditManagement"));
 
-/* Module page */
+// Module page
 const LoanProducts            = lazy(() => import("../loans/LoanProducts"));
+
+// Smart fallback that still works with live data
+const AdminPlaceholder        = lazy(() => import("./AdminPlaceholder"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
-/**
- * Registry maps slug -> Component.
- * Includes helpful aliases so menu labels like "General Settings", "Branches", etc. work out of the box.
- */
+// Map readable slugs -> components
 const registry = {
   // General
   "general": GeneralSettings,
-  "general-settings": GeneralSettings, // alias for menu label
+  "general-settings": GeneralSettings,
 
   // Email/SMS
   "email": EmailAccounts,
-  "email-accounts": EmailAccounts,     // alias for menu label
-  "email-settings": EmailAccounts,     // temporary alias
+  "email-accounts": EmailAccounts,
+  "email-settings": EmailAccounts,
   "sms": SmsSettings,
-  "sms-settings": SmsSettings,         // alias for menu label
+  "sms-settings": SmsSettings,
   "bulk-sms-settings": BulkSmsSettings,
 
-  // Existing controllers
+  // Core settings
   "loan-categories": LoanCategories,
   "loan-settings":   LoanSettings,
   "penalty-settings": PenaltySettings,
-  "loan-penalty-settings": PenaltySettings, // alias for menu label
+  "loan-penalty-settings": PenaltySettings,
   "integration-settings": IntegrationSettings,
   "branch-settings": BranchSettings,
-  "branches": BranchSettings,                 // alias for menu label
+  "branches": BranchSettings,
   "borrower-settings": BorrowerSettings,
   "user-management": UserManagementSettings,
   "saving-settings": SavingSettings,
@@ -77,51 +77,54 @@ const registry = {
   "loan-sector-settings": LoanSectorSettings,
   "income-source-settings": IncomeSourceSettings,
   "holiday-settings": HolidaySettings,
-  "branch-holidays": HolidaySettings,         // alias for menu label
+  "branch-holidays": HolidaySettings,
   "communications": Communications,
 
-  // NEW — Loans batch
+  // Loans batch
   "loan-fees": LoanFees,
   "loan-repayment-cycles": LoanRepaymentCycles,
   "loan-reminder-settings": LoanReminderSettings,
   "loan-templates-applications-agreements": LoanTemplates,
   "manage-loan-status-and-approvals": LoanApprovals,
 
-  // NEW — Manage Staff batch
+  // Staff batch
   "staff": Staff,
   "staff-roles-and-permissions": StaffRolesPermissions,
   "staff-email-notifications": StaffEmailNotifications,
   "audit-management": AuditManagement,
 
-  // Module page
+  // Modules
   "loan-products": LoanProducts,
 };
 
-const ComingSoon = ({ title }) => (
-  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-    <h1 className="text-xl font-semibold mb-1">{title}</h1>
-    <p className="text-sm text-slate-600 dark:text-slate-400">
-      This settings editor is not wired yet. We’ll enable this page shortly.
-    </p>
-  </div>
-);
+// Normalize unknown slugs into a settings key for the smart placeholder
+function slugToSettingsKey(s) {
+  if (!s) return "";
+  return s
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
 
 export default function AdminRouter() {
   const { slug } = useParams();
   if (!slug) return <Navigate to="/admin/general-settings" replace />;
 
   const Component = registry[slug];
-
   const title = slug
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 
-  if (!Component) return <ComingSoon title={title} />;
-
   return (
     <Suspense fallback={<Fallback />}>
-      <Component />
+      {Component ? (
+        <Component />
+      ) : (
+        // Fallback editor that persists JSON at /api/settings/:key so every page is at least functional
+        <AdminPlaceholder keyProp={slugToSettingsKey(slug)} title={title} />
+      )}
     </Suspense>
   );
 }

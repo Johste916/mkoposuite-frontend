@@ -1,6 +1,10 @@
 // src/api/acl.js
 import api from "./index";
 
+/* ---------------------------------------------------------------
+   Normalizers
+-----------------------------------------------------------------*/
+
 /** Normalize staff list shape so callers get an Array with .meta attached. */
 function normalizeStaffList(resData) {
   if (Array.isArray(resData)) {
@@ -14,14 +18,46 @@ function normalizeStaffList(resData) {
   return rows;
 }
 
+/** Try multiple endpoints when servers differ slightly */
+async function tryPaths({ method = "get", paths = [], body, params }) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.request({ url: p, method, data: body, params });
+      return res.data;
+    } catch (e) {
+      lastErr = e;
+      // if unauthorized, fail fast so the UI can redirect/login
+      const code = e?.response?.status;
+      if (code === 401) throw e;
+    }
+  }
+  throw lastErr || new Error("All paths failed");
+}
+
+/* ---------------------------------------------------------------
+   ACL Client
+-----------------------------------------------------------------*/
 export const ACL = {
   /* ----------------------- Roles ----------------------- */
-  listRoles:  () => api.get("/roles").then(r => r.data),
-  createRole: (payload) => api.post("/roles", payload).then(r => r.data),
+  listRoles: () =>
+    tryPaths({ paths: ["/roles"] }),
+
+  createRole: (payload) =>
+    tryPaths({ method: "post", paths: ["/roles"], body: payload }),
+
+  updateRole: (id, payload) =>
+    tryPaths({ method: "put", paths: [`/roles/${encodeURIComponent(id)}`], body: payload }),
+
+  deleteRole: (id) =>
+    tryPaths({ method: "delete", paths: [`/roles/${encodeURIComponent(id)}`] }),
 
   /* ------------------- Users (Staff) ------------------- */
-  listUsers: (params) =>
-    api.get("/admin/staff", { params }).then(r => normalizeStaffList(r.data)),
+  listUsers: (params = {}) =>
+    tryPaths({ paths: ["/admin/staff"], params }).then(normalizeStaffList),
+
+  getUser: (id) =>
+    tryPaths({ paths: [`/admin/staff/${encodeURIComponent(id)}`] }),
 
   // Map { roleId, branchIds[] } → { roleIds[], branchId } for backend compatibility
   createUser: (payload) => {
@@ -30,7 +66,7 @@ export const ACL = {
     const body = { ...payload, roleIds, branchId };
     delete body.roleId;
     delete body.branchIds;
-    return api.post("/admin/staff", body).then(r => r.data);
+    return tryPaths({ method: "post", paths: ["/admin/staff"], body });
   },
 
   updateUser: (id, payload) => {
@@ -39,20 +75,65 @@ export const ACL = {
     const body = { ...payload, ...(roleIds ? { roleIds } : {}), ...(branchId !== undefined ? { branchId } : {}) };
     delete body.roleId;
     delete body.branchIds;
-    return api.put(`/admin/staff/${encodeURIComponent(id)}`, body).then(r => r.data);
+    return tryPaths({ method: "put", paths: [`/admin/staff/${encodeURIComponent(id)}`], body });
   },
 
   resetUserPassword: (id, password) =>
-    api.patch(`/admin/staff/${encodeURIComponent(id)}/password`, { password }).then(r => r.data),
+    tryPaths({
+      method: "patch",
+      paths: [`/admin/staff/${encodeURIComponent(id)}/password`],
+      body: { password },
+    }),
 
-  toggleUserStatus: (id, next) =>
-    api.patch(`/admin/staff/${encodeURIComponent(id)}/status`, { isActive: next }).then(r => r.data),
+  toggleUserStatus: (id, isActive) =>
+    tryPaths({
+      method: "patch",
+      paths: [`/admin/staff/${encodeURIComponent(id)}/status`],
+      body: { isActive },
+    }),
+
+  assignUserBranches: (id, branchIds = []) =>
+    tryPaths({
+      method: "put",
+      paths: [`/admin/staff/${encodeURIComponent(id)}/branches`],
+      body: { branchIds },
+    }),
 
   /* ------------------- Permissions --------------------- */
-  listPermissions: () => api.get("/permissions").then(r => r.data),
-  updatePermission: (action, roles, description = "") =>
-    api.put(`/permissions/${encodeURIComponent(action)}`, { roles, description }).then(r => r.data),
+  listPermissions: () =>
+    tryPaths({ paths: ["/permissions"] }),
+
+  /**
+   * Update permission roles:
+   *  - Works with either numeric id (/permissions/:id) or action key (/permissions/:action)
+   *  - Pass array of role slugs/names in `roles`, optional description.
+   */
+  updatePermission: (idOrAction, roles, description = "") =>
+    tryPaths({
+      method: "put",
+      paths: [
+        `/permissions/${encodeURIComponent(idOrAction)}`, // supports :id or :action — whichever your API uses
+      ],
+      body: { roles, description },
+    }),
 
   /* ---------------------- Audit ------------------------ */
-  listAudit: (params) => api.get("/admin/audit", { params }).then(r => r.data),
+  listAudit: (params) =>
+    tryPaths({ paths: ["/admin/audit", "/audit-logs"], params }),
+
+  /* ---------------- Convenience (optional) ------------- */
+  listBranches: () => tryPaths({ paths: ["/branches"] }),
+  can: (user, action, permissions) => {
+    // simple client-side check helper (UI-only; server is source of truth)
+    if (!user) return false;
+    const role = String(user.role || "").toLowerCase();
+    if (role === "admin" || role === "director") return true;
+    if (!Array.isArray(permissions)) return false;
+    const entry = permissions.find((p) => p.action === action);
+    if (!entry) return false;
+    const allowed = Array.isArray(entry.roles) ? entry.roles.map((r) => String(r).toLowerCase()) : [];
+    return allowed.includes(role);
+  },
 };
+
+export default ACL;

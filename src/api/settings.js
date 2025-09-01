@@ -1,130 +1,129 @@
 // src/api/settings.js
-import api from "./index"; // axios instance
+import api from "../api";
 
-// If axios baseURL is not already "/api", change `/settings/...` to `/api/settings/...`.
-const G    = (path, params)  => api.get(`/settings/${path}`, { params }).then(r => r.data);
-const P    = (path, payload) => api.put(`/settings/${path}`, payload).then(r => r.data);
-const POST = (path, payload) => api.post(`/settings/${path}`, payload).then(r => r.data);
-const DEL  = (path)          => api.delete(`/settings/${path}`).then(r => r.data);
+/** Helper that tries multiple endpoints for maximum compatibility. */
+async function smartGet(paths, params) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const { data } = await api.get(p, { params });
+      return data;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("All GET paths failed");
+}
+async function smartPut(paths, body) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const { data } = await api.put(p, body);
+      return data;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("All PUT paths failed");
+}
+async function smartPost(paths, body) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const { data } = await api.post(p, body);
+      return data;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("All POST paths failed");
+}
+async function smartDelete(paths) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const { data } = await api.delete(p);
+      return data;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("All DELETE paths failed");
+}
 
-const PUT_ID = (path, id, payload) => api.put(`/settings/${path}/${id}`, payload).then(r => r.data);
-const GET_ID = (path, id)          => api.get(`/settings/${path}/${id}`).then(r => r.data);
+/** Generic handlers for /api/settings/:key with fallbacks */
+const settingsGet = (key) => smartGet([`/api/settings/${key}`, `/api/settings`], { key });
+const settingsPut = (key, value) => smartPut([`/api/settings/${key}`, `/api/settings`], { key, value });
 
+/* ------------------ BASIC SETTINGS (JSON blobs) ------------------ */
 export const SettingsAPI = {
-  // Generic
-  get: G,
-  put: P,
-  post: POST,
-  del: DEL,
+  // General
+  getGeneral: () => settingsGet("general"),
+  saveGeneral: (v) => settingsPut("general", v),
+  // Email
+  getEmail: () => smartGet([`/api/email/accounts`, `/api/settings/email`]),
+  saveEmail: (v) => smartPut([`/api/email/accounts`, `/api/settings/email`], v),
+  // SMS
+  getSms: () => smartGet([`/api/sms/settings`, `/api/settings/sms`]),
+  saveSms: (v) => smartPut([`/api/sms/settings`, `/api/settings/sms`], v),
+  // Borrower
+  getBorrower: () => settingsGet("borrower"),
+  saveBorrower: (v) => settingsPut("borrower", v),
+  // Comment
+  getCommentSettings: () => settingsGet("comments"),
+  saveCommentSettings: (v) => settingsPut("comments", v),
+  // Dashboard
+  getDashboardSettings: () => settingsGet("dashboard"),
+  saveDashboardSettings: (v) => settingsPut("dashboard", v),
+  // Holiday
+  getHolidaySettings: () => settingsGet("holidays"),
+  saveHolidaySettings: (v) => settingsPut("holidays", v),
+  // Income source
+  getIncomeSourceSettings: () => settingsGet("income-sources"),
+  saveIncomeSourceSettings: (v) => settingsPut("income-sources", v),
+  // Integration
+  getIntegrationSettings: () => settingsGet("integrations"),
+  saveIntegrationSettings: (v) => settingsPut("integrations", v),
+  // Loan approvals / statuses
+  getLoanApprovals: () => settingsGet("loan-approvals"),
+  saveLoanApprovals: (v) => settingsPut("loan-approvals", v),
+  // Loan templates
+  getLoanTemplates: () => settingsGet("loan-templates"),
+  saveLoanTemplates: (v) => settingsPut("loan-templates", v),
+  // Loan settings
+  getLoanSettings: () => smartGet([`/api/loans/settings`, `/api/settings/loans`]),
+  saveLoanSettings: (v) => smartPut([`/api/loans/settings`, `/api/settings/loans`], v),
+  // Loan penalties
+  getPenaltySettings: () => smartGet([`/api/loans/penalties`, `/api/settings/loan-penalties`]),
+  savePenaltySettings: (v) => smartPut([`/api/loans/penalties`, `/api/settings/loan-penalties`], v),
+  // Loan fees
+  getLoanFees: () => smartGet([`/api/loans/fees`, `/api/settings/loan-fees`]),
+  saveLoanFees: (v) => smartPut([`/api/loans/fees`, `/api/settings/loan-fees`], v),
+  // Loan repayment cycles
+  getLoanCycles: () => smartGet([`/api/loans/repayment-cycles`, `/api/settings/loan-cycles`]),
+  saveLoanCycles: (v) => smartPut([`/api/loans/repayment-cycles`, `/api/settings/loan-cycles`], v),
+  // Loan reminders
+  getLoanReminders: () => smartGet([`/api/loans/reminders`, `/api/settings/loan-reminders`]),
+  saveLoanReminders: (v) => smartPut([`/api/loans/reminders`, `/api/settings/loan-reminders`], v),
+  // Loan sectors
+  getLoanSectorSettings: () => settingsGet("loan-sectors"),
+  saveLoanSectorSettings: (v) => settingsPut("loan-sectors", v),
+  // Payment settings
+  getPaymentSettings: () => settingsGet("payments"),
+  savePaymentSettings: (v) => settingsPut("payments", v),
+  // Payroll
+  getPayrollSettings: () => smartGet([`/api/hr/payroll/settings`, `/api/settings/payroll`]),
+  savePayrollSettings: (v) => smartPut([`/api/hr/payroll/settings`, `/api/settings/payroll`], v),
+  // Saving
+  getSavingSettings: () => settingsGet("savings"),
+  saveSavingSettings: (v) => settingsPut("savings", v),
+  // Users
+  getUsersSettings: () => settingsGet("users"),
+  saveUsersSettings: (v) => settingsPut("users", v),
 
-  /* ===== General/Email/SMS ===== */
-  getGeneral:        () => G("general"),
-  saveGeneral:       (payload) => P("general", payload),
+  /* ------------- Branch management (live resources) ------------- */
+  listBranches: () => api.get(`/api/branches`).then(r => r.data),
+  createBranch: (body) => api.post(`/api/branches`, body).then(r => r.data),
+  updateBranch: (id, body) => api.put(`/api/branches/${id}`, body).then(r => r.data),
+  deleteBranch: (id) => api.delete(`/api/branches/${id}`).then(r => r.data),
 
-  getSms:            () => G("sms"),
-  saveSms:           (payload) => P("sms", payload),
-
-  getEmail:          () => G("email"),
-  saveEmail:         (payload) => P("email", payload),
-
-  /* ===== Loans batch (new) ===== */
-  getLoanFees:       () => G("loan-fees"),
-  saveLoanFees:      (payload) => P("loan-fees", payload),
-
-  getLoanReminders:  () => G("loan-reminders"),
-  saveLoanReminders: (payload) => P("loan-reminders", payload),
-
-  getLoanCycles:     () => G("loan-repayment-cycles"),
-  saveLoanCycles:    (payload) => P("loan-repayment-cycles", payload),
-
-  getLoanTemplates:  () => G("loan-templates"),
-  saveLoanTemplates: (payload) => P("loan-templates", payload),
-
-  getLoanApprovals:  () => G("loan-approvals"),
-  saveLoanApprovals: (payload) => P("loan-approvals", payload),
-
-  /* ===== Existing blobs ===== */
-  getSystem:            () => G("system-settings"),
-  saveSystem:           (payload) => P("system-settings", payload),
-
-  getBorrower:          () => G("borrower-settings"),
-  saveBorrower:         (payload) => P("borrower-settings", payload),
-
-  getDashboard:         () => G("dashboard-settings"),
-  saveDashboard:        (payload) => P("dashboard-settings", payload),
-
-  getPenalty:           () => G("penalty-settings"),
-  savePenalty:          (payload) => P("penalty-settings", payload),
-
-  getBulkSms:           () => G("bulk-sms-settings"),
-  saveBulkSms:          (payload) => P("bulk-sms-settings", payload),
-
-  getIntegration:       () => G("integration-settings"),
-  saveIntegration:      (payload) => P("integration-settings", payload),
-
-  getSaving:            () => G("saving-settings"),
-  saveSaving:           (payload) => P("saving-settings", payload),
-
-  getPayroll:           () => G("payroll-settings"),
-  savePayroll:          (payload) => P("payroll-settings", payload),
-
-  getPayment:           () => G("payment-settings"),
-  savePayment:          (payload) => P("payment-settings", payload),
-
-  getLoan:              () => G("loan-settings"),
-  saveLoan:             (payload) => P("loan-settings", payload),
-
-  getLoanSectors:       () => G("loan-sector-settings"),
-  saveLoanSectors:      (payload) => P("loan-sector-settings", payload),
-
-  getIncomeSources:     () => G("income-source-settings"),
-  saveIncomeSources:    (payload) => P("income-source-settings", payload),
-
-  getHolidays:          () => G("holiday-settings"),
-  saveHolidays:         (payload) => P("holiday-settings", payload),
-
-  /* ===== Loan categories CRUD ===== */
-  listLoanCategories:         () => G("loan-categories"),
-  createLoanCategory:         (payload) => POST("loan-categories", payload),
-  updateLoanCategory:         (id, payload) => PUT_ID("loan-categories", id, payload),
-  deleteLoanCategory:         (id) => DEL(`loan-categories/${id}`),
-
-  /* ===== Branch Settings (list + update by :id) ===== */
-  listBranches:               () => G("branch-settings"),
-  updateBranch:               (id, payload) => PUT_ID("branch-settings", id, payload),
-
-  /* ===== Communications ===== */
-  listCommunications:         (params) => G("communications", params),
-  createCommunication:        (payload) => POST("communications", payload),
-  getCommunication:           (id) => GET_ID("communications", id),
-  updateCommunication:        (id, payload) => PUT_ID("communications", id, payload),
-  deleteCommunication:        (id) => DEL(`communications/${id}`),
-  addCommunicationAttachment: (id, payload) => POST(`communications/${id}/attachments`, payload),
-  removeCommunicationAttachment: (id, attId) => DEL(`communications/${id}/attachments/${attId}`),
-
-  /* ===== Friendly aliases (optional) ===== */
-  getBorrowerSettings:       () => G("borrower-settings"),
-  saveBorrowerSettings:      (payload) => P("borrower-settings", payload),
-  getPaymentSettings:        () => G("payment-settings"),
-  savePaymentSettings:       (payload) => P("payment-settings", payload),
-  getDashboardSettings:      () => G("dashboard-settings"),
-  saveDashboardSettings:     (payload) => P("dashboard-settings", payload),
-  getPenaltySettings:        () => G("penalty-settings"),
-  savePenaltySettings:       (payload) => P("penalty-settings", payload),
-  getSavingSettings:         () => G("saving-settings"),
-  saveSavingSettings:        (payload) => P("saving-settings", payload),
-  getPayrollSettings:        () => G("payroll-settings"),
-  savePayrollSettings:       (payload) => P("payroll-settings", payload),
-  getIntegrationSettings:    () => G("integration-settings"),
-  saveIntegrationSettings:   (payload) => P("integration-settings", payload),
-  getIncomeSourceSettings:   () => G("income-source-settings"),
-  saveIncomeSourceSettings:  (payload) => P("income-source-settings", payload),
-  getLoanSectorSettings:     () => G("loan-sector-settings"),
-  saveLoanSectorSettings:    (payload) => P("loan-sector-settings", payload),
-  getHolidaySettings:        () => G("holiday-settings"),
-  saveHolidaySettings:       (payload) => P("holiday-settings", payload),
-  getSystemSettings:         () => G("system-settings"),
-  saveSystemSettings:        (payload) => P("system-settings", payload),
-  getLoanSettings:           () => G("loan-settings"),
-  saveLoanSettings:          (payload) => P("loan-settings", payload),
+  /* ------------- Loan categories (live resources) -------------- */
+  getLoanCategories: () => smartGet([`/api/loans/categories`, `/api/settings/loan-categories`]).then(x => Array.isArray(x?.items) ? x.items : x),
+  createLoanCategory: (body) => smartPost([`/api/loans/categories`], body),
+  updateLoanCategory: (id, body) => smartPut([`/api/loans/categories/${id}`], body),
+  deleteLoanCategory: (id) => smartDelete([`/api/loans/categories/${id}`]),
 };
+
+export default SettingsAPI;

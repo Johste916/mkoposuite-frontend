@@ -1,41 +1,76 @@
-import { useEffect, useState } from "react";
+// src/hooks/useSettingsResource.js
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-export function useSettingsResource(getFn, saveFn, initial = {}) {
-  const [data, setData] = useState(initial);
+/**
+ * Small state machine for settings editors.
+ * - getter(): Promise<obj>
+ * - saver(obj): Promise<any>
+ * - defaults: initial shape to use if GET returns empty
+ */
+export default function useSettingsResource(getter, saver, defaults = {}) {
+  const [data, setData] = useState(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    let alive = true;
+    isMounted.current = true;
     (async () => {
-      setLoading(true); setError(""); setSuccess("");
+      setLoading(true); setError("");
       try {
-        const d = await getFn();
-        if (alive) setData(d || initial);
+        const res = await getter();
+        if (isMounted.current) setData(res && Object.keys(res).length ? res : defaults);
       } catch (e) {
-        if (alive) setError(e?.response?.data?.message || e.message || "Failed to load");
+        if (isMounted.current) setError(e?.response?.data?.error || e.message);
       } finally {
-        if (alive) setLoading(false);
+        if (isMounted.current) setLoading(false);
       }
     })();
-    return () => { alive = false; };
-  }, [getFn]);
+    return () => { isMounted.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const save = async (payload = data) => {
-    setSaving(true); setError(""); setSuccess("");
+  const set = useCallback((patch) => {
+    setData((prev) => ({ ...prev, ...(typeof patch === "function" ? patch(prev) : patch) }));
+  }, []);
+
+  const toast = useCallback((message, type = "info") => {
     try {
-      await saveFn(payload);
-      setSuccess("Saved!");
+      window.dispatchEvent(new CustomEvent("app:toast", { detail: { type, message } }));
+    } catch {}
+    if (type === "error") console.error(message);
+    else console.log(message);
+  }, []);
+
+  const save = useCallback(async (patch) => {
+    setSaving(true); setError("");
+    try {
+      const next = patch ? { ...data, ...patch } : data;
+      await saver(next);
+      toast("Saved", "success");
       return true;
     } catch (e) {
-      setError(e?.response?.data?.message || e.message || "Failed to save");
+      const msg = e?.response?.data?.error || e.message;
+      setError(msg);
+      toast(msg || "Save failed", "error");
       return false;
     } finally {
       setSaving(false);
     }
-  };
+  }, [data, saver, toast]);
 
-  return { data, setData, loading, saving, error, success, save };
+  const reload = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const res = await getter();
+      setData(res && Object.keys(res).length ? res : defaults);
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [getter, defaults]);
+
+  return { data, set, loading, saving, error, save, reload, toast };
 }
