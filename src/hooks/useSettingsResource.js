@@ -1,76 +1,95 @@
 // src/hooks/useSettingsResource.js
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+'use strict';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import api from '../api';
 
 /**
- * Small state machine for settings editors.
- * - getter(): Promise<obj>
- * - saver(obj): Promise<any>
- * - defaults: initial shape to use if GET returns empty
+ * Flexible settings data hook.
+ *
+ * Usage:
+ *   const s = useSettingsResource('/settings/general');                // GET+PUT same URL
+ *   const s = useSettingsResource('/settings/general', '/settings/general');
+ *   const s = useSettingsResource({ getUrl: '/settings/x', putUrl: '/settings/x', initial: {} });
  */
-export default function useSettingsResource(getter, saver, defaults = {}) {
-  const [data, setData] = useState(defaults);
-  const [loading, setLoading] = useState(true);
+export function useSettingsResource(arg1, arg2, arg3) {
+  // Normalize arguments
+  let getUrl, putUrl, initial;
+  if (typeof arg1 === 'string') {
+    getUrl = arg1;
+    putUrl = arg2 || arg1;
+    initial = arg3 || {};
+  } else if (arg1 && typeof arg1 === 'object') {
+    getUrl = arg1.getUrl;
+    putUrl = arg1.putUrl || arg1.getUrl;
+    initial = arg1.initial || {};
+  }
+
+  const mounted = useRef(true);
+  const [data, setData] = useState(initial);
+  const [loading, setLoading] = useState(!!getUrl);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const isMounted = useRef(true);
+  const [error, setError] = useState('');
+
+  const parsePayload = useCallback((res) => {
+    // Accept {data}, array, or plain object
+    const raw = res?.data ?? res;
+    if (raw && typeof raw === 'object' && 'data' in raw && raw.data != null) return raw.data;
+    return raw;
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!getUrl) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get(getUrl);
+      const payload = parsePayload(res);
+      if (mounted.current) setData(payload ?? {});
+    } catch (e) {
+      if (mounted.current) setError(e?.response?.data?.error || e?.message || 'Failed to load settings');
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }, [getUrl, parsePayload]);
+
+  const save = useCallback(
+    async (patch) => {
+      setSaving(true);
+      setError('');
+      try {
+        const body = patch ? { ...data, ...patch } : data;
+        const res = await api.put(putUrl || getUrl, body);
+        const payload = parsePayload(res);
+        if (mounted.current) setData(payload ?? body ?? {});
+        return payload ?? body ?? {};
+      } catch (e) {
+        const msg = e?.response?.data?.error || e?.message || 'Failed to save settings';
+        if (mounted.current) setError(msg);
+        throw new Error(msg);
+      } finally {
+        if (mounted.current) setSaving(false);
+      }
+    },
+    [data, getUrl, putUrl, parsePayload]
+  );
+
+  const reset = useCallback(() => setData(initial), [initial]);
 
   useEffect(() => {
-    isMounted.current = true;
-    (async () => {
-      setLoading(true); setError("");
-      try {
-        const res = await getter();
-        if (isMounted.current) setData(res && Object.keys(res).length ? res : defaults);
-      } catch (e) {
-        if (isMounted.current) setError(e?.response?.data?.error || e.message);
-      } finally {
-        if (isMounted.current) setLoading(false);
-      }
-    })();
-    return () => { isMounted.current = false; };
+    mounted.current = true;
+    if (getUrl) load();
+    return () => {
+      mounted.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [getUrl]);
 
-  const set = useCallback((patch) => {
-    setData((prev) => ({ ...prev, ...(typeof patch === "function" ? patch(prev) : patch) }));
-  }, []);
-
-  const toast = useCallback((message, type = "info") => {
-    try {
-      window.dispatchEvent(new CustomEvent("app:toast", { detail: { type, message } }));
-    } catch {}
-    if (type === "error") console.error(message);
-    else console.log(message);
-  }, []);
-
-  const save = useCallback(async (patch) => {
-    setSaving(true); setError("");
-    try {
-      const next = patch ? { ...data, ...patch } : data;
-      await saver(next);
-      toast("Saved", "success");
-      return true;
-    } catch (e) {
-      const msg = e?.response?.data?.error || e.message;
-      setError(msg);
-      toast(msg || "Save failed", "error");
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }, [data, saver, toast]);
-
-  const reload = useCallback(async () => {
-    setLoading(true); setError("");
-    try {
-      const res = await getter();
-      setData(res && Object.keys(res).length ? res : defaults);
-    } catch (e) {
-      setError(e?.response?.data?.error || e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [getter, defaults]);
-
-  return { data, set, loading, saving, error, save, reload, toast };
+  return useMemo(
+    () => ({ data, setData, loading, saving, error, load, reload: load, save, reset }),
+    [data, loading, saving, error, load, save, reset]
+  );
 }
+
+// Optional default export for convenience (some pages may import default)
+export default useSettingsResource;

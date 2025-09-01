@@ -1,0 +1,1 @@
+import{j as t}from"./index-Beh6sWFf.js";import{R as r}from"./ReportShell-3NBvFoLp.js";function o(){return t.jsx(r,{title:"All Entries",endpoint:"/reports/all-entries",columns:[]})}export{o as default};
