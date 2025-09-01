@@ -1,0 +1,1 @@
+import{j as r}from"./index-BtuSn5tU.js";import{R as o}from"./ReportShell-xqz6J213.js";function s(){return r.jsx(o,{title:"Borrowers Report",endpoint:"/reports/borrowers/loan-summary",columns:[{key:"borrower"}]})}export{s as default};
