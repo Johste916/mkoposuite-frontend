@@ -1,9 +1,8 @@
 // src/pages/admin/AdminRouter.jsx
 import React, { lazy, Suspense } from "react";
 import { useParams, Navigate } from "react-router-dom";
-import ErrorBoundary from "../../components/ErrorBoundary";
 
-/* Admin pages (yours) */
+/* ---- Admin pages (already working) ---- */
 const GeneralSettings         = lazy(() => import("./GeneralSettings"));
 const EmailAccounts           = lazy(() => import("./EmailAccounts"));
 const SmsSettings             = lazy(() => import("./SmsSettings"));
@@ -14,7 +13,7 @@ const BulkSmsSettings         = lazy(() => import("./BulkSmsSettings"));
 const CommentSettings         = lazy(() => import("./CommentSettings"));
 const Communications          = lazy(() => import("./Communications"));
 const DashboardSettings       = lazy(() => import("./DashboardSettings"));
-const HolidaySettings         = lazy(() => import("./HolidaySettings"));
+const HolidaySettings         = lazy(() => import("./HolidaySettings")); // real UI
 const IncomeSourceSettings    = lazy(() => import("./IncomeSourceSettings"));
 const IntegrationSettings     = lazy(() => import("./IntegrationSettings"));
 const LoanCategories          = lazy(() => import("./LoanCategories"));
@@ -25,154 +24,126 @@ const PayrollSettings         = lazy(() => import("./PayrollSettings"));
 const SavingSettings          = lazy(() => import("./SavingSettings"));
 const UserManagementSettings  = lazy(() => import("./UserManagementSettings"));
 
-/* NEW Loan settings pages */
+/* ---- Loan sub-pages ---- */
 const LoanFees                = lazy(() => import("./LoanFees"));
 const LoanRepaymentCycles     = lazy(() => import("./LoanRepaymentCycles"));
 const LoanReminderSettings    = lazy(() => import("./LoanReminderSettings"));
 const LoanTemplates           = lazy(() => import("./LoanTemplates"));
 const LoanApprovals           = lazy(() => import("./LoanApprovals"));
 
-/* NEW Manage Staff pages */
+/* ---- Manage Staff ---- */
 const Staff                   = lazy(() => import("./Staff"));
 const StaffRolesPermissions   = lazy(() => import("./StaffRolesPermissions"));
 const StaffEmailNotifications = lazy(() => import("./StaffEmailNotifications"));
 const AuditManagement         = lazy(() => import("./AuditManagement"));
 
-/* Module page */
+/* ---- Module page ---- */
 const LoanProducts            = lazy(() => import("../loans/LoanProducts"));
 
-/* NEW: generic KV settings page for many remaining slugs */
-const KVPageRouter            = lazy(() => import("./KVPageRouter"));
+/* ---- Real CRUD wrappers (Types/Templates) ---- */
+const ExpenseTypes            = lazy(() => import("./ExpenseTypes"));
+const OtherIncomeTypes        = lazy(() => import("./OtherIncomeTypes"));
+const AssetManagementTypes    = lazy(() => import("./AssetManagementTypes"));
+const CollateralTypes         = lazy(() => import("./CollateralTypes"));
+const PayrollTemplates        = lazy(() => import("./PayrollTemplates"));
 
-const Fallback = () => (
-  <div className="p-6 text-sm text-gray-600">Loading…</div>
-);
+const SavingsProducts         = lazy(() => import("./SavingsProducts"));
+const SavingsFees             = lazy(() => import("./SavingsFees"));
+const SavingsTransactionTypes = lazy(() => import("./SavingsTransactionTypes"));
 
-/** Keep slug logic consistent with the Admin list */
-const normalize = (s = "") =>
-  s
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
+const EmailTemplates          = lazy(() => import("./EmailTemplates"));
+const SmsTemplates            = lazy(() => import("./SmsTemplates"));
 
-/** Registry maps normalized slug -> Component. */
+const InvestorProducts        = lazy(() => import("./InvestorProducts"));
+const LoanInvestmentProducts  = lazy(() => import("./LoanInvestmentProducts"));
+const InvestorFees            = lazy(() => import("./InvestorFees"));
+const InvestorTransactionTypes= lazy(() => import("./InvestorTransactionTypes"));
+
+const LoanRepaymentMethods    = lazy(() => import("./LoanRepaymentMethods"));
+const ManageCollectors        = lazy(() => import("./ManageCollectors"));
+
+const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
+
+/** Maps URL slug -> Component */
 const registry = {
-  // General
-  [normalize("general")]: GeneralSettings,
-  [normalize("general-settings")]: GeneralSettings,
+  /* General */
+  "general": GeneralSettings,
+  "general-settings": GeneralSettings,
 
-  // Email/SMS
-  [normalize("email")]: EmailAccounts,
-  [normalize("email-accounts")]: EmailAccounts,
-  [normalize("email-settings")]: EmailAccounts,
-  [normalize("sms")]: SmsSettings,
-  [normalize("sms-settings")]: SmsSettings,
-  [normalize("bulk-sms-settings")]: BulkSmsSettings,
+  /* Email/SMS */
+  "email": EmailAccounts,
+  "email-accounts": EmailAccounts,
+  "email-settings": EmailAccounts,
+  "sms": SmsSettings,
+  "sms-settings": SmsSettings,
+  "bulk-sms-settings": BulkSmsSettings,
 
-  // Existing controllers
-  [normalize("loan-categories")]: LoanCategories,
-  [normalize("loan-settings")]: LoanSettings,
-  [normalize("penalty-settings")]: PenaltySettings,
-  [normalize("loan-penalty-settings")]: PenaltySettings,
-  [normalize("integration-settings")]: IntegrationSettings,
-  [normalize("branch-settings")]: BranchSettings,
-  [normalize("branches")]: BranchSettings,
-  [normalize("borrower-settings")]: BorrowerSettings,
-  [normalize("user-management")]: UserManagementSettings,
-  [normalize("saving-settings")]: SavingSettings,
-  [normalize("payroll-settings")]: PayrollSettings,
-  [normalize("payment-settings")]: PaymentSettings,
-  [normalize("comment-settings")]: CommentSettings,
-  [normalize("dashboard-settings")]: DashboardSettings,
-  [normalize("loan-sector-settings")]: LoanSectorSettings,
-  [normalize("income-source-settings")]: IncomeSourceSettings,
-  [normalize("holiday-settings")]: HolidaySettings,
-  [normalize("branch-holidays")]: HolidaySettings,
-  [normalize("communications")]: Communications,
+  /* Existing controllers */
+  "loan-categories": LoanCategories,
+  "loan-settings": LoanSettings,
+  "penalty-settings": PenaltySettings,
+  "loan-penalty-settings": PenaltySettings,
+  "integration-settings": IntegrationSettings,
+  "branch-settings": BranchSettings,
+  "branches": BranchSettings,
+  "borrower-settings": BorrowerSettings,
+  "user-management": UserManagementSettings,
+  "saving-settings": SavingSettings,
+  "payroll-settings": PayrollSettings,
+  "payment-settings": PaymentSettings,
+  "comment-settings": CommentSettings,
+  "dashboard-settings": DashboardSettings,
+  "loan-sector-settings": LoanSectorSettings,
+  "income-source-settings": IncomeSourceSettings,
 
-  // NEW — Loans batch
-  [normalize("loan-fees")]: LoanFees,
-  [normalize("loan-repayment-cycles")]: LoanRepaymentCycles,
-  [normalize("loan-reminder-settings")]: LoanReminderSettings,
-  [normalize("loan-templates-applications-agreements")]: LoanTemplates,
-  [normalize("manage-loan-status-and-approvals")]: LoanApprovals,
+  /* Holidays (real CRUD, no JSON blobs) */
+  "holiday-settings": HolidaySettings,
+  "branch-holidays": HolidaySettings,
 
-  // NEW — Manage Staff batch
-  [normalize("staff")]: Staff,
-  [normalize("staff-roles-and-permissions")]: StaffRolesPermissions,
-  [normalize("staff-email-notifications")]: StaffEmailNotifications,
-  [normalize("audit-management")]: AuditManagement,
+  /* Loans batch */
+  "loan-fees": LoanFees,
+  "loan-repayment-cycles": LoanRepaymentCycles,
+  "loan-reminder-settings": LoanReminderSettings,
+  "loan-templates-applications-agreements": LoanTemplates,
+  "manage-loan-status-and-approvals": LoanApprovals,
 
-  // Module page
-  [normalize("loan-products")]: LoanProducts,
+  /* Manage Staff */
+  "staff": Staff,
+  "staff-roles-and-permissions": StaffRolesPermissions,
+  "staff-email-notifications": StaffEmailNotifications,
+  "audit-management": AuditManagement,
 
-  /* ---------- KV-backed pages (now real editors) ---------- */
-  [normalize("format-borrower-reports")]: KVPageRouter,
-  [normalize("rename-borrower-reports")]: KVPageRouter,
-  [normalize("rename-collection-sheet-headings")]: KVPageRouter,
-  [normalize("invite-borrowers-settings")]: KVPageRouter,
-  [normalize("modify-add-borrower-fields")]: KVPageRouter,
+  /* Module */
+  "loan-products": LoanProducts,
 
-  [normalize("loan-repayment-methods")]: KVPageRouter,
-  [normalize("manage-collectors")]: KVPageRouter,
+  /* Types/Templates CRUD (replaces old KV JSON screens) */
+  "expense-types": ExpenseTypes,
+  "other-income-types": OtherIncomeTypes,
+  "asset-management-types": AssetManagementTypes,
+  "collateral-types": CollateralTypes,
+  "payroll-templates": PayrollTemplates,
 
-  [normalize("collateral-types")]: KVPageRouter,
-  [normalize("payroll-templates")]: KVPageRouter,
+  "savings-products": SavingsProducts,
+  "savings-fees": SavingsFees,
+  "savings-transaction-types": SavingsTransactionTypes,
 
-  [normalize("upload-borrowers-from-csv-file")]: KVPageRouter,
-  [normalize("upload-loans-from-csv-file")]: KVPageRouter,
-  [normalize("upload-repayments-from-csv-file")]: KVPageRouter,
-  [normalize("upload-expenses-from-csv-file")]: KVPageRouter,
-  [normalize("upload-other-income-from-csv-file")]: KVPageRouter,
-  [normalize("upload-savings-accounts-from-csv-file")]: KVPageRouter,
-  [normalize("upload-savings-transactions-from-csv-file")]: KVPageRouter,
-  [normalize("upload-loan-schedule-from-csv-file")]: KVPageRouter,
-  [normalize("upload-inter-bank-transfer-from-csv-file")]: KVPageRouter,
+  "email-templates": EmailTemplates,
+  "sms-templates": SmsTemplates,
 
-  [normalize("other-income-types")]: KVPageRouter,
-  [normalize("expense-types")]: KVPageRouter,
-  [normalize("asset-management-types")]: KVPageRouter,
+  "investor-products": InvestorProducts,
+  "loan-investment-products": LoanInvestmentProducts,
+  "investor-fees": InvestorFees,
+  "investor-transaction-types": InvestorTransactionTypes,
 
-  [normalize("sms-credits")]: KVPageRouter,
-  [normalize("sender-id")]: KVPageRouter,
-  [normalize("sms-templates")]: KVPageRouter,
-  [normalize("auto-send-sms")]: KVPageRouter,
-  [normalize("collection-sheets-sms-template")]: KVPageRouter,
-
-  [normalize("email-templates")]: KVPageRouter,
-  [normalize("auto-send-emails")]: KVPageRouter,
-  [normalize("collection-sheets-email-template")]: KVPageRouter,
-
-  [normalize("savings-products")]: KVPageRouter,
-  [normalize("savings-fees")]: KVPageRouter,
-  [normalize("savings-transaction-types")]: KVPageRouter,
-
-  [normalize("e-signature-settings")]: KVPageRouter,
-  [normalize("email-templates-for-e-signature")]: KVPageRouter,
-
-  [normalize("investor-products")]: KVPageRouter,
-  [normalize("loan-investment-products")]: KVPageRouter,
-  [normalize("investor-fees")]: KVPageRouter,
-  [normalize("format-investor-report")]: KVPageRouter,
-  [normalize("rename-investor-report")]: KVPageRouter,
-  [normalize("invite-investors-settings")]: KVPageRouter,
-  [normalize("investor-transaction-types")]: KVPageRouter,
-
-  [normalize("settings")]: KVPageRouter, // accounting -> settings
-  [normalize("bank-accounts")]: KVPageRouter,
-  [normalize("taxes")]: KVPageRouter,
-  [normalize("opening-balances")]: KVPageRouter,
-
-  [normalize("backup-settings")]: KVPageRouter,
-  [normalize("download-backups")]: KVPageRouter,
+  "loan-repayment-methods": LoanRepaymentMethods,
+  "manage-collectors": ManageCollectors,
 };
 
 const ComingSoon = ({ title }) => (
   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
     <h1 className="text-xl font-semibold mb-1">{title}</h1>
     <p className="text-sm text-slate-600 dark:text-slate-400">
-      This settings editor is not wired yet. We’ll enable this page shortly.
+      This settings editor is not wired yet.
     </p>
   </div>
 );
@@ -181,10 +152,9 @@ export default function AdminRouter() {
   const { slug } = useParams();
   if (!slug) return <Navigate to="/admin/general-settings" replace />;
 
-  const key = normalize(slug);
-  const Component = registry[key];
+  const Component = registry[slug];
 
-  const title = key
+  const title = slug
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
@@ -192,10 +162,8 @@ export default function AdminRouter() {
   if (!Component) return <ComingSoon title={title} />;
 
   return (
-    <ErrorBoundary>
-      <Suspense fallback={<Fallback />}>
-        <Component />
-      </Suspense>
-    </ErrorBoundary>
+    <Suspense fallback={<Fallback />}>
+      <Component />
+    </Suspense>
   );
 }
