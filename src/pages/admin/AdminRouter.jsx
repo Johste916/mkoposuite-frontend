@@ -2,7 +2,7 @@
 import React, { lazy, Suspense } from "react";
 import { useParams, Navigate } from "react-router-dom";
 
-/* Admin pages (tailored) */
+/* Admin pages (yours) */
 const GeneralSettings         = lazy(() => import("./GeneralSettings"));
 const EmailAccounts           = lazy(() => import("./EmailAccounts"));
 const SmsSettings             = lazy(() => import("./SmsSettings"));
@@ -40,21 +40,12 @@ const AuditManagement         = lazy(() => import("./AuditManagement"));
 /* Module page */
 const LoanProducts            = lazy(() => import("../loans/LoanProducts"));
 
-/* Generic key-based settings editor (nice JSON UI, no placeholder text) */
-const KeySettingsPage         = lazy(() => import("./KeySettingsPage"));
+/* NEW: generic KV settings page for many remaining slugs */
+const KVPageRouter            = lazy(() => import("./KVPageRouter"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
-/** tiny factory to pass props into lazy component */
-const K = (title, keyName, defaults = {}) =>
-  function KeyWrapper() {
-    return <KeySettingsPage title={title} keyName={keyName} defaults={defaults} />;
-  };
-
-/**
- * Registry maps slug -> Component.
- * If an item is pure JSON config, map it with K(title, keyName).
- */
+/** Registry maps slug -> Component. */
 const registry = {
   // General
   "general": GeneralSettings,
@@ -105,85 +96,65 @@ const registry = {
   // Module page
   "loan-products": LoanProducts,
 
-  /* ----------------- JSON-backed pages (via /api/settings/:key) ----------------- */
-  // Borrowers
-  "format-borrower-reports": K("Format Borrower Reports", "format-borrower-reports"),
-  "rename-borrower-reports": K("Rename Borrower Reports", "rename-borrower-reports"),
-  "rename-collection-sheet-headings": K("Rename Collection Sheet Headings", "rename-collection-sheet-headings"),
-  "manage-loan-officers": K("Manage Loan Officers", "manage-loan-officers"),
-  "invite-borrowers-settings": K("Invite Borrowers Settings", "invite-borrowers-settings"),
-  "bulk-update-borrowers-with-loan-officers": K("Bulk Update Borrowers With Loan Officers", "bulk-update-borrowers-with-loan-officers"),
-  "bulk-move-borrowers-to-another-branch": K("Bulk Move Borrowers to Another Branch", "bulk-move-borrowers-to-another-branch"),
-  "modify-add-borrower-fields": K("Modify Add Borrower Fields", "modify-add-borrower-fields"),
+  /* ---------- KV-backed pages (now real editors) ---------- */
+  "format-borrower-reports": KVPageRouter,
+  "rename-borrower-reports": KVPageRouter,
+  "rename-collection-sheet-headings": KVPageRouter,
+  "invite-borrowers-settings": KVPageRouter,
+  "modify-add-borrower-fields": KVPageRouter,
 
-  // Repayments
-  "loan-repayment-methods": K("Loan Repayment Methods", "loan-repayment-methods"),
-  "manage-collectors": K("Manage Collectors", "manage-collectors"),
+  "loan-repayment-methods": KVPageRouter,
+  "manage-collectors": KVPageRouter,
 
-  // Collateral
-  "collateral-types": K("Collateral Types", "collateral-types"),
+  "collateral-types": KVPageRouter,
+  "payroll-templates": KVPageRouter,
 
-  // Payroll
-  "payroll-templates": K("Payroll Templates", "payroll-templates"),
+  "upload-borrowers-from-csv-file": KVPageRouter,            // shows info JSON placeholder
+  "upload-loans-from-csv-file": KVPageRouter,
+  "upload-repayments-from-csv-file": KVPageRouter,
+  "upload-expenses-from-csv-file": KVPageRouter,
+  "upload-other-income-from-csv-file": KVPageRouter,
+  "upload-savings-accounts-from-csv-file": KVPageRouter,
+  "upload-savings-transactions-from-csv-file": KVPageRouter,
+  "upload-loan-schedule-from-csv-file": KVPageRouter,
+  "upload-inter-bank-transfer-from-csv-file": KVPageRouter,
 
-  // Bulk Upload
-  "upload-borrowers-from-csv-file": K("Upload Borrowers from CSV file", "upload-borrowers-csv"),
-  "upload-loans-from-csv-file": K("Upload Loans from CSV file", "upload-loans-csv"),
-  "upload-repayments-from-csv-file": K("Upload Repayments from CSV file", "upload-repayments-csv"),
-  "upload-expenses-from-csv-file": K("Upload Expenses from CSV file", "upload-expenses-csv"),
-  "upload-other-income-from-csv-file": K("Upload Other Income from CSV file", "upload-other-income-csv"),
-  "upload-savings-accounts-from-csv-file": K("Upload Savings Accounts from CSV file", "upload-savings-accounts-csv"),
-  "upload-savings-transactions-from-csv-file": K("Upload Savings Transactions from CSV file", "upload-savings-transactions-csv"),
-  "upload-loan-schedule-from-csv-file": K("Upload Loan Schedule from CSV file", "upload-loan-schedule-csv"),
-  "upload-inter-bank-transfer-from-csv-file": K("Upload Inter Bank Transfer from CSV file", "upload-interbank-transfer-csv"),
+  "other-income-types": KVPageRouter,
+  "expense-types": KVPageRouter,
+  "asset-management-types": KVPageRouter,
 
-  // Other Income / Expenses / Assets
-  "other-income-types": K("Other Income Types", "other-income-types"),
-  "expense-types": K("Expense Types", "expense-types"),
-  "asset-management-types": K("Asset Management Types", "asset-management-types"),
+  "sms-credits": KVPageRouter,
+  "sender-id": KVPageRouter,
+  "sms-templates": KVPageRouter,
+  "auto-send-sms": KVPageRouter,
+  "collection-sheets-sms-template": KVPageRouter,
 
-  // SMS
-  "sms-credits": K("SMS Credits", "sms-credits"),
-  "sender-id": K("Sender ID", "sms-sender-id"),
-  "sms-templates": K("SMS Templates", "sms-templates"),
-  "auto-send-sms": K("Auto Send SMS", "auto-send-sms"),
-  "collection-sheets-sms-template": K("Collection Sheets - SMS Template", "collection-sheets-sms-template"),
-  "sms-logs": K("SMS Logs", "sms-logs"),
+  "email-templates": KVPageRouter,
+  "auto-send-emails": KVPageRouter,
+  "collection-sheets-email-template": KVPageRouter,
 
-  // Email
-  "email-templates": K("Email Templates", "email-templates"),
-  "auto-send-emails": K("Auto Send Emails", "auto-send-emails"),
-  "collection-sheets-email-template": K("Collection Sheets - Email Template", "collection-sheets-email-template"),
-  "email-logs": K("Email Logs", "email-logs"),
+  "savings-products": KVPageRouter,
+  "savings-fees": KVPageRouter,
+  "savings-transaction-types": KVPageRouter,
 
-  // Savings
-  "savings-products": K("Savings Products", "savings-products"),
-  "savings-fees": K("Savings Fees", "savings-fees"),
-  "savings-transaction-types": K("Savings Transaction Types", "savings-transaction-types"),
+  "e-signature-settings": KVPageRouter,
+  "email-templates-for-e-signature": KVPageRouter,
 
-  // E-Signature
-  "e-signature-settings": K("E-Signature Settings", "esignature-settings"),
-  "email-templates-for-e-signature": K("Email Templates for E-Signature", "esignature-email-templates"),
-  "e-signature-email-logs": K("E-Signature Email Logs", "esignature-email-logs"),
+  "investor-products": KVPageRouter,
+  "loan-investment-products": KVPageRouter,
+  "investor-fees": KVPageRouter,
+  "format-investor-report": KVPageRouter,
+  "rename-investor-report": KVPageRouter,
+  "invite-investors-settings": KVPageRouter,
+  "investor-transaction-types": KVPageRouter,
 
-  // Investors
-  "investor-products": K("Investor Products", "investor-products"),
-  "loan-investment-products": K("Loan Investment Products", "loan-investment-products"),
-  "investor-fees": K("Investor Fees", "investor-fees"),
-  "format-investor-report": K("Format Investor Report", "format-investor-report"),
-  "rename-investor-report": K("Rename Investor Report", "rename-investor-report"),
-  "invite-investors-settings": K("Invite Investors Settings", "invite-investors-settings"),
-  "investor-transaction-types": K("Investor Transaction Types", "investor-transaction-types"),
+  "settings": KVPageRouter,                 // accounting -> settings
+  "bank-accounts": KVPageRouter,
+  "taxes": KVPageRouter,
+  "opening-balances": KVPageRouter,
 
-  // Accounting
-  "settings": K("Accounting Settings", "accounting-settings"),
-  "bank-accounts": K("Bank Accounts", "accounting-bank-accounts"),
-  "taxes": K("Taxes", "accounting-taxes"),
-  "opening-balances": K("Opening Balances", "accounting-opening-balances"),
-
-  // Backups
-  "backup-settings": K("Backup Settings", "backup-settings"),
-  "download-backups": K("Download Backups", "backup-downloads"),
+  "backup-settings": KVPageRouter,
+  "download-backups": KVPageRouter,
 };
 
 const ComingSoon = ({ title }) => (
