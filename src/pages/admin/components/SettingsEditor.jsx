@@ -51,8 +51,6 @@ export default function SettingsEditor({ title, prefix, fields }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  const fieldMap = useMemo(() => Object.fromEntries(fields.map(f => [f.key, f])), [fields]);
-
   useEffect(() => {
     (async () => {
       setErr("");
@@ -68,7 +66,8 @@ export default function SettingsEditor({ title, prefix, fields }) {
   const values = useMemo(() => {
     const out = {};
     for (const f of fields) {
-      const row = rows.find(r => r.key === (prefix ? `${prefix}${f.key}` : f.key));
+      const full = prefix ? `${prefix}${f.key}` : f.key;
+      const row = rows.find(r => r.key === full);
       out[f.key] = row ? row.value : (f.default ?? null);
     }
     return out;

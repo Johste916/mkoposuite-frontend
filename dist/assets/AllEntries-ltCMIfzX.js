@@ -1,0 +1,1 @@
+import{j as t}from"./index-uOcrLdeq.js";import{R as r}from"./ReportShell-CqzpV-ga.js";function o(){return t.jsx(r,{title:"All Entries",endpoint:"/reports/all-entries",columns:[]})}export{o as default};

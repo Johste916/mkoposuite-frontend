@@ -19,7 +19,7 @@ const SECTIONS = [
     title: "General",
     icon: <FiSettings className="opacity-70" />,
     items: [
-      "General Settings", // mapped to /admin/general-settings (alias to GeneralSettings page)
+      "General Settings",
     ],
   },
   {
@@ -49,8 +49,8 @@ const SECTIONS = [
     title: "Manage Branches",
     icon: <FiList className="opacity-70" />,
     items: [
-      "Branches",         // alias to Branch Settings page
-      "Branch Holidays",  // alias to Holiday Settings page
+      "Branches",
+      "Branch Holidays",
     ],
   },
   {
@@ -124,19 +124,19 @@ const SECTIONS = [
       "Auto Send SMS",
       "Collection Sheets - SMS Template",
       "SMS Logs",
-      "SMS Settings", // alias to SmsSettings page
+      "SMS Settings",
     ],
   },
   {
     title: "Email Settings",
     icon: <FiGlobe className="opacity-70" />,
     items: [
-      "Email Accounts",   // alias to EmailAccounts page
+      "Email Accounts",
       "Email Templates",
       "Auto Send Emails",
       "Collection Sheets - Email Template",
       "Email Logs",
-      "Email Settings",   // alias to EmailAccounts page (until a separate editor exists)
+      "Email Settings",
     ],
   },
   {
