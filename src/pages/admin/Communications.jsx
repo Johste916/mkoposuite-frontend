@@ -1,154 +1,81 @@
-import { useEffect, useState } from "react";
-import api from "../../api";
+import React from "react";
+import { SettingsAPI } from "../../api/settings";
 
 export default function Communications() {
-  const [items, setItems] = useState([]);
-  const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const [form, setForm] = useState({ title: "", text: "", type: "notice", priority: "normal", isActive: true });
+  const [rows, setRows] = React.useState([]);
+  const [err, setErr] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+  const [form, setForm] = React.useState({ title:"", channel:"email", body:"" });
 
   const load = async () => {
-    setLoading(true); setErr("");
+    setErr(""); setLoading(true);
     try {
-      const res = await api.get("/settings/communications", { params: { q } });
-      setItems(res.data.items || []);
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to load communications");
-    } finally {
-      setLoading(false);
-    }
+      const data = await SettingsAPI.listComms();
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) { setErr(e?.response?.data?.error || e.message); }
+    finally { setLoading(false); }
   };
+  React.useEffect(()=>{ load(); },[]);
 
-  useEffect(() => { load(); }, []); // initial
-
-  const create = async () => {
-    if (!form.title.trim() || !form.text.trim()) return;
+  const add = async () => {
     try {
-      await api.post("/settings/communications", form);
-      setForm({ title: "", text: "", type: "notice", priority: "normal", isActive: true });
+      await SettingsAPI.createComm(form);
+      setForm({ title:"", channel:"email", body:"" });
       await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to create");
-    }
+    } catch (e) { setErr(e?.response?.data?.error || e.message); }
+  };
+  const del = async (id) => {
+    if (!confirm("Delete?")) return;
+    try { await SettingsAPI.deleteComm(id); await load(); }
+    catch (e) { setErr(e?.response?.data?.error || e.message); }
   };
 
-  const toggleActive = async (id, current) => {
-    try {
-      await api.put(`/settings/communications/${id}`, { isActive: !current });
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to update");
-    }
-  };
-
-  const remove = async (id) => {
-    if (!window.confirm("Delete this communication?")) return;
-    try {
-      await api.delete(`/settings/communications/${id}`);
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to delete");
-    }
-  };
+  if (loading) return <div className="p-4 text-sm text-slate-500">Loading…</div>;
 
   return (
-    <div className="space-y-4">
-      <header className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
-        <h1 className="text-xl font-semibold">Communications</h1>
-        <p className="text-sm text-slate-500">Notices, alerts, and policies for staff/branches.</p>
-      </header>
+    <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-4">
+      <h1 className="text-xl font-semibold">Communications</h1>
+      {err && <div className="text-sm text-rose-600">{err}</div>}
 
-      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-3">
-        <div className="flex gap-2">
-          <input
-            className="rounded border px-3 py-2 text-sm flex-1"
-            placeholder="Search title/text…"
-            value={q}
-            onChange={(e)=>setQ(e.target.value)}
-          />
-          <button className="px-3 py-2 rounded bg-slate-100" onClick={load}>Search</button>
+      <div className="grid md:grid-cols-2 gap-2 items-start">
+        <div>
+          <label className="block text-xs">Title</label>
+          <input className="w-full border rounded px-2 py-1 text-sm"
+                 value={form.title} onChange={(e)=>setForm(s=>({...s,title:e.target.value}))}/>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <input
-            placeholder="Title"
-            className="rounded border px-3 py-2 text-sm md:col-span-2"
-            value={form.title}
-            onChange={(e)=>setForm({...form, title:e.target.value})}
-          />
-          <select
-            className="rounded border px-3 py-2 text-sm"
-            value={form.type}
-            onChange={(e)=>setForm({...form, type:e.target.value})}
-          >
-            <option value="notice">Notice</option>
-            <option value="policy">Policy</option>
-            <option value="alert">Alert</option>
-            <option value="guideline">Guideline</option>
+        <div>
+          <label className="block text-xs">Channel</label>
+          <select className="w-full border rounded px-2 py-1 text-sm"
+                  value={form.channel} onChange={(e)=>setForm(s=>({...s,channel:e.target.value}))}>
+            <option value="email">email</option>
+            <option value="sms">sms</option>
           </select>
-          <select
-            className="rounded border px-3 py-2 text-sm"
-            value={form.priority}
-            onChange={(e)=>setForm({...form, priority:e.target.value})}
-          >
-            <option value="low">Low</option>
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
-          </select>
-          <textarea
-            placeholder="Text"
-            className="rounded border px-3 py-2 text-sm md:col-span-3 h-24"
-            value={form.text}
-            onChange={(e)=>setForm({...form, text:e.target.value})}
-          />
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={!!form.isActive}
-              onChange={(e)=>setForm({...form, isActive:e.target.checked})}
-            />
-            <span className="text-sm">Active</span>
-          </label>
-          <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={create}>Create</button>
         </div>
+        <div className="md:col-span-2">
+          <label className="block text-xs">Body</label>
+          <textarea rows={5} className="w-full border rounded px-2 py-1 text-sm"
+                    value={form.body} onChange={(e)=>setForm(s=>({...s,body:e.target.value}))}/>
+        </div>
+        <div><button onClick={add} className="px-3 py-2 border rounded bg-white">Add</button></div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
-        {err && <div className="text-sm text-rose-600 mb-2">{err}</div>}
-        {loading ? (
-          <div className="text-sm text-slate-500">Loading…</div>
-        ) : items.length === 0 ? (
-          <div className="text-sm text-slate-500">No communications yet.</div>
-        ) : (
-          <div className="space-y-2">
-            {items.map((c) => (
-              <div key={c.id} className="p-3 border rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{c.title}</div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-100">{c.type}</span>
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-100">{c.priority}</span>
-                    <button
-                      className="text-sm px-2 py-1 rounded bg-slate-100"
-                      onClick={() => toggleActive(c.id, c.isActive)}
-                    >
-                      {c.isActive ? "Deactivate" : "Activate"}
-                    </button>
-                    <button
-                      className="text-sm px-2 py-1 rounded bg-rose-600 text-white"
-                      onClick={() => remove(c.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-                <div className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{c.text}</div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="overflow-x-auto border rounded-xl">
+        <table className="min-w-full text-sm">
+          <thead><tr className="border-b"><th className="p-2 text-left">Title</th><th className="p-2">Channel</th><th className="p-2 w-28"></th></tr></thead>
+          <tbody>
+            {rows.length===0 ? <tr><td className="p-3" colSpan={3}>No items</td></tr> :
+              rows.map(r=>(
+                <tr key={r.id} className="border-b">
+                  <td className="p-2">{r.title}</td>
+                  <td className="p-2 text-center">{r.channel || "—"}</td>
+                  <td className="p-2 text-right">
+                    <button onClick={()=>del(r.id)} className="px-2 py-1 text-xs border rounded">Delete</button>
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
       </div>
     </div>
   );
