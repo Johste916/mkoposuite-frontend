@@ -1,0 +1,1 @@
+import{j as t}from"./index-DuCvDBMs.js";import{R as r}from"./ReportShell-B0qokBY5.js";function o(){return t.jsx(r,{title:"All Entries",endpoint:"/reports/all-entries",columns:[]})}export{o as default};

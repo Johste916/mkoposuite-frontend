@@ -1,1 +1,0 @@
-import{j as t}from"./index-C_4DK2M-.js";import{R as o}from"./ReportShell-GZu3miuN.js";function e(){return t.jsx(o,{title:"MFRS Ratios",endpoint:"/reports/mfrs",mode:"snapshot",columns:[]})}export{e as default};

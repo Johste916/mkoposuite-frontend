@@ -136,12 +136,35 @@ export const SettingsAPI = {
 
 /* ------------------ KV helpers for “simple settings” ------------------ */
 export const KV = {
-  get: (key) =>
-    api.get(`/api/settings/kv/${encodeURIComponent(key)}`).then((r) => r.data),
-  save: (key, value) =>
-    api.put(`/api/settings/kv/${encodeURIComponent(key)}`, value).then((r) => r.data),
-  patch: (key, patch) =>
-    api.patch(`/api/settings/kv/${encodeURIComponent(key)}`, patch).then((r) => r.data),
+  async get(key) {
+    // Try new alias first, then legacy fallback
+    try {
+      const { data } = await api.get(`/api/settings/kv/${encodeURIComponent(key)}`);
+      return data;
+    } catch {
+      const { data } = await api.get(`/api/settings/${encodeURIComponent(key)}`);
+      return data;
+    }
+  },
+  async save(key, value) {
+    try {
+      const { data } = await api.put(`/api/settings/kv/${encodeURIComponent(key)}`, value);
+      return data;
+    } catch {
+      // legacy handler expects {value} or raw JSON; we send {value} for safety
+      const { data } = await api.put(`/api/settings/${encodeURIComponent(key)}`, { value });
+      return data;
+    }
+  },
+  async patch(key, patch) {
+    try {
+      const { data } = await api.patch(`/api/settings/kv/${encodeURIComponent(key)}`, patch);
+      return data;
+    } catch {
+      const { data } = await api.patch(`/api/settings/${encodeURIComponent(key)}`, { patch });
+      return data;
+    }
+  },
 };
 
 /** Ensure we have the shape the editor expects ([], {}, or "") */
