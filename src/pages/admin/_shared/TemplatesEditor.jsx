@@ -1,145 +1,170 @@
-// src/pages/admin/_shared/TemplatesEditor.jsx
 import React, { useEffect, useState } from "react";
 import { AdminAPI } from "../../../api/admin";
 
-export default function TemplatesEditor({ title, channel }) {
+export default function TemplatesEditor({ title, category, channel = "email" }) {
   const [rows, setRows] = useState([]);
-  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
+  const [error, setError] = useState("");
 
-  const load = async () => {
+  async function load() {
+    setLoading(true);
+    setError("");
     try {
-      setLoading(true);
-      const data = await AdminAPI.listTemplates(channel, { q });
-      setRows(data || []);
-      setErr("");
+      const data = await AdminAPI.listTemplates(channel, { category });
+      setRows(Array.isArray(data) ? data : []);
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      setError(e?.response?.data?.error || e.message);
+    } finally { setLoading(false); }
+  }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [channel]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [category, channel]);
 
-  const addRow = () => setRows([{ id: null, name: "", subject: "", body: "", meta: {} }, ...rows]);
-
-  const saveRow = async (row) => {
+  async function createBlank() {
+    setSaving(true);
+    setError("");
     try {
-      setSaving(true);
-      const payload = { channel, name: row.name, subject: row.subject, body: row.body, meta: row.meta || {} };
-      const saved = row.id ? await AdminAPI.updateTemplate(row.id, payload) : await AdminAPI.createTemplate(payload);
-      setRows((prev) => prev.map(r => (r === row ? saved : r)));
+      const created = await AdminAPI.createTemplate({
+        channel, category, name: "", code: "", subject: "", body: "", active: true
+      });
+      setRows(prev => [created, ...prev]);
     } catch (e) {
-      alert(e?.response?.data?.error || e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
+      setError(e?.response?.data?.error || e.message);
+    } finally { setSaving(false); }
+  }
 
-  const deleteRow = async (row) => {
-    if (!row.id) { setRows(rows.filter(r => r !== row)); return; }
+  async function saveRow(row) {
+    setSaving(true);
+    setError("");
+    try {
+      const payload = { ...row, channel, category };
+      const saved = row.id
+        ? await AdminAPI.updateTemplate(row.id, payload)
+        : await AdminAPI.createTemplate(payload);
+      setRows(prev => prev.map(r => (r.id === saved.id ? saved : r)));
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message);
+    } finally { setSaving(false); }
+  }
+
+  async function removeRow(id) {
     if (!window.confirm("Delete this template?")) return;
+    setSaving(true);
+    setError("");
     try {
-      setSaving(true);
-      await AdminAPI.deleteTemplate(row.id);
-      setRows(rows.filter(r => r.id !== row.id));
+      await AdminAPI.deleteTemplate(id);
+      setRows(prev => prev.filter(r => r.id !== id));
     } catch (e) {
-      alert(e?.response?.data?.error || e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
+      setError(e?.response?.data?.error || e.message);
+    } finally { setSaving(false); }
+  }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">{title}</h1>
-        <div className="flex gap-2">
-          <input
-            value={q}
-            onChange={(e)=>setQ(e.target.value)}
-            placeholder="Search…"
-            className="text-sm border rounded px-2 py-1"
-          />
-          <button className="text-sm px-3 py-1 rounded border" onClick={load}>Search</button>
-          <button className="text-sm px-3 py-1 rounded bg-blue-600 text-white" onClick={addRow}>Add</button>
+    <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4 space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold">{title}</h1>
+          <p className="text-xs text-slate-500">Channel: {channel} • Category: {category}</p>
         </div>
+        <button
+          onClick={createBlank}
+          disabled={saving}
+          className="px-3 py-2 text-sm rounded bg-blue-600 text-white"
+        >
+          + Add Template
+        </button>
       </div>
 
-      {err && <div className="text-sm text-rose-600">{err}</div>}
+      {error && <div className="text-sm text-rose-600">{error}</div>}
       {loading ? (
         <div className="text-sm text-slate-500">Loading…</div>
+      ) : rows.length === 0 ? (
+        <div className="text-sm text-slate-500">No templates found.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-600">
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Subject</th>
-                <th className="py-2 pr-4">Body</th>
-                <th className="py-2 pr-4">Meta (JSON)</th>
-                <th className="py-2 pr-4 w-40">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => (
-                <tr key={row.id ?? `new-${idx}`} className="border-t">
-                  <td className="py-2 pr-4">
-                    <input
-                      value={row.name || ""}
-                      onChange={(e)=>setRows(rs => rs.map((r,i)=> i===idx ? {...r, name:e.target.value} : r))}
-                      className="w-full border rounded px-2 py-1"
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <input
-                      value={row.subject || ""}
-                      onChange={(e)=>setRows(rs => rs.map((r,i)=> i===idx ? {...r, subject:e.target.value} : r))}
-                      className="w-full border rounded px-2 py-1"
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <textarea
-                      rows={3}
-                      value={row.body || ""}
-                      onChange={(e)=>setRows(rs => rs.map((r,i)=> i===idx ? {...r, body:e.target.value} : r))}
-                      className="w-full border rounded px-2 py-1 font-mono"
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <input
-                      value={row.meta ? JSON.stringify(row.meta) : ""}
-                      onChange={(e)=>{
-                        let meta = {};
-                        try { meta = JSON.parse(e.target.value || "{}"); } catch {}
-                        setRows(rs => rs.map((r,i)=> i===idx ? {...r, meta} : r));
-                      }}
-                      className="w-full border rounded px-2 py-1 font-mono"
-                      placeholder="{}"
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <div className="flex gap-2">
-                      <button className="px-2 py-1 text-sm rounded border" disabled={saving} onClick={()=>saveRow(row)}>
-                        {saving ? "Saving…" : "Save"}
-                      </button>
-                      <button className="px-2 py-1 text-sm rounded border" disabled={saving} onClick={()=>deleteRow(row)}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr><td colSpan={5} className="py-6 text-center text-slate-500">No templates.</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="grid gap-3">
+          {rows.map((row) => (
+            <TemplateCard
+              key={row.id || Math.random()}
+              row={row}
+              onSave={saveRow}
+              onDelete={removeRow}
+              saving={saving}
+            />
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function TemplateCard({ row, onSave, onDelete, saving }) {
+  const [draft, setDraft] = useState(row);
+
+  useEffect(() => setDraft(row), [row]);
+
+  return (
+    <div className="border rounded-lg p-3">
+      <div className="grid md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-slate-500">Name</label>
+          <input
+            className="w-full px-2 py-1 rounded border"
+            value={draft.name ?? ""}
+            onChange={(e)=>setDraft({ ...draft, name: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-slate-500">Code</label>
+          <input
+            className="w-full px-2 py-1 rounded border"
+            value={draft.code ?? ""}
+            onChange={(e)=>setDraft({ ...draft, code: e.target.value })}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-xs text-slate-500">Subject (email only)</label>
+          <input
+            className="w-full px-2 py-1 rounded border"
+            value={draft.subject ?? ""}
+            onChange={(e)=>setDraft({ ...draft, subject: e.target.value })}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-xs text-slate-500">Body</label>
+          <textarea
+            rows={6}
+            className="w-full px-2 py-1 rounded border font-mono"
+            value={draft.body ?? ""}
+            onChange={(e)=>setDraft({ ...draft, body: e.target.value })}
+          />
+        </div>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!draft.active}
+            onChange={(e)=>setDraft({ ...draft, active: e.target.checked })}
+          />
+          <span className="text-sm">Active</span>
+        </label>
+      </div>
+      <div className="mt-3 text-right">
+        <button
+          onClick={()=>onSave(draft)}
+          disabled={saving}
+          className="px-2 py-1 text-xs rounded bg-emerald-600 text-white mr-2"
+        >
+          Save
+        </button>
+        {row.id && (
+          <button
+            onClick={()=>onDelete(row.id)}
+            disabled={saving}
+            className="px-2 py-1 text-xs rounded bg-rose-600 text-white"
+          >
+            Delete
+          </button>
+        )}
+      </div>
     </div>
   );
 }

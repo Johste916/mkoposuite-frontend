@@ -13,7 +13,7 @@ const BulkSmsSettings         = lazy(() => import("./BulkSmsSettings"));
 const CommentSettings         = lazy(() => import("./CommentSettings"));
 const Communications          = lazy(() => import("./Communications"));
 const DashboardSettings       = lazy(() => import("./DashboardSettings"));
-const HolidaySettings         = lazy(() => import("./HolidaySettings")); // real UI
+const HolidaySettings         = lazy(() => import("./HolidaySettings"));
 const IncomeSourceSettings    = lazy(() => import("./IncomeSourceSettings"));
 const IntegrationSettings     = lazy(() => import("./IntegrationSettings"));
 const LoanCategories          = lazy(() => import("./LoanCategories"));
@@ -40,7 +40,7 @@ const AuditManagement         = lazy(() => import("./AuditManagement"));
 /* ---- Module page ---- */
 const LoanProducts            = lazy(() => import("../loans/LoanProducts"));
 
-/* ---- Real CRUD wrappers (Types/Templates) ---- */
+/* ---- Types/Templates screens (if you have them) ---- */
 const ExpenseTypes            = lazy(() => import("./ExpenseTypes"));
 const OtherIncomeTypes        = lazy(() => import("./OtherIncomeTypes"));
 const AssetManagementTypes    = lazy(() => import("./AssetManagementTypes"));
@@ -59,10 +59,11 @@ const LoanInvestmentProducts  = lazy(() => import("./LoanInvestmentProducts"));
 const InvestorFees            = lazy(() => import("./InvestorFees"));
 const InvestorTransactionTypes= lazy(() => import("./InvestorTransactionTypes"));
 
+/* ---- Repayments ---- */
 const LoanRepaymentMethods    = lazy(() => import("./LoanRepaymentMethods"));
 const ManageCollectors        = lazy(() => import("./ManageCollectors"));
 
-/* ---- Settings-style pages (no JSON blobs) ---- */
+/* ---- Backups ---- */
 const BackupSettings          = lazy(() => import("./BackupSettings"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
@@ -85,10 +86,10 @@ const registry = {
   "loan-categories": LoanCategories,
   "loan-settings": LoanSettings,
   "penalty-settings": PenaltySettings,
-  "loan-penalty-settings": PenaltySettings,
+  "loan-penalty-settings": PenaltySettings, // alias used by Admin.jsx menu
   "integration-settings": IntegrationSettings,
   "branch-settings": BranchSettings,
-  "branches": BranchSettings,
+  "branches": BranchSettings,               // alias used by Admin.jsx menu
   "borrower-settings": BorrowerSettings,
   "user-management": UserManagementSettings,
   "saving-settings": SavingSettings,
@@ -99,14 +100,15 @@ const registry = {
   "loan-sector-settings": LoanSectorSettings,
   "income-source-settings": IncomeSourceSettings,
 
-  /* Holidays (real CRUD, no JSON blobs) */
+  /* Holidays (real UI; no JSON) */
   "holiday-settings": HolidaySettings,
-  "branch-holidays": HolidaySettings,
+  "branch-holidays": HolidaySettings,       // alias used by Admin.jsx menu
 
   /* Loans batch */
   "loan-fees": LoanFees,
   "loan-repayment-cycles": LoanRepaymentCycles,
   "loan-reminder-settings": LoanReminderSettings,
+  "loan-templates": LoanTemplates,          // helpful short alias
   "loan-templates-applications-agreements": LoanTemplates,
   "manage-loan-status-and-approvals": LoanApprovals,
 
@@ -119,7 +121,7 @@ const registry = {
   /* Module */
   "loan-products": LoanProducts,
 
-  /* Types/Templates CRUD (replaces old KV JSON screens) */
+  /* Types/Templates CRUD (if present) */
   "expense-types": ExpenseTypes,
   "other-income-types": OtherIncomeTypes,
   "asset-management-types": AssetManagementTypes,
@@ -138,10 +140,11 @@ const registry = {
   "investor-fees": InvestorFees,
   "investor-transaction-types": InvestorTransactionTypes,
 
+  /* Repayments */
   "loan-repayment-methods": LoanRepaymentMethods,
   "manage-collectors": ManageCollectors,
 
-  /* Settings-style */
+  /* Backups */
   "backup-settings": BackupSettings,
 };
 

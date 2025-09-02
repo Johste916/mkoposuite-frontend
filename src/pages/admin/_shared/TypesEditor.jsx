@@ -1,5 +1,4 @@
-// src/pages/admin/_shared/TypesEditor.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AdminAPI } from "../../../api/admin";
 
 export default function TypesEditor({ title, category }) {
@@ -7,130 +6,171 @@ export default function TypesEditor({ title, category }) {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
+  const [error, setError] = useState("");
 
-  const load = async () => {
+  async function load() {
+    setLoading(true);
+    setError("");
     try {
-      setLoading(true);
-      const data = await AdminAPI.listTypes(category, { q });
-      setRows(data || []);
-      setErr("");
+      const data = await AdminAPI.listTypes(category);
+      setRows(Array.isArray(data) ? data : []);
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message);
+      setError(e?.response?.data?.error || e.message || "Failed to load.");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [category]);
 
-  const addRow = () => setRows([{ id: null, name: "", code: "", meta: {} }, ...rows]);
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter(r =>
+      Object.values(r).some(v => String(v ?? "").toLowerCase().includes(term))
+    );
+  }, [rows, q]);
 
-  const saveRow = async (row) => {
+  async function createBlank() {
+    setSaving(true);
+    setError("");
     try {
-      setSaving(true);
-      const payload = { category, name: row.name, code: row.code, meta: row.meta || {} };
-      const saved = row.id ? await AdminAPI.updateType(row.id, payload) : await AdminAPI.createType(payload);
-      setRows((prev) => prev.map(r => (r === row ? saved : r)));
+      const created = await AdminAPI.createType({ category, name: "", code: "" });
+      setRows(prev => [created, ...prev]);
     } catch (e) {
-      alert(e?.response?.data?.error || e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
+      setError(e?.response?.data?.error || e.message);
+    } finally { setSaving(false); }
+  }
 
-  const deleteRow = async (row) => {
-    if (!row.id) { setRows(rows.filter(r => r !== row)); return; }
+  async function saveRow(row) {
+    setSaving(true);
+    setError("");
+    try {
+      const payload = { ...row, category };
+      const saved = row.id
+        ? await AdminAPI.updateType(row.id, payload)
+        : await AdminAPI.createType(payload);
+      setRows(prev => prev.map(r => (r.id === saved.id ? saved : r)));
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message);
+    } finally { setSaving(false); }
+  }
+
+  async function removeRow(id) {
     if (!window.confirm("Delete this item?")) return;
+    setSaving(true);
+    setError("");
     try {
-      setSaving(true);
-      await AdminAPI.deleteType(row.id);
-      setRows(rows.filter(r => r.id !== row.id));
+      await AdminAPI.deleteType(id);
+      setRows(prev => prev.filter(r => r.id !== id));
     } catch (e) {
-      alert(e?.response?.data?.error || e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
+      setError(e?.response?.data?.error || e.message);
+    } finally { setSaving(false); }
+  }
 
   return (
-    <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">{title}</h1>
+    <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4 space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold">{title}</h1>
+          <p className="text-xs text-slate-500">Category: {category}</p>
+        </div>
         <div className="flex gap-2">
           <input
+            placeholder="Search…"
+            className="px-3 py-2 text-sm rounded border"
             value={q}
             onChange={(e)=>setQ(e.target.value)}
-            placeholder="Search…"
-            className="text-sm border rounded px-2 py-1"
           />
-          <button className="text-sm px-3 py-1 rounded border" onClick={load}>Search</button>
-          <button className="text-sm px-3 py-1 rounded bg-blue-600 text-white" onClick={addRow}>Add</button>
+          <button
+            onClick={createBlank}
+            disabled={saving}
+            className="px-3 py-2 text-sm rounded bg-blue-600 text-white"
+          >
+            + Add
+          </button>
         </div>
       </div>
 
-      {err && <div className="text-sm text-rose-600">{err}</div>}
+      {error && <div className="text-sm text-rose-600">{error}</div>}
       {loading ? (
         <div className="text-sm text-slate-500">Loading…</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-sm text-slate-500">No items found.</div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-auto border rounded">
           <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-600">
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Code</th>
-                <th className="py-2 pr-4">Meta (JSON)</th>
-                <th className="py-2 pr-4 w-40">Actions</th>
+            <thead className="bg-slate-50 dark:bg-slate-800">
+              <tr>
+                <th className="px-3 py-2 text-left">Name</th>
+                <th className="px-3 py-2 text-left">Code</th>
+                <th className="px-3 py-2 text-left">Active</th>
+                <th className="px-3 py-2 w-36"></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, idx) => (
-                <tr key={row.id ?? `new-${idx}`} className="border-t">
-                  <td className="py-2 pr-4">
-                    <input
-                      value={row.name || ""}
-                      onChange={(e)=>setRows(rs => rs.map((r,i)=> i===idx ? {...r, name:e.target.value} : r))}
-                      className="w-full border rounded px-2 py-1"
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <input
-                      value={row.code || ""}
-                      onChange={(e)=>setRows(rs => rs.map((r,i)=> i===idx ? {...r, code:e.target.value} : r))}
-                      className="w-full border rounded px-2 py-1"
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <input
-                      value={row.meta ? JSON.stringify(row.meta) : ""}
-                      onChange={(e)=>{
-                        let meta = {};
-                        try { meta = JSON.parse(e.target.value || "{}"); } catch {}
-                        setRows(rs => rs.map((r,i)=> i===idx ? {...r, meta} : r));
-                      }}
-                      className="w-full border rounded px-2 py-1 font-mono"
-                      placeholder="{}"
-                    />
-                  </td>
-                  <td className="py-2 pr-4">
-                    <div className="flex gap-2">
-                      <button className="px-2 py-1 text-sm rounded border" disabled={saving} onClick={()=>saveRow(row)}>
-                        {saving ? "Saving…" : "Save"}
-                      </button>
-                      <button className="px-2 py-1 text-sm rounded border" disabled={saving} onClick={()=>deleteRow(row)}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+              {filtered.map((row, idx) => (
+                <EditableRow
+                  key={row.id ?? `tmp-${idx}`}
+                  row={row}
+                  onSave={saveRow}
+                  onDelete={removeRow}
+                  saving={saving}
+                />
               ))}
-              {rows.length === 0 && (
-                <tr><td colSpan={4} className="py-6 text-center text-slate-500">No items.</td></tr>
-              )}
             </tbody>
           </table>
         </div>
       )}
     </div>
+  );
+}
+
+function EditableRow({ row, onSave, onDelete, saving }) {
+  const [draft, setDraft] = useState(row);
+  useEffect(() => setDraft(row), [row]);
+
+  return (
+    <tr className="border-t">
+      <td className="px-3 py-2">
+        <input
+          className="w-full px-2 py-1 rounded border"
+          value={draft.name ?? ""}
+          onChange={(e)=>setDraft({ ...draft, name: e.target.value })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <input
+          className="w-full px-2 py-1 rounded border"
+          value={draft.code ?? ""}
+          onChange={(e)=>setDraft({ ...draft, code: e.target.value })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <input
+          type="checkbox"
+          checked={!!draft.active}
+          onChange={(e)=>setDraft({ ...draft, active: e.target.checked })}
+        />
+      </td>
+      <td className="px-3 py-2 text-right">
+        <button
+          onClick={()=>onSave(draft)}
+          disabled={saving}
+          className="px-2 py-1 text-xs rounded bg-emerald-600 text-white mr-2"
+        >
+          Save
+        </button>
+        {row.id && (
+          <button
+            onClick={()=>onDelete(row.id)}
+            disabled={saving}
+            className="px-2 py-1 text-xs rounded bg-rose-600 text-white"
+          >
+            Delete
+          </button>
+        )}
+      </td>
+    </tr>
   );
 }
