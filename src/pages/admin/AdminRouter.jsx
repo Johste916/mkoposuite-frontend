@@ -62,6 +62,9 @@ const InvestorTransactionTypes= lazy(() => import("./InvestorTransactionTypes"))
 const LoanRepaymentMethods    = lazy(() => import("./LoanRepaymentMethods"));
 const ManageCollectors        = lazy(() => import("./ManageCollectors"));
 
+/* ---- Settings-style pages (no JSON blobs) ---- */
+const BackupSettings          = lazy(() => import("./BackupSettings"));
+
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
 /** Maps URL slug -> Component */
@@ -137,6 +140,9 @@ const registry = {
 
   "loan-repayment-methods": LoanRepaymentMethods,
   "manage-collectors": ManageCollectors,
+
+  /* Settings-style */
+  "backup-settings": BackupSettings,
 };
 
 const ComingSoon = ({ title }) => (
