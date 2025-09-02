@@ -1,7 +1,8 @@
+// src/pages/admin/AdminRouter.jsx
 import React, { lazy, Suspense } from "react";
 import { useParams, Navigate } from "react-router-dom";
 
-/* ---- Admin pages ---- */
+/* ---- Admin pages (already working) ---- */
 const GeneralSettings         = lazy(() => import("./GeneralSettings"));
 const EmailAccounts           = lazy(() => import("./EmailAccounts"));
 const SmsSettings             = lazy(() => import("./SmsSettings"));
@@ -10,7 +11,6 @@ const BorrowerSettings        = lazy(() => import("./BorrowerSettings"));
 const BranchSettings          = lazy(() => import("./BranchSettings"));
 const BulkSmsSettings         = lazy(() => import("./BulkSmsSettings"));
 const CommentSettings         = lazy(() => import("./CommentSettings"));
-const Communications          = lazy(() => import("./Communications")); // ✅ now wired
 const DashboardSettings       = lazy(() => import("./DashboardSettings"));
 const HolidaySettings         = lazy(() => import("./HolidaySettings"));
 const IncomeSourceSettings    = lazy(() => import("./IncomeSourceSettings"));
@@ -23,23 +23,23 @@ const PayrollSettings         = lazy(() => import("./PayrollSettings"));
 const SavingSettings          = lazy(() => import("./SavingSettings"));
 const UserManagementSettings  = lazy(() => import("./UserManagementSettings"));
 
-/* Loan sub-pages */
+/* ---- Loan sub-pages ---- */
 const LoanFees                = lazy(() => import("./LoanFees"));
 const LoanRepaymentCycles     = lazy(() => import("./LoanRepaymentCycles"));
 const LoanReminderSettings    = lazy(() => import("./LoanReminderSettings"));
 const LoanTemplates           = lazy(() => import("./LoanTemplates"));
 const LoanApprovals           = lazy(() => import("./LoanApprovals"));
 
-/* Staff */
+/* ---- Manage Staff ---- */
 const Staff                   = lazy(() => import("./Staff"));
 const StaffRolesPermissions   = lazy(() => import("./StaffRolesPermissions"));
 const StaffEmailNotifications = lazy(() => import("./StaffEmailNotifications"));
 const AuditManagement         = lazy(() => import("./AuditManagement"));
 
-/* Module page */
+/* ---- Module page ---- */
 const LoanProducts            = lazy(() => import("../loans/LoanProducts"));
 
-/* Simple CRUD wrappers (Types/Templates) */
+/* ---- Simple CRUD wrappers (Types/Templates) ---- */
 const ExpenseTypes            = lazy(() => import("./ExpenseTypes"));
 const OtherIncomeTypes        = lazy(() => import("./OtherIncomeTypes"));
 const AssetManagementTypes    = lazy(() => import("./AssetManagementTypes"));
@@ -61,42 +61,63 @@ const InvestorTransactionTypes= lazy(() => import("./InvestorTransactionTypes"))
 const LoanRepaymentMethods    = lazy(() => import("./LoanRepaymentMethods"));
 const ManageCollectors        = lazy(() => import("./ManageCollectors"));
 
-/* Settings-style placeholders */
+/* ---- Settings-style pages ---- */
 const BackupSettings          = lazy(() => import("./BackupSettings"));
+
+/* ---- NEW: Communications (the admin CRUD you’re using) ---- */
+const Communications          = lazy(() => import("./Communications"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
-/** Maps URL slug -> Component (must match Admin.jsx slugs) */
+/**
+ * Registry maps every /admin/:slug to a component.
+ * Include aliases so different labels route to the same page.
+ */
 const registry = {
   /* General */
   "general": GeneralSettings,
   "general-settings": GeneralSettings,
-  "integration-settings": IntegrationSettings,
-  "payment-settings": PaymentSettings,
-  "dashboard-settings": DashboardSettings,
 
-  /* Email/SMS */
+  /* Email/SMS core */
   "email": EmailAccounts,
   "email-accounts": EmailAccounts,
-  "email-settings": EmailAccounts,
+  "email-settings": EmailAccounts,               // alias
   "email-templates": EmailTemplates,
   "sms": SmsSettings,
   "sms-settings": SmsSettings,
   "sms-templates": SmsTemplates,
   "bulk-sms-settings": BulkSmsSettings,
-  "communications": Communications, // ✅ drives Dashboard notices
+
+  /* Communications (now wired) */
+  "communications": Communications,
+  "general-communications": Communications,      // alias if you ever use this label
+
+  /* Extra labels from Admin grid -> sensible targets */
+  "auto-send-emails": EmailAccounts,
+  "collection-sheets-email-template": EmailTemplates,
+  "email-logs": EmailAccounts,                   // placeholder until a logs page exists
+
+  "sms-credits": SmsSettings,
+  "sender-id": SmsSettings,
+  "auto-send-sms": SmsSettings,
+  "collection-sheets-sms-template": SmsTemplates,
+  "sms-logs": SmsSettings,                       // placeholder until a logs page exists
 
   /* Existing controllers */
   "loan-categories": LoanCategories,
   "loan-settings": LoanSettings,
   "penalty-settings": PenaltySettings,
-  "loan-penalty-settings": PenaltySettings,
+  "loan-penalty-settings": PenaltySettings,      // alias
+  "integration-settings": IntegrationSettings,
   "branch-settings": BranchSettings,
-  "branches": BranchSettings,
+  "branches": BranchSettings,                    // alias
   "borrower-settings": BorrowerSettings,
   "user-management": UserManagementSettings,
   "saving-settings": SavingSettings,
   "payroll-settings": PayrollSettings,
+  "payment-settings": PaymentSettings,
+  "comment-settings": CommentSettings,
+  "dashboard-settings": DashboardSettings,
   "loan-sector-settings": LoanSectorSettings,
   "income-source-settings": IncomeSourceSettings,
 
@@ -112,13 +133,13 @@ const registry = {
   "loan-templates-applications-agreements": LoanTemplates,
   "manage-loan-status-and-approvals": LoanApprovals,
 
-  /* Staff */
+  /* Manage Staff */
   "staff": Staff,
   "staff-roles-and-permissions": StaffRolesPermissions,
   "staff-email-notifications": StaffEmailNotifications,
   "audit-management": AuditManagement,
 
-  /* Simple CRUD (types/templates) */
+  /* Types/Templates CRUD */
   "expense-types": ExpenseTypes,
   "other-income-types": OtherIncomeTypes,
   "asset-management-types": AssetManagementTypes,
@@ -137,8 +158,27 @@ const registry = {
   "loan-repayment-methods": LoanRepaymentMethods,
   "manage-collectors": ManageCollectors,
 
-  /* Bulk upload – temporarily reuse BackupSettings screen */
+  /* Borrowers extras -> route to BorrowerSettings for now */
+  "download-statements-schedules": BorrowerSettings,
+  "format-borrower-reports": BorrowerSettings,
+  "rename-borrower-reports": BorrowerSettings,
+  "rename-collection-sheet-headings": BorrowerSettings,
+  "manage-loan-officers": BorrowerSettings,
+  "invite-borrowers-settings": BorrowerSettings,
+  "bulk-update-borrowers-with-loan-officers": BorrowerSettings,
+  "bulk-move-borrowers-to-another-branch": BorrowerSettings,
+  "modify-add-borrower-fields": BorrowerSettings,
+
+  /* Backups */
   "backup-settings": BackupSettings,
+
+  /* Accounting placeholders -> point to settings you already have */
+  "settings": IntegrationSettings,       // temporary sensible default
+  "bank-accounts": PaymentSettings,      // until a dedicated page exists
+  "taxes": PaymentSettings,              // same
+  "opening-balances": DashboardSettings, // or create a new page later
+
+  /* Bulk Upload items -> route to a page for now */
   "upload-borrowers-from-csv-file": BackupSettings,
   "upload-loans-from-csv-file": BackupSettings,
   "upload-repayments-from-csv-file": BackupSettings,
@@ -148,12 +188,6 @@ const registry = {
   "upload-savings-transactions-from-csv-file": BackupSettings,
   "upload-loan-schedule-from-csv-file": BackupSettings,
   "upload-inter-bank-transfer-from-csv-file": BackupSettings,
-
-  /* Accounting placeholders */
-  "settings": IntegrationSettings,
-  "bank-accounts": PaymentSettings,
-  "taxes": PaymentSettings,
-  "opening-balances": DashboardSettings,
 };
 
 const ComingSoon = ({ title }) => (
@@ -171,7 +205,10 @@ export default function AdminRouter() {
 
   const Component = registry[slug];
 
-  const title = slug.split("-").map((w) => w[0]?.toUpperCase() + w.slice(1)).join(" ");
+  const title = slug
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 
   if (!Component) return <ComingSoon title={title} />;
 
