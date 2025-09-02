@@ -1,0 +1,1 @@
+import{j as t}from"./index-YOBwJX5V.js";import{T as s}from"./TemplatesEditor-lkbv185y.js";import"./admin-D4okHQef.js";import"./index-DqqhenKb.js";function a(){return t.jsx(s,{title:"SMS Templates",category:"sms",channel:"sms"})}export{a as default};
