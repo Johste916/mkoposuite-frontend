@@ -1,90 +1,145 @@
+// src/pages/admin/_shared/TemplatesEditor.jsx
 import React, { useEffect, useState } from "react";
-import api from "../../../api";
+import { AdminAPI } from "../../../api/admin";
 
-/** Generic CRUD for /api/admin/templates/:category  */
-export default function TemplatesEditor({ title, category, channel = null }) {
+export default function TemplatesEditor({ title, channel }) {
   const [rows, setRows] = useState([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
-  const [form, setForm] = useState({ name:"", subject:"", body:"", channel: channel || "email" });
 
   const load = async () => {
-    setErr("");
     try {
-      const { data } = await api.get(`/admin/templates/${category}`);
+      setLoading(true);
+      const data = await AdminAPI.listTemplates(channel, { q });
       setRows(data || []);
-    } catch (e) { setErr(e?.response?.data?.error || e.message); }
+      setErr("");
+    } catch (e) {
+      setErr(e?.response?.data?.error || e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(()=>{ load(); /* eslint-disable-next-line */ },[category]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [channel]);
 
-  const add = async () => {
+  const addRow = () => setRows([{ id: null, name: "", subject: "", body: "", meta: {} }, ...rows]);
+
+  const saveRow = async (row) => {
     try {
-      await api.post(`/admin/templates/${category}`, form);
-      setForm({ name:"", subject:"", body:"", channel: form.channel });
-      await load();
-    } catch (e) { setErr(e?.response?.data?.error || e.message); }
+      setSaving(true);
+      const payload = { channel, name: row.name, subject: row.subject, body: row.body, meta: row.meta || {} };
+      const saved = row.id ? await AdminAPI.updateTemplate(row.id, payload) : await AdminAPI.createTemplate(payload);
+      setRows((prev) => prev.map(r => (r === row ? saved : r)));
+    } catch (e) {
+      alert(e?.response?.data?.error || e.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const del = async (id) => {
-    if (!window.confirm("Delete?")) return;
-    try { await api.delete(`/admin/templates/${category}/${id}`); await load(); }
-    catch (e) { setErr(e?.response?.data?.error || e.message); }
+  const deleteRow = async (row) => {
+    if (!row.id) { setRows(rows.filter(r => r !== row)); return; }
+    if (!window.confirm("Delete this template?")) return;
+    try {
+      setSaving(true);
+      await AdminAPI.deleteTemplate(row.id);
+      setRows(rows.filter(r => r.id !== row.id));
+    } catch (e) {
+      alert(e?.response?.data?.error || e.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
-      <h1 className="text-xl font-semibold">{title}</h1>
-      {err && <div className="text-sm text-rose-600">{err}</div>}
-
-      <div className="grid md:grid-cols-2 gap-2">
-        <div>
-          <label className="block text-xs">Name</label>
-          <input className="w-full border rounded px-2 py-1 text-sm"
-                 value={form.name} onChange={(e)=>setForm(s=>({...s,name:e.target.value}))}/>
-        </div>
-        {form.channel !== "sms" && (
-          <div>
-            <label className="block text-xs">Subject</label>
-            <input className="w-full border rounded px-2 py-1 text-sm"
-                   value={form.subject} onChange={(e)=>setForm(s=>({...s,subject:e.target.value}))}/>
-          </div>
-        )}
-        <div className="md:col-span-2">
-          <label className="block text-xs">Body</label>
-          <textarea rows={8} className="w-full border rounded px-2 py-1 text-sm"
-                    value={form.body} onChange={(e)=>setForm(s=>({...s,body:e.target.value}))}/>
-        </div>
-        <div>
-          <label className="block text-xs">Channel</label>
-          <select className="w-full border rounded px-2 py-1 text-sm"
-                  value={form.channel} onChange={(e)=>setForm(s=>({...s,channel:e.target.value}))}>
-            <option value="email">email</option>
-            <option value="sms">sms</option>
-          </select>
-        </div>
-        <div className="self-end">
-          <button onClick={add} className="px-3 py-2 border rounded bg-white">Add</button>
+    <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">{title}</h1>
+        <div className="flex gap-2">
+          <input
+            value={q}
+            onChange={(e)=>setQ(e.target.value)}
+            placeholder="Search…"
+            className="text-sm border rounded px-2 py-1"
+          />
+          <button className="text-sm px-3 py-1 rounded border" onClick={load}>Search</button>
+          <button className="text-sm px-3 py-1 rounded bg-blue-600 text-white" onClick={addRow}>Add</button>
         </div>
       </div>
 
-      <div className="overflow-x-auto border rounded-xl">
-        <table className="min-w-full text-sm">
-          <thead><tr className="border-b"><th className="p-2 text-left">Name</th><th className="p-2">Channel</th><th className="p-2"></th></tr></thead>
-          <tbody>
-            {rows.length===0 ? <tr><td className="p-3" colSpan={3}>No templates</td></tr> :
-              rows.map(r=>(
-                <tr key={r.id} className="border-b">
-                  <td className="p-2">{r.name}</td>
-                  <td className="p-2 text-center">{r.channel || "—"}</td>
-                  <td className="p-2 text-right">
-                    <button onClick={()=>del(r.id)} className="px-2 py-1 text-xs border rounded">Delete</button>
+      {err && <div className="text-sm text-rose-600">{err}</div>}
+      {loading ? (
+        <div className="text-sm text-slate-500">Loading…</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-600">
+                <th className="py-2 pr-4">Name</th>
+                <th className="py-2 pr-4">Subject</th>
+                <th className="py-2 pr-4">Body</th>
+                <th className="py-2 pr-4">Meta (JSON)</th>
+                <th className="py-2 pr-4 w-40">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => (
+                <tr key={row.id ?? `new-${idx}`} className="border-t">
+                  <td className="py-2 pr-4">
+                    <input
+                      value={row.name || ""}
+                      onChange={(e)=>setRows(rs => rs.map((r,i)=> i===idx ? {...r, name:e.target.value} : r))}
+                      className="w-full border rounded px-2 py-1"
+                    />
+                  </td>
+                  <td className="py-2 pr-4">
+                    <input
+                      value={row.subject || ""}
+                      onChange={(e)=>setRows(rs => rs.map((r,i)=> i===idx ? {...r, subject:e.target.value} : r))}
+                      className="w-full border rounded px-2 py-1"
+                    />
+                  </td>
+                  <td className="py-2 pr-4">
+                    <textarea
+                      rows={3}
+                      value={row.body || ""}
+                      onChange={(e)=>setRows(rs => rs.map((r,i)=> i===idx ? {...r, body:e.target.value} : r))}
+                      className="w-full border rounded px-2 py-1 font-mono"
+                    />
+                  </td>
+                  <td className="py-2 pr-4">
+                    <input
+                      value={row.meta ? JSON.stringify(row.meta) : ""}
+                      onChange={(e)=>{
+                        let meta = {};
+                        try { meta = JSON.parse(e.target.value || "{}"); } catch {}
+                        setRows(rs => rs.map((r,i)=> i===idx ? {...r, meta} : r));
+                      }}
+                      className="w-full border rounded px-2 py-1 font-mono"
+                      placeholder="{}"
+                    />
+                  </td>
+                  <td className="py-2 pr-4">
+                    <div className="flex gap-2">
+                      <button className="px-2 py-1 text-sm rounded border" disabled={saving} onClick={()=>saveRow(row)}>
+                        {saving ? "Saving…" : "Save"}
+                      </button>
+                      <button className="px-2 py-1 text-sm rounded border" disabled={saving} onClick={()=>deleteRow(row)}>
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ))
-            }
-          </tbody>
-        </table>
-      </div>
+              ))}
+              {rows.length === 0 && (
+                <tr><td colSpan={5} className="py-6 text-center text-slate-500">No templates.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
