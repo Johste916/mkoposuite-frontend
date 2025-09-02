@@ -1,1 +1,0 @@
-import{j as o}from"./index-ChU33jNq.js";import{R as t}from"./ReportShell-CQOxcC6I.js";function s(){return o.jsx(t,{title:"Collections Report",endpoint:"/reports/collections/summary",columns:[]})}export{s as default};
