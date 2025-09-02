@@ -13,8 +13,8 @@ const svgPlaceholder = (w, h, text) =>
             fill='#6b7280' font-size='12' font-family='sans-serif'>${text}</text>
     </svg>`
   )}`;
-const LOGO_PH   = svgPlaceholder(80, 80, "Logo");
-const IMAGE_PH  = svgPlaceholder(80, 80, "Img");
+const LOGO_PH  = svgPlaceholder(80, 80, "Logo");
+const IMAGE_PH = svgPlaceholder(80, 80, "Img");
 
 export default function GeneralSettings() {
   const { data, setData, loading, saving, error, success, save } =
@@ -47,7 +47,13 @@ export default function GeneralSettings() {
           decimalSeparator: ".",
           currencyPosition: "prefix",
         },
-        dashboard: { landingWidgets: ["kpis","recent-activity","collections"], showTicker: true },
+        dashboard: {
+          landingWidgets: ["kpis", "recent-activity", "collections"],
+          showTicker: true,
+          // the following two strings are consumed by the dashboard summary band
+          importantNotice: "",
+          companyMessage: "",
+        },
       }
     );
 
@@ -200,6 +206,44 @@ export default function GeneralSettings() {
               <option value="prefix">Prefix (TZS 1,000)</option>
               <option value="suffix">Suffix (1,000 TZS)</option>
             </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Dashboard Messages & Ticker */}
+      <section className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-4">
+        <h2 className="font-semibold">Dashboard Messages</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="text-sm">Important Notice (shown in amber band)</label>
+            <textarea
+              className="mt-1 w-full rounded border px-3 py-2 text-sm min-h-[80px]"
+              value={getPath(data, "dashboard.importantNotice") || ""}
+              onChange={(e) => setPath(setData, "dashboard.importantNotice", e.target.value)}
+              placeholder="REMINDER: Submit weekly PAR review by Friday 4:00 PM."
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-sm">Company Message (shown in blue band)</label>
+            <textarea
+              className="mt-1 w-full rounded border px-3 py-2 text-sm min-h-[80px]"
+              value={getPath(data, "dashboard.companyMessage") || ""}
+              onChange={(e) => setPath(setData, "dashboard.companyMessage", e.target.value)}
+              placeholder="Welcome to MkopoSuite LMS — Q3 focus: Risk reduction & collections discipline."
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="showTicker"
+              type="checkbox"
+              className="h-4 w-4"
+              checked={!!getPath(data, "dashboard.showTicker")}
+              onChange={(e) => setPath(setData, "dashboard.showTicker", e.target.checked)}
+            />
+            <label htmlFor="showTicker" className="text-sm">Show communications ticker on dashboard</label>
           </div>
         </div>
       </section>
