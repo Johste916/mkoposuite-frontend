@@ -8,11 +8,11 @@ import {
 
 const slug = (s) =>
   s.toLowerCase()
-   .replace(/&/g, "and")
-   .replace(/[^a-z0-9]+/g, "-")
-   .replace(/(^-|-$)+/g, "");
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
 
-const linkFor = (label) => `/admin/${slug(label)}`; // ✅ FIXED (backticks)
+const linkFor = (label) => `/admin/${slug(label)}`;
 
 const SECTIONS = [
   { title: "General", icon: <FiSettings className="opacity-70" />, items: ["General Settings"] },
