@@ -40,7 +40,7 @@ export const SettingsAPI = {
   saveLoanApprovals:   (v) => api.put(P("loan-approvals"), v).then(r => r.data),
 
   /* ------------------------------ System/General ------------------------------- */
-  // (your backend exposes BOTH "system-settings" and "general")
+  // Backend exposes BOTH "system-settings" (legacy) and "general" (current, used by dashboard)
   getSystemSettings:   () => api.get(P("system-settings")).then(r => r.data),
   saveSystemSettings:  (v) => api.put(P("system-settings"), v).then(r => r.data),
 

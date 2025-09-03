@@ -50,14 +50,16 @@ export default function GeneralSettings() {
         dashboard: {
           landingWidgets: ["kpis", "recent-activity", "collections"],
           showTicker: true,
-          // NEW — these drive the top two lines on the dashboard:
+
+          // These drive the top two lines on the dashboard:
           importantNotice: "",
           companyMessage: "",
-          // Optional curated block (appears as a white card with title + text)
+
+          // Optional curated block (white card under the blue line)
           curatedMessage: {
             title: "",
             text: "",
-            attachments: [] // [{fileName, fileUrl}] (attach UI can be added later)
+            attachments: [] // [{fileName, fileUrl}]
           }
         },
       }
@@ -216,7 +218,7 @@ export default function GeneralSettings() {
         </div>
       </section>
 
-      {/* NEW — Dashboard messages */}
+      {/* Dashboard messages */}
       <section className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-4">
         <h2 className="font-semibold">Dashboard Messages</h2>
 
@@ -248,7 +250,6 @@ export default function GeneralSettings() {
             onChange={(e) => setPath(setData, "dashboard.curatedMessage.text", e.target.value)}
           />
         </div>
-        {/* (Attachment UI can be added later; JSON array is kept for future) */}
       </section>
 
       <div className="flex gap-2">

@@ -1,0 +1,1 @@
+import{j as t}from"./index-DG5R-4Rf.js";import{T as e}from"./TypesEditor-BLbWIUdH.js";import"./admin-Cr8lycLe.js";import"./index-BlPtbu1l.js";function s(){return t.jsx(e,{title:"Other Income Types",category:"other-income-types"})}export{s as default};
