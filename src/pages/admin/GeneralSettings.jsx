@@ -50,9 +50,15 @@ export default function GeneralSettings() {
         dashboard: {
           landingWidgets: ["kpis", "recent-activity", "collections"],
           showTicker: true,
-          // the following two strings are consumed by the dashboard summary band
+          // NEW — these drive the top two lines on the dashboard:
           importantNotice: "",
           companyMessage: "",
+          // Optional curated block (appears as a white card with title + text)
+          curatedMessage: {
+            title: "",
+            text: "",
+            attachments: [] // [{fileName, fileUrl}] (attach UI can be added later)
+          }
         },
       }
     );
@@ -81,7 +87,7 @@ export default function GeneralSettings() {
     <div className="space-y-4">
       <header className="bg-white dark:bg-slate-900 border rounded-2xl p-4">
         <h1 className="text-xl font-semibold">General Settings</h1>
-        <p className="text-sm text-slate-500">Branding, company info, locale and formats.</p>
+        <p className="text-sm text-slate-500">Branding, company info, locale and dashboard messages.</p>
       </header>
 
       {error && (
@@ -210,42 +216,39 @@ export default function GeneralSettings() {
         </div>
       </section>
 
-      {/* Dashboard Messages & Ticker */}
+      {/* NEW — Dashboard messages */}
       <section className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-4">
         <h2 className="font-semibold">Dashboard Messages</h2>
 
+        <InputField
+          label="Important Notice (top amber line)"
+          value={getPath(data, "dashboard.importantNotice") || ""}
+          onChange={(v) => setPath(setData, "dashboard.importantNotice", v)}
+          placeholder="REMINDER: Submit weekly PAR review by Friday 4:00 PM."
+        />
+
+        <InputField
+          label="Company Message (blue line)"
+          value={getPath(data, "dashboard.companyMessage") || ""}
+          onChange={(v) => setPath(setData, "dashboard.companyMessage", v)}
+          placeholder="Welcome to MkopoSuite LMS — Q3 focus: Risk reduction & collections discipline."
+        />
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="text-sm">Important Notice (shown in amber band)</label>
-            <textarea
-              className="mt-1 w-full rounded border px-3 py-2 text-sm min-h-[80px]"
-              value={getPath(data, "dashboard.importantNotice") || ""}
-              onChange={(e) => setPath(setData, "dashboard.importantNotice", e.target.value)}
-              placeholder="REMINDER: Submit weekly PAR review by Friday 4:00 PM."
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-sm">Company Message (shown in blue band)</label>
-            <textarea
-              className="mt-1 w-full rounded border px-3 py-2 text-sm min-h-[80px]"
-              value={getPath(data, "dashboard.companyMessage") || ""}
-              onChange={(e) => setPath(setData, "dashboard.companyMessage", e.target.value)}
-              placeholder="Welcome to MkopoSuite LMS — Q3 focus: Risk reduction & collections discipline."
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              id="showTicker"
-              type="checkbox"
-              className="h-4 w-4"
-              checked={!!getPath(data, "dashboard.showTicker")}
-              onChange={(e) => setPath(setData, "dashboard.showTicker", e.target.checked)}
-            />
-            <label htmlFor="showTicker" className="text-sm">Show communications ticker on dashboard</label>
-          </div>
+          <InputField
+            label="Curated Card Title (optional)"
+            value={getPath(data, "dashboard.curatedMessage.title") || ""}
+            onChange={(v) => setPath(setData, "dashboard.curatedMessage.title", v)}
+            placeholder="Quarterly Collections Drive"
+          />
+          <textarea
+            className="rounded border px-3 py-2 text-sm min-h-[96px]"
+            placeholder="Short text shown in a white card below the blue line."
+            value={getPath(data, "dashboard.curatedMessage.text") || ""}
+            onChange={(e) => setPath(setData, "dashboard.curatedMessage.text", e.target.value)}
+          />
         </div>
+        {/* (Attachment UI can be added later; JSON array is kept for future) */}
       </section>
 
       <div className="flex gap-2">

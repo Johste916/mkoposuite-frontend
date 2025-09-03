@@ -7,24 +7,42 @@ const CHANNELS = [
   { value: "sms", label: "SMS" },
 ];
 
+const TYPES = [
+  { value: "notice", label: "Notice" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "policy", label: "Policy" },
+];
+
+const PRIORITIES = [
+  { value: "low", label: "Low" },
+  { value: "normal", label: "Normal" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "Urgent" },
+];
+
 export default function Communications() {
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "",
-    text: "",         // ✅ backend expects "text" (not "body")
-    channel: "inapp", // default
+    text: "",
+    channel: "inapp",
+    type: "notice",
+    priority: "normal",
+    isActive: true,
+    showInTicker: true,      // drives bottom “General Communications”
+    showOnDashboard: false,  // not used by ticker; future use for curated card lists
+    startAt: "",
+    endAt: "",
   });
 
   async function load() {
     setErr("");
     try {
       const data = await SettingsAPI.listComms();
-      // Be tolerant of null/undefined/single-object responses
       setRows(Array.isArray(data) ? data : (data ? [data] : []));
     } catch (e) {
-      // Treat 404/500 as empty list but show a small hint in console
       console.warn("Failed to list communications, treating as empty.", e?.response?.status, e?.response?.data);
       setRows([]);
       if (e?.response?.status === 401) setErr("You are not authorized. Please sign in again.");
@@ -43,10 +61,17 @@ export default function Communications() {
     try {
       await SettingsAPI.createComm({
         title: form.title.trim(),
-        text: form.text.trim(),     // ✅ send "text"
+        text: form.text.trim(),
         channel: form.channel,
+        type: form.type,
+        priority: form.priority,
+        isActive: !!form.isActive,
+        showInTicker: !!form.showInTicker,
+        showOnDashboard: !!form.showOnDashboard,
+        startAt: form.startAt || null,
+        endAt: form.endAt || null,
       });
-      setForm({ title: "", text: "", channel: form.channel });
+      setForm((s) => ({ ...s, title: "", text: "" }));
       await load();
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || "Failed to create communication");
@@ -93,6 +118,28 @@ export default function Communications() {
           </select>
         </div>
 
+        <div>
+          <label className="block text-xs mb-1">Type</label>
+          <select
+            className="w-full border rounded px-2 py-1 text-sm"
+            value={form.type}
+            onChange={(e) => setForm(s => ({ ...s, type: e.target.value }))}
+          >
+            {TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs mb-1">Priority</label>
+          <select
+            className="w-full border rounded px-2 py-1 text-sm"
+            value={form.priority}
+            onChange={(e) => setForm(s => ({ ...s, priority: e.target.value }))}
+          >
+            {PRIORITIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+        </div>
+
         <div className="md:col-span-2">
           <label className="block text-xs mb-1">Body</label>
           <textarea
@@ -100,6 +147,40 @@ export default function Communications() {
             value={form.text}
             onChange={(e) => setForm(s => ({ ...s, text: e.target.value }))}
             placeholder="REMINDER: Submit weekly PAR review by Friday 4:00 PM."
+          />
+        </div>
+
+        <div className="flex items-center gap-4">
+          <label className="text-xs flex items-center gap-2">
+            <input type="checkbox" checked={form.isActive} onChange={(e)=>setForm(s=>({...s,isActive:e.target.checked}))} />
+            Active
+          </label>
+          <label className="text-xs flex items-center gap-2">
+            <input type="checkbox" checked={form.showInTicker} onChange={(e)=>setForm(s=>({...s,showInTicker:e.target.checked}))} />
+            Show in ticker (bottom line)
+          </label>
+          <label className="text-xs flex items-center gap-2">
+            <input type="checkbox" checked={form.showOnDashboard} onChange={(e)=>setForm(s=>({...s,showOnDashboard:e.target.checked}))} />
+            Show on dashboard (future cards)
+          </label>
+        </div>
+
+        <div>
+          <label className="block text-xs mb-1">Start at</label>
+          <input
+            type="datetime-local"
+            className="w-full border rounded px-2 py-1 text-sm"
+            value={form.startAt}
+            onChange={(e) => setForm(s => ({ ...s, startAt: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="block text-xs mb-1">End at</label>
+          <input
+            type="datetime-local"
+            className="w-full border rounded px-2 py-1 text-sm"
+            value={form.endAt}
+            onChange={(e) => setForm(s => ({ ...s, endAt: e.target.value }))}
           />
         </div>
 
@@ -119,6 +200,8 @@ export default function Communications() {
           <thead>
             <tr className="border-b">
               <th className="p-2 text-left">Title</th>
+              <th className="p-2 text-left">Type</th>
+              <th className="p-2 text-left">Priority</th>
               <th className="p-2 text-left">Channel</th>
               <th className="p-2 text-left">Preview</th>
               <th className="p-2"></th>
@@ -126,13 +209,18 @@ export default function Communications() {
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td className="p-3 text-slate-500" colSpan={4}>No communications</td></tr>
+              <tr><td className="p-3 text-slate-500" colSpan={6}>No communications</td></tr>
             ) : rows.map(r => (
               <tr key={r.id || r._id || r.title} className="border-b align-top">
                 <td className="p-2">{r.title}</td>
+                <td className="p-2">{r.type || "notice"}</td>
+                <td className="p-2">{r.priority || "normal"}</td>
                 <td className="p-2">{r.channel || "inapp"}</td>
                 <td className="p-2 max-w-[480px]">
                   <div className="line-clamp-2 whitespace-pre-wrap">{r.text || r.body || ""}</div>
+                  <div className="text-[11px] text-slate-500 mt-1">
+                    {r.isActive ? "Active" : "Inactive"} · {r.showInTicker ? "Ticker" : "—"} {r.showOnDashboard ? "· Dashboard" : ""}
+                  </div>
                 </td>
                 <td className="p-2 text-right">
                   <button className="px-2 py-1 text-xs border rounded"

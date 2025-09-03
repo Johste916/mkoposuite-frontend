@@ -1,1 +1,0 @@
-import{j as t}from"./index-YOBwJX5V.js";import{T as e}from"./TemplatesEditor-lkbv185y.js";import"./admin-D4okHQef.js";import"./index-DqqhenKb.js";function o(){return t.jsx(e,{title:"Email Templates",category:"email"})}export{o as default};
