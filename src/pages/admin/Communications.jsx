@@ -1,3 +1,4 @@
+// src/pages/admin/Communications.jsx
 import React, { useEffect, useState } from "react";
 import { SettingsAPI } from "../../api/settings";
 
@@ -17,13 +18,14 @@ const PRIORITIES = [
   { value: "low", label: "Low" },
   { value: "normal", label: "Normal" },
   { value: "high", label: "High" },
-  { value: "urgent", label: "Urgent" },
+  { value: "critical", label: "Critical" }, // ✅ aligns with backend ordering
 ];
 
 export default function Communications() {
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+
   const [form, setForm] = useState({
     title: "",
     text: "",
@@ -31,25 +33,41 @@ export default function Communications() {
     type: "notice",
     priority: "normal",
     isActive: true,
-    showInTicker: true,      // drives bottom “General Communications”
-    showOnDashboard: false,  // not used by ticker; future use for curated card lists
+    showInTicker: true,      // drives bottom ticker
+    showOnDashboard: false,  // drives curated card (top of list)
     startAt: "",
     endAt: "",
   });
 
+  /* ----------------------- data ----------------------- */
   async function load() {
     setErr("");
     try {
       const data = await SettingsAPI.listComms();
-      setRows(Array.isArray(data) ? data : (data ? [data] : []));
+      const items = Array.isArray(data?.items)
+        ? data.items
+        : Array.isArray(data)
+        ? data
+        : [];
+      setRows(items);
     } catch (e) {
-      console.warn("Failed to list communications, treating as empty.", e?.response?.status, e?.response?.data);
+      console.warn(
+        "Failed to list communications, treating as empty.",
+        e?.response?.status,
+        e?.response?.data
+      );
       setRows([]);
-      if (e?.response?.status === 401) setErr("You are not authorized. Please sign in again.");
+      if (e?.response?.status === 401)
+        setErr("You are not authorized. Please sign in again.");
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
+
+  /* ----------------------- actions ----------------------- */
+  const toIso = (v) => (v ? new Date(v).toISOString() : null);
 
   async function add() {
     setErr("");
@@ -61,20 +79,22 @@ export default function Communications() {
     try {
       await SettingsAPI.createComm({
         title: form.title.trim(),
-        text: form.text.trim(),
+        text: form.text.trim(), // ✅ API expects "text"
         channel: form.channel,
         type: form.type,
         priority: form.priority,
         isActive: !!form.isActive,
         showInTicker: !!form.showInTicker,
         showOnDashboard: !!form.showOnDashboard,
-        startAt: form.startAt || null,
-        endAt: form.endAt || null,
+        startAt: toIso(form.startAt),
+        endAt: toIso(form.endAt),
       });
       setForm((s) => ({ ...s, title: "", text: "" }));
       await load();
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed to create communication");
+      setErr(
+        e?.response?.data?.error || e.message || "Failed to create communication"
+      );
     } finally {
       setSaving(false);
     }
@@ -91,6 +111,7 @@ export default function Communications() {
     }
   }
 
+  /* ----------------------- UI ----------------------- */
   return (
     <div className="bg-white dark:bg-slate-900 border rounded-2xl p-4 space-y-3">
       <h1 className="text-xl font-semibold">Communications</h1>
@@ -102,7 +123,7 @@ export default function Communications() {
           <input
             className="w-full border rounded px-2 py-1 text-sm"
             value={form.title}
-            onChange={(e) => setForm(s => ({ ...s, title: e.target.value }))}
+            onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
             placeholder="Important Notice"
           />
         </div>
@@ -112,9 +133,13 @@ export default function Communications() {
           <select
             className="w-full border rounded px-2 py-1 text-sm"
             value={form.channel}
-            onChange={(e) => setForm(s => ({ ...s, channel: e.target.value }))}
+            onChange={(e) => setForm((s) => ({ ...s, channel: e.target.value }))}
           >
-            {CHANNELS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            {CHANNELS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -123,9 +148,13 @@ export default function Communications() {
           <select
             className="w-full border rounded px-2 py-1 text-sm"
             value={form.type}
-            onChange={(e) => setForm(s => ({ ...s, type: e.target.value }))}
+            onChange={(e) => setForm((s) => ({ ...s, type: e.target.value }))}
           >
-            {TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            {TYPES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -134,9 +163,15 @@ export default function Communications() {
           <select
             className="w-full border rounded px-2 py-1 text-sm"
             value={form.priority}
-            onChange={(e) => setForm(s => ({ ...s, priority: e.target.value }))}
+            onChange={(e) =>
+              setForm((s) => ({ ...s, priority: e.target.value }))
+            }
           >
-            {PRIORITIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            {PRIORITIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -145,23 +180,41 @@ export default function Communications() {
           <textarea
             className="w-full min-h-[120px] border rounded px-2 py-1 text-sm"
             value={form.text}
-            onChange={(e) => setForm(s => ({ ...s, text: e.target.value }))}
+            onChange={(e) => setForm((s) => ({ ...s, text: e.target.value }))}
             placeholder="REMINDER: Submit weekly PAR review by Friday 4:00 PM."
           />
         </div>
 
         <div className="flex items-center gap-4">
           <label className="text-xs flex items-center gap-2">
-            <input type="checkbox" checked={form.isActive} onChange={(e)=>setForm(s=>({...s,isActive:e.target.checked}))} />
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) =>
+                setForm((s) => ({ ...s, isActive: e.target.checked }))
+              }
+            />
             Active
           </label>
           <label className="text-xs flex items-center gap-2">
-            <input type="checkbox" checked={form.showInTicker} onChange={(e)=>setForm(s=>({...s,showInTicker:e.target.checked}))} />
+            <input
+              type="checkbox"
+              checked={form.showInTicker}
+              onChange={(e) =>
+                setForm((s) => ({ ...s, showInTicker: e.target.checked }))
+              }
+            />
             Show in ticker (bottom line)
           </label>
           <label className="text-xs flex items-center gap-2">
-            <input type="checkbox" checked={form.showOnDashboard} onChange={(e)=>setForm(s=>({...s,showOnDashboard:e.target.checked}))} />
-            Show on dashboard (future cards)
+            <input
+              type="checkbox"
+              checked={form.showOnDashboard}
+              onChange={(e) =>
+                setForm((s) => ({ ...s, showOnDashboard: e.target.checked }))
+              }
+            />
+            Show on dashboard (curated card)
           </label>
         </div>
 
@@ -171,7 +224,7 @@ export default function Communications() {
             type="datetime-local"
             className="w-full border rounded px-2 py-1 text-sm"
             value={form.startAt}
-            onChange={(e) => setForm(s => ({ ...s, startAt: e.target.value }))}
+            onChange={(e) => setForm((s) => ({ ...s, startAt: e.target.value }))}
           />
         </div>
         <div>
@@ -180,7 +233,7 @@ export default function Communications() {
             type="datetime-local"
             className="w-full border rounded px-2 py-1 text-sm"
             value={form.endAt}
-            onChange={(e) => setForm(s => ({ ...s, endAt: e.target.value }))}
+            onChange={(e) => setForm((s) => ({ ...s, endAt: e.target.value }))}
           />
         </div>
 
@@ -209,25 +262,44 @@ export default function Communications() {
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td className="p-3 text-slate-500" colSpan={6}>No communications</td></tr>
-            ) : rows.map(r => (
-              <tr key={r.id || r._id || r.title} className="border-b align-top">
-                <td className="p-2">{r.title}</td>
-                <td className="p-2">{r.type || "notice"}</td>
-                <td className="p-2">{r.priority || "normal"}</td>
-                <td className="p-2">{r.channel || "inapp"}</td>
-                <td className="p-2 max-w-[480px]">
-                  <div className="line-clamp-2 whitespace-pre-wrap">{r.text || r.body || ""}</div>
-                  <div className="text-[11px] text-slate-500 mt-1">
-                    {r.isActive ? "Active" : "Inactive"} · {r.showInTicker ? "Ticker" : "—"} {r.showOnDashboard ? "· Dashboard" : ""}
-                  </div>
-                </td>
-                <td className="p-2 text-right">
-                  <button className="px-2 py-1 text-xs border rounded"
-                          onClick={() => remove(r.id || r._id)}>Delete</button>
+              <tr>
+                <td className="p-3 text-slate-500" colSpan={6}>
+                  No communications
                 </td>
               </tr>
-            ))}
+            ) : (
+              rows.map((r) => (
+                <tr
+                  key={r.id || r._id || r.title}
+                  className="border-b align-top"
+                >
+                  <td className="p-2">{r.title}</td>
+                  <td className="p-2">{r.type || "notice"}</td>
+                  <td className="p-2">{r.priority || "normal"}</td>
+                  <td className="p-2">{r.channel || "inapp"}</td>
+                  <td className="p-2 max-w-[520px]">
+                    <div className="line-clamp-2 whitespace-pre-wrap">
+                      {r.text || r.body || ""}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      {r.isActive ? "Active" : "Inactive"} ·{" "}
+                      {r.showInTicker ? "Ticker" : "—"}{" "}
+                      {r.showOnDashboard ? "· Dashboard" : ""}
+                      {r.startAt ? ` · from ${new Date(r.startAt).toLocaleString()}` : ""}
+                      {r.endAt ? ` · until ${new Date(r.endAt).toLocaleString()}` : ""}
+                    </div>
+                  </td>
+                  <td className="p-2 text-right">
+                    <button
+                      className="px-2 py-1 text-xs border rounded"
+                      onClick={() => remove(r.id || r._id)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
