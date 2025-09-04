@@ -11,7 +11,7 @@ const LoanScheduleModal = ({ loan, schedule, onClose }) => {
   // 👉 Export to PDF
   const exportToPDF = () => {
     const doc = new jsPDF();
-    doc.text(`Loan Schedule for TZS ${loan.amount.toLocaleString()}`, 14, 14);
+    doc.text(`Loan Schedule for TZS ${Number(loan.amount || 0).toLocaleString()}`, 14, 14);
     autoTable(doc, {
       startY: 20,
       head: [['#', 'Due Date', 'Principal', 'Interest', 'Total', 'Balance']],
@@ -46,10 +46,10 @@ const LoanScheduleModal = ({ loan, schedule, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded shadow-lg w-full max-w-3xl overflow-y-auto max-h-[85vh]">
-        <h2 className="text-xl font-bold mb-4">
-          Repayment Schedule for TZS {loan.amount.toLocaleString()}
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-slate-900 p-6 rounded shadow-lg w-full max-w-3xl overflow-y-auto max-h-[85vh] border border-slate-200 dark:border-slate-800">
+        <h2 className="text-xl font-bold mb-4 dark:text-slate-100">
+          Repayment Schedule for TZS {Number(loan.amount || 0).toLocaleString()}
         </h2>
 
         {/* Export Buttons */}
@@ -68,30 +68,32 @@ const LoanScheduleModal = ({ loan, schedule, onClose }) => {
           </button>
         </div>
 
-        <table className="w-full text-sm border">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border px-2 py-1">Installment</th>
-              <th className="border px-2 py-1">Due Date</th>
-              <th className="border px-2 py-1">Principal</th>
-              <th className="border px-2 py-1">Interest</th>
-              <th className="border px-2 py-1">Total</th>
-              <th className="border px-2 py-1">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {schedule.map((row, i) => (
-              <tr key={i}>
-                <td className="border px-2 text-center">{row.installment}</td>
-                <td className="border px-2">{row.dueDate}</td>
-                <td className="border px-2">TZS {parseFloat(row.principal).toLocaleString()}</td>
-                <td className="border px-2">TZS {parseFloat(row.interest).toLocaleString()}</td>
-                <td className="border px-2 font-semibold">TZS {parseFloat(row.total).toLocaleString()}</td>
-                <td className="border px-2">TZS {parseFloat(row.balance).toLocaleString()}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border dark:border-slate-800">
+            <thead className="bg-gray-100 dark:bg-slate-800">
+              <tr>
+                <th className="border px-2 py-1">Installment</th>
+                <th className="border px-2 py-1">Due Date</th>
+                <th className="border px-2 py-1">Principal</th>
+                <th className="border px-2 py-1">Interest</th>
+                <th className="border px-2 py-1">Total</th>
+                <th className="border px-2 py-1">Balance</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {schedule.map((row, i) => (
+                <tr key={i}>
+                  <td className="border px-2 text-center">{row.installment}</td>
+                  <td className="border px-2">{row.dueDate}</td>
+                  <td className="border px-2">TZS {parseFloat(row.principal).toLocaleString()}</td>
+                  <td className="border px-2">TZS {parseFloat(row.interest).toLocaleString()}</td>
+                  <td className="border px-2 font-semibold">TZS {parseFloat(row.total).toLocaleString()}</td>
+                  <td className="border px-2">TZS {parseFloat(row.balance).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <div className="text-right mt-4">
           <button

@@ -1,15 +1,12 @@
 // frontend/src/hooks/usePaginatedFetch.js
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 
 /**
- * Paginated fetch hook
- * - Accepts either "/api/xxx" or "/xxx". If api.baseURL already ends with "/api",
- *   we strip the leading "/api" from the url to avoid "/api/api".
- * - Understands payloads shaped as:
- *     { data: [], pagination: { page, limit, total }, summary?: any }
- *   and also gracefully handles plain arrays.
- * - Exposes `summary` and `refresh()`.
+ * Paginated fetch hook (behavior-safe)
+ * Supports:
+ *   payload = []  OR  { data: [], pagination: { page, limit, total }, summary? }
+ * Exposes summary + refresh().
  */
 export default function usePaginatedFetch({
   url,
@@ -28,15 +25,28 @@ export default function usePaginatedFetch({
 
   const query = useMemo(
     () => ({ ...params, page, limit, q: q || undefined }),
-    [params, page, limit, q]
+    // params may be stable object from caller; stringify safely as last resort
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page, limit, q, JSON.stringify(params)]
   );
 
-  const normalizedUrl = useMemo(() => api.path(url || "/"), [url]);
+  const normalizedUrl = useMemo(() => {
+    // api.path may not exist in some setups; fallback gracefully
+    const pathFn = typeof api.path === "function"
+      ? api.path
+      : (p) => {
+          const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
+          const rel = (p || "/").replace(/^\/+/, "");
+          return `${base}/${rel}`;
+        };
+    return pathFn(url || "/");
+  }, [url]);
+
+  const inFlight = useRef(null);
 
   const fetchNow = async (signal) => {
     setLoading(true);
     setError("");
-
     try {
       const res = await api.get(normalizedUrl, { params: query, signal });
       const payload = res?.data;
@@ -59,18 +69,26 @@ export default function usePaginatedFetch({
         setError(e?.response?.data?.error || e.message || "Request failed");
       }
     } finally {
-        if (!signal || !signal.aborted) setLoading(false);
+      if (!signal || !signal.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
     const ac = new AbortController();
+    inFlight.current?.abort?.();
+    inFlight.current = ac;
     fetchNow(ac.signal);
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normalizedUrl, JSON.stringify(query)]);
 
-  const refresh = () => fetchNow();
+  const refresh = () => {
+    const ac = new AbortController();
+    inFlight.current?.abort?.();
+    inFlight.current = ac;
+    fetchNow(ac.signal);
+    return () => ac.abort();
+  };
 
   return {
     rows,

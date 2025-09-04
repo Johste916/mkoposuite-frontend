@@ -71,7 +71,6 @@ const NAV = () => [
     ]
   },
 
-  /* Savings menu */
   {
     label: "Savings", icon: <BsBank />, to: "/savings", children: [
       { label: "View Savings", to: "/savings" },
@@ -253,7 +252,7 @@ const SidebarLayout = () => {
   const [user, setUser] = useState(null);
 
   // tenant state (for multi-tenant header + API header)
-  const [tenant, setTenant] = useState(null);  // { id, name } recommended
+  const [tenant, setTenant] = useState(null); // { id, name } recommended
 
   const [branches, setBranches] = useState([]);
   const [activeBranchId, setActiveBranchId] = useState("");
@@ -278,10 +277,9 @@ const SidebarLayout = () => {
   const handleLogout = () => {
     try {
       delete api.defaults.headers.common.Authorization;
-      localStorage.removeItem("token");
-      localStorage.removeItem("jwt");
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("user");
+      ["token", "jwt", "access_token", "user"].forEach((k) =>
+        localStorage.removeItem(k)
+      );
     } catch {}
     navigate("/login");
   };
@@ -295,7 +293,10 @@ const SidebarLayout = () => {
     }
 
     // inject Authorization header from local storage (works even if api.ts forgets)
-    const tok = localStorage.getItem("token") || localStorage.getItem("jwt") || localStorage.getItem("access_token");
+    const tok =
+      localStorage.getItem("token") ||
+      localStorage.getItem("jwt") ||
+      localStorage.getItem("access_token");
     if (tok) api.defaults.headers.common.Authorization = `Bearer ${tok}`;
 
     try {
@@ -369,7 +370,7 @@ const SidebarLayout = () => {
     (async () => {
       try {
         const res = await api.get("/branches");
-        const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+        const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
         setBranches(list);
         if (list.length && !activeBranchId) setActiveBranchId(String(list[0].id));
       } catch (e) {
@@ -427,6 +428,7 @@ const SidebarLayout = () => {
                   type="text"
                   placeholder="Search borrowers, loans, receipts…"
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+                  aria-label="Global search"
                 />
               </div>
             </div>
@@ -436,6 +438,7 @@ const SidebarLayout = () => {
                 className="hidden md:block px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 dark:text-slate-200 text-sm border border-slate-200 dark:border-slate-700"
                 value={activeBranchId}
                 onChange={(e) => setActiveBranchId(e.target.value)}
+                aria-label="Active branch"
               >
                 <option value="">Branch</option>
                 {branches.map((b) => (
@@ -510,7 +513,7 @@ const SidebarLayout = () => {
             <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Navigation
             </div>
-            <nav className="space-y-1">
+            <nav className="space-y-1" aria-label="Primary">
               {featuresLoading ? (
                 <div className="px-3 py-2 text-xs text-slate-500">Loading menu…</div>
               ) : (
@@ -548,7 +551,7 @@ const SidebarLayout = () => {
               {featuresLoading ? (
                 <div className="px-3 py-2 text-xs text-slate-500">Loading menu…</div>
               ) : (
-                <nav className="space-y-1">
+                <nav className="space-y-1" aria-label="Mobile primary">
                   {computedNav.map((item) => (
                     <Section
                       key={item.label + item.to}

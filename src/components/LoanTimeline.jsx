@@ -20,16 +20,16 @@ export default function LoanTimeline({ loan, comments = [], repayments = [], aud
     ({status:"bg-indigo-100 text-indigo-800",repayment:"bg-emerald-100 text-emerald-800",comment:"bg-gray-100 text-gray-700",audit:"bg-yellow-100 text-yellow-800"}[k] || "bg-slate-100 text-slate-800");
 
   return (
-    <div className="bg-white rounded shadow p-4">
+    <div className="bg-white dark:bg-slate-900 rounded shadow p-4 border border-slate-200 dark:border-slate-800">
       <h3 className="text-lg font-semibold mb-3">Timeline</h3>
-      {items.length === 0 ? <p className="text-sm text-gray-500">No activity yet.</p> : (
+      {items.length === 0 ? <p className="text-sm text-gray-500 dark:text-slate-400">No activity yet.</p> : (
         <ul className="space-y-2">
           {items.map((it, idx) => (
             <li key={idx} className="flex items-start gap-3">
               <span className={`px-2 py-0.5 rounded text-xs ${chip(it.kind)}`}>{it.kind}</span>
               <div>
                 <div className="text-sm">{it.label}</div>
-                <div className="text-xs text-gray-500">{fmt(it.t)}</div>
+                <div className="text-xs text-gray-500 dark:text-slate-400">{fmt(it.t)}</div>
               </div>
             </li>
           ))}

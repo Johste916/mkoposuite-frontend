@@ -66,6 +66,7 @@ export default function ListShell({
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search…"
             className="px-3 py-2 border rounded w-full sm:w-60 dark:bg-gray-700"
+            aria-label="Search list"
           />
         )}
       </div>
@@ -108,10 +109,13 @@ export default function ListShell({
                 safeRows.map((row, rIdx) => (
                   <tr
                     key={row?.id ?? rIdx}
-                    className="border-b last:border-0 dark:border-gray-700"
+                    className="border-b last:border-0 dark:border-gray-700 align-top"
                   >
                     {safeColumns.map((col, cIdx) => (
-                      <td key={col.key || cIdx} className="px-3 py-2">
+                      <td
+                        key={col.key || cIdx}
+                        className="px-3 py-2 break-words whitespace-normal"
+                      >
                         {renderCell(col, row, rIdx, cIdx)}
                       </td>
                     ))}
