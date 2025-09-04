@@ -1,7 +1,7 @@
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
-// ❌ removed: import "./styles/theme.css";  (theme is pulled via styles/tailwind.css)
+// Theme comes from styles/tailwind.css via main.jsx (do not import theme.css directly)
 
 // Auth/public
 const Login = lazy(() => import("./pages/Login"));
@@ -190,6 +190,13 @@ function App() {
               {/* Account hub */}
               <Route path="account/settings" element={<AccountSettings />} />
               <Route path="account/organization" element={<Organization />} />
+
+              {/* ✅ Aliases for legacy/incorrect links */}
+              <Route path="profile" element={<Navigate to="/account/settings" replace />} />
+              <Route path="settings" element={<Navigate to="/account/settings" replace />} />
+              <Route path="settings/profile" element={<Navigate to="/account/settings" replace />} />
+              <Route path="account" element={<Navigate to="/account/settings" replace />} />
+              <Route path="account/profile" element={<Navigate to="/account/settings" replace />} />
 
               {/* Canonical account */}
               <Route path="billing" element={<Billing />} />

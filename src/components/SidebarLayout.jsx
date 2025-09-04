@@ -365,7 +365,7 @@ const SidebarLayout = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Branch list (real)
+  // Branch list
   useEffect(() => {
     (async () => {
       try {
@@ -382,7 +382,7 @@ const SidebarLayout = () => {
 
   const userRole = (user?.role || "").toLowerCase();
 
-  // Build full NAV, then apply Admin filters/labels (authoritative + tenant entitlements)
+  // Build full NAV, then apply Admin filters/labels
   const computedNav = useMemo(() => {
     const base = NAV();
     return filterNavByFeatures(base, features, userRole, featureCtx);
@@ -477,12 +477,13 @@ const SidebarLayout = () => {
                       </div>
                     </div>
                     <hr className="my-2 border-slate-200 dark:border-slate-700" />
+                    {/* ✅ point to canonical route to avoid 404s */}
                     <NavLink
-                      to="/settings/profile"
+                      to="/account/settings"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2"><FiSettings /> Profile & Settings</span>
+                      <span className="inline-flex items-center gap-2"><FiSettings /> Profile &amp; Settings</span>
                     </NavLink>
                     <NavLink
                       to="/admin"

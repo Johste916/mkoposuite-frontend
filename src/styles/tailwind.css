@@ -1,7 +1,6 @@
-/* src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Load our theme after Tailwind layers are declared */
-@import "./styles/theme.css";
+/* Import theme AFTER Tailwind directives so @layer works correctly */
+@import "./theme.css";

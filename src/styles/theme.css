@@ -1,11 +1,8 @@
-/* src/styles/theme.css */
-
-/* Put base resets and dark-mode friendly defaults here.
-   Because this file is imported *after* @tailwind base, using @layer base is valid. */
+/* Global theme defaults that are safe for all modules. Loaded via styles/tailwind.css */
 
 @layer base {
   html {
-    /* Let the browser auto-switch form controls where supported */
+    /* Lets the browser auto-theme form controls (where supported) */
     color-scheme: light dark;
   }
 
@@ -13,19 +10,19 @@
     @apply bg-gray-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100;
   }
 
-  /* Visible focus across themes */
+  /* Consistent, visible focus in both themes */
   :focus-visible {
     outline: 2px solid rgb(59 130 246 / 60%);
     outline-offset: 2px;
   }
 
-  /* Make placeholders readable in dark mode */
+  /* Readable placeholders in dark mode */
   input::placeholder,
   textarea::placeholder {
     @apply text-slate-400 dark:text-slate-500;
   }
 
-  /* Ensure selects/options inherit colors in both modes */
+  /* Make native selects inherit theme colors */
   select,
   option {
     color: inherit;
@@ -33,9 +30,8 @@
   }
 }
 
-/* Optional small utilities that help across the app */
 @layer utilities {
-  /* A subtle card helper (use if needed) */
+  /* Handy card + button utilities if you want them app-wide */
   .ms-card {
     @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl;
   }
