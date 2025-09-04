@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
   FiBarChart2, FiSearch, FiSettings, FiUserCheck, FiFileText, FiBriefcase,
-  FiDatabase, FiMenu, FiX, FiChevronDown, FiChevronUp
+  FiDatabase, FiMenu, FiX, FiChevronDown, FiChevronUp, FiUser
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
@@ -71,7 +71,7 @@ const NAV = () => [
     ]
   },
 
-  /* ✅ Savings menu */
+  /* Savings menu */
   {
     label: "Savings", icon: <BsBank />, to: "/savings", children: [
       { label: "View Savings", to: "/savings" },
@@ -88,8 +88,6 @@ const NAV = () => [
       { label: "Add Investor", to: "/investors/add" },
     ]
   },
-
-  // ❌ E-Signatures removed from the sidebar (route still exists)
 
   {
     label: "HR & Payroll", icon: <FiUserCheck />, to: "/payroll", children: [
@@ -254,7 +252,7 @@ const SidebarLayout = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState(null);
 
-  // ✅ NEW: tenant state (for multi-tenant header + API header)
+  // tenant state (for multi-tenant header + API header)
   const [tenant, setTenant] = useState(null);  // { id, name } recommended
 
   const [branches, setBranches] = useState([]);
@@ -265,13 +263,13 @@ const SidebarLayout = () => {
   const featureCtx = useFeatureConfig();
   const { loading: featuresLoading, features } = featureCtx;
 
-  // Settings dropdown
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsRef = useRef(null);
+  // Avatar menu
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const avatarRef = useRef(null);
   React.useEffect(() => {
     const onDoc = (e) => {
-      if (!settingsRef.current) return;
-      if (!settingsRef.current.contains(e.target)) setSettingsOpen(false);
+      if (!avatarRef.current) return;
+      if (!avatarRef.current.contains(e.target)) setAvatarOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -307,7 +305,7 @@ const SidebarLayout = () => {
       localStorage.removeItem("user");
     }
 
-    // ✅ load tenant from localStorage
+    // load tenant from localStorage
     try {
       const rawTenant = localStorage.getItem("tenant");
       if (rawTenant) {
@@ -352,7 +350,7 @@ const SidebarLayout = () => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  // ✅ Fetch current user from real API and keep localStorage in sync
+  // Fetch current user from API and keep localStorage in sync
   useEffect(() => {
     (async () => {
       try {
@@ -360,7 +358,6 @@ const SidebarLayout = () => {
         setUser(data);
         localStorage.setItem("user", JSON.stringify(data));
       } catch (e) {
-        // if backend says unauthorized, dump auth and go to login
         if (e?.response?.status === 401) handleLogout();
       }
     })();
@@ -390,10 +387,10 @@ const SidebarLayout = () => {
     return filterNavByFeatures(base, features, userRole, featureCtx);
   }, [features, userRole, featureCtx]);
 
-  /* close mobile when route changes & close settings */
+  /* close mobile when route changes & close avatar menu */
   useEffect(() => {
     setMobileOpen(false);
-    setSettingsOpen(false);
+    setAvatarOpen(false);
   }, [location.pathname]);
 
   return (
@@ -415,7 +412,7 @@ const SidebarLayout = () => {
                 <span className="text-slate-800 dark:text-slate-200">Suite</span>
               </span>
 
-              {/* ✅ subtle tenant badge */}
+              {/* subtle tenant badge */}
               {tenant?.name && (
                 <span className="ml-2 px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                   {tenant.name}
@@ -454,47 +451,42 @@ const SidebarLayout = () => {
                 {darkMode ? <FiSun /> : <FiMoon />}
               </button>
 
-              {/* Admin hub button */}
-              <button
-                onClick={() => navigate("/admin")}
-                className="hidden md:inline-flex items-center gap-2 h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
-                title="Admin"
-              >
-                <FiSettings /> Admin
-              </button>
-
-              {/* Settings dropdown */}
-              <div className="relative" ref={settingsRef}>
+              {/* Avatar dropdown (Profile & Settings / Admin / Logout) */}
+              <div className="relative" ref={avatarRef}>
                 <button
-                  onClick={() => setSettingsOpen((v) => !v)}
-                  className="inline-flex items-center gap-2 h-9 px-3 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  title="Settings"
-                  aria-expanded={settingsOpen}
+                  onClick={() => setAvatarOpen((v) => !v)}
+                  className="inline-flex items-center gap-2 h-9 px-2 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  aria-expanded={avatarOpen}
+                  title="Account"
                 >
-                  <FiSettings /> Settings <FiChevronDown className="opacity-70" />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                    {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
+                  </div>
+                  <FiChevronDown className="opacity-70" />
                 </button>
-                {settingsOpen && (
-                  <div className="absolute right-0 mt-2 w-60 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 z-[60] p-2">
+                {avatarOpen && (
+                  <div className="absolute right-0 mt-2 w-64 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 z-[60] p-2">
+                    <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                      <FiUser />
+                      <div className="truncate">
+                        <div className="font-medium text-slate-800 dark:text-slate-200 truncate">{user?.name || user?.email || "User"}</div>
+                        <div className="truncate opacity-70">{(user?.role || "user").toLowerCase()}</div>
+                      </div>
+                    </div>
+                    <hr className="my-2 border-slate-200 dark:border-slate-700" />
                     <NavLink
-                      to="/billing"
+                      to="/settings/profile"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setSettingsOpen(false)}
+                      onClick={() => setAvatarOpen(false)}
                     >
-                      Billing
+                      <span className="inline-flex items-center gap-2"><FiSettings /> Profile & Settings</span>
                     </NavLink>
                     <NavLink
-                      to="/change-password"
+                      to="/admin"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setSettingsOpen(false)}
+                      onClick={() => setAvatarOpen(false)}
                     >
-                      Change Password
-                    </NavLink>
-                    <NavLink
-                      to="/2fa"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setSettingsOpen(false)}
-                    >
-                      Two-Factor Authentication
+                      <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
                     </NavLink>
                     <button
                       onClick={handleLogout}
@@ -504,14 +496,6 @@ const SidebarLayout = () => {
                     </button>
                   </div>
                 )}
-              </div>
-
-              {/* Avatar */}
-              <div className="flex items-center gap-2 pl-1">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-                  {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
-                </div>
-                <span className="hidden md:block text-xs opacity-70">{(user?.role || "user").toLowerCase()}</span>
               </div>
             </div>
           </div>

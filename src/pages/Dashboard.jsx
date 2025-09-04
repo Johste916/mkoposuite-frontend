@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -30,6 +29,8 @@ const useIsDarkMode = () => {
   }, []);
   return isDark;
 };
+
+const TZS = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
 const Dashboard = () => {
   const isDark = useIsDarkMode();
@@ -87,7 +88,7 @@ const Dashboard = () => {
   };
   const money = (v) => {
     const num = n(v);
-    return isNaN(num) ? 'TZS —' : `TZS ${num.toLocaleString()}`;
+    return Number.isNaN(num) ? 'TZS —' : `TZS ${TZS.format(num)}`;
   };
 
   const branchNameById = (id) =>
@@ -312,13 +313,16 @@ const Dashboard = () => {
           <span>{v.toLocaleString()}</span>
         </div>
         <div className="h-2 w-full bg-gray-100 dark:bg-slate-800 rounded">
-          <div className="h-2 rounded" style={{ width: `${pct}%`, backgroundColor: 'currentColor' }} />
+          <div
+            className="h-2 rounded"
+            style={{ width: `${pct}%`, backgroundColor: 'currentColor' }}
+          />
         </div>
       </div>
     );
   };
 
-  const Skeleton = ({ className }) => (
+  const Skeleton = ({ className = '' }) => (
     <div className={`animate-pulse bg-gray-100 dark:bg-slate-800/50 rounded ${className}`} />
   );
 
@@ -462,25 +466,25 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Important Notice */}
+      {/* Important Notice (amber) */}
       {summary?.importantNotice && (
         <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 p-4">
           <div className="flex gap-2 items-start">
             <Info className="w-5 h-5 mt-0.5" />
-            <div>
-              <p className="font-semibold">Important Notice</p>
-              <p className="text-sm">{summary.importantNotice}</p>
+            <div className="min-w-0">
+              <p className="font-semibold truncate">Important Notice</p>
+              <p className="text-sm break-words">{summary.importantNotice}</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Company Message */}
+      {/* Company Message (blue) */}
       {summary?.companyMessage ? (
         <div className="rounded-xl border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 text-blue-700 dark:text-blue-200 p-4">
-          <div className="flex items-center gap-2">
-            <Info className="w-5 h-5" />
-            <p className="text-sm font-medium">{summary.companyMessage}</p>
+          <div className="flex items-start gap-2">
+            <Info className="w-5 h-5 shrink-0" />
+            <p className="text-sm font-medium break-words">{summary.companyMessage}</p>
           </div>
         </div>
       ) : loading ? (
@@ -491,16 +495,16 @@ const Dashboard = () => {
       {dashMsg && (
         <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-sm p-4">
           <div className="flex items-start justify-between gap-2">
-            <div>
-              {dashMsg.title && <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100">{dashMsg.title}</h3>}
-              {dashMsg.text && <p className="text-sm text-gray-700 dark:text-slate-300 mt-1">{dashMsg.text}</p>}
+            <div className="min-w-0">
+              {dashMsg.title && <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100 truncate">{dashMsg.title}</h3>}
+              {dashMsg.text && <p className="text-sm text-gray-700 dark:text-slate-300 mt-1 break-words">{dashMsg.text}</p>}
               {Array.isArray(dashMsg.attachments) && dashMsg.attachments.length > 0 && (
                 <div className="mt-2">
                   <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-1">Attachments</p>
                   <div className="flex flex-wrap gap-3">
                     {dashMsg.attachments.map((a) => (
                       <a
-                        key={`${a.id}-${a.fileUrl}`}
+                        key={`${a.id || a.fileUrl}`}
                         href={a.fileUrl}
                         target="_blank"
                         rel="noreferrer"
@@ -521,7 +525,7 @@ const Dashboard = () => {
                     if (a.fileUrl) setTimeout(() => window.open(a.fileUrl, '_blank', 'noopener,noreferrer'), i * 150);
                   });
                 }}
-                className="text-xs flex items-center gap-1 border rounded px-2 py-1 h-8 dark:border-slate-700 dark:hover:bg-slate-800"
+                className="text-xs flex items-center gap-1 border rounded px-2 py-1 h-8 dark:border-slate-700 dark:hover:bg-slate-800 shrink-0"
                 title="Open all attachments"
               >
                 <Download className="w-3 h-3" /> Open all
@@ -541,6 +545,7 @@ const Dashboard = () => {
                 onClick={downloadAllAttachments}
                 className="text-xs flex items-center gap-1 border rounded px-2 py-1 dark:border-slate-700 dark:hover:bg-slate-800"
                 title="Open all attachments"
+                disabled={loadingComms}
               >
                 <Download className="w-3 h-3" /> Download all
               </button>
@@ -552,8 +557,8 @@ const Dashboard = () => {
               className="absolute whitespace-nowrap will-change-transform text-sm text-gray-700 dark:text-slate-200 flex items-center gap-8 px-3"
               style={{ animation: 'ms-marquee 18s linear infinite' }}
             >
-              {comms.map((c) => (
-                <span key={c.id || c.text} className="inline-flex items-center gap-2">
+              {comms.map((c, idx) => (
+                <span key={c.id || c.text || idx} className="inline-flex items-center gap-2">
                   {c.type && (
                     <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
                       {c.type}
@@ -575,7 +580,7 @@ const Dashboard = () => {
                     </span>
                   )}
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  {c.text}
+                  <span className="truncate">{c.text}</span>
                 </span>
               ))}
             </div>
@@ -647,7 +652,7 @@ const Dashboard = () => {
                   <div className="flex items-center gap-2 mb-3">
                     <BarChart2 className="w-5 h-5 text-indigo-600 dark:text-indigo-300" />
                     <h3 className="font-semibold text-gray-800 dark:text-slate-100">
-                      Monthly Trends{(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}
+                      {`Monthly Trends${(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}`}
                     </h3>
                   </div>
 
@@ -842,7 +847,7 @@ const Dashboard = () => {
                       <p className="text-sm font-medium text-gray-800 dark:text-slate-100">
                         {a.type} • {a.entityType} #{a.entityId}
                       </p>
-                      <p className="text-xs text-gray-600 dark:text-slate-300">{a.message}</p>
+                      <p className="text-xs text-gray-600 dark:text-slate-300 break-words">{a.message}</p>
                       <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-1">
                         by {a.createdBy?.name || a.createdBy?.email} • {new Date(a.createdAt).toLocaleString()}
                       </p>
@@ -852,7 +857,7 @@ const Dashboard = () => {
                         <div className="mt-2 space-y-1">
                           {a.comments.map((c) => (
                             <div key={c.id} className="bg-gray-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-2">
-                              <p className="text-xs text-gray-800 dark:text-slate-200">{c.comment}</p>
+                              <p className="text-xs text-gray-800 dark:text-slate-200 break-words">{c.comment}</p>
                               <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-0.5">
                                 — {c.createdBy?.name || c.createdBy?.email} • {new Date(c.createdAt).toLocaleString()}
                               </p>
@@ -962,10 +967,10 @@ const Dashboard = () => {
   );
 };
 
-/** KPI card with subtle tone color accents */
+/** KPI card with subtle tone color accents and taller height */
 const SummaryCard = ({ title, value, icon, tone = 'indigo' }) => {
   const tones =
-    {
+    ({
       indigo:  { ring: 'ring-indigo-100 dark:ring-indigo-900/40',  icon: 'text-indigo-600 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-950/40' },
       sky:     { ring: 'ring-sky-100 dark:ring-sky-900/40',        icon: 'text-sky-600 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/40' },
       blue:    { ring: 'ring-blue-100 dark:ring-blue-900/40',      icon: 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-950/40' },
@@ -975,15 +980,15 @@ const SummaryCard = ({ title, value, icon, tone = 'indigo' }) => {
       violet:  { ring: 'ring-violet-100 dark:ring-violet-900/40',  icon: 'text-violet-600 bg-violet-50 dark:text-violet-300 dark:bg-violet-950/40' },
       rose:    { ring: 'ring-rose-100 dark:ring-rose-900/40',      icon: 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40' },
       slate:   { ring: 'ring-slate-100 dark:ring-slate-800',       icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' },
-    }[tone] || { ring: 'ring-slate-100 dark:ring-slate-800', icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' };
+    }[tone]) || { ring: 'ring-slate-100 dark:ring-slate-800', icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' };
 
   return (
-    <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring}`}>
+    <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring} min-h-[7rem]`}>
       <div className="flex items-center gap-3">
         <div className={`p-2 rounded-full ${tones.icon}`}>{icon}</div>
-        <div>
-          <h3 className="text-xs font-medium text-gray-500 dark:text-slate-400">{title}</h3>
-          <p className="text-xl font-semibold text-gray-900 dark:text-white">{value ?? '—'}</p>
+        <div className="min-w-0">
+          <h3 className="text-xs font-medium text-gray-500 dark:text-slate-400 truncate">{title}</h3>
+          <p className="text-xl font-semibold text-gray-900 dark:text-white break-words">{value ?? '—'}</p>
         </div>
       </div>
     </div>
