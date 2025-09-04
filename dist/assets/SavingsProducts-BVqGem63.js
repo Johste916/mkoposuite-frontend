@@ -1,0 +1,1 @@
+import{j as t}from"./index-Y30r8o2M.js";import{T as r}from"./TypesEditor-BWEgu4JF.js";import"./admin-7ms6J_sA.js";import"./index-BcB9miDM.js";function p(){return t.jsx(r,{title:"Savings Products",category:"savings-products"})}export{p as default};

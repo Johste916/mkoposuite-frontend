@@ -1,8 +1,6 @@
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
-// Theme comes from styles/tailwind.css via main.jsx (do not import theme.css directly)
-
 // Auth/public
 const Login = lazy(() => import("./pages/Login"));
 
@@ -11,9 +9,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import SidebarLayout from "./components/SidebarLayout";
 
-// Admin-controlled feature flags
+// Feature flags + toasts
 import { FeatureConfigProvider } from "./context/FeatureConfigContext";
-// Toasts
 import { ToastProvider } from "./components/common/ToastProvider";
 
 // Core
@@ -68,11 +65,12 @@ const Permissions = lazy(() => import("./pages/user-management/Permissions"));
 const Branches = lazy(() => import("./pages/Branches"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-// Admin hub + account hub
+// Admin & account hubs
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 const Organization = lazy(() => import("./pages/account/Organization"));
+const Profile = lazy(() => import("./pages/account/Profile")); // 👈 NEW
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -83,7 +81,7 @@ const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets
 const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
 const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
 
-// ✅ Savings
+// Savings
 const Savings = lazy(() => import("./pages/Savings"));
 const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactions"));
 const UploadSavingsCSV = lazy(() => import("./pages/savings/UploadCSV"));
@@ -108,44 +106,22 @@ const HRAttendance = lazy(() => import("./pages/hr/Attendance"));
 const HRLeave = lazy(() => import("./pages/hr/Leave"));
 const HRContracts = lazy(() => import("./pages/hr/Contracts"));
 
-// ACCOUNTING
+// Accounting
 const ChartOfAccounts = lazy(() => import("./pages/accounting/ChartOfAccounts"));
 const TrialBalance = lazy(() => import("./pages/accounting/TrialBalance"));
 const ProfitLoss = lazy(() => import("./pages/accounting/ProfitLoss"));
 const Cashflow = lazy(() => import("./pages/accounting/Cashflow"));
 const ManualJournal = lazy(() => import("./pages/accounting/ManualJournal"));
 
-// ✅ Canonical account pages
+// Canonical account pages
 const Billing = lazy(() => import("./pages/account/Billing"));
 const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const TwoFactor = lazy(() => import("./pages/account/TwoFactor"));
-
-/** Reports — dedicated pages */
-const BorrowersReport = lazy(() => import("./pages/reports/BorrowersReport"));
-const LoanReport = lazy(() => import("./pages/reports/LoanReport"));
-const ArrearsAging = lazy(() => import("./pages/reports/ArrearsAging"));
-const CollectionsReport = lazy(() => import("./pages/reports/CollectionsReport"));
-const CollectorReport = lazy(() => import("./pages/reports/CollectorReport"));
-const DeferredIncome = lazy(() => import("./pages/reports/DeferredIncome"));
-const DeferredIncomeMonthly = lazy(() => import("./pages/reports/DeferredIncomeMonthly"));
-const ProRataCollections = lazy(() => import("./pages/reports/ProRataCollections"));
-const DisbursementReport = lazy(() => import("./pages/reports/DisbursementReport"));
-const FeesReport = lazy(() => import("./pages/reports/FeesReport"));
-const LoanOfficerReport = lazy(() => import("./pages/reports/LoanOfficerReport"));
-const LoanProductsReport = lazy(() => import("./pages/reports/LoanProductsReport"));
-const MfrsRatios = lazy(() => import("./pages/reports/MfrsRatios"));
-const DailyReport = lazy(() => import("./pages/reports/DailyReport"));
-const MonthlyReport = lazy(() => import("./pages/reports/MonthlyReport"));
-const OutstandingReport = lazy(() => import("./pages/reports/OutstandingReport"));
-const ParReport = lazy(() => import("./pages/reports/ParReport"));
-const AtAGlance = lazy(() => import("./pages/reports/AtAGlance"));
-const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 
 const Fallback = () => (
   <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
 );
 
-/* Small 403 page so RequireRole redirects have a target */
 const Forbidden = () => (
   <div className="p-6">
     <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">403 — Forbidden</h1>
@@ -174,7 +150,7 @@ function App() {
               {/* Dashboard */}
               <Route index element={<Dashboard />} />
 
-              {/* ===== Admin hub ===== */}
+              {/* Admin hub */}
               <Route
                 path="admin"
                 element={
@@ -189,14 +165,16 @@ function App() {
 
               {/* Account hub */}
               <Route path="account/settings" element={<AccountSettings />} />
+              <Route path="account/profile" element={<Profile />} />
               <Route path="account/organization" element={<Organization />} />
 
               {/* ✅ Aliases for legacy/incorrect links */}
-              <Route path="profile" element={<Navigate to="/account/settings" replace />} />
+              <Route path="profile" element={<Navigate to="/account/profile" replace />} />
               <Route path="settings" element={<Navigate to="/account/settings" replace />} />
-              <Route path="settings/profile" element={<Navigate to="/account/settings" replace />} />
+              <Route path="settings/profile" element={<Navigate to="/account/profile" replace />} />
               <Route path="account" element={<Navigate to="/account/settings" replace />} />
-              <Route path="account/profile" element={<Navigate to="/account/settings" replace />} />
+              <Route path="organization" element={<Navigate to="/account/organization" replace />} />
+              <Route path="org" element={<Navigate to="/account/organization" replace />} />
 
               {/* Canonical account */}
               <Route path="billing" element={<Billing />} />
@@ -329,7 +307,7 @@ function App() {
               <Route path="collections/sms" element={<Sms />} />
               <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>} />
 
-              {/* ✅ Savings */}
+              {/* Savings */}
               <Route path="savings" element={<Savings />} />
               <Route path="savings/report" element={<Savings />} />
               <Route path="savings/transactions" element={<SavingsTransactions />} />
@@ -364,7 +342,6 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
-
               <Route path="hr" element={<Navigate to="/hr/employees" replace />} />
               <Route
                 path="hr/employees"
@@ -382,7 +359,6 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
-              {/* Leave visible to staff; server enforces approvals */}
               <Route path="hr/leave" element={<HRLeave />} />
               <Route
                 path="hr/contracts"
@@ -421,7 +397,7 @@ function App() {
               <Route path="assets" element={<Assets />} />
               <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
 
-              {/* ── ACCOUNTING (grouped) ───────────────────────────────── */}
+              {/* Accounting (grouped) */}
               <Route
                 path="accounting"
                 element={
@@ -436,7 +412,6 @@ function App() {
                 <Route path="profit-loss" element={<ProfitLoss />} />
                 <Route path="cashflow" element={<Cashflow />} />
                 <Route path="manual-journal" element={<ManualJournal />} />
-                {/* Short aliases */}
                 <Route path="coa" element={<Navigate to="/accounting/chart-of-accounts" replace />} />
                 <Route path="tb" element={<Navigate to="/accounting/trial-balance" replace />} />
                 <Route path="pnl" element={<Navigate to="/accounting/profit-loss" replace />} />
