@@ -12,7 +12,6 @@ import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigC
 /* ---------- NAV CONFIG (Admin controls visibility via FeatureConfig) ---------- */
 const NAV = () => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
-
   {
     label: "Borrowers", icon: <FiUsers />, to: "/borrowers", children: [
       { label: "View Borrowers", to: "/borrowers" },
@@ -28,7 +27,6 @@ const NAV = () => [
       { label: "Invite Borrowers", to: "/borrowers/invite" },
     ]
   },
-
   {
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
       { label: "View All Loans", to: "/loans" },
@@ -46,7 +44,6 @@ const NAV = () => [
       { label: "3 Months Late", to: "/loans/status/3-months-late" },
     ]
   },
-
   {
     label: "Repayments", icon: <FiDollarSign />, to: "/repayments", children: [
       { label: "View Repayments", to: "/repayments" },
@@ -58,9 +55,7 @@ const NAV = () => [
       { label: "Approve Repayments", to: "/repayments/approve" },
     ]
   },
-
   { label: "Collateral Register", icon: <FiBriefcase />, to: "/collateral" },
-
   {
     label: "Collection Sheets", icon: <FiFileText />, to: "/collections", children: [
       { label: "Daily Collection Sheet", to: "/collections/daily" },
@@ -70,7 +65,6 @@ const NAV = () => [
       { label: "Send Email", to: "/collections/email" },
     ]
   },
-
   {
     label: "Savings", icon: <BsBank />, to: "/savings", children: [
       { label: "View Savings", to: "/savings" },
@@ -80,14 +74,12 @@ const NAV = () => [
       { label: "Savings Report", to: "/savings/report" },
     ]
   },
-
   {
     label: "Investors", icon: <FiUsers />, to: "/investors", children: [
       { label: "View Investors", to: "/investors" },
       { label: "Add Investor", to: "/investors/add" },
     ]
   },
-
   {
     label: "HR & Payroll", icon: <FiUserCheck />, to: "/payroll", children: [
       { label: "View Payroll", to: "/payroll" },
@@ -99,7 +91,6 @@ const NAV = () => [
       { label: "Contracts", to: "/hr/contracts" },
     ]
   },
-
   {
     label: "Expenses", icon: <FiCreditCard />, to: "/expenses", children: [
       { label: "View Expenses", to: "/expenses" },
@@ -107,7 +98,6 @@ const NAV = () => [
       { label: "Upload CSV", to: "/expenses/csv" },
     ]
   },
-
   {
     label: "Other Income", icon: <FiDollarSign />, to: "/other-income", children: [
       { label: "View Other Income", to: "/other-income" },
@@ -115,14 +105,12 @@ const NAV = () => [
       { label: "Upload CSV", to: "/other-income/csv" },
     ]
   },
-
   {
     label: "Asset Management", icon: <FiBriefcase />, to: "/assets", children: [
       { label: "View Assets", to: "/assets" },
       { label: "Add Asset", to: "/assets/add" },
     ]
   },
-
   {
     label: "Accounting", icon: <FiDatabase />, to: "/accounting", children: [
       { label: "Chart of Accounts", to: "/accounting/chart-of-accounts" },
@@ -131,7 +119,6 @@ const NAV = () => [
       { label: "Cashflow", to: "/accounting/cashflow" },
     ]
   },
-
   {
     label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
       { label: "Users", to: "/user-management/users" },
@@ -139,9 +126,7 @@ const NAV = () => [
       { label: "Permissions", to: "/user-management/permissions" },
     ]
   },
-
   { label: "Branches", icon: <FiDatabase />, to: "/branches" },
-
   {
     label: "Reports", icon: <FiBarChart2 />, to: "/reports", children: [
       { label: "Borrowers Report", to: "/reports/borrowers" },
@@ -174,9 +159,7 @@ const Section = ({ item, currentPath, onNavigate }) => {
   const isActiveSection = pathIsIn(currentPath, item.to);
   const [open, setOpen] = useState(isActiveSection || !hasChildren);
 
-  React.useEffect(() => {
-    if (isActiveSection) setOpen(true);
-  }, [isActiveSection]);
+  React.useEffect(() => { if (isActiveSection) setOpen(true); }, [isActiveSection]);
 
   const baseItem = "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
 
@@ -185,11 +168,8 @@ const Section = ({ item, currentPath, onNavigate }) => {
       <NavLink
         to={item.to}
         className={({ isActive }) =>
-          `${baseItem} ${
-            isActive
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-          }`
+          `${baseItem} ${isActive ? "bg-blue-600 text-white shadow-sm"
+            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"}`
         }
         onClick={onNavigate}
       >
@@ -204,10 +184,9 @@ const Section = ({ item, currentPath, onNavigate }) => {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`${baseItem} ${
-          isActiveSection
-            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
-            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+        className={`${baseItem} ${isActiveSection
+          ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
+          : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
         } w-full justify-between`}
         aria-expanded={open}
       >
@@ -226,11 +205,9 @@ const Section = ({ item, currentPath, onNavigate }) => {
                 key={c.to}
                 to={c.to}
                 className={({ isActive }) =>
-                  `block px-2 py-1.5 rounded text-[13px] ${
-                    isActive
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                  }`
+                  `block px-2 py-1.5 rounded text-[13px] ${isActive
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"}`
                 }
                 onClick={onNavigate}
               >
@@ -277,9 +254,7 @@ const SidebarLayout = () => {
   const handleLogout = () => {
     try {
       delete api.defaults.headers.common.Authorization;
-      ["token", "jwt", "access_token", "user"].forEach((k) =>
-        localStorage.removeItem(k)
-      );
+      ["token", "jwt", "access_token", "user"].forEach((k) => localStorage.removeItem(k));
     } catch {}
     navigate("/login");
   };
@@ -351,6 +326,16 @@ const SidebarLayout = () => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
+  // React to branch changes triggered by Profile page (optional)
+  useEffect(() => {
+    const onBranch = (e) => {
+      const id = String(e?.detail?.id || "");
+      if (id) setActiveBranchId(id);
+    };
+    window.addEventListener("ms:branch-changed", onBranch);
+    return () => window.removeEventListener("ms:branch-changed", onBranch);
+  }, []);
+
   // Fetch current user from API and keep localStorage in sync
   useEffect(() => {
     (async () => {
@@ -393,6 +378,9 @@ const SidebarLayout = () => {
     setMobileOpen(false);
     setAvatarOpen(false);
   }, [location.pathname]);
+
+  const initial =
+    (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
 
   return (
     <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
@@ -463,7 +451,7 @@ const SidebarLayout = () => {
                   title="Account"
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-                    {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
+                    {initial}
                   </div>
                   <FiChevronDown className="opacity-70" />
                 </button>
@@ -472,12 +460,14 @@ const SidebarLayout = () => {
                     <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                       <FiUser />
                       <div className="truncate">
-                        <div className="font-medium text-slate-800 dark:text-slate-200 truncate">{user?.name || user?.email || "User"}</div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                          {user?.displayName || user?.name || user?.email || "User"}
+                        </div>
                         <div className="truncate opacity-70">{(user?.role || "user").toLowerCase()}</div>
                       </div>
                     </div>
                     <hr className="my-2 border-slate-200 dark:border-slate-700" />
-                    {/* ✅ point to canonical route to avoid 404s */}
+                    {/* ✅ canonical route to avoid 404s */}
                     <NavLink
                       to="/account/settings"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
