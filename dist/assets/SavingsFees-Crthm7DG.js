@@ -1,1 +1,0 @@
-import{j as s}from"./index-DG5R-4Rf.js";import{T as t}from"./TypesEditor-BLbWIUdH.js";import"./admin-Cr8lycLe.js";import"./index-BlPtbu1l.js";function a(){return s.jsx(t,{title:"Savings Fees",category:"savings-fees"})}export{a as default};

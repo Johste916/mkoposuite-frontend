@@ -1,11 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import client from "../api/client";
-import { previewAllocation, createRepayment } from "../api/repayments";
+import * as repaymentsApi from "../api/repayments";
 
-const money = (v) => {
-  const n = Number(v || 0);
-  return Number.isFinite(n) ? n.toLocaleString() : "0";
-};
+const money = (v) => Number(v || 0).toLocaleString();
 
 const MethodBadge = ({ value }) => {
   const map = {
@@ -26,7 +23,7 @@ const AllocationTable = ({ currency = "TZS", allocation = [] }) => {
     <div className="border rounded-lg overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead>
-          <tr className="bg-gray-50 dark:bg-slate-800/40">
+          <tr className="bg-gray-50">
             <th className="text-left p-2">Period</th>
             <th className="text-right p-2">Principal</th>
             <th className="text-right p-2">Interest</th>
@@ -36,7 +33,7 @@ const AllocationTable = ({ currency = "TZS", allocation = [] }) => {
         </thead>
         <tbody>
           {allocation.map((a, idx) => (
-            <tr key={`${a.period}-${idx}`} className="border-t dark:border-slate-700">
+            <tr key={`${a.period}-${idx}`} className="border-t">
               <td className="p-2">{a.period}</td>
               <td className="p-2 text-right">{currency} {money(a.principal)}</td>
               <td className="p-2 text-right">{currency} {money(a.interest)}</td>
@@ -49,6 +46,19 @@ const AllocationTable = ({ currency = "TZS", allocation = [] }) => {
     </div>
   );
 };
+
+// Safe API shims (don’t break if a named export is missing)
+const previewAllocationFn =
+  repaymentsApi.previewAllocation ||
+  (async () => { throw new Error("Preview API not available (export previewAllocation in src/api/repayments.js)."); });
+
+const createRepaymentFn =
+  repaymentsApi.createRepayment ||
+  (async (payload) => {
+    // Fallback aligns with how other parts of the app post repayments
+    const { data } = await client.post("/repayments", payload);
+    return data;
+  });
 
 /**
  * Props:
@@ -67,27 +77,15 @@ const RepaymentModal = ({ isOpen, onClose, loan: loanProp, loanId: loanIdProp, o
     reference: "",
     waivePenalties: false,
   });
-
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState("");
-  const amountRef = useRef(null);
 
   const canPreview = useMemo(
-    () => !!loanId && Number(form.amount) > 0 && !!form.date,
+    () => loanId && Number(form.amount) > 0 && form.date,
     [loanId, form.amount, form.date]
   );
-
-  useEffect(() => {
-    if (!isOpen) return;
-    // focus amount on open
-    const t = setTimeout(() => amountRef.current?.focus(), 50);
-    // esc to close
-    const handler = (e) => { if (e.key === "Escape") onClose?.(); };
-    window.addEventListener("keydown", handler);
-    return () => { window.removeEventListener("keydown", handler); clearTimeout(t); };
-  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (loan) {
@@ -102,7 +100,7 @@ const RepaymentModal = ({ isOpen, onClose, loan: loanProp, loanId: loanIdProp, o
       try {
         const { data } = await client.get(`/loans/${loanId}`);
         setLoan(data);
-        setForm((f) => ({ ...f, reference: data?.reference || f.reference }));
+        setForm((f) => ({ ...f, reference: data.reference || f.reference }));
       } catch {
         // ignore missing
       }
@@ -111,21 +109,28 @@ const RepaymentModal = ({ isOpen, onClose, loan: loanProp, loanId: loanIdProp, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loanId]);
 
-  const normData = (maybeAxios) => (maybeAxios?.data !== undefined ? maybeAxios.data : maybeAxios);
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
 
   const doPreview = async () => {
     if (!canPreview) return;
     setError("");
     setPreviewing(true);
     try {
-      const res = await previewAllocation({
+      const data = await previewAllocationFn({
         loanId,
-        amount: Math.max(0, Number(form.amount)),
+        amount: Number(form.amount),
         date: form.date,
         strategy: "oldest_due_first",
         waivePenalties: !!form.waivePenalties,
       });
-      setPreview(normData(res));
+      setPreview(data);
     } catch (e) {
       setError(e?.response?.data?.error || e?.message || "Preview failed");
     } finally {
@@ -138,14 +143,10 @@ const RepaymentModal = ({ isOpen, onClose, loan: loanProp, loanId: loanIdProp, o
       setError("Please fill amount and date.");
       return;
     }
-    if (Number(form.amount) <= 0) {
-      setError("Amount must be greater than zero.");
-      return;
-    }
     setError("");
     setLoading(true);
     try {
-      await createRepayment({
+      await createRepaymentFn({
         loanId,
         amount: Number(form.amount),
         date: form.date,
@@ -167,34 +168,16 @@ const RepaymentModal = ({ isOpen, onClose, loan: loanProp, loanId: loanIdProp, o
 
   const currency = loan?.currency || "TZS";
 
-  const closeOnBackdrop = (e) => {
-    if (e.target === e.currentTarget) onClose?.();
-  };
-
-  // prevent mousewheel from changing number input on scroll
-  const stopWheel = (e) => e.target.blur();
-
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onMouseDown={closeOnBackdrop}
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="repaymentTitle"
         className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-md w-full max-w-xl space-y-4"
-        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
-          <h2 id="repaymentTitle" className="text-xl font-bold">Add Repayment</h2>
-          <button
-            onClick={onClose}
-            className="text-sm text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
-            aria-label="Close repayment modal"
-          >
-            Close
-          </button>
+          <h2 className="text-xl font-bold">Add Repayment</h2>
+          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">Close</button>
         </div>
 
         {loan && (
@@ -202,11 +185,8 @@ const RepaymentModal = ({ isOpen, onClose, loan: loanProp, loanId: loanIdProp, o
             <div className="flex flex-wrap gap-3 items-center">
               <div><span className="text-gray-500 mr-1">Loan:</span> {loan.reference || `L-${loan.id}`}</div>
               <div><span className="text-gray-500 mr-1">Borrower:</span> {loan.Borrower?.name || loan.borrowerName || "—"}</div>
-              <div>
-                <span className="text-gray-500 mr-1">Repay Ref:</span>
-                <code className="px-1.5 py-0.5 bg-white dark:bg-slate-900 border rounded ml-1">
-                  {loan.reference || `L-${loan.id}`}
-                </code>
+              <div><span className="text-gray-500 mr-1">Repay Ref:</span>
+                <code className="px-1.5 py-0.5 bg-white dark:bg-slate-900 border rounded ml-1">{loan.reference || `L-${loan.id}`}</code>
               </div>
             </div>
           </div>
@@ -216,17 +196,12 @@ const RepaymentModal = ({ isOpen, onClose, loan: loanProp, loanId: loanIdProp, o
           <div className="space-y-1">
             <label className="text-sm">Amount</label>
             <input
-              ref={amountRef}
               type="number"
-              inputMode="decimal"
-              min="0"
               step="0.01"
               placeholder="0.00"
-              onWheel={stopWheel}
               className="w-full border px-3 py-2 rounded dark:bg-slate-900 dark:border-slate-700"
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              onKeyDown={(e) => { if (e.key === "Enter" && canPreview && !previewing) doPreview(); }}
             />
           </div>
           <div className="space-y-1">
