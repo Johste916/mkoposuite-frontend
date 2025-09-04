@@ -374,12 +374,16 @@ const Dashboard = () => {
               Quick snapshot of borrowers, loans, repayments and savings.
             </p>
           </div>
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2">
+
+          {/* Filters (no clipping, wrap as needed) */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <select
+              aria-label="Filter by branch"
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
-              className="border rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+              className="h-10 px-3.5 sm:px-4 rounded-lg border border-slate-200 bg-white shadow-sm
+                         dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100
+                         whitespace-nowrap shrink-0 min-w-[9.5rem]"
             >
               <option value="">All Branches</option>
               {branches.map((b) => (
@@ -390,9 +394,12 @@ const Dashboard = () => {
             </select>
 
             <select
+              aria-label="Filter by loan officer"
               value={officerId}
               onChange={(e) => setOfficerId(e.target.value)}
-              className="border rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+              className="h-10 px-3.5 sm:px-4 rounded-lg border border-slate-200 bg-white shadow-sm
+                         dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100
+                         whitespace-nowrap shrink-0 min-w-[12rem]"
             >
               <option value="">All Loan Officers</option>
               {officers.map((o) => (
@@ -403,9 +410,12 @@ const Dashboard = () => {
             </select>
 
             <select
+              aria-label="Filter by time range"
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="border rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+              className="h-10 px-3.5 sm:px-4 rounded-lg border border-slate-200 bg-white shadow-sm
+                         dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100
+                         whitespace-nowrap shrink-0 min-w-[8.5rem]"
             >
               <option value="">All Time</option>
               <option value="today">Today</option>
@@ -417,9 +427,12 @@ const Dashboard = () => {
             </select>
 
             <select
+              aria-label="Auto refresh interval"
               value={autoRefresh}
               onChange={(e) => setAutoRefresh(Number(e.target.value))}
-              className="border rounded-lg px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+              className="h-10 px-3.5 sm:px-4 rounded-lg border border-slate-200 bg-white shadow-sm
+                         dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100
+                         whitespace-nowrap shrink-0 min-w-[11rem]"
             >
               <option value={0}>No Auto-Refresh</option>
               <option value={1}>Every 1 min</option>
@@ -428,7 +441,10 @@ const Dashboard = () => {
             </select>
 
             <button
-              className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700"
+              className="inline-flex items-center justify-center h-10 px-3.5 sm:px-4 rounded-lg
+                         border border-slate-200 bg-white hover:bg-gray-50 shadow-sm
+                         dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700
+                         whitespace-nowrap shrink-0"
               onClick={() => {
                 const ac = new AbortController();
                 Promise.all([
@@ -983,7 +999,7 @@ const SummaryCard = ({ title, value, icon, tone = 'indigo' }) => {
     }[tone]) || { ring: 'ring-slate-100 dark:ring-slate-800', icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' };
 
   return (
-    <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring} min-h-[7rem]`}>
+    <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring} min-h-[8rem]`}>
       <div className="flex items-center gap-3">
         <div className={`p-2 rounded-full ${tones.icon}`}>{icon}</div>
         <div className="min-w-0">
