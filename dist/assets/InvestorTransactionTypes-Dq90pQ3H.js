@@ -1,0 +1,1 @@
+import{j as t}from"./index-CmX2U-P9.js";import{T as r}from"./TypesEditor-KhWioJ9-.js";import"./admin-55x3dMgz.js";import"./index-CC3jbHID.js";function i(){return t.jsx(r,{title:"Investor Transaction Types",category:"investor-transaction-types"})}export{i as default};

@@ -1,6 +1,7 @@
-// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
+
+// ❌ removed: import "./styles/theme.css";  (theme is pulled via styles/tailwind.css)
 
 // Auth/public
 const Login = lazy(() => import("./pages/Login"));
@@ -88,7 +89,7 @@ const SavingsTransactions = lazy(() => import("./pages/savings/SavingsTransactio
 const UploadSavingsCSV = lazy(() => import("./pages/savings/UploadCSV"));
 const ApproveSavingsTx = lazy(() => import("./pages/savings/ApproveTransactions"));
 
-// Biz ops (MAKE SURE THESE ARE IMPORTED)
+// Biz ops
 const Investors = lazy(() => import("./pages/investors/Investors"));
 const AddInvestor = lazy(() => import("./pages/investors/AddInvestor"));
 const InvestorDetails = lazy(() => import("./pages/investors/InvestorDetails"));
@@ -98,7 +99,7 @@ const AddExpense = lazy(() => import("./pages/expenses/AddExpense"));
 const UploadExpensesCSV = lazy(() => import("./pages/expenses/UploadCSV"));
 const OtherIncome = lazy(() => import("./pages/other-income/OtherIncome"));
 
-// HR & Payroll (real pages)
+// HR & Payroll
 const Payroll = lazy(() => import("./pages/payroll/Payroll"));
 const AddPayroll = lazy(() => import("./pages/payroll/AddPayroll"));
 const PayrollReport = lazy(() => import("./pages/payroll/PayrollReport"));
@@ -140,7 +141,17 @@ const ParReport = lazy(() => import("./pages/reports/ParReport"));
 const AtAGlance = lazy(() => import("./pages/reports/AtAGlance"));
 const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 
-const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
+const Fallback = () => (
+  <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
+);
+
+/* Small 403 page so RequireRole redirects have a target */
+const Forbidden = () => (
+  <div className="p-6">
+    <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">403 — Forbidden</h1>
+    <p className="mt-2 text-slate-700 dark:text-slate-300">You don’t have permission to access this area.</p>
+  </div>
+);
 
 function App() {
   return (
@@ -466,7 +477,8 @@ function App() {
               <Route path="*" element={<NotFound />} />
             </Route>
 
-            {/* Hard 404 */}
+            {/* 403 and hard 404 (outside shell) */}
+            <Route path="/403" element={<Forbidden />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </FeatureConfigProvider>
