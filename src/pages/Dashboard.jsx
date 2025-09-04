@@ -375,15 +375,13 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* Filters (no clipping, wrap as needed) */}
+          {/* Filters (wrap as needed; no clipping) */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <select
               aria-label="Filter by branch"
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
-              className="h-10 px-3.5 sm:px-4 rounded-lg border border-slate-200 bg-white shadow-sm
-                         dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100
-                         whitespace-nowrap shrink-0 min-w-[9.5rem]"
+              className="ms-select"
             >
               <option value="">All Branches</option>
               {branches.map((b) => (
@@ -397,9 +395,7 @@ const Dashboard = () => {
               aria-label="Filter by loan officer"
               value={officerId}
               onChange={(e) => setOfficerId(e.target.value)}
-              className="h-10 px-3.5 sm:px-4 rounded-lg border border-slate-200 bg-white shadow-sm
-                         dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100
-                         whitespace-nowrap shrink-0 min-w-[12rem]"
+              className="ms-select min-w-[12rem]"
             >
               <option value="">All Loan Officers</option>
               {officers.map((o) => (
@@ -413,9 +409,7 @@ const Dashboard = () => {
               aria-label="Filter by time range"
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="h-10 px-3.5 sm:px-4 rounded-lg border border-slate-200 bg-white shadow-sm
-                         dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100
-                         whitespace-nowrap shrink-0 min-w-[8.5rem]"
+              className="ms-select ms-select--sm"
             >
               <option value="">All Time</option>
               <option value="today">Today</option>
@@ -430,9 +424,7 @@ const Dashboard = () => {
               aria-label="Auto refresh interval"
               value={autoRefresh}
               onChange={(e) => setAutoRefresh(Number(e.target.value))}
-              className="h-10 px-3.5 sm:px-4 rounded-lg border border-slate-200 bg-white shadow-sm
-                         dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100
-                         whitespace-nowrap shrink-0 min-w-[11rem]"
+              className="ms-select"
             >
               <option value={0}>No Auto-Refresh</option>
               <option value={1}>Every 1 min</option>
@@ -441,10 +433,7 @@ const Dashboard = () => {
             </select>
 
             <button
-              className="inline-flex items-center justify-center h-10 px-3.5 sm:px-4 rounded-lg
-                         border border-slate-200 bg-white hover:bg-gray-50 shadow-sm
-                         dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700
-                         whitespace-nowrap shrink-0"
+              className="ms-btn h-10 px-3.5 sm:px-4 inline-flex items-center justify-center whitespace-nowrap shrink-0"
               onClick={() => {
                 const ac = new AbortController();
                 Promise.all([
@@ -608,19 +597,19 @@ const Dashboard = () => {
       <div className="flex flex-wrap gap-3">
         <Link
           to="/loans/add"
-          className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 shadow-sm"
+          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm"
         >
           <PlusCircle className="w-4 h-4" /> Add Loan
         </Link>
         <Link
           to="/borrowers/add"
-          className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 shadow-sm"
+          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm"
         >
           <PlusCircle className="w-4 h-4" /> Add Borrower
         </Link>
         <Link
           to="/repayments/new"
-          className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 shadow-sm"
+          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm"
         >
           <PlusCircle className="w-4 h-4" /> Record Repayment
         </Link>
@@ -829,18 +818,18 @@ const Dashboard = () => {
             <div className="grid grid-cols-2 gap-2 mb-3">
               <input
                 type="date"
-                className="border rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                className="ms-input h-9"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
               />
               <input
                 type="date"
-                className="border rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                className="ms-input h-9"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
               />
               <button
-                className="col-span-2 border rounded px-2 py-1 text-sm bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700"
+                className="ms-btn col-span-2 h-9 text-sm"
                 onClick={() => {
                   setActivityPage(1);
                   fetchActivity({ page: 1 });
@@ -888,12 +877,12 @@ const Dashboard = () => {
                           value={commentDraft[a.id] || ''}
                           onChange={(e) => setCommentDraft((d) => ({ ...d, [a.id]: e.target.value }))}
                           placeholder="Reply…"
-                          className="flex-1 border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                          className="ms-input flex-1 h-9 text-xs"
                         />
                         <button
                           onClick={() => submitComment(a.id)}
                           disabled={submitting[`c-${a.id}`]}
-                          className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 disabled:opacity-50 flex items-center gap-1"
+                          className="ms-btn h-9 px-2 text-xs disabled:opacity-50 flex items-center gap-1"
                         >
                           <MessageSquare className="w-3 h-3" /> Reply
                         </button>
@@ -905,7 +894,7 @@ const Dashboard = () => {
                           onChange={(e) =>
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), assigneeId: e.target.value } }))
                           }
-                          className="col-span-2 border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                          className="ms-select col-span-2 h-9 text-xs"
                         >
                           <option value="">Assign to…</option>
                           {officers.map((o) => (
@@ -920,12 +909,12 @@ const Dashboard = () => {
                           onChange={(e) =>
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), dueDate: e.target.value } }))
                           }
-                          className="border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                          className="ms-input h-9 text-xs"
                         />
                         <button
                           onClick={() => submitAssignment(a.id)}
                           disabled={submitting[`a-${a.id}`]}
-                          className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 disabled:opacity-50 flex items-center gap-1 justify-center"
+                          className="ms-btn h-9 px-2 text-xs disabled:opacity-50 flex items-center justify-center gap-1"
                         >
                           <UserPlus className="w-3 h-3" /> Assign
                         </button>
@@ -935,7 +924,7 @@ const Dashboard = () => {
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), note: e.target.value } }))
                           }
                           placeholder="Note…"
-                          className="col-span-4 border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                          className="ms-input col-span-4 h-9 text-xs"
                         />
                       </div>
                     </div>
@@ -956,7 +945,7 @@ const Dashboard = () => {
                       fetchActivity({ page: p });
                     }}
                     disabled={activityPage === 1}
-                    className="px-2 py-1 border rounded disabled:opacity-50 bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700"
+                    className="ms-btn px-2 py-1 disabled:opacity-50"
                   >
                     Prev
                   </button>
@@ -969,7 +958,7 @@ const Dashboard = () => {
                       }
                     }}
                     disabled={activityPage * activityPageSize >= activityTotal}
-                    className="px-2 py-1 border rounded disabled:opacity-50 bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700"
+                    className="ms-btn px-2 py-1 disabled:opacity-50"
                   >
                     Next
                   </button>

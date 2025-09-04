@@ -1,0 +1,1 @@
+import{j as t}from"./index-D-guICjU.js";import{T as r}from"./TypesEditor-ZQ6jFthk.js";import"./admin-BPmMnfvE.js";import"./index--QyFw8bA.js";function p(){return t.jsx(r,{title:"Investor Products",category:"investor-products"})}export{p as default};
