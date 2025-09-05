@@ -4,6 +4,8 @@ import api from "../../api";
 export default function Organization() {
   const [tenant, setTenant] = useState(null);
   const [ent, setEnt] = useState(null);
+  const [limits, setLimits] = useState(null);
+  const [invoices, setInvoices] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | ready | unavailable | error
   const [errMsg, setErrMsg] = useState("");
 
@@ -12,21 +14,17 @@ export default function Organization() {
     for (const p of paths) {
       try {
         const res = await api.get(p, opts);
-        if (res?.data) return res.data;
+        if (res?.data !== undefined) return res.data;
       } catch (e) {
-        // Ignore only 404s; bubble up anything else
-        if (e?.response?.status !== 404) throw e;
+        if (e?.response?.status !== 404) throw e; // ignore only 404s
       }
     }
-    const nf = new Error("Not Found");
-    nf.code = 404;
-    throw nf;
+    const nf = new Error("Not Found"); nf.code = 404; throw nf;
   }
 
   const load = async () => {
     setStatus("loading");
     setErrMsg("");
-
     try {
       const t = await tryGet(
         ["/tenants/me", "/tenant/me", "/account/tenant", "/account/organization"],
@@ -35,30 +33,34 @@ export default function Organization() {
       setTenant(t);
 
       const e = await tryGet(
-        [
-          "/tenants/me/entitlements",
-          "/tenant/me/entitlements",
-          "/account/tenant/entitlements",
-          "/account/organization/entitlements",
-        ],
+        ["/tenants/me/entitlements","/tenant/me/entitlements","/account/tenant/entitlements","/account/organization/entitlements"],
         {}
-      ).catch(() => ({})); // entitlements optional
+      ).catch(() => ({}));
       setEnt(e || {});
+
+      const lim = await tryGet(
+        ["/tenants/me/limits","/tenant/me/limits","/account/tenant/limits","/account/organization/limits"],
+        {}
+      ).catch(() => ({}));
+      setLimits(lim || {});
+
+      const inv = await tryGet(
+        ["/tenants/me/invoices","/tenant/me/invoices","/account/tenant/invoices","/account/organization/invoices"],
+        {}
+      ).catch(() => []);
+      setInvoices(Array.isArray(inv) ? inv : []);
+
       setStatus("ready");
     } catch (e) {
-      if (e?.code === 404) {
-        setStatus("unavailable");
-      } else {
+      if (e?.code === 404) setStatus("unavailable");
+      else {
         setStatus("error");
         setErrMsg(e?.response?.data?.error || e.message || "Unknown error");
       }
     }
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line
 
   if (status === "loading") {
     return <div className="p-4 text-sm text-slate-500 dark:text-slate-400">Loading…</div>;
@@ -70,8 +72,8 @@ export default function Organization() {
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Organization</h2>
         <div className="rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-3">
           <p className="text-sm text-slate-700 dark:text-slate-300">
-            Organization settings aren’t available on this server (the <code>/tenants/me</code> API
-            is not implemented). If you don’t need this module you can ignore this page.
+            Organization settings aren’t available on this server (the <code>/tenants/me</code> API is not implemented).
+            If you don’t need this module you can ignore this page.
           </p>
         </div>
       </div>
@@ -110,7 +112,7 @@ export default function Organization() {
   };
 
   return (
-    <div className="ms-card p-4 space-y-4">
+    <div className="ms-card p-4 space-y-6">
       <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Organization</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -154,6 +156,7 @@ export default function Organization() {
             value={t.graceDays ?? 7}
             onChange={(e) => setTenant({ ...t, graceDays: Number(e.target.value || 0) })}
             className="border rounded px-2 py-2 w-full bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
+            min={0} max={90}
           />
         </label>
 
@@ -173,6 +176,7 @@ export default function Organization() {
         <button onClick={load} className="h-9 px-3 rounded ms-btn">Refresh</button>
       </div>
 
+      {/* Entitlements */}
       <div className="border-t border-slate-200 dark:border-slate-800 pt-3">
         <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Entitlements</h3>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
@@ -182,19 +186,73 @@ export default function Organization() {
             Object.entries(e.modules || {}).map(([k, v]) => (
               <div key={k} className="flex items-center gap-2">
                 <span className="w-44 capitalize text-slate-700 dark:text-slate-200">{k.replace(/_/g, " ")}</span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded ${
-                    v
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                  }`}
-                >
-                  {v ? "enabled" : "disabled"}
-                </span>
+                <span className={`text-xs px-2 py-0.5 rounded ${
+                  v ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                    : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                }`}>{v ? "enabled" : "disabled"}</span>
               </div>
             ))
           )}
         </div>
+      </div>
+
+      {/* Limits */}
+      <div className="border-t border-slate-200 dark:border-slate-800 pt-3">
+        <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Limits</h3>
+        {!limits || Object.keys(limits).length === 0 ? (
+          <div className="text-sm text-slate-500 dark:text-slate-400">No limits configured.</div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
+            {Object.entries(limits).map(([k, v]) => (
+              <div key={k} className="flex items-center gap-2">
+                <span className="w-44 capitalize text-slate-700 dark:text-slate-200">{k.replace(/_/g, " ")}</span>
+                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 dark:text-slate-200">{String(v)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Invoices */}
+      <div className="border-t border-slate-200 dark:border-slate-800 pt-3">
+        <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Invoices</h3>
+        {invoices.length === 0 ? (
+          <div className="text-sm text-slate-500 dark:text-slate-400">No invoices yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-slate-500 dark:text-slate-400">
+                <tr>
+                  <th className="py-2 pr-4">Number</th>
+                  <th className="py-2 pr-4">Amount</th>
+                  <th className="py-2 pr-4">Due date</th>
+                  <th className="py-2 pr-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="align-top">
+                {invoices.map((inv) => (
+                  <tr key={inv.id} className="border-top border-slate-100 dark:border-slate-800">
+                    <td className="py-2 pr-4">{inv.number || inv.id}</td>
+                    <td className="py-2 pr-4">
+                      {(inv.amount_cents != null ? inv.amount_cents / 100 : 0)
+                        .toLocaleString(undefined, { style: "currency", currency: inv.currency || "USD" })}
+                    </td>
+                    <td className="py-2 pr-4">{inv.due_date ? String(inv.due_date).slice(0,10) : "-"}</td>
+                    <td className="py-2 pr-4">
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        inv.status === "paid" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                        : inv.status === "past_due" ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      }`}>
+                        {inv.status || "open"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

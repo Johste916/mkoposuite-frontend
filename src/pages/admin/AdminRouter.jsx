@@ -64,15 +64,15 @@ const ManageCollectors        = lazy(() => import("./ManageCollectors"));
 /* ---- Settings-style pages ---- */
 const BackupSettings          = lazy(() => import("./BackupSettings"));
 
-/* ---- NEW: Communications (the admin CRUD you’re using) ---- */
+/* ---- NEW: Communications ---- */
 const Communications          = lazy(() => import("./Communications"));
+
+/* ---- NEW: Admin → Tenants console ---- */
+const TenantsAdmin            = lazy(() => import("./Tenants"));
 
 const Fallback = () => <div className="p-6 text-sm text-gray-600">Loading…</div>;
 
-/**
- * Registry maps every /admin/:slug to a component.
- * Include aliases so different labels route to the same page.
- */
+/** Map /admin/:slug -> component */
 const registry = {
   /* General */
   "general": GeneralSettings,
@@ -81,36 +81,29 @@ const registry = {
   /* Email/SMS core */
   "email": EmailAccounts,
   "email-accounts": EmailAccounts,
-  "email-settings": EmailAccounts,               // alias
+  "email-settings": EmailAccounts,
   "email-templates": EmailTemplates,
   "sms": SmsSettings,
   "sms-settings": SmsSettings,
   "sms-templates": SmsTemplates,
   "bulk-sms-settings": BulkSmsSettings,
 
-  /* Communications (now wired) */
+  /* Communications */
   "communications": Communications,
-  "general-communications": Communications,      // alias if you ever use this label
+  "general-communications": Communications,
 
-  /* Extra labels from Admin grid -> sensible targets */
-  "auto-send-emails": EmailAccounts,
-  "collection-sheets-email-template": EmailTemplates,
-  "email-logs": EmailAccounts,                   // placeholder until a logs page exists
-
-  "sms-credits": SmsSettings,
-  "sender-id": SmsSettings,
-  "auto-send-sms": SmsSettings,
-  "collection-sheets-sms-template": SmsTemplates,
-  "sms-logs": SmsSettings,                       // placeholder until a logs page exists
+  /* Admin → Tenants (NEW) */
+  "tenants": TenantsAdmin,
+  "organizations": TenantsAdmin,
 
   /* Existing controllers */
   "loan-categories": LoanCategories,
   "loan-settings": LoanSettings,
   "penalty-settings": PenaltySettings,
-  "loan-penalty-settings": PenaltySettings,      // alias
+  "loan-penalty-settings": PenaltySettings,
   "integration-settings": IntegrationSettings,
   "branch-settings": BranchSettings,
-  "branches": BranchSettings,                    // alias
+  "branches": BranchSettings,
   "borrower-settings": BorrowerSettings,
   "user-management": UserManagementSettings,
   "saving-settings": SavingSettings,
@@ -158,7 +151,7 @@ const registry = {
   "loan-repayment-methods": LoanRepaymentMethods,
   "manage-collectors": ManageCollectors,
 
-  /* Borrowers extras -> route to BorrowerSettings for now */
+  /* Borrowers extras -> reuse for now */
   "download-statements-schedules": BorrowerSettings,
   "format-borrower-reports": BorrowerSettings,
   "rename-borrower-reports": BorrowerSettings,
@@ -172,30 +165,17 @@ const registry = {
   /* Backups */
   "backup-settings": BackupSettings,
 
-  /* Accounting placeholders -> point to settings you already have */
-  "settings": IntegrationSettings,       // temporary sensible default
-  "bank-accounts": PaymentSettings,      // until a dedicated page exists
-  "taxes": PaymentSettings,              // same
-  "opening-balances": DashboardSettings, // or create a new page later
-
-  /* Bulk Upload items -> route to a page for now */
-  "upload-borrowers-from-csv-file": BackupSettings,
-  "upload-loans-from-csv-file": BackupSettings,
-  "upload-repayments-from-csv-file": BackupSettings,
-  "upload-expenses-from-csv-file": BackupSettings,
-  "upload-other-income-from-csv-file": BackupSettings,
-  "upload-savings-accounts-from-csv-file": BackupSettings,
-  "upload-savings-transactions-from-csv-file": BackupSettings,
-  "upload-loan-schedule-from-csv-file": BackupSettings,
-  "upload-inter-bank-transfer-from-csv-file": BackupSettings,
+  /* Accounting placeholders */
+  "settings": IntegrationSettings,
+  "bank-accounts": PaymentSettings,
+  "taxes": PaymentSettings,
+  "opening-balances": DashboardSettings,
 };
 
 const ComingSoon = ({ title }) => (
   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
     <h1 className="text-xl font-semibold mb-1">{title}</h1>
-    <p className="text-sm text-slate-600 dark:text-slate-400">
-      This settings editor is not wired yet.
-    </p>
+    <p className="text-sm text-slate-600 dark:text-slate-400">This settings editor is not wired yet.</p>
   </div>
 );
 
@@ -205,11 +185,7 @@ export default function AdminRouter() {
 
   const Component = registry[slug];
 
-  const title = slug
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-
+  const title = slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   if (!Component) return <ComingSoon title={title} />;
 
   return (
