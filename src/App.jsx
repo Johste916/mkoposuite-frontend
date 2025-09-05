@@ -71,7 +71,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 const Organization = lazy(() => import("./pages/account/Organization"));
-const Profile = lazy(() => import("./pages/account/Profile")); // exists or load-on-demand
+const Profile = lazy(() => import("./pages/account/Profile")); // ✅ professional profile
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -119,7 +119,7 @@ const Billing = lazy(() => import("./pages/account/Billing"));
 const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const TwoFactor = lazy(() => import("./pages/account/TwoFactor"));
 
-// Reports — ✅ add the lazy imports you were missing
+// Reports — ✅ imported so BorrowersReport exists
 const BorrowersReport = lazy(() => import("./pages/reports/BorrowersReport"));
 const LoanReport = lazy(() => import("./pages/reports/LoanReport"));
 const ArrearsAging = lazy(() => import("./pages/reports/ArrearsAging"));
@@ -412,33 +412,12 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route
-                path="other-income/add"
-                element={
-                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
-                    Add Other Income
-                  </div>
-                }
-              />
-              <Route
-                path="other-income/csv"
-                element={
-                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
-                    Upload Other Income CSV
-                  </div>
-                }
-              />
+              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
+              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
 
               {/* Assets */}
               <Route path="assets" element={<Assets />} />
-              <Route
-                path="assets/add"
-                element={
-                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
-                    Add Asset
-                  </div>
-                }
-              />
+              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
 
               {/* Accounting (grouped) */}
               <Route
@@ -462,7 +441,6 @@ function App() {
 
               {/* Reports */}
               <Route path="reports" element={<Outlet />}>
-                {/* safer index: redirect to a known child route */}
                 <Route index element={<Navigate to="/reports/borrowers" replace />} />
                 <Route path="borrowers" element={<BorrowersReport />} />
                 <Route path="loans" element={<LoanReport />} />

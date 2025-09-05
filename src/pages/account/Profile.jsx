@@ -1,397 +1,369 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import api from "../../api";
+// src/pages/account/Profile.jsx
+import React, { useEffect, useMemo, useState } from 'react';
+import api from '../../api';
+import { useNavigate } from 'react-router-dom';
 
-/* ---------- helpers ---------- */
-const getTimeZones = () => {
-  try {
-    const list = Intl.supportedValuesOf?.("timeZone") || [];
-    return list.length ? list : [Intl.DateTimeFormat().resolvedOptions().timeZone];
-  } catch {
-    return [Intl.DateTimeFormat().resolvedOptions().timeZone];
-  }
-};
+const TIMEZONES = [
+  'Africa/Nairobi','Africa/Kampala','Africa/Dar_es_Salaam','Africa/Lagos',
+  'Africa/Johannesburg','UTC','Europe/London','Europe/Berlin','Asia/Dubai'
+];
 
-const readTenantFromStorage = () => {
-  try {
-    const raw = localStorage.getItem("tenant");
-    if (raw) return JSON.parse(raw);
-    const id = localStorage.getItem("tenantId");
-    const name = localStorage.getItem("tenantName");
-    if (id || name) return { id: id || null, name: name || "" };
-  } catch {}
-  return null;
-};
+const LANDING_PAGES = [
+  { value: '/dashboard', label: 'Dashboard' },
+  { value: '/borrowers', label: 'Borrowers' },
+  { value: '/loans/review-queue', label: 'Loan Review Queue' },
+  { value: '/collections', label: 'Collections' },
+  { value: '/reports/borrowers', label: 'Reports' },
+];
 
-const writeTenantToStorage = (t) => {
-  try {
-    if (t) {
-      localStorage.setItem("tenant", JSON.stringify(t));
-      if (t.id) localStorage.setItem("tenantId", String(t.id));
-      if (t.name) localStorage.setItem("tenantName", t.name);
-    }
-  } catch {}
-};
-
-const ensureTenantHeader = () => {
-  const t = readTenantFromStorage();
-  if (t?.id) api.defaults.headers.common["x-tenant-id"] = t.id;
-  else delete api.defaults.headers.common["x-tenant-id"];
-  return t;
-};
-
-/* ---------- resilient API callers ---------- */
-async function tryGetProfile() {
-  const paths = ["/account/profile", "/auth/me", "/users/me", "/me"];
-  for (const p of paths) {
-    try { const { data } = await api.get(p); return data; } catch {}
-  }
-  throw new Error("No profile endpoint available");
-}
-
-async function tryUpdateProfile(payload) {
-  const attempt = async (m, u) => { try { return await api[m](u, payload); } catch {} };
-  return (
-    (await attempt("patch", "/account/profile")) ||
-    (await attempt("put",   "/account/profile")) ||
-    (await attempt("patch", "/users/me")) ||
-    (await attempt("put",   "/users/me")) ||
-    (await attempt("patch", "/auth/me")) ||
-    (await attempt("put",   "/auth/me")) ||
-    (await attempt("post",  "/profile"))
-  );
-}
-
-async function tryUploadAvatar(file) {
-  const fd = new FormData();
-  fd.append("avatar", file);
-  const endpoints = ["/account/profile/avatar", "/users/me/avatar", "/auth/me/avatar", "/profile/avatar"];
-  for (const u of endpoints) {
-    try { const { data } = await api.post(u, fd, { headers: { "Content-Type": "multipart/form-data" } }); return data; } catch {}
-  }
-  throw new Error("Avatar upload failed");
-}
-
-async function tryListTenants() {
-  const paths = ["/tenants", "/auth/tenants", "/account/tenants"];
-  for (const p of paths) {
-    try {
-      const { data } = await api.get(p);
-      const arr = Array.isArray(data) ? data : data?.data;
-      if (Array.isArray(arr)) return arr;
-      // sometimes { tenants: [...] }
-      if (Array.isArray(data?.tenants)) return data.tenants;
-    } catch {}
-  }
-  return []; // fine if single-tenant
-}
-
-/* ---------- component ---------- */
 export default function Profile() {
   const navigate = useNavigate();
 
-  // ensure header even on hard refresh direct to /account/profile
-  const [tenant, setTenant] = useState(() => ensureTenantHeader());
-  const [tenants, setTenants] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [err, setErr] = useState("");
-
   const [branches, setBranches] = useState([]);
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState("");
 
-  const [form, setForm] = useState({
-    displayName: "",
-    name: "",
-    email: "",
-    phone: "",
-    defaultBranchId: "",
-    timezone: "",
-    locale: "",
-    avatarUrl: "",
+  // core profile
+  const [u, setU] = useState({
+    displayName: '',
+    name: '',
+    email: '',
+    phone: '',
+    branchId: '',
+    timezone: 'Africa/Nairobi',
+    locale: 'en',
+    avatarUrl: null,
+    title: '',
+    department: '',
+    employeeCode: '',
   });
 
-  const tzOptions = useMemo(getTimeZones, []);
-  const initial = (form.displayName || form.name || form.email || "U").charAt(0).toUpperCase();
-  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  // preferences
+  const [prefs, setPrefs] = useState({
+    landingPage: '/dashboard',
+    defaultCurrency: 'TZS',
+    dateFormat: 'dd/MM/yyyy',
+    numberFormat: '1,234.56',
+    theme: 'system',
+    fontScale: 'normal',
+    reduceMotion: false,
+    colorBlindMode: false,
+  });
+
+  // notifications
+  const [notif, setNotif] = useState({
+    channels: { inApp: true, email: true, sms: false },
+    events: {
+      loanAssigned: true,
+      approvalNeeded: true,
+      largeRepayment: { enabled: true, threshold: 500000 },
+      arrearsDigest: { enabled: true, days: 7, hour: 18 },
+      kycAssigned: true,
+    },
+  });
+
+  // sessions
+  const [sessions, setSessions] = useState([]);
+
+  const initials = useMemo(() => {
+    const s = (u.displayName || u.name || u.email || 'U').trim();
+    const parts = s.split(/\s+/);
+    return (parts[0]?.[0] || 'U').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
+  }, [u.displayName, u.name, u.email]);
 
   const load = async () => {
-    setLoading(true); setErr(""); setMsg("");
+    setLoading(true);
     try {
-      // tenants (optional)
-      const list = await tryListTenants();
-      setTenants(list);
+      const [me, pr, nf, br, ss] = await Promise.all([
+        api.get('/account/me'),
+        api.get('/account/preferences'),
+        api.get('/account/notifications'),
+        api.get('/branches'),
+        api.get('/account/security/sessions').catch(() => ({ data: { sessions: [] } })),
+      ]);
 
-      // profile
-      const me = await tryGetProfile();
-      const d = {
-        displayName: me.displayName || me.fullName || me.name || "",
-        name:        me.name || me.fullName || "",
-        email:       me.email || "",
-        phone:       me.phone || me.phoneNumber || "",
-        defaultBranchId: String(me.defaultBranchId ?? me.branchId ?? "") || "",
-        timezone:    me.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-        locale:      me.locale || navigator.language || "en-US",
-        avatarUrl:   me.avatarUrl || me.photoUrl || "",
-      };
-      setForm(d);
-      setAvatarPreview(d.avatarUrl || "");
+      const meU = me.data?.user || {};
+      setU({
+        displayName: meU.displayName || meU.name || '',
+        name: meU.name || '',
+        email: meU.email || '',
+        phone: meU.phone || '',
+        branchId: meU.branchId || '',
+        timezone: meU.timezone || 'Africa/Nairobi',
+        locale: meU.locale || 'en',
+        avatarUrl: meU.avatarUrl || null,
+        title: meU.title || '',
+        department: meU.department || '',
+        employeeCode: meU.employeeCode || '',
+      });
 
-      // branches are tenant-scoped by header
-      try {
-        const res = await api.get("/branches");
-        const listB = Array.isArray(res.data) ? res.data : res.data?.data || [];
-        setBranches(listB);
-      } catch {}
-    } catch (e) {
-      setErr(e?.response?.data?.message || e.message || "Failed to load profile");
+      const p = pr.data?.preferences || {};
+      setPrefs(prev => ({ ...prev, ...p }));
+
+      const n = nf.data?.notifications || {};
+      // merge deeply but shallow is fine for now
+      setNotif(prev => ({
+        channels: { ...prev.channels, ...(n.channels || {}) },
+        events: {
+          ...prev.events,
+          ...(n.events || {}),
+          largeRepayment: { ...prev.events.largeRepayment, ...(n.events?.largeRepayment || {}) },
+          arrearsDigest: { ...prev.events.arrearsDigest, ...(n.events?.arrearsDigest || {}) },
+        },
+      }));
+
+      const list = Array.isArray(br.data) ? br.data : br.data?.data || [];
+      setBranches(list);
+
+      setSessions(Array.isArray(ss.data?.sessions) ? ss.data.sessions : []);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, [tenant?.id]);
+  useEffect(() => { load(); }, []);
 
-  // if some other place changes tenant, refresh here
-  useEffect(() => {
-    const onTenant = (e) => setTenant(e.detail || ensureTenantHeader());
-    window.addEventListener("ms:tenant-changed", onTenant);
-    return () => window.removeEventListener("ms:tenant-changed", onTenant);
-  }, []);
-
-  const onAvatarChange = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (f.size > 2 * 1024 * 1024) { setErr("Avatar must be 2MB or smaller."); return; }
-    setErr("");
-    setAvatarFile(f);
-    setAvatarPreview(URL.createObjectURL(f));
-  };
-
-  const save = async () => {
-    setSaving(true); setErr(""); setMsg("");
+  const saveProfile = async () => {
+    setSaving(true);
     try {
-      let avatarUrl = form.avatarUrl;
-      if (avatarFile) {
-        const up = await tryUploadAvatar(avatarFile);
-        avatarUrl = up?.avatarUrl || up?.url || avatarUrl;
-      }
-
       const payload = {
-        displayName: form.displayName,
-        name: form.name,
-        phone: form.phone,
-        defaultBranchId: form.defaultBranchId || null,
-        timezone: form.timezone,
-        locale: form.locale,
-        avatarUrl,
+        displayName: u.displayName,
+        name: u.name,
+        phone: u.phone,
+        branchId: u.branchId || null,
+        timezone: u.timezone,
+        locale: u.locale || 'en',
       };
-      const { data } = await tryUpdateProfile(payload);
-
-      // sync local user cache (used by header)
-      const merged = { ...(JSON.parse(localStorage.getItem("user") || "{}")), ...payload, email: form.email };
-      localStorage.setItem("user", JSON.stringify(merged));
-      window.dispatchEvent(new CustomEvent("ms:profile-updated", { detail: merged }));
-
-      if (form.defaultBranchId) {
-        localStorage.setItem("activeBranchId", String(form.defaultBranchId));
-        window.dispatchEvent(new CustomEvent("ms:branch-changed", { detail: { id: String(form.defaultBranchId) } }));
-      }
-
-      setMsg(data?.message || "Profile saved.");
-      setAvatarFile(null);
-      if (avatarUrl) set("avatarUrl", avatarUrl);
-    } catch (e) {
-      setErr(e?.response?.data?.message || e.message || "Failed to save profile");
+      await api.put('/account/me', payload);
     } finally {
       setSaving(false);
     }
   };
 
-  const switchTenant = async (nextId) => {
-    // find metadata for badge
-    const next = tenants.find((t) => String(t.id) === String(nextId)) || { id: nextId, name: nextId };
-    // persist + header
-    writeTenantToStorage(next);
-    api.defaults.headers.common["x-tenant-id"] = next.id;
-    setTenant(next);
-    // let the shell know
-    window.dispatchEvent(new CustomEvent("ms:tenant-changed", { detail: next }));
-    // clear branch (new tenant will have own branches)
-    localStorage.removeItem("activeBranchId");
-    setForm((p) => ({ ...p, defaultBranchId: "" }));
+  const savePreferences = async () => {
+    setSaving(true);
+    try {
+      await api.put('/account/preferences', prefs);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (loading) return <div className="p-4 text-sm text-slate-500 dark:text-slate-400">Loading…</div>;
+  const saveNotifications = async () => {
+    setSaving(true);
+    try {
+      await api.put('/account/notifications', notif);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadAvatar = async (file) => {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('avatar', file);
+    const { data } = await api.post('/account/avatar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    setU((prev) => ({ ...prev, avatarUrl: data.avatarUrl }));
+  };
+
+  const revokeAll = async () => {
+    await api.post('/account/security/sessions/revoke-all');
+    setSessions([]);
+  };
+
+  if (loading) return <div className="p-6 text-sm text-slate-500">Loading…</div>;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-      {/* Left: main form */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Profile</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Update your personal info and preferences.</p>
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+      {/* Left: sections */}
+      <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
+        <h1 className="text-xl font-semibold mb-4">Profile</h1>
+
+        {/* Identity */}
+        <Section title="Identity">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Input label="Display name" value={u.displayName} onChange={(v)=>setU({...u, displayName:v})} />
+            <Input label="Full name" value={u.name} onChange={(v)=>setU({...u, name:v})} />
+            <Input label="Email" value={u.email} disabled hint="Email is managed by your admin." />
+            <Input label="Phone" value={u.phone} onChange={(v)=>setU({...u, phone:v})} placeholder="+2547…" />
+            <Select
+              label="Default branch"
+              value={u.branchId || ''}
+              onChange={(v)=>setU({...u, branchId: v})}
+              options={[{value:'',label:'—'}, ...branches.map(b=>({ value:String(b.id), label:b.name }))]}
+            />
+            <Select
+              label="Time zone"
+              value={u.timezone}
+              onChange={(v)=>setU({...u, timezone:v})}
+              options={TIMEZONES.map(t=>({ value:t, label:t }))}
+            />
+            <Input label="Locale" value={u.locale} onChange={(v)=>setU({...u, locale:v})} placeholder="en" />
           </div>
-          {tenant?.name && (
-            <span className="px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-              {tenant.name}
-            </span>
-          )}
-        </div>
-
-        {msg && <div className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">{msg}</div>}
-        {err && <div className="mt-3 text-sm text-rose-600 dark:text-rose-400">{err}</div>}
-
-        {/* Optional tenant switcher (only shown if multiple tenants) */}
-        {Array.isArray(tenants) && tenants.length > 1 && (
-          <div className="mt-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-            <label className="text-xs text-slate-600 dark:text-slate-300">Organization</label>
-            <select
-              className="mt-1 w-full border rounded px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
-              value={String(tenant?.id || "")}
-              onChange={(e) => switchTenant(e.target.value)}
-            >
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>{t.name || t.id}</option>
-              ))}
-            </select>
-            <div className="text-[11px] text-slate-500 mt-1">Switch organization. Data below will reload.</div>
+          <div className="mt-3 flex gap-2">
+            <Button onClick={saveProfile} loading={saving}>Save Changes</Button>
+            <Button type="secondary" onClick={load}>Refresh</Button>
+            <Button type="secondary" onClick={()=>navigate('/change-password')}>Change Password</Button>
+            <Button type="secondary" onClick={()=>navigate('/2fa')}>Two-Factor</Button>
           </div>
-        )}
+        </Section>
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          <label>
-            <div className="mb-1 text-slate-700 dark:text-slate-300">Display name</div>
-            <input
-              className="w-full border rounded px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
-              value={form.displayName}
-              onChange={(e) => set("displayName", e.target.value)}
-              placeholder="Shown in the app"
+        {/* Professional (read-only) */}
+        <Section title="Professional">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Input label="Job title" value={u.title} disabled />
+            <Input label="Department" value={u.department} disabled />
+            <Input label="Employee ID" value={u.employeeCode} disabled />
+          </div>
+        </Section>
+
+        {/* Preferences */}
+        <Section title="Preferences">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Select
+              label="Default landing page"
+              value={prefs.landingPage}
+              onChange={(v)=>setPrefs({...prefs, landingPage:v})}
+              options={LANDING_PAGES}
             />
-          </label>
-
-          <label>
-            <div className="mb-1 text-slate-700 dark:text-slate-300">Full name</div>
-            <input
-              className="w-full border rounded px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              placeholder="Legal / full name"
+            <Input
+              label="Default currency"
+              value={prefs.defaultCurrency}
+              onChange={(v)=>setPrefs({...prefs, defaultCurrency:v.toUpperCase()})}
+              placeholder="TZS"
             />
-          </label>
-
-          <label>
-            <div className="mb-1 text-slate-700 dark:text-slate-300">Email</div>
-            <input
-              className="w-full border rounded px-3 py-2 bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300"
-              value={form.email}
-              disabled
-              readOnly
+            <Select
+              label="Date format"
+              value={prefs.dateFormat}
+              onChange={(v)=>setPrefs({...prefs, dateFormat:v})}
+              options={[
+                { value: 'dd/MM/yyyy', label: 'DD/MM/YYYY' },
+                { value: 'MM/dd/yyyy', label: 'MM/DD/YYYY' },
+              ]}
             />
-            <div className="text-xs text-slate-500 mt-1">Email is managed by your admin.</div>
-          </label>
-
-          <label>
-            <div className="mb-1 text-slate-700 dark:text-slate-300">Phone</div>
-            <input
-              className="w-full border rounded px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
-              value={form.phone}
-              onChange={(e) => set("phone", e.target.value)}
-              placeholder="+2547…"
+            <Select
+              label="Theme"
+              value={prefs.theme}
+              onChange={(v)=>setPrefs({...prefs, theme:v})}
+              options={[
+                { value:'system', label:'System' },
+                { value:'light',  label:'Light' },
+                { value:'dark',   label:'Dark' },
+              ]}
             />
-          </label>
-
-          <label>
-            <div className="mb-1 text-slate-700 dark:text-slate-300">Default branch</div>
-            <select
-              className="w-full border rounded px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
-              value={form.defaultBranchId}
-              onChange={(e) => set("defaultBranchId", e.target.value)}
-            >
-              <option value="">—</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-            <div className="text-xs text-slate-500 mt-1">Used for filtering & quick actions.</div>
-          </label>
-
-          <label>
-            <div className="mb-1 text-slate-700 dark:text-slate-300">Time zone</div>
-            <select
-              className="w-full border rounded px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
-              value={form.timezone}
-              onChange={(e) => set("timezone", e.target.value)}
-            >
-              {tzOptions.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-            </select>
-          </label>
-
-          <label>
-            <div className="mb-1 text-slate-700 dark:text-slate-300">Locale</div>
-            <input
-              className="w-full border rounded px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
-              value={form.locale}
-              onChange={(e) => set("locale", e.target.value)}
-              placeholder="e.g. en-US, sw-KE"
+            <Select
+              label="Font size"
+              value={prefs.fontScale}
+              onChange={(v)=>setPrefs({...prefs, fontScale:v})}
+              options={[
+                { value:'normal', label:'Normal' },
+                { value:'large',  label:'Large' },
+              ]}
             />
-          </label>
+            <Toggle
+              label="Reduced motion"
+              checked={prefs.reduceMotion}
+              onChange={(v)=>setPrefs({...prefs, reduceMotion:v})}
+            />
+            <Toggle
+              label="Color-blind friendly palette"
+              checked={prefs.colorBlindMode}
+              onChange={(v)=>setPrefs({...prefs, colorBlindMode:v})}
+            />
+          </div>
+          <div className="mt-3"><Button onClick={savePreferences} loading={saving}>Save Preferences</Button></div>
+        </Section>
 
-          <div className="sm:col-span-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={save}
-                disabled={saving}
-                className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-              >
-                {saving ? "Saving…" : "Save Changes"}
-              </button>
-              <button
-                onClick={load}
-                disabled={saving}
-                className="px-3 py-2 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                Refresh
-              </button>
-              <button
-                onClick={() => navigate("/change-password")}
-                className="px-3 py-2 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                Change Password
-              </button>
-              <button
-                onClick={() => navigate("/2fa")}
-                className="px-3 py-2 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                Two-Factor
-              </button>
+        {/* Notifications */}
+        <Section title="Notifications">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Toggle label="In-app"   checked={!!notif.channels.inApp}  onChange={(v)=>setNotif({...notif, channels:{...notif.channels, inApp:v}})} />
+            <Toggle label="Email"    checked={!!notif.channels.email}   onChange={(v)=>setNotif({...notif, channels:{...notif.channels, email:v}})} />
+            <Toggle label="SMS/WhatsApp" checked={!!notif.channels.sms} onChange={(v)=>setNotif({...notif, channels:{...notif.channels, sms:v}})} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+            <Toggle label="New loan assigned to me" checked={!!notif.events.loanAssigned} onChange={(v)=>setNotif({...notif, events:{...notif.events, loanAssigned:v}})} />
+            <Toggle label="Approval needed (maker–checker)" checked={!!notif.events.approvalNeeded} onChange={(v)=>setNotif({...notif, events:{...notif.events, approvalNeeded:v}})} />
+            <div className="border rounded-lg p-3">
+              <div className="font-medium text-sm">Large repayment</div>
+              <div className="mt-2 flex items-center gap-2">
+                <Toggle
+                  label="Enabled"
+                  checked={!!notif.events.largeRepayment?.enabled}
+                  onChange={(v)=>setNotif({...notif, events:{...notif.events, largeRepayment:{ ...(notif.events.largeRepayment||{}), enabled:v }}})}
+                />
+                <Input
+                  label="Threshold"
+                  value={String(notif.events.largeRepayment?.threshold ?? 500000)}
+                  onChange={(v)=>setNotif({...notif, events:{...notif.events, largeRepayment:{ ...(notif.events.largeRepayment||{}), threshold:Number(v)||0 }}})}
+                />
+              </div>
+            </div>
+            <div className="border rounded-lg p-3">
+              <div className="font-medium text-sm">Arrears digest</div>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <Toggle
+                  label="Enabled"
+                  checked={!!notif.events.arrearsDigest?.enabled}
+                  onChange={(v)=>setNotif({...notif, events:{...notif.events, arrearsDigest:{ ...(notif.events.arrearsDigest||{}), enabled:v }}})}
+                />
+                <Input
+                  label="Days"
+                  value={String(notif.events.arrearsDigest?.days ?? 7)}
+                  onChange={(v)=>setNotif({...notif, events:{...notif.events, arrearsDigest:{ ...(notif.events.arrearsDigest||{}), days:Math.max(1, Number(v)||1) }}})}
+                />
+                <Input
+                  label="Hour (24h)"
+                  value={String(notif.events.arrearsDigest?.hour ?? 18)}
+                  onChange={(v)=>setNotif({...notif, events:{...notif.events, arrearsDigest:{ ...(notif.events.arrearsDigest||{}), hour:Math.min(23, Math.max(0, Number(v)||0)) }}})}
+                />
+              </div>
+            </div>
+            <Toggle label="KYC item assigned to me" checked={!!notif.events.kycAssigned} onChange={(v)=>setNotif({...notif, events:{...notif.events, kycAssigned:v}})} />
+          </div>
+          <div className="mt-3"><Button onClick={saveNotifications} loading={saving}>Save Notifications</Button></div>
+        </Section>
+
+        {/* Security */}
+        <Section title="Security">
+          <div className="flex flex-wrap gap-2">
+            <Button type="secondary" onClick={()=>navigate('/2fa')}>Manage Two-Factor</Button>
+            <Button type="secondary" onClick={()=>navigate('/change-password')}>Change Password</Button>
+          </div>
+
+          <div className="mt-4">
+            <div className="text-sm font-medium mb-2">Active sessions</div>
+            {sessions.length === 0 ? (
+              <div className="text-sm text-slate-500">Only this device is active.</div>
+            ) : (
+              <ul className="space-y-2">
+                {sessions.map((s, i) => (
+                  <li key={i} className="border rounded-lg p-2 text-sm flex justify-between">
+                    <span>{s.device || 'Device'} • {s.ip || 'IP'} • {s.lastSeen ? new Date(s.lastSeen).toLocaleString() : ''}</span>
+                    <span className="opacity-60">{s.userAgent || ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-2">
+              <Button type="danger" onClick={revokeAll}>Sign out of other devices</Button>
             </div>
           </div>
-        </div>
+        </Section>
       </div>
 
-      {/* Right: avatar card */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 h-fit">
-        <div className="text-sm font-medium text-slate-900 dark:text-slate-100">Avatar</div>
-        <div className="mt-3 flex items-center gap-3">
-          {avatarPreview ? (
-            <img
-              src={avatarPreview}
-              alt="Avatar preview"
-              className="w-16 h-16 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-            />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-lg font-bold">
-              {initial}
-            </div>
-          )}
+      {/* Right: avatar */}
+      <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
+        <div className="text-sm font-medium mb-3">Avatar</div>
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-lg font-bold">
+            {u.avatarUrl ? (
+              <img src={u.avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover" />
+            ) : initials}
+          </div>
           <div>
-            <label className="inline-block px-3 py-2 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
-              <input type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
+            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer hover:bg-slate-50">
+              <input type="file" className="hidden" accept="image/*" onChange={(e)=>uploadAvatar(e.target.files?.[0])} />
               Choose image
             </label>
             <div className="text-xs text-slate-500 mt-1">PNG/JPG up to 2MB.</div>
@@ -399,5 +371,74 @@ export default function Profile() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ----------------------------- tiny UI atoms ----------------------------- */
+function Section({ title, children }) {
+  return (
+    <div className="mb-6">
+      <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function Input({ label, value, onChange, placeholder, disabled, hint }) {
+  return (
+    <label className="block">
+      <div className="text-xs text-slate-500 mb-1">{label}</div>
+      <input
+        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800"
+        value={value ?? ''}
+        placeholder={placeholder}
+        onChange={(e)=>onChange && onChange(e.target.value)}
+        disabled={disabled}
+      />
+      {hint && <div className="text-xs text-slate-400 mt-1">{hint}</div>}
+    </label>
+  );
+}
+
+function Select({ label, value, onChange, options }) {
+  return (
+    <label className="block">
+      <div className="text-xs text-slate-500 mb-1">{label}</div>
+      <select
+        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800"
+        value={value}
+        onChange={(e)=>onChange && onChange(e.target.value)}
+      >
+        {(options || []).map(opt => (
+          <option key={String(opt.value)} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Toggle({ label, checked, onChange }) {
+  return (
+    <label className="flex items-center gap-2">
+      <input type="checkbox" className="h-4 w-4" checked={!!checked} onChange={(e)=>onChange && onChange(e.target.checked)} />
+      <span className="text-sm">{label}</span>
+    </label>
+  );
+}
+
+function Button({ children, onClick, type='primary', loading }) {
+  const cls = type === 'secondary'
+    ? 'border bg-white hover:bg-slate-50 text-slate-800'
+    : type === 'danger'
+      ? 'bg-rose-600 hover:bg-rose-700 text-white'
+      : 'bg-blue-600 hover:bg-blue-700 text-white';
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${cls} disabled:opacity-60`}
+    >
+      {loading ? 'Saving…' : children}
+    </button>
   );
 }
