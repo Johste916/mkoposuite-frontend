@@ -1,57 +1,48 @@
-// src/pages/account/Profile.jsx
-import React, { useEffect, useMemo, useState } from 'react';
-import api from '../../api';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import api from "../../api";
 
-const TIMEZONES = [
-  'Africa/Nairobi','Africa/Kampala','Africa/Dar_es_Salaam','Africa/Lagos',
-  'Africa/Johannesburg','UTC','Europe/London','Europe/Berlin','Asia/Dubai'
+const TZ_OPTIONS = [
+  "Africa/Nairobi", "Africa/Dar_es_Salaam", "Africa/Kampala",
+  "Africa/Addis_Ababa", "Africa/Kigali", "UTC",
 ];
 
-const LANDING_PAGES = [
-  { value: '/dashboard', label: 'Dashboard' },
-  { value: '/borrowers', label: 'Borrowers' },
-  { value: '/loans/review-queue', label: 'Loan Review Queue' },
-  { value: '/collections', label: 'Collections' },
-  { value: '/reports/borrowers', label: 'Reports' },
-];
+const LOCALES = ["en", "sw", "fr"];
 
 export default function Profile() {
-  const navigate = useNavigate();
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  // ----------- data -----------
+  const [me, setMe] = useState(null);
   const [branches, setBranches] = useState([]);
 
-  // core profile
-  const [u, setU] = useState({
-    displayName: '',
-    name: '',
-    email: '',
-    phone: '',
-    branchId: '',
-    timezone: 'Africa/Nairobi',
-    locale: 'en',
-    avatarUrl: null,
-    title: '',
-    department: '',
-    employeeCode: '',
+  // identity form (aka “me”)
+  const [form, setForm] = useState({
+    displayName: "",
+    name: "",
+    phone: "",
+    branchId: "",
+    timezone: "Africa/Nairobi",
+    locale: "en",
+
+    // professional extras
+    title: "",
+    department: "",
+    employeeCode: "",
   });
 
   // preferences
   const [prefs, setPrefs] = useState({
-    landingPage: '/dashboard',
-    defaultCurrency: 'TZS',
-    dateFormat: 'dd/MM/yyyy',
-    numberFormat: '1,234.56',
-    theme: 'system',
-    fontScale: 'normal',
+    landingPage: "/dashboard",
+    defaultCurrency: "TZS",
+    dateFormat: "DD/MM/YYYY",
+    numberFormat: "1,234.56",
+    theme: "system",
+    fontScale: "normal",
     reduceMotion: false,
     colorBlindMode: false,
   });
 
   // notifications
-  const [notif, setNotif] = useState({
+  const [notifs, setNotifs] = useState({
     channels: { inApp: true, email: true, sms: false },
     events: {
       loanAssigned: true,
@@ -62,383 +53,451 @@ export default function Profile() {
     },
   });
 
-  // sessions
+  // security
   const [sessions, setSessions] = useState([]);
+  const [saving, setSaving] = useState(false);
 
-  const initials = useMemo(() => {
-    const s = (u.displayName || u.name || u.email || 'U').trim();
-    const parts = s.split(/\s+/);
-    return (parts[0]?.[0] || 'U').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
-  }, [u.displayName, u.name, u.email]);
+  const avatarUrl = useMemo(() => me?.user?.avatarUrl || "", [me]);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [me, pr, nf, br, ss] = await Promise.all([
-        api.get('/account/me'),
-        api.get('/account/preferences'),
-        api.get('/account/notifications'),
-        api.get('/branches'),
-        api.get('/account/security/sessions').catch(() => ({ data: { sessions: [] } })),
-      ]);
+  // ----------- effects -----------
+  useEffect(() => {
+    const ac = new AbortController();
 
-      const meU = me.data?.user || {};
-      setU({
-        displayName: meU.displayName || meU.name || '',
-        name: meU.name || '',
-        email: meU.email || '',
-        phone: meU.phone || '',
-        branchId: meU.branchId || '',
-        timezone: meU.timezone || 'Africa/Nairobi',
-        locale: meU.locale || 'en',
-        avatarUrl: meU.avatarUrl || null,
-        title: meU.title || '',
-        department: meU.department || '',
-        employeeCode: meU.employeeCode || '',
-      });
+    (async () => {
+      try {
+        const [meRes, prefRes, notifRes, sessRes, brRes] = await Promise.all([
+          api.get("/account/me", { signal: ac.signal }),
+          api.get("/account/preferences", { signal: ac.signal }),
+          api.get("/account/notifications", { signal: ac.signal }),
+          api.get("/account/security/sessions", { signal: ac.signal }),
+          api.get("/branches", { signal: ac.signal }).catch(() => ({ data: [] })),
+        ]);
 
-      const p = pr.data?.preferences || {};
-      setPrefs(prev => ({ ...prev, ...p }));
+        setMe(meRes.data);
+        const u = meRes.data?.user || {};
+        setForm((f) => ({
+          ...f,
+          displayName: u.displayName || u.name || "",
+          name: u.name || "",
+          phone: u.phone || "",
+          branchId: u.branchId || "",
+          timezone: u.timezone || f.timezone,
+          locale: u.locale || f.locale,
+          title: u.title || "",
+          department: u.department || "",
+          employeeCode: u.employeeCode || "",
+        }));
 
-      const n = nf.data?.notifications || {};
-      // merge deeply but shallow is fine for now
-      setNotif(prev => ({
-        channels: { ...prev.channels, ...(n.channels || {}) },
-        events: {
-          ...prev.events,
-          ...(n.events || {}),
-          largeRepayment: { ...prev.events.largeRepayment, ...(n.events?.largeRepayment || {}) },
-          arrearsDigest: { ...prev.events.arrearsDigest, ...(n.events?.arrearsDigest || {}) },
-        },
-      }));
+        setPrefs((p) => ({ ...p, ...(prefRes.data?.preferences || {}) }));
+        setNotifs((n) => ({ ...n, ...(notifRes.data?.notifications || {}) }));
+        setSessions(sessRes.data?.sessions || []);
+        setBranches(Array.isArray(brRes.data) ? brRes.data : (brRes.data?.items || []));
+      } catch (e) {
+        console.error("Failed to load profile:", e?.message || e);
+      }
+    })();
 
-      const list = Array.isArray(br.data) ? br.data : br.data?.data || [];
-      setBranches(list);
+    return () => ac.abort();
+  }, []);
 
-      setSessions(Array.isArray(ss.data?.sessions) ? ss.data.sessions : []);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const saveProfile = async () => {
+  // ----------- actions -----------
+  const saveIdentity = async () => {
     setSaving(true);
     try {
       const payload = {
-        displayName: u.displayName,
-        name: u.name,
-        phone: u.phone,
-        branchId: u.branchId || null,
-        timezone: u.timezone,
-        locale: u.locale || 'en',
+        displayName: form.displayName,
+        name: form.name,
+        phone: form.phone,
+        timezone: form.timezone,
+        locale: form.locale,
+        branchId: form.branchId || null,
+        // you can persist the professional extras server-side if your model supports them
+        title: form.title,
+        department: form.department,
+        employeeCode: form.employeeCode,
       };
-      await api.put('/account/me', payload);
+      const res = await api.put("/account/me", payload);
+      setMe({ user: res.data?.user || {} });
+      toast("Saved profile");
+    } catch (e) {
+      toast("Failed to save profile", "error");
     } finally {
       setSaving(false);
     }
   };
 
-  const savePreferences = async () => {
+  const savePrefs = async () => {
     setSaving(true);
     try {
-      await api.put('/account/preferences', prefs);
+      await api.put("/account/preferences", prefs);
+      toast("Saved preferences");
+    } catch {
+      toast("Failed to save preferences", "error");
     } finally {
       setSaving(false);
     }
   };
 
-  const saveNotifications = async () => {
+  const saveNotifs = async () => {
     setSaving(true);
     try {
-      await api.put('/account/notifications', notif);
+      await api.put("/account/notifications", notifs);
+      toast("Saved notifications");
+    } catch {
+      toast("Failed to save notifications", "error");
     } finally {
       setSaving(false);
     }
   };
 
-  const uploadAvatar = async (file) => {
+  const revokeOtherSessions = async () => {
+    setSaving(true);
+    try {
+      await api.post("/account/security/sessions/revoke-all");
+      setSessions([]);
+      toast("Signed out from other devices");
+    } catch {
+      toast("Failed to revoke sessions", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onAvatarPick = async (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast("Image too large (max 2MB)", "error");
+      return;
+    }
     const fd = new FormData();
-    fd.append('avatar', file);
-    const { data } = await api.post('/account/avatar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-    setU((prev) => ({ ...prev, avatarUrl: data.avatarUrl }));
+    fd.append("avatar", file);
+    try {
+      const res = await api.post("/account/avatar", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setMe((m) => ({
+        ...(m || {}),
+        user: { ...(m?.user || {}), avatarUrl: res.data?.avatarUrl || "" },
+      }));
+      toast("Avatar updated");
+    } catch (e) {
+      toast("Failed to upload avatar", "error");
+    } finally {
+      e.target.value = "";
+    }
   };
 
-  const revokeAll = async () => {
-    await api.post('/account/security/sessions/revoke-all');
-    setSessions([]);
-  };
+  // ----------- tiny toast -----------
+  const [toasts, setToasts] = useState([]);
+  function toast(msg, type = "ok") {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((t) => [...t, { id, msg, type }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2500);
+  }
 
-  if (loading) return <div className="p-6 text-sm text-slate-500">Loading…</div>;
+  // ----------- UI -----------
+  const user = me?.user || {};
+  const initials = (user.displayName || user.name || "S").split(" ").map(s => s[0]).join("").slice(0,2).toUpperCase();
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-      {/* Left: sections */}
-      <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
-        <h1 className="text-xl font-semibold mb-4">Profile</h1>
-
-        {/* Identity */}
-        <Section title="Identity">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Input label="Display name" value={u.displayName} onChange={(v)=>setU({...u, displayName:v})} />
-            <Input label="Full name" value={u.name} onChange={(v)=>setU({...u, name:v})} />
-            <Input label="Email" value={u.email} disabled hint="Email is managed by your admin." />
-            <Input label="Phone" value={u.phone} onChange={(v)=>setU({...u, phone:v})} placeholder="+2547…" />
-            <Select
-              label="Default branch"
-              value={u.branchId || ''}
-              onChange={(v)=>setU({...u, branchId: v})}
-              options={[{value:'',label:'—'}, ...branches.map(b=>({ value:String(b.id), label:b.name }))]}
-            />
-            <Select
-              label="Time zone"
-              value={u.timezone}
-              onChange={(v)=>setU({...u, timezone:v})}
-              options={TIMEZONES.map(t=>({ value:t, label:t }))}
-            />
-            <Input label="Locale" value={u.locale} onChange={(v)=>setU({...u, locale:v})} placeholder="en" />
-          </div>
-          <div className="mt-3 flex gap-2">
-            <Button onClick={saveProfile} loading={saving}>Save Changes</Button>
-            <Button type="secondary" onClick={load}>Refresh</Button>
-            <Button type="secondary" onClick={()=>navigate('/change-password')}>Change Password</Button>
-            <Button type="secondary" onClick={()=>navigate('/2fa')}>Two-Factor</Button>
-          </div>
-        </Section>
-
-        {/* Professional (read-only) */}
-        <Section title="Professional">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Input label="Job title" value={u.title} disabled />
-            <Input label="Department" value={u.department} disabled />
-            <Input label="Employee ID" value={u.employeeCode} disabled />
-          </div>
-        </Section>
-
-        {/* Preferences */}
-        <Section title="Preferences">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Select
-              label="Default landing page"
-              value={prefs.landingPage}
-              onChange={(v)=>setPrefs({...prefs, landingPage:v})}
-              options={LANDING_PAGES}
-            />
-            <Input
-              label="Default currency"
-              value={prefs.defaultCurrency}
-              onChange={(v)=>setPrefs({...prefs, defaultCurrency:v.toUpperCase()})}
-              placeholder="TZS"
-            />
-            <Select
-              label="Date format"
-              value={prefs.dateFormat}
-              onChange={(v)=>setPrefs({...prefs, dateFormat:v})}
-              options={[
-                { value: 'dd/MM/yyyy', label: 'DD/MM/YYYY' },
-                { value: 'MM/dd/yyyy', label: 'MM/DD/YYYY' },
-              ]}
-            />
-            <Select
-              label="Theme"
-              value={prefs.theme}
-              onChange={(v)=>setPrefs({...prefs, theme:v})}
-              options={[
-                { value:'system', label:'System' },
-                { value:'light',  label:'Light' },
-                { value:'dark',   label:'Dark' },
-              ]}
-            />
-            <Select
-              label="Font size"
-              value={prefs.fontScale}
-              onChange={(v)=>setPrefs({...prefs, fontScale:v})}
-              options={[
-                { value:'normal', label:'Normal' },
-                { value:'large',  label:'Large' },
-              ]}
-            />
-            <Toggle
-              label="Reduced motion"
-              checked={prefs.reduceMotion}
-              onChange={(v)=>setPrefs({...prefs, reduceMotion:v})}
-            />
-            <Toggle
-              label="Color-blind friendly palette"
-              checked={prefs.colorBlindMode}
-              onChange={(v)=>setPrefs({...prefs, colorBlindMode:v})}
-            />
-          </div>
-          <div className="mt-3"><Button onClick={savePreferences} loading={saving}>Save Preferences</Button></div>
-        </Section>
-
-        {/* Notifications */}
-        <Section title="Notifications">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Toggle label="In-app"   checked={!!notif.channels.inApp}  onChange={(v)=>setNotif({...notif, channels:{...notif.channels, inApp:v}})} />
-            <Toggle label="Email"    checked={!!notif.channels.email}   onChange={(v)=>setNotif({...notif, channels:{...notif.channels, email:v}})} />
-            <Toggle label="SMS/WhatsApp" checked={!!notif.channels.sms} onChange={(v)=>setNotif({...notif, channels:{...notif.channels, sms:v}})} />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-            <Toggle label="New loan assigned to me" checked={!!notif.events.loanAssigned} onChange={(v)=>setNotif({...notif, events:{...notif.events, loanAssigned:v}})} />
-            <Toggle label="Approval needed (maker–checker)" checked={!!notif.events.approvalNeeded} onChange={(v)=>setNotif({...notif, events:{...notif.events, approvalNeeded:v}})} />
-            <div className="border rounded-lg p-3">
-              <div className="font-medium text-sm">Large repayment</div>
-              <div className="mt-2 flex items-center gap-2">
-                <Toggle
-                  label="Enabled"
-                  checked={!!notif.events.largeRepayment?.enabled}
-                  onChange={(v)=>setNotif({...notif, events:{...notif.events, largeRepayment:{ ...(notif.events.largeRepayment||{}), enabled:v }}})}
-                />
-                <Input
-                  label="Threshold"
-                  value={String(notif.events.largeRepayment?.threshold ?? 500000)}
-                  onChange={(v)=>setNotif({...notif, events:{...notif.events, largeRepayment:{ ...(notif.events.largeRepayment||{}), threshold:Number(v)||0 }}})}
-                />
-              </div>
-            </div>
-            <div className="border rounded-lg p-3">
-              <div className="font-medium text-sm">Arrears digest</div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <Toggle
-                  label="Enabled"
-                  checked={!!notif.events.arrearsDigest?.enabled}
-                  onChange={(v)=>setNotif({...notif, events:{...notif.events, arrearsDigest:{ ...(notif.events.arrearsDigest||{}), enabled:v }}})}
-                />
-                <Input
-                  label="Days"
-                  value={String(notif.events.arrearsDigest?.days ?? 7)}
-                  onChange={(v)=>setNotif({...notif, events:{...notif.events, arrearsDigest:{ ...(notif.events.arrearsDigest||{}), days:Math.max(1, Number(v)||1) }}})}
-                />
-                <Input
-                  label="Hour (24h)"
-                  value={String(notif.events.arrearsDigest?.hour ?? 18)}
-                  onChange={(v)=>setNotif({...notif, events:{...notif.events, arrearsDigest:{ ...(notif.events.arrearsDigest||{}), hour:Math.min(23, Math.max(0, Number(v)||0)) }}})}
-                />
-              </div>
-            </div>
-            <Toggle label="KYC item assigned to me" checked={!!notif.events.kycAssigned} onChange={(v)=>setNotif({...notif, events:{...notif.events, kycAssigned:v}})} />
-          </div>
-          <div className="mt-3"><Button onClick={saveNotifications} loading={saving}>Save Notifications</Button></div>
-        </Section>
-
-        {/* Security */}
-        <Section title="Security">
-          <div className="flex flex-wrap gap-2">
-            <Button type="secondary" onClick={()=>navigate('/2fa')}>Manage Two-Factor</Button>
-            <Button type="secondary" onClick={()=>navigate('/change-password')}>Change Password</Button>
-          </div>
-
-          <div className="mt-4">
-            <div className="text-sm font-medium mb-2">Active sessions</div>
-            {sessions.length === 0 ? (
-              <div className="text-sm text-slate-500">Only this device is active.</div>
-            ) : (
-              <ul className="space-y-2">
-                {sessions.map((s, i) => (
-                  <li key={i} className="border rounded-lg p-2 text-sm flex justify-between">
-                    <span>{s.device || 'Device'} • {s.ip || 'IP'} • {s.lastSeen ? new Date(s.lastSeen).toLocaleString() : ''}</span>
-                    <span className="opacity-60">{s.userAgent || ''}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="mt-2">
-              <Button type="danger" onClick={revokeAll}>Sign out of other devices</Button>
-            </div>
-          </div>
-        </Section>
+    <div className="p-6">
+      {/* toasts */}
+      <div className="fixed right-4 top-4 z-50 space-y-2">
+        {toasts.map(t => (
+          <div key={t.id} className={`px-3 py-2 rounded shadow text-sm text-white ${t.type==='error'?'bg-rose-600':'bg-emerald-600'}`}>{t.msg}</div>
+        ))}
       </div>
 
-      {/* Right: avatar */}
-      <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
-        <div className="text-sm font-medium mb-3">Avatar</div>
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-lg font-bold">
-            {u.avatarUrl ? (
-              <img src={u.avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover" />
-            ) : initials}
-          </div>
-          <div>
-            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer hover:bg-slate-50">
-              <input type="file" className="hidden" accept="image/*" onChange={(e)=>uploadAvatar(e.target.files?.[0])} />
+      <h1 className="text-2xl font-bold mb-4">Profile</h1>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
+        {/* LEFT: forms */}
+        <div className="space-y-6">
+          {/* Identity (no change password / 2fa here) */}
+          <section className="bg-white border rounded-2xl p-4 shadow-sm">
+            <h2 className="text-lg font-semibold mb-3">Identity</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Text label="Display name" value={form.displayName} onChange={(v)=>setForm(s=>({...s,displayName:v}))}/>
+              <Text label="Full name" value={form.name} onChange={(v)=>setForm(s=>({...s,name:v}))}/>
+              <Text label="Email" value={user.email || ""} readOnly helper="Email is managed by your admin."/>
+              <Text label="Phone" value={form.phone} onChange={(v)=>setForm(s=>({...s,phone:v}))} placeholder="+2547…"/>
+              <Select
+                label="Default branch"
+                value={String(form.branchId || "")}
+                onChange={(v)=>setForm(s=>({...s,branchId:v||""}))}
+                options={[{value:"",label:"—"}, ...branches.map(b=>({value:String(b.id), label:b.name}))]}
+              />
+              <Select
+                label="Time zone"
+                value={form.timezone}
+                onChange={(v)=>setForm(s=>({...s,timezone:v}))}
+                options={TZ_OPTIONS.map(tz=>({value:tz, label:tz}))}
+              />
+              <Select
+                label="Locale"
+                value={form.locale}
+                onChange={(v)=>setForm(s=>({...s,locale:v}))}
+                options={LOCALES.map(l=>({value:l,label:l}))}
+              />
+            </div>
+
+            {/* Professional */}
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-slate-700 mb-2">Professional</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Text label="Job title" value={form.title} onChange={(v)=>setForm(s=>({...s,title:v}))}/>
+                <Text label="Department" value={form.department} onChange={(v)=>setForm(s=>({...s,department:v}))}/>
+                <Text label="Employee ID" value={form.employeeCode} onChange={(v)=>setForm(s=>({...s,employeeCode:v}))}/>
+              </div>
+            </div>
+
+            {/* Save row — NO Refresh/Change Password/Two-Factor here anymore */}
+            <div className="mt-4 flex items-center gap-2">
+              <button onClick={saveIdentity} disabled={saving} className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60">
+                {saving ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </section>
+
+          {/* Preferences */}
+          <section className="bg-white border rounded-2xl p-4 shadow-sm">
+            <h2 className="text-lg font-semibold mb-3">Preferences</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Select
+                label="Default landing page"
+                value={prefs.landingPage}
+                onChange={(v)=>setPrefs(p=>({...p,landingPage:v}))}
+                options={[
+                  { value: "/dashboard", label: "Dashboard" },
+                  { value: "/loans", label: "Loans" },
+                  { value: "/borrowers", label: "Borrowers" },
+                  { value: "/collections", label: "Collections" },
+                ]}
+              />
+              <Select
+                label="Default currency"
+                value={prefs.defaultCurrency}
+                onChange={(v)=>setPrefs(p=>({...p,defaultCurrency:v}))}
+                options={[{value:"TZS",label:"TZS"},{value:"USD",label:"USD"},{value:"KES",label:"KES"}]}
+              />
+              <Select
+                label="Date format"
+                value={prefs.dateFormat}
+                onChange={(v)=>setPrefs(p=>({...p,dateFormat:v}))}
+                options={[
+                  { value:"DD/MM/YYYY", label:"DD/MM/YYYY" },
+                  { value:"YYYY-MM-DD", label:"YYYY-MM-DD" },
+                  { value:"MM/DD/YYYY", label:"MM/DD/YYYY" },
+                ]}
+              />
+              <Select
+                label="Theme"
+                value={prefs.theme}
+                onChange={(v)=>setPrefs(p=>({...p,theme:v}))}
+                options={[
+                  { value:"system", label:"System" },
+                  { value:"light", label:"Light" },
+                  { value:"dark", label:"Dark" },
+                ]}
+              />
+              <Select
+                label="Font size"
+                value={prefs.fontScale}
+                onChange={(v)=>setPrefs(p=>({...p,fontScale:v}))}
+                options={[
+                  { value:"small", label:"Small" },
+                  { value:"normal", label:"Normal" },
+                  { value:"large", label:"Large" },
+                ]}
+              />
+            </div>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Checkbox
+                label="Color-blind friendly palette"
+                checked={!!prefs.colorBlindMode}
+                onChange={(v)=>setPrefs(p=>({...p,colorBlindMode:v}))}
+              />
+              <Checkbox
+                label="Reduced motion"
+                checked={!!prefs.reduceMotion}
+                onChange={(v)=>setPrefs(p=>({...p,reduceMotion:v}))}
+              />
+            </div>
+            <div className="mt-4">
+              <button onClick={savePrefs} disabled={saving} className="px-3 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 disabled:opacity-60">
+                {saving ? "Saving…" : "Save Preferences"}
+              </button>
+            </div>
+          </section>
+
+          {/* Notifications */}
+          <section className="bg-white border rounded-2xl p-4 shadow-sm">
+            <h2 className="text-lg font-semibold mb-3">Notifications</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Checkbox label="In-app" checked={!!notifs.channels?.inApp}
+                        onChange={(v)=>setNotifs(n=>({...n,channels:{...n.channels,inApp:v}}))}/>
+              <Checkbox label="Email" checked={!!notifs.channels?.email}
+                        onChange={(v)=>setNotifs(n=>({...n,channels:{...n.channels,email:v}}))}/>
+              <Checkbox label="SMS/WhatsApp" checked={!!notifs.channels?.sms}
+                        onChange={(v)=>setNotifs(n=>({...n,channels:{...n.channels,sms:v}}))}/>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Checkbox label="New loan assigned to me"
+                        checked={!!notifs.events?.loanAssigned}
+                        onChange={(v)=>setNotifs(n=>({...n,events:{...n.events,loanAssigned:v}}))}/>
+              <Checkbox label="Approval needed (maker-checker)"
+                        checked={!!notifs.events?.approvalNeeded}
+                        onChange={(v)=>setNotifs(n=>({...n,events:{...n.events,approvalNeeded:v}}))}/>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="border rounded-lg p-3">
+                <Checkbox
+                  label="Large repayment"
+                  checked={!!notifs.events?.largeRepayment?.enabled}
+                  onChange={(v)=>setNotifs(n=>({...n,events:{...n.events,largeRepayment:{...(n.events?.largeRepayment||{}),enabled:v}}}))}
+                />
+                <div className="mt-2">
+                  <Text
+                    label="Threshold"
+                    type="number"
+                    value={String(notifs.events?.largeRepayment?.threshold ?? 500000)}
+                    onChange={(v)=>setNotifs(n=>({...n,events:{...n.events,largeRepayment:{...(n.events?.largeRepayment||{}),threshold:Number(v||0)}}}))}
+                  />
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-3">
+                <Checkbox
+                  label="Arrears digest"
+                  checked={!!notifs.events?.arrearsDigest?.enabled}
+                  onChange={(v)=>setNotifs(n=>({...n,events:{...n.events,arrearsDigest:{...(n.events?.arrearsDigest||{}),enabled:v}}}))}
+                />
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Text
+                    label="Days"
+                    type="number"
+                    value={String(notifs.events?.arrearsDigest?.days ?? 7)}
+                    onChange={(v)=>setNotifs(n=>({...n,events:{...n.events,arrearsDigest:{...(n.events?.arrearsDigest||{}),days:Number(v||0)}}}))}
+                  />
+                  <Text
+                    label="Hour (24h)"
+                    type="number"
+                    value={String(notifs.events?.arrearsDigest?.hour ?? 18)}
+                    onChange={(v)=>setNotifs(n=>({...n,events:{...n.events,arrearsDigest:{...(n.events?.arrearsDigest||{}),hour:Number(v||0)}}}))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <button onClick={saveNotifs} disabled={saving} className="px-3 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 disabled:opacity-60">
+                {saving ? "Saving…" : "Save Notifications"}
+              </button>
+            </div>
+          </section>
+
+          {/* Security — Change Password + Two-Factor live here now */}
+          <section className="bg-white border rounded-2xl p-4 shadow-sm">
+            <h2 className="text-lg font-semibold mb-3">Security</h2>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/2fa"
+                className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50"
+              >
+                Manage Two-Factor
+              </Link>
+              <Link
+                to="/change-password"
+                className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50"
+              >
+                Change Password
+              </Link>
+            </div>
+
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-slate-700 mb-2">Active sessions</h3>
+              <p className="text-xs text-slate-500 mb-2">Only this device is active.</p>
+              <button
+                onClick={revokeOtherSessions}
+                className="px-3 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
+              >
+                Sign out of other devices
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {/* RIGHT: avatar card */}
+        <aside className="bg-white border rounded-2xl p-4 h-fit shadow-sm">
+          <h2 className="text-lg font-semibold mb-3">Avatar</h2>
+
+          <div className="flex items-center gap-3">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Avatar"
+                className="w-14 h-14 rounded-full object-cover border"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-indigo-600 text-white flex items-center justify-center text-lg font-semibold">
+                {initials}
+              </div>
+            )}
+            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 cursor-pointer">
+              <input type="file" accept="image/*" className="hidden" onChange={onAvatarPick} />
               Choose image
             </label>
-            <div className="text-xs text-slate-500 mt-1">PNG/JPG up to 2MB.</div>
           </div>
-        </div>
+
+          <p className="text-xs text-slate-500 mt-2">PNG/JPG/WEBP up to 2MB.</p>
+          {/* 🔥 No “Refresh” button anymore */}
+        </aside>
       </div>
     </div>
   );
 }
 
-/* ----------------------------- tiny UI atoms ----------------------------- */
-function Section({ title, children }) {
-  return (
-    <div className="mb-6">
-      <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function Input({ label, value, onChange, placeholder, disabled, hint }) {
+/* ----------------------- tiny inputs ----------------------- */
+function Text({ label, value, onChange, type="text", placeholder="", readOnly=false, helper="" }) {
   return (
     <label className="block">
-      <div className="text-xs text-slate-500 mb-1">{label}</div>
+      <span className="text-xs text-slate-600">{label}</span>
       <input
-        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800"
-        value={value ?? ''}
+        className={`mt-1 w-full border rounded-lg px-3 py-2 outline-none ${readOnly ? "bg-gray-50" : "focus:ring-2 focus:ring-indigo-200"}`}
+        type={type}
+        value={value ?? ""}
         placeholder={placeholder}
-        onChange={(e)=>onChange && onChange(e.target.value)}
-        disabled={disabled}
+        onChange={e=>onChange?.(e.target.value)}
+        readOnly={readOnly}
       />
-      {hint && <div className="text-xs text-slate-400 mt-1">{hint}</div>}
+      {helper && <span className="block mt-1 text-[11px] text-slate-500">{helper}</span>}
     </label>
   );
 }
-
 function Select({ label, value, onChange, options }) {
   return (
     <label className="block">
-      <div className="text-xs text-slate-500 mb-1">{label}</div>
+      <span className="text-xs text-slate-600">{label}</span>
       <select
-        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800"
-        value={value}
-        onChange={(e)=>onChange && onChange(e.target.value)}
+        className="mt-1 w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-200"
+        value={value ?? ""}
+        onChange={e=>onChange?.(e.target.value)}
       >
-        {(options || []).map(opt => (
-          <option key={String(opt.value)} value={opt.value}>{opt.label}</option>
-        ))}
+        {options.map((o,i)=>(<option key={i} value={o.value}>{o.label}</option>))}
       </select>
     </label>
   );
 }
-
-function Toggle({ label, checked, onChange }) {
+function Checkbox({ label, checked, onChange }) {
   return (
-    <label className="flex items-center gap-2">
-      <input type="checkbox" className="h-4 w-4" checked={!!checked} onChange={(e)=>onChange && onChange(e.target.checked)} />
-      <span className="text-sm">{label}</span>
+    <label className="inline-flex items-center gap-2 text-sm">
+      <input type="checkbox" className="w-4 h-4" checked={!!checked} onChange={e=>onChange?.(e.target.checked)} />
+      <span>{label}</span>
     </label>
-  );
-}
-
-function Button({ children, onClick, type='primary', loading }) {
-  const cls = type === 'secondary'
-    ? 'border bg-white hover:bg-slate-50 text-slate-800'
-    : type === 'danger'
-      ? 'bg-rose-600 hover:bg-rose-700 text-white'
-      : 'bg-blue-600 hover:bg-blue-700 text-white';
-  return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${cls} disabled:opacity-60`}
-    >
-      {loading ? 'Saving…' : children}
-    </button>
   );
 }
