@@ -1,1 +1,0 @@
-import{j as o}from"./index-XjG2GIub.js";import{R as t}from"./ReportShell-CjJnP-i5.js";function e(){return o.jsx(t,{title:"Loan Products Report",endpoint:"/reports/loan-products/summary",columns:[]})}export{e as default};

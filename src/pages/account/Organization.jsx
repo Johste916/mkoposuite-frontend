@@ -50,33 +50,56 @@ export default function Organization() {
       );
       setTenant(t);
 
-      // Entitlements (old endpoints first)
-      const e = await tryGet(
-        ["/tenants/me/entitlements","/tenant/me/entitlements","/account/tenant/entitlements","/account/organization/entitlements"],
+      // Entitlements (old endpoints first), now also try /org/entitlements
+      const entData = await tryGet(
+        [
+          "/tenants/me/entitlements",
+          "/tenant/me/entitlements",
+          "/account/tenant/entitlements",
+          "/account/organization/entitlements",
+          "/org/entitlements",
+        ],
         {}
       ).catch(() => ({}));
-      setEnt(e || {});
+      setEnt(entData || {});
 
-      // Limits — now also try the new /org/limits
-      const lim = await tryGet(
-        ["/tenants/me/limits","/tenant/me/limits","/account/tenant/limits","/account/organization/limits","/org/limits"],
+      // Limits — normalize /org/limits shape { plan, limits, entitlements, usage }
+      const limRaw = await tryGet(
+        [
+          "/tenants/me/limits",
+          "/tenant/me/limits",
+          "/account/tenant/limits",
+          "/account/organization/limits",
+          "/org/limits",
+        ],
         {}
       ).catch(() => ({}));
-      setLimits(lim || {});
+
+      // If backend returned the org shape, pull out the nested limits
+      const normalizedLimits = limRaw && typeof limRaw === "object" && limRaw.limits
+        ? limRaw.limits
+        : limRaw || {};
+      setLimits(normalizedLimits || {});
 
       // If entitlements endpoint wasn’t available, try to derive from /org/limits
-      const hasEntModules = e && e.modules && Object.keys(e.modules).length > 0;
-      if (!hasEntModules && Array.isArray(lim?.entitlements)) {
+      const hasEntModules = entData && entData.modules && Object.keys(entData.modules).length > 0;
+      if (!hasEntModules && Array.isArray(limRaw?.entitlements)) {
         setEnt({
-          modules: entitlementsToModules(lim.entitlements),
-          planCode: (lim?.plan?.code || lim?.plan?.name || t?.planCode || 'basic').toString().toLowerCase(),
+          modules: entitlementsToModules(limRaw.entitlements),
+          planCode: (limRaw?.plan?.code || limRaw?.plan?.name || t?.planCode || 'basic').toString().toLowerCase(),
           status: t?.status || 'trial',
         });
       }
 
-      // Invoices — now also try the new /org/invoices
+      // Invoices — also try the new /org/invoices
       const inv = await tryGet(
-        ["/tenants/me/invoices","/tenant/me/invoices","/account/tenant/invoices","/account/organization/invoices","/org/invoices"],
+        [
+          "/tenants/me/invoices",
+          "/tenant/me/invoices",
+          "/account/tenant/invoices",
+          "/account/organization/invoices",
+          "/org/invoices",
+        ],
         {}
       ).catch(() => []);
       // normalize array or { invoices: [...] }
@@ -239,7 +262,9 @@ export default function Organization() {
             {Object.entries(limits).map(([k, v]) => (
               <div key={k} className="flex items-center gap-2">
                 <span className="w-44 capitalize text-slate-700 dark:text-slate-200">{k.replace(/_/g, " ")}</span>
-                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 dark:text-slate-200">{String(v === null ? 'Unlimited' : v)}</span>
+                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 dark:text-slate-200">
+                  {v === null ? "Unlimited" : String(v)}
+                </span>
               </div>
             ))}
           </div>
