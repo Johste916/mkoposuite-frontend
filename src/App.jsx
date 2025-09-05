@@ -207,6 +207,9 @@ function App() {
               <Route path="settings/billing" element={<Navigate to="/billing" replace />} />
               <Route path="settings/change-password" element={<Navigate to="/change-password" replace />} />
               <Route path="settings/2fa" element={<Navigate to="/2fa" replace />} />
+              {/* ✅ add these two lines to fix Organization “not found” */}
+              <Route path="settings/organization" element={<Navigate to="/account/organization" replace />} />
+              <Route path="settings/org" element={<Navigate to="/account/organization" replace />} />
 
               {/* Borrowers */}
               <Route path="borrowers" element={<Borrowers />} />
