@@ -1,0 +1,1 @@
+import{j as o}from"./index-XjG2GIub.js";import{R as r}from"./ReportShell-CjJnP-i5.js";function f(){return o.jsx(r,{title:"Loan Officer Report",endpoint:"/reports/loan-officers/summary",columns:[]})}export{f as default};

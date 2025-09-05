@@ -22,6 +22,24 @@ export default function Organization() {
     const nf = new Error("Not Found"); nf.code = 404; throw nf;
   }
 
+  // Map ['loans.view', ...] -> { loans: true, ... } for the badges UI
+  function entitlementsToModules(keys = []) {
+    const on = (k) => keys.includes(k);
+    return {
+      savings:     on('savings.view'),
+      loans:       on('loans.view'),
+      collections: on('collections.view'),
+      accounting:  on('accounting.view'),
+      sms:         on('sms.send') || on('sms.view'),
+      esignatures: on('esign.view') || on('esignatures.view'),
+      payroll:     on('payroll.view'),
+      investors:   on('investors.view'),
+      assets:      on('assets.view'),
+      collateral:  on('collateral.view'),
+      reports:     on('reports.view'),
+    };
+  }
+
   const load = async () => {
     setStatus("loading");
     setErrMsg("");
@@ -32,23 +50,38 @@ export default function Organization() {
       );
       setTenant(t);
 
+      // Entitlements (old endpoints first)
       const e = await tryGet(
         ["/tenants/me/entitlements","/tenant/me/entitlements","/account/tenant/entitlements","/account/organization/entitlements"],
         {}
       ).catch(() => ({}));
       setEnt(e || {});
 
+      // Limits — now also try the new /org/limits
       const lim = await tryGet(
-        ["/tenants/me/limits","/tenant/me/limits","/account/tenant/limits","/account/organization/limits"],
+        ["/tenants/me/limits","/tenant/me/limits","/account/tenant/limits","/account/organization/limits","/org/limits"],
         {}
       ).catch(() => ({}));
       setLimits(lim || {});
 
+      // If entitlements endpoint wasn’t available, try to derive from /org/limits
+      const hasEntModules = e && e.modules && Object.keys(e.modules).length > 0;
+      if (!hasEntModules && Array.isArray(lim?.entitlements)) {
+        setEnt({
+          modules: entitlementsToModules(lim.entitlements),
+          planCode: (lim?.plan?.code || lim?.plan?.name || t?.planCode || 'basic').toString().toLowerCase(),
+          status: t?.status || 'trial',
+        });
+      }
+
+      // Invoices — now also try the new /org/invoices
       const inv = await tryGet(
-        ["/tenants/me/invoices","/tenant/me/invoices","/account/tenant/invoices","/account/organization/invoices"],
+        ["/tenants/me/invoices","/tenant/me/invoices","/account/tenant/invoices","/account/organization/invoices","/org/invoices"],
         {}
       ).catch(() => []);
-      setInvoices(Array.isArray(inv) ? inv : []);
+      // normalize array or { invoices: [...] }
+      const invList = Array.isArray(inv) ? inv : (Array.isArray(inv?.invoices) ? inv.invoices : []);
+      setInvoices(invList);
 
       setStatus("ready");
     } catch (e) {
@@ -206,7 +239,7 @@ export default function Organization() {
             {Object.entries(limits).map(([k, v]) => (
               <div key={k} className="flex items-center gap-2">
                 <span className="w-44 capitalize text-slate-700 dark:text-slate-200">{k.replace(/_/g, " ")}</span>
-                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 dark:text-slate-200">{String(v)}</span>
+                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 dark:text-slate-200">{String(v === null ? 'Unlimited' : v)}</span>
               </div>
             ))}
           </div>
@@ -234,14 +267,14 @@ export default function Organization() {
                   <tr key={inv.id} className="border-top border-slate-100 dark:border-slate-800">
                     <td className="py-2 pr-4">{inv.number || inv.id}</td>
                     <td className="py-2 pr-4">
-                      {(inv.amount_cents != null ? inv.amount_cents / 100 : 0)
+                      {Number((inv.amount_cents ?? inv.amountCents ?? 0) / 100)
                         .toLocaleString(undefined, { style: "currency", currency: inv.currency || "USD" })}
                     </td>
-                    <td className="py-2 pr-4">{inv.due_date ? String(inv.due_date).slice(0,10) : "-"}</td>
+                    <td className="py-2 pr-4">{(inv.due_date || inv.dueDate) ? String(inv.due_date || inv.dueDate).slice(0,10) : "-"}</td>
                     <td className="py-2 pr-4">
                       <span className={`text-xs px-2 py-0.5 rounded ${
-                        inv.status === "paid" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                        : inv.status === "past_due" ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
+                        (inv.status || "open") === "paid" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                        : (inv.status || "open") === "past_due" ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
                         : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                       }`}>
                         {inv.status || "open"}
