@@ -1,1 +1,0 @@
-import{j as t}from"./index-1gkhjes9.js";import{R as e}from"./ReportShell-Vv4KHrGk.js";function o(){return t.jsx(e,{title:"Disbursement Report",endpoint:"/reports/disbursements/summary",columns:[]})}export{o as default};

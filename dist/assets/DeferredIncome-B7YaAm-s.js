@@ -1,0 +1,1 @@
+import{j as e}from"./index-Bg9psR-u.js";import{R as r}from"./ReportShell-Dv13k1cC.js";function n(){return e.jsx(r,{title:"Deferred Income",endpoint:"/reports/deferred-income",columns:[]})}export{n as default};
