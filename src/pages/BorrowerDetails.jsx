@@ -1,26 +1,22 @@
 // src/pages/BorrowerDetails.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import axios from "axios";
+import { useParams } from "react-router-dom";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { CSVLink } from "react-csv";
 import { getUserRole } from "../utils/auth";
 import LoanScheduleModal from "../components/LoanScheduleModal";
 import RepaymentModal from "../components/RepaymentModal";
+import api from "../api";
 
 const BorrowerDetails = () => {
   const { id } = useParams();
-  const API = import.meta.env.VITE_API_BASE_URL;
   const userRole = getUserRole();
 
   const [borrower, setBorrower] = useState(null);
   const [loans, setLoans] = useState([]);
   const [repayments, setRepayments] = useState([]);
   const [comments, setComments] = useState([]);
-  const [tab, setTab] = useState("overview");
-  const [newComment, setNewComment] = useState("");
-  const [form, setForm] = useState({});
 
   // Repayments (shared modal)
   const [showRepaymentModal, setShowRepaymentModal] = useState(false);
@@ -35,33 +31,43 @@ const BorrowerDetails = () => {
   const [savings, setSavings] = useState([]);
   const [filteredSavings, setFilteredSavings] = useState([]);
   const [savingsBalance, setSavingsBalance] = useState(0);
-  const [savingsForm, setSavingsForm] = useState({
-    type: "deposit",
-    amount: "",
-    date: new Date().toISOString().split("T")[0],
-    notes: "",
-  });
   const [filterType, setFilterType] = useState("all");
+
+  const tryGET = async (paths = [], opts = {}) => {
+    for (const p of paths) {
+      try {
+        const res = await api.get(p, opts);
+        return res?.data;
+      } catch {}
+    }
+    throw new Error(`All endpoints failed: ${paths.join(", ")}`);
+  };
 
   const fetchBorrowerBundle = async () => {
     try {
-      const borrowerRes = await axios.get(`${API}/borrowers/${id}`);
-      setBorrower(borrowerRes.data);
-      setForm(borrowerRes.data);
+      // borrower
+      const borrowerData = await tryGET([`/borrowers/${id}`]);
+      setBorrower(borrowerData);
 
-      const [loanRes, repayRes, commentRes, savingsRes] = await Promise.all([
-        axios.get(`${API}/loans/borrower/${id}`),
-        axios.get(`${API}/repayments/borrower/${id}`),
-        axios.get(`${API}/comments/borrower/${id}`),
-        axios.get(`${API}/savings/borrower/${id}`),
+      // loans / repayments / comments / savings
+      const [loanData, repayData, commentData, savingsData] = await Promise.all([
+        tryGET([`/loans/borrower/${id}`, `/borrowers/${id}/loans`]).catch(() => []),
+        tryGET([`/repayments/borrower/${id}`, `/borrowers/${id}/repayments`]).catch(() => []),
+        tryGET([`/comments/borrower/${id}`, `/borrowers/${id}/comments`]).catch(() => []),
+        tryGET([`/savings/borrower/${id}`, `/borrowers/${id}/savings`]).catch(() => ({})),
       ]);
 
-      setLoans(Array.isArray(loanRes.data) ? loanRes.data : []);
-      setRepayments(Array.isArray(repayRes.data) ? repayRes.data : []);
-      setComments(Array.isArray(commentRes.data) ? commentRes.data : []);
-      const txs = savingsRes?.data?.transactions || [];
+      setLoans(Array.isArray(loanData) ? loanData : loanData?.items || []);
+      setRepayments(Array.isArray(repayData) ? repayData : repayData?.items || []);
+      setComments(Array.isArray(commentData) ? commentData : commentData?.items || []);
+
+      const txs = Array.isArray(savingsData?.transactions)
+        ? savingsData.transactions
+        : Array.isArray(savingsData)
+        ? savingsData
+        : [];
       setSavings(txs);
-      setSavingsBalance(Number(savingsRes?.data?.balance || 0));
+      setSavingsBalance(Number(savingsData?.balance || 0));
       setFilteredSavings(txs);
     } catch (err) {
       console.error("Fetch borrower bundle failed:", err?.message || err);
@@ -78,41 +84,25 @@ const BorrowerDetails = () => {
     else setFilteredSavings(savings.filter((tx) => tx.type === filterType));
   }, [filterType, savings]);
 
-  const handleAddComment = async () => {
-    const text = (newComment || "").trim();
-    if (!text) return;
+  const handleAddComment = async (textRaw) => {
+    const content = String(textRaw || "").trim();
+    if (!content) return;
     try {
-      await axios.post(`${API}/comments`, { borrowerId: id, content: text });
-      setComments((prev) => [...prev, { content: text, createdAt: new Date().toISOString() }]);
-      setNewComment("");
+      await api.post(`/comments`, { borrowerId: id, content });
+      setComments((prev) => [
+        ...prev,
+        { content, createdAt: new Date().toISOString() },
+      ]);
     } catch (err) {
       console.error("Error adding comment", err);
     }
   };
 
-  const handleUpdate = async () => {
-    try {
-      await axios.put(`${API}/borrowers/${id}`, form);
-      setBorrower(form);
-    } catch (err) {
-      console.error("Error updating borrower", err);
-    }
-  };
-
-  const handleRepaymentSaved = async () => {
-    try {
-      const repayRes = await axios.get(`${API}/repayments/borrower/${id}`);
-      setRepayments(Array.isArray(repayRes.data) ? repayRes.data : []);
-    } catch (e) {
-      // ignore
-    }
-  };
-
   const handleViewSchedule = async (loanId) => {
     try {
-      const res = await axios.get(`${API}/loans/${loanId}/schedule`);
-      setSelectedSchedule(Array.isArray(res.data) ? res.data : []);
-      const loan = loans.find((l) => l.id === loanId) || null;
+      const data = await tryGET([`/loans/${loanId}/schedule`, `/loan/${loanId}/schedule`]);
+      setSelectedSchedule(Array.isArray(data) ? data : data?.items || []);
+      const loan = loans.find((l) => String(l.id) === String(loanId)) || null;
       setSelectedLoan(loan);
       setShowScheduleModal(true);
     } catch (err) {
@@ -120,21 +110,46 @@ const BorrowerDetails = () => {
     }
   };
 
+  const handleRepaymentSaved = async () => {
+    try {
+      const repay = await tryGET([`/repayments/borrower/${id}`, `/borrowers/${id}/repayments`]);
+      setRepayments(Array.isArray(repay) ? repay : repay?.items || []);
+    } catch {}
+  };
+
   const summarizeSavings = (type) =>
-    savings.filter((tx) => tx.type === type).reduce((total, tx) => total + Number(tx.amount || 0), 0);
+    savings.reduce((sum, tx) => (tx.type === type ? sum + Number(tx.amount || 0) : sum), 0);
 
   const buildTimeline = () => {
     const items = [];
     loans.forEach((l) =>
-      items.push({ type: "loan", date: l.createdAt, text: `Loan ${l.id} - ${String(l.status || "").toUpperCase()}` })
+      items.push({
+        type: "loan",
+        date: l.createdAt || l.disbursedAt || l.updatedAt || new Date().toISOString(),
+        text: `Loan ${l.id} - ${String(l.status || "").toUpperCase()}`,
+      })
     );
     repayments.forEach((r) =>
-      items.push({ type: "repayment", date: r.date, text: `Repayment of TZS ${Number(r.amount || 0).toLocaleString()}` })
+      items.push({
+        type: "repayment",
+        date: r.date || r.createdAt || new Date().toISOString(),
+        text: `Repayment of TZS ${Number(r.amount || 0).toLocaleString()}`,
+      })
     );
     savings.forEach((s) =>
-      items.push({ type: "savings", date: s.date, text: `${s.type} of TZS ${Number(s.amount || 0).toLocaleString()}` })
+      items.push({
+        type: "savings",
+        date: s.date || s.createdAt || new Date().toISOString(),
+        text: `${s.type} of TZS ${Number(s.amount || 0).toLocaleString()}`,
+      })
     );
-    comments.forEach((c) => items.push({ type: "comment", date: c.createdAt, text: `Note: ${c.content}` }));
+    comments.forEach((c) =>
+      items.push({
+        type: "comment",
+        date: c.createdAt || new Date().toISOString(),
+        text: `Note: ${c.content}`,
+      })
+    );
     return items.sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
@@ -163,7 +178,6 @@ const BorrowerDetails = () => {
 
   const canAddRepayment = useMemo(() => {
     const role = String(userRole || "").toLowerCase();
-    // keep your current policy (Admins only), but don't block UI if your backend allows others
     return role === "admin";
   }, [userRole]);
 
@@ -177,7 +191,7 @@ const BorrowerDetails = () => {
           <CSVLink
             data={[borrower]}
             filename={`borrower-${borrower.id}.csv`}
-            className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700 text-sm"
+            className="bg-emerald-600 text-white px-4 py-1 rounded hover:bg-emerald-700 text-sm"
           >
             Export CSV
           </CSVLink>
@@ -188,7 +202,7 @@ const BorrowerDetails = () => {
               doc.autoTable({
                 startY: 20,
                 head: [["Field", "Value"]],
-                body: Object.entries(borrower).map(([k, v]) => [k, String(v)]),
+                body: Object.entries(borrower).map(([k, v]) => [k, String(v ?? "")]),
               });
               doc.save(`borrower-${borrower.id}.pdf`);
             }}
@@ -199,6 +213,7 @@ const BorrowerDetails = () => {
         </div>
       </div>
 
+      {/* Risk snippet */}
       <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
         <h4 className="font-semibold text-yellow-700 mb-1">⚠️ Risk Summary</h4>
         <p>
@@ -218,7 +233,6 @@ const BorrowerDetails = () => {
         {canAddRepayment && loans.length > 0 && (
           <button
             onClick={() => {
-              // pick the first active loan by default, you can change selection UI later
               const active = loans.find((l) => l.status === "active") || loans[0];
               setSelectedLoanForRepayment(active || null);
               setShowRepaymentModal(true);
@@ -233,12 +247,15 @@ const BorrowerDetails = () => {
       <ul className="space-y-2 text-sm">
         {buildTimeline().map((item, i) => (
           <li key={i} className="border-l-4 pl-2 border-gray-300">
-            <span className="text-gray-500">{new Date(item.date).toLocaleDateString()}</span> – {item.text}
+            <span className="text-gray-500">
+              {item.date ? new Date(item.date).toLocaleDateString() : "—"}
+            </span>{" "}
+            – {item.text}
           </li>
         ))}
       </ul>
 
-      {/* Loans quick list (lightweight, non-intrusive) */}
+      {/* Loans quick list */}
       {!!loans.length && (
         <div className="bg-white rounded shadow p-4">
           <div className="flex items-center justify-between mb-2">
@@ -261,9 +278,13 @@ const BorrowerDetails = () => {
                     <td className="px-3 py-2">{l.id}</td>
                     <td className="px-3 py-2">{l.reference || `L-${l.id}`}</td>
                     <td className="px-3 py-2">
-                      <span className={getStatusBadge(l.status)}>{String(l.status || "—")}</span>
+                      <span className={getStatusBadge(l.status)}>
+                        {String(l.status || "—")}
+                      </span>
                     </td>
-                    <td className="px-3 py-2">TZS {Number(l.amount || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2">
+                      TZS {Number(l.amount || 0).toLocaleString()}
+                    </td>
                     <td className="px-3 py-2 flex gap-2">
                       <button
                         className="px-2 py-1 border rounded hover:bg-gray-50"
@@ -294,23 +315,13 @@ const BorrowerDetails = () => {
       {/* Comments */}
       <div className="bg-white rounded shadow p-4">
         <h3 className="font-semibold mb-2">Comments</h3>
-        <div className="flex gap-2 mb-3">
-          <input
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Add a note…"
-            className="flex-1 border rounded px-3 py-2"
-          />
-          <button onClick={handleAddComment} className="px-3 py-2 rounded bg-slate-800 text-white">
-            Add
-          </button>
-        </div>
+        <CommentInput onAdd={handleAddComment} />
         <ul className="space-y-2 text-sm">
           {comments.map((c, i) => (
             <li key={`${i}-${c.createdAt}`} className="border rounded p-2">
               <div>{c.content}</div>
               <div className="text-xs text-gray-500">
-                {new Date(c.createdAt).toLocaleString()}
+                {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
               </div>
             </li>
           ))}
@@ -323,15 +334,19 @@ const BorrowerDetails = () => {
           <h3 className="font-semibold">Savings</h3>
           <div className="text-sm">
             Balance:&nbsp;
-            <strong>TZS {Number(savingsBalance || 0).toLocaleString()}</strong>
+            <strong>
+              TZS {Number(savingsBalance || 0).toLocaleString()}
+            </strong>
           </div>
         </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
           <div className="p-2 rounded bg-emerald-50">
             Deposits: <strong>TZS {Number(deposits).toLocaleString()}</strong>
           </div>
           <div className="p-2 rounded bg-amber-50">
-            Withdrawals: <strong>TZS {Number(withdrawals).toLocaleString()}</strong>
+            Withdrawals:{" "}
+            <strong>TZS {Number(withdrawals).toLocaleString()}</strong>
           </div>
           <div className="p-2 rounded bg-sky-50">
             Interest: <strong>TZS {Number(interest).toLocaleString()}</strong>
@@ -369,9 +384,13 @@ const BorrowerDetails = () => {
             <tbody>
               {filteredSavings.map((tx, i) => (
                 <tr key={`${tx.id || i}`} className="border-b last:border-0">
-                  <td className="px-3 py-2">{new Date(tx.date).toLocaleDateString()}</td>
+                  <td className="px-3 py-2">
+                    {tx.date ? new Date(tx.date).toLocaleDateString() : "—"}
+                  </td>
                   <td className="px-3 py-2 capitalize">{tx.type}</td>
-                  <td className="px-3 py-2">TZS {Number(tx.amount || 0).toLocaleString()}</td>
+                  <td className="px-3 py-2">
+                    TZS {Number(tx.amount || 0).toLocaleString()}
+                  </td>
                   <td className="px-3 py-2">{tx.notes || "—"}</td>
                 </tr>
               ))}
@@ -389,7 +408,7 @@ const BorrowerDetails = () => {
         />
       )}
 
-      {/* Repayment modal (shared) */}
+      {/* Repayment modal */}
       {showRepaymentModal && selectedLoanForRepayment && (
         <RepaymentModal
           isOpen={showRepaymentModal}
@@ -398,6 +417,29 @@ const BorrowerDetails = () => {
           onSaved={handleRepaymentSaved}
         />
       )}
+    </div>
+  );
+};
+
+const CommentInput = ({ onAdd }) => {
+  const [val, setVal] = useState("");
+  return (
+    <div className="flex gap-2 mb-3">
+      <input
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        placeholder="Add a note…"
+        className="flex-1 border rounded px-3 py-2"
+      />
+      <button
+        onClick={() => {
+          onAdd(val);
+          setVal("");
+        }}
+        className="px-3 py-2 rounded bg-slate-800 text-white"
+      >
+        Add
+      </button>
     </div>
   );
 };

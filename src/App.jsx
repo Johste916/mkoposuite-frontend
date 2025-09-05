@@ -1,3 +1,4 @@
+// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -70,7 +71,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 const Organization = lazy(() => import("./pages/account/Organization"));
-const Profile = lazy(() => import("./pages/account/Profile")); // 👈 NEW
+const Profile = lazy(() => import("./pages/account/Profile")); // exists or load-on-demand
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -117,6 +118,27 @@ const ManualJournal = lazy(() => import("./pages/accounting/ManualJournal"));
 const Billing = lazy(() => import("./pages/account/Billing"));
 const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const TwoFactor = lazy(() => import("./pages/account/TwoFactor"));
+
+// Reports — ✅ add the lazy imports you were missing
+const BorrowersReport = lazy(() => import("./pages/reports/BorrowersReport"));
+const LoanReport = lazy(() => import("./pages/reports/LoanReport"));
+const ArrearsAging = lazy(() => import("./pages/reports/ArrearsAging"));
+const CollectionsReport = lazy(() => import("./pages/reports/CollectionsReport"));
+const CollectorReport = lazy(() => import("./pages/reports/CollectorReport"));
+const DeferredIncome = lazy(() => import("./pages/reports/DeferredIncome"));
+const DeferredIncomeMonthly = lazy(() => import("./pages/reports/DeferredIncomeMonthly"));
+const ProRataCollections = lazy(() => import("./pages/reports/ProRataCollections"));
+const DisbursementReport = lazy(() => import("./pages/reports/DisbursementReport"));
+const FeesReport = lazy(() => import("./pages/reports/FeesReport"));
+const LoanOfficerReport = lazy(() => import("./pages/reports/LoanOfficerReport"));
+const LoanProductsReport = lazy(() => import("./pages/reports/LoanProductsReport"));
+const MfrsRatios = lazy(() => import("./pages/reports/MfrsRatios"));
+const DailyReport = lazy(() => import("./pages/reports/DailyReport"));
+const MonthlyReport = lazy(() => import("./pages/reports/MonthlyReport"));
+const OutstandingReport = lazy(() => import("./pages/reports/OutstandingReport"));
+const ParReport = lazy(() => import("./pages/reports/ParReport"));
+const AtAGlance = lazy(() => import("./pages/reports/AtAGlance"));
+const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 
 const Fallback = () => (
   <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
@@ -168,7 +190,7 @@ function App() {
               <Route path="account/profile" element={<Profile />} />
               <Route path="account/organization" element={<Organization />} />
 
-              {/* ✅ Aliases for legacy/incorrect links */}
+              {/* Aliases */}
               <Route path="profile" element={<Navigate to="/account/profile" replace />} />
               <Route path="settings" element={<Navigate to="/account/settings" replace />} />
               <Route path="settings/profile" element={<Navigate to="/account/profile" replace />} />
@@ -390,12 +412,33 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
-              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
+              <Route
+                path="other-income/add"
+                element={
+                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
+                    Add Other Income
+                  </div>
+                }
+              />
+              <Route
+                path="other-income/csv"
+                element={
+                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
+                    Upload Other Income CSV
+                  </div>
+                }
+              />
 
-              {/* Asset Management */}
+              {/* Assets */}
               <Route path="assets" element={<Assets />} />
-              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
+              <Route
+                path="assets/add"
+                element={
+                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
+                    Add Asset
+                  </div>
+                }
+              />
 
               {/* Accounting (grouped) */}
               <Route
@@ -417,19 +460,10 @@ function App() {
                 <Route path="pnl" element={<Navigate to="/accounting/profit-loss" replace />} />
               </Route>
 
-              {/* User Management */}
-              <Route path="user-management" element={<Outlet />}>
-                <Route path="users" element={<Users />} />
-                <Route path="roles" element={<Roles />} />
-                <Route path="permissions" element={<Permissions />} />
-              </Route>
-
-              {/* Branches */}
-              <Route path="branches" element={<Branches />} />
-
               {/* Reports */}
               <Route path="reports" element={<Outlet />}>
-                <Route index element={<BorrowersReport />} />
+                {/* safer index: redirect to a known child route */}
+                <Route index element={<Navigate to="/reports/borrowers" replace />} />
                 <Route path="borrowers" element={<BorrowersReport />} />
                 <Route path="loans" element={<LoanReport />} />
                 <Route path="arrears-aging" element={<ArrearsAging />} />

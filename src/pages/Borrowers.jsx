@@ -1,6 +1,7 @@
+// src/pages/Borrowers.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  PlusCircle, Upload, Search, Filter, X, Users, Phone, Building2,
+  PlusCircle, Upload, Search, Filter, X, Phone, Building2,
   ChevronLeft, ChevronRight, FileUp, IdCard
 } from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
@@ -44,8 +45,8 @@ const Borrowers = () => {
   const [toasts, setToasts] = useState([]);
   const pushToast = (msg, type = "info") => {
     const id = Math.random().toString(36).slice(2);
-    setToasts(t => [...t, { id, msg, type }]);
-    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500);
+    setToasts((t) => [...t, { id, msg, type }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   };
 
   // Debounce search
@@ -62,8 +63,8 @@ const Borrowers = () => {
       api.get("/users", { params: { role: "loan_officer" }, signal: ac.signal }).catch(() => ({ data: [] })),
     ])
       .then(([b, u]) => {
-        setBranches(Array.isArray(b.data) ? b.data : []);
-        setOfficers(Array.isArray(u.data) ? u.data : []);
+        setBranches(Array.isArray(b.data) ? b.data : b.data?.data || []);
+        setOfficers(Array.isArray(u.data) ? u.data : u.data?.data || []);
       })
       .catch(() => pushToast("Failed to load filters", "error"));
     return () => ac.abort();
@@ -94,7 +95,7 @@ const Borrowers = () => {
           list = res.data;
           count = res.data.length;
         } else {
-          list = res.data?.items || res.data?.rows || [];
+          list = res.data?.items || res.data?.rows || res.data?.data || [];
           count = Number(res.data?.total ?? list.length ?? 0);
         }
 
@@ -130,16 +131,16 @@ const Borrowers = () => {
       try {
         if (tab === "overview") {
           const res = await api.get(`/borrowers/${borrowerId}`, { signal });
-          setDrawerData(d => ({ ...d, overview: res.data || null }));
+          setDrawerData((d) => ({ ...d, overview: res.data || null }));
         } else if (tab === "loans") {
           const res = await api.get(`/borrowers/${borrowerId}/loans`, { signal });
-          setDrawerData(d => ({ ...d, loans: res.data || [] }));
+          setDrawerData((d) => ({ ...d, loans: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         } else if (tab === "savings") {
           const res = await api.get(`/borrowers/${borrowerId}/savings`, { signal });
-          setDrawerData(d => ({ ...d, savings: res.data || [] }));
+          setDrawerData((d) => ({ ...d, savings: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         } else if (tab === "documents") {
           const res = await api.get(`/borrowers/${borrowerId}/documents`, { signal });
-          setDrawerData(d => ({ ...d, documents: res.data || [] }));
+          setDrawerData((d) => ({ ...d, documents: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         }
       } catch (e) {
         pushToast("Failed to load borrower details", "error");
@@ -160,7 +161,7 @@ const Borrowers = () => {
   // Sorting
   const onSort = (key) => {
     if (sort === key) {
-      setDir(d => (d === "asc" ? "desc" : "asc"));
+      setDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSort(key);
       setDir("asc");
@@ -170,14 +171,11 @@ const Borrowers = () => {
   // Helpers
   const fmtMoney = (v) => `TZS ${Number(v || 0).toLocaleString()}`;
   const pageFrom = useMemo(() => (total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1), [page, total]);
-  const pageTo   = useMemo(() => Math.min(page * PAGE_SIZE, total), [page, total]);
+  const pageTo = useMemo(() => Math.min(page * PAGE_SIZE, total), [page, total]);
 
-  const displayName = (b) =>
-    b.name || `${b.firstName || ""} ${b.lastName || ""}`.trim() || "—";
-  const displayBranch = (b) =>
-    b.branchName || b.Branch?.name || b.branch?.name || "—";
-  const displayOfficer = (b) =>
-    b.officerName || b.officer?.name || b.loanOfficer?.name || "—";
+  const displayName = (b) => b.name || `${b.firstName || ""} ${b.lastName || ""}`.trim() || "—";
+  const displayBranch = (b) => b.branchName || b.Branch?.name || b.branch?.name || "—";
+  const displayOfficer = (b) => b.officerName || b.officer?.name || b.loanOfficer?.name || "—";
 
   const getInitials = (full) => {
     const s = (full || "").trim();
@@ -185,15 +183,19 @@ const Borrowers = () => {
     const parts = s.split(/\s+/).filter(Boolean);
     const letters = (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
     return letters.toUpperCase() || s[0].toUpperCase();
-  };
+    };
 
   const statusChip = (s) => {
     const base = "text-[11px] px-2 py-0.5 rounded border";
     switch (s) {
-      case "active": return `${base} bg-emerald-50 border-emerald-300 text-emerald-700`;
-      case "pending_kyc": return `${base} bg-yellow-50 border-yellow-300 text-yellow-700`;
-      case "blacklisted": return `${base} bg-red-50 border-red-300 text-red-700`;
-      default: return `${base} bg-gray-50 border-gray-300 text-gray-700`;
+      case "active":
+        return `${base} bg-emerald-50 border-emerald-300 text-emerald-700`;
+      case "pending_kyc":
+        return `${base} bg-yellow-50 border-yellow-300 text-yellow-700`;
+      case "blacklisted":
+        return `${base} bg-red-50 border-red-300 text-red-700`;
+      default:
+        return `${base} bg-gray-50 border-gray-300 text-gray-700`;
     }
   };
 
@@ -201,7 +203,7 @@ const Borrowers = () => {
     <div className="p-6">
       {/* Toasts */}
       <div className="fixed right-4 top-4 z-50 space-y-2">
-        {toasts.map(t => (
+        {toasts.map((t) => (
           <div
             key={t.id}
             className={`px-3 py-2 rounded shadow text-sm text-white ${
@@ -216,7 +218,6 @@ const Borrowers = () => {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800">👥 Borrowers</h1>
         <div className="flex gap-2">
-          {/* Directly navigate to the Add Borrower page */}
           <button
             onClick={() => navigate("/borrowers/add")}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
@@ -239,22 +240,54 @@ const Borrowers = () => {
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={q}
-              onChange={(e) => { setQ(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search by name, phone, national ID…"
               className="w-full border rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200"
             />
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            <select value={branchId} onChange={e => { setBranchId(e.target.value); setPage(1); }} className="border rounded-lg px-3 py-2">
+            <select
+              value={branchId}
+              onChange={(e) => {
+                setBranchId(e.target.value);
+                setPage(1);
+              }}
+              className="border rounded-lg px-3 py-2"
+            >
               <option value="">All Branches</option>
-              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
             </select>
-            <select value={officerId} onChange={e => { setOfficerId(e.target.value); setPage(1); }} className="border rounded-lg px-3 py-2">
+            <select
+              value={officerId}
+              onChange={(e) => {
+                setOfficerId(e.target.value);
+                setPage(1);
+              }}
+              className="border rounded-lg px-3 py-2"
+            >
               <option value="">All Officers</option>
-              {officers.map(o => <option key={o.id} value={o.id}>{o.name || o.email}</option>)}
+              {officers.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name || o.email}
+                </option>
+              ))}
             </select>
-            <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="border rounded-lg px-3 py-2">
+            <select
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+              className="border rounded-lg px-3 py-2"
+            >
               <option value="">All Statuses</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
@@ -286,11 +319,19 @@ const Borrowers = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-500">Loading…</td></tr>
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                    Loading…
+                  </td>
+                </tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-500">No borrowers.</td></tr>
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                    No borrowers.
+                  </td>
+                </tr>
               ) : (
-                rows.map(b => (
+                rows.map((b) => (
                   <tr key={b.id} className="border-t hover:bg-gray-50">
                     <td className="px-4 py-2">{displayName(b)}</td>
                     <td className="px-4 py-2">{b.phone || "—"}</td>
@@ -302,7 +343,12 @@ const Borrowers = () => {
                     </td>
                     <td className="px-4 py-2 text-right">
                       <div className="flex gap-3 justify-end">
-                        <button onClick={() => openDrawer(b.id)} className="text-indigo-600 hover:text-indigo-800 hover:underline">View</button>
+                        <button
+                          onClick={() => openDrawer(b.id)}
+                          className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                        >
+                          View
+                        </button>
                         <Link
                           to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
                           className="text-blue-600 hover:text-blue-800 hover:underline"
@@ -317,67 +363,69 @@ const Borrowers = () => {
             </tbody>
           </table>
 
-          {/* Mobile / small screens — ENLARGED CARDS */}
+          {/* Mobile / small screens — cards */}
           <div className="md:hidden grid grid-cols-1 gap-3 p-3">
             {loading ? (
               <div className="p-6 text-center text-gray-500">Loading…</div>
             ) : rows.length === 0 ? (
               <div className="p-6 text-center text-gray-500">No borrowers.</div>
-            ) : rows.map(b => {
-              const name = displayName(b);
-              return (
-                <div
-                  key={b.id}
-                  className="bg-white border rounded-2xl shadow-sm p-4 hover:shadow-md transition-shadow"
-                >
-                  {/* Header */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm">
-                        {getInitials(name)}
+            ) : (
+              rows.map((b) => {
+                const name = displayName(b);
+                return (
+                  <div
+                    key={b.id}
+                    className="bg-white border rounded-2xl shadow-sm p-4 hover:shadow-md transition-shadow"
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm">
+                          {getInitials(name)}
+                        </div>
+                        <div>
+                          <div className="text-base font-semibold text-gray-900">{name}</div>
+                          <div className="text-xs text-gray-500">ID: {b.id}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-base font-semibold text-gray-900">{name}</div>
-                        <div className="text-xs text-gray-500">ID: {b.id}</div>
+                      <span className={statusChip(b.status)}>{b.status || "—"}</span>
+                    </div>
+
+                    {/* Body */}
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                      <div className="flex items-center gap-2 text-gray-700">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        <span>{b.phone || "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-700">
+                        <Building2 className="w-4 h-4 text-gray-400" />
+                        <span className="truncate">{displayBranch(b)}</span>
+                      </div>
+                      <div className="col-span-2 text-gray-700">
+                        <span className="text-xs text-gray-500">Outstanding</span>
+                        <div className="text-sm font-medium">{fmtMoney(b.outstanding)}</div>
                       </div>
                     </div>
-                    <span className={statusChip(b.status)}>{b.status || "—"}</span>
-                  </div>
 
-                  {/* Body */}
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <span>{b.phone || "—"}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Building2 className="w-4 h-4 text-gray-400" />
-                      <span className="truncate">{displayBranch(b)}</span>
-                    </div>
-                    <div className="col-span-2 text-gray-700">
-                      <span className="text-xs text-gray-500">Outstanding</span>
-                      <div className="text-sm font-medium">{fmtMoney(b.outstanding)}</div>
+                    {/* Actions */}
+                    <div className="mt-4 flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openDrawer(b.id)}
+                        className="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50"
+                      >
+                        View
+                      </button>
+                      <Link
+                        to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
+                        className="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                      >
+                        New Loan
+                      </Link>
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="mt-4 flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => openDrawer(b.id)}
-                      className="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50"
-                    >
-                      View
-                    </button>
-                    <Link
-                      to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
-                      className="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
-                    >
-                      New Loan
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -388,7 +436,7 @@ const Borrowers = () => {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
               className="p-1.5 border rounded-lg disabled:opacity-50 bg-white"
               aria-label="Previous page"
@@ -396,7 +444,7 @@ const Borrowers = () => {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setPage(p => (p * PAGE_SIZE < total ? p + 1 : p))}
+              onClick={() => setPage((p) => (p * PAGE_SIZE < total ? p + 1 : p))}
               disabled={page * PAGE_SIZE >= total}
               className="p-1.5 border rounded-lg disabled:opacity-50 bg-white"
               aria-label="Next page"
@@ -412,7 +460,7 @@ const Borrowers = () => {
         <Drawer onClose={() => setDrawerOpen(false)} title="Borrower Details">
           {/* Tabs */}
           <div className="flex gap-2 border-b mb-3">
-            {["overview","loans","savings","documents"].map(t => (
+            {["overview", "loans", "savings", "documents"].map((t) => (
               <button
                 key={t}
                 onClick={() => setDrawerTab(t)}
@@ -450,11 +498,7 @@ const Borrowers = () => {
 const Th = ({ label, sortKey, sort, dir, onSort }) => {
   const active = sort === sortKey;
   return (
-    <th
-      className="px-3 py-2 cursor-pointer select-none"
-      onClick={() => onSort(sortKey)}
-      title="Sort"
-    >
+    <th className="px-3 py-2 cursor-pointer select-none" onClick={() => onSort(sortKey)} title="Sort">
       <span className={`inline-flex items-center gap-1 ${active ? "text-indigo-700" : ""}`}>
         {label}
         {active ? (dir === "asc" ? "▲" : "▼") : ""}
@@ -462,19 +506,6 @@ const Th = ({ label, sortKey, sort, dir, onSort }) => {
     </th>
   );
 };
-
-const Modal = ({ title, onClose, children }) => (
-  <div className="fixed inset-0 z-[60] flex items-center justify-center">
-    <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-    <div className="relative bg-white rounded-lg shadow-xl w-[95%] max-w-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-gray-800">{title}</h3>
-        <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X className="w-4 h-4" /></button>
-      </div>
-      {children}
-    </div>
-  </div>
-);
 
 const Drawer = ({ title, onClose, children }) => (
   <div className="fixed inset-0 z-[60]">
@@ -490,8 +521,6 @@ const Drawer = ({ title, onClose, children }) => (
     </div>
   </div>
 );
-
-/* Tabs */
 
 const OverviewTab = ({ data }) => {
   if (!data) return <p className="text-gray-500 text-sm">No overview data.</p>;
@@ -534,7 +563,7 @@ const LoansTab = ({ items }) => {
           </tr>
         </thead>
         <tbody>
-          {items.map(l => (
+          {items.map((l) => (
             <tr key={l.id} className="border-t">
               <td className="px-3 py-2">{l.id}</td>
               <td className="px-3 py-2">{l.product || "—"}</td>
@@ -564,7 +593,7 @@ const SavingsTab = ({ items }) => {
           </tr>
         </thead>
         <tbody>
-          {items.map(s => (
+          {items.map((s) => (
             <tr key={s.id} className="border-t">
               <td className="px-3 py-2">{s.id}</td>
               <td className="px-3 py-2">{money(s.balance)}</td>
@@ -588,21 +617,30 @@ const DocumentsTab = ({ items }) => {
           <FileUp className="w-4 h-4" /> Upload Document
         </button>
       </div>
-      {(!Array.isArray(items) || items.length === 0) ? (
+      {!Array.isArray(items) || items.length === 0 ? (
         <p className="text-gray-500 text-sm">No documents.</p>
       ) : (
         <ul className="space-y-2">
-          {items.map(d => (
+          {items.map((d) => (
             <li key={d.id} className="border rounded-lg p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <IdCard className="w-4 h-4 text-gray-500" />
                 <div>
                   <p className="text-sm font-medium text-gray-800">{d.fileName || "Document"}</p>
-                  <p className="text-xs text-gray-500">{d.type || "KYC"} • {new Date(d.createdAt).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">
+                    {d.type || "KYC"} • {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
+                  </p>
                 </div>
               </div>
               {d.url && (
-                <a className="text-indigo-600 hover:text-indigo-800 underline text-sm" href={d.url} target="_blank" rel="noreferrer">Open</a>
+                <a
+                  className="text-indigo-600 hover:text-indigo-800 underline text-sm"
+                  href={d.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open
+                </a>
               )}
             </li>
           ))}
@@ -612,7 +650,7 @@ const DocumentsTab = ({ items }) => {
   );
 };
 
-/* Small UI helpers – enlarged/professional cards */
+/* Small UI helpers */
 const InfoCard = ({ label, value }) => (
   <div className="border rounded-xl p-4 bg-white shadow-sm">
     <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>
