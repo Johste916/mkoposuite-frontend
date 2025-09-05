@@ -1,3 +1,4 @@
+// src/pages/Dashboard.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -64,7 +65,7 @@ const Dashboard = () => {
   // Monthly trends (mini charts)
   const [trends, setTrends] = useState(null);
 
-  // NEW placeholders (until API is ready)
+  // Optional tables/charts (hydrate automatically if API provides arrays)
   const [topBorrowers, setTopBorrowers] = useState([]);
   const [upcomingRepayments, setUpcomingRepayments] = useState([]);
   const [branchPerformance, setBranchPerformance] = useState([]);
@@ -248,6 +249,15 @@ const Dashboard = () => {
     return () => ac.abort();
   }, [summary, fetchCommunications]);
 
+  // hydrate optional tables/charts if backend starts sending them on summary
+  useEffect(() => {
+    if (!summary) return;
+    if (Array.isArray(summary.topBorrowers)) setTopBorrowers(summary.topBorrowers);
+    if (Array.isArray(summary.upcomingRepayments)) setUpcomingRepayments(summary.upcomingRepayments);
+    if (Array.isArray(summary.branchPerformance)) setBranchPerformance(summary.branchPerformance);
+    if (Array.isArray(summary.officerPerformance)) setOfficerPerformance(summary.officerPerformance);
+  }, [summary]);
+
   // Auto-refresh (minutes)
   useEffect(() => {
     if (!autoRefresh || autoRefresh <= 0) return;
@@ -314,7 +324,7 @@ const Dashboard = () => {
         </div>
         <div className="h-2 w-full bg-gray-100 dark:bg-slate-800 rounded">
           <div
-            className="h-2 rounded"
+            className="h-2 rounded transition-[width] duration-500"
             style={{ width: `${pct}%`, backgroundColor: 'currentColor' }}
           />
         </div>
@@ -342,22 +352,22 @@ const Dashboard = () => {
   // Chart palette that adapts to theme
   const chartColors = isDark
     ? {
-        grid: '#334155',      // slate-700
-        axis: '#94a3b8',      // slate-400
-        legend: '#e2e8f0',    // slate-200
-        tooltipBg: '#0f172a', // slate-900
+        grid: '#334155',
+        axis: '#94a3b8',
+        legend: '#e2e8f0',
+        tooltipBg: '#0f172a',
         tooltipText: '#e2e8f0',
-        bar1: '#60a5fa',      // blue-400
-        bar2: '#34d399',      // emerald-400
+        bar1: '#60a5fa',
+        bar2: '#34d399',
       }
     : {
-        grid: '#e2e8f0',      // slate-200
-        axis: '#475569',      // slate-600
-        legend: '#334155',    // slate-700
+        grid: '#e2e8f0',
+        axis: '#475569',
+        legend: '#334155',
         tooltipBg: '#ffffff',
-        tooltipText: '#0f172a', // slate-900
-        bar1: '#2563eb',      // blue-600
-        bar2: '#10b981',      // emerald-500
+        tooltipText: '#0f172a',
+        bar1: '#2563eb',
+        bar2: '#10b981',
       };
 
   // ---------- RENDER ----------
@@ -595,22 +605,13 @@ const Dashboard = () => {
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
-        <Link
-          to="/loans/add"
-          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm"
-        >
+        <Link to="/loans/add" className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm">
           <PlusCircle className="w-4 h-4" /> Add Loan
         </Link>
-        <Link
-          to="/borrowers/add"
-          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm"
-        >
+        <Link to="/borrowers/add" className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm">
           <PlusCircle className="w-4 h-4" /> Add Borrower
         </Link>
-        <Link
-          to="/repayments/new"
-          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm"
-        >
+        <Link to="/repayments/new" className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm">
           <PlusCircle className="w-4 h-4" /> Record Repayment
         </Link>
       </div>
@@ -972,7 +973,7 @@ const Dashboard = () => {
   );
 };
 
-/** KPI card with subtle tone color accents and taller height */
+/** KPI card with subtle motion and tone accents */
 const SummaryCard = ({ title, value, icon, tone = 'indigo' }) => {
   const tones =
     ({
@@ -988,7 +989,10 @@ const SummaryCard = ({ title, value, icon, tone = 'indigo' }) => {
     }[tone]) || { ring: 'ring-slate-100 dark:ring-slate-800', icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' };
 
   return (
-    <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring} min-h-[8rem]`}>
+    <div
+      className={`group bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring} min-h-[8rem]
+                  transition-transform will-change-transform hover:-translate-y-0.5`}
+    >
       <div className="flex items-center gap-3">
         <div className={`p-2 rounded-full ${tones.icon}`}>{icon}</div>
         <div className="min-w-0">
