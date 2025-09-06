@@ -146,8 +146,12 @@ const Fallback = () => (
 
 const Forbidden = () => (
   <div className="p-6">
-    <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">403 — Forbidden</h1>
-    <p className="mt-2 text-slate-700 dark:text-slate-300">You don’t have permission to access this area.</p>
+    <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">
+      403 — Forbidden
+    </h1>
+    <p className="mt-2 text-slate-700 dark:text-slate-300">
+      You don’t have permission to access this area.
+    </p>
   </div>
 );
 
@@ -176,7 +180,7 @@ function App() {
               <Route
                 path="admin"
                 element={
-                  <RoleProtectedRoute allow={["admin", "director"]}>
+                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin", "developer"]}>
                     <Outlet />
                   </RoleProtectedRoute>
                 }
@@ -207,7 +211,7 @@ function App() {
               <Route path="settings/billing" element={<Navigate to="/billing" replace />} />
               <Route path="settings/change-password" element={<Navigate to="/change-password" replace />} />
               <Route path="settings/2fa" element={<Navigate to="/2fa" replace />} />
-              {/* ✅ add these two lines to fix Organization “not found” */}
+              {/* ✅ keep org aliases for robustness */}
               <Route path="settings/organization" element={<Navigate to="/account/organization" replace />} />
               <Route path="settings/org" element={<Navigate to="/account/organization" replace />} />
 
