@@ -1,66 +1,141 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../../../api";
+
+async function tryGet(paths, opts) {
+  let lastErr = null;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data ?? null;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (lastErr) throw lastErr;
+  return null;
+}
 
 export default function TenantsList() {
   const [rows, setRows] = useState([]);
+  const [status, setStatus] = useState("loading"); // loading | ready | error
+  const [err, setErr] = useState("");
   const [q, setQ] = useState("");
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  async function load() {
-    setLoading(true);
+  const load = async () => {
+    setStatus("loading");
+    setErr("");
     try {
-      const res = await api.get("/admin/tenants", { params: { q, limit: 50, offset: 0 } });
-      setRows(res.data || []);
-      setTotal(Number(res.headers["x-total-count"] || 0));
-    } catch (e) {
-      console.error(e);
-    } finally { setLoading(false); }
-  }
+      const data = await tryGet(
+        [
+          "/admin/tenants",
+          "/system/tenants",
+          "/org/admin/tenants",
+          "/tenants/all", // optional fallback if your API exposes it
+        ],
+        {}
+      );
 
-  useEffect(() => { load(); }, []); // eslint-disable-line
+      const list = Array.isArray(data?.tenants) ? data.tenants : Array.isArray(data) ? data : [];
+      setRows(list);
+      setStatus("ready");
+    } catch (e) {
+      setStatus("error");
+      setErr(e?.response?.data?.error || e.message || "Failed to load tenants");
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [r.name, r.code, r.planCode, r.plan_code, r.status]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(term))
+    );
+  }, [rows, q]);
 
   return (
-    <div className="ms-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">Tenants ({total})</h2>
-        <div className="flex gap-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="border rounded px-2 py-1" />
-          <button onClick={load} className="h-9 px-3 rounded ms-btn">Search</button>
-        </div>
+    <div className="ms-card p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Tenants</h2>
+        <button onClick={load} className="ms-btn h-9 px-3">Refresh</button>
       </div>
 
-      {loading ? (
-        <div className="text-sm text-slate-500">Loading…</div>
-      ) : rows.length === 0 ? (
-        <div className="text-sm text-slate-500">No tenants.</div>
-      ) : (
+      <div className="flex gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search name, code, plan, status…"
+          className="w-80 border rounded px-3 py-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
+        />
+      </div>
+
+      {status === "loading" && (
+        <div className="text-sm text-slate-500 dark:text-slate-400">Loading…</div>
+      )}
+      {status === "error" && (
+        <div className="text-sm text-rose-600 dark:text-rose-400">Error: {err}</div>
+      )}
+
+      {status === "ready" && (
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="text-left text-slate-500">
+            <thead className="text-left text-slate-500 dark:text-slate-400">
               <tr>
                 <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Slug</th>
+                <th className="py-2 pr-4">Code</th>
                 <th className="py-2 pr-4">Plan</th>
                 <th className="py-2 pr-4">Status</th>
-                <th className="py-2 pr-4">Trial ends</th>
+                <th className="py-2 pr-4">Created</th>
                 <th className="py-2 pr-4">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((t) => (
-                <tr key={t.id} className="border-t">
-                  <td className="py-2 pr-4">{t.name}</td>
-                  <td className="py-2 pr-4">{t.slug}</td>
-                  <td className="py-2 pr-4">{t.plan_code || '-'}</td>
-                  <td className="py-2 pr-4">{t.status}</td>
-                  <td className="py-2 pr-4">{t.trial_ends_at ? String(t.trial_ends_at).slice(0,10) : '-'}</td>
-                  <td className="py-2 pr-4">
-                    <Link className="text-blue-600 hover:underline" to={`/admin/tenants/${t.id}`}>Manage</Link>
+              {filtered.map((t) => {
+                const plan = t.planCode || t.plan_code || "basic";
+                const created =
+                  t.createdAt || t.created_at ? String(t.createdAt || t.created_at).slice(0, 10) : "-";
+                return (
+                  <tr key={t.id} className="border-t border-slate-200 dark:border-slate-800">
+                    <td className="py-2 pr-4">{t.name}</td>
+                    <td className="py-2 pr-4">{t.code || "-"}</td>
+                    <td className="py-2 pr-4 capitalize">{plan}</td>
+                    <td className="py-2 pr-4">{t.status || "-"}</td>
+                    <td className="py-2 pr-4">{created}</td>
+                    <td className="py-2 pr-4 flex gap-2">
+                      <Link
+                        to={String(t.id)}
+                        className="text-blue-600 hover:underline"
+                      >
+                        View
+                      </Link>
+                      <button
+                        onClick={() => navigate(`${t.id}/edit`)}
+                        className="text-slate-700 dark:text-slate-300 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <Link
+                        to={`${t.id}/billing`}
+                        className="text-slate-700 dark:text-slate-300 hover:underline"
+                      >
+                        Billing
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-6 text-center text-slate-500 dark:text-slate-400">
+                    No tenants found.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
