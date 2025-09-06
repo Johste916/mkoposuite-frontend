@@ -1,60 +1,37 @@
 import axios from "axios";
 
-// Prefer env var, fall back to origin + /api (works on Render/Netlify proxy setups)
 const baseURL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ||
   `${window.location.origin}/api`;
 
 const api = axios.create({
   baseURL,
-  withCredentials: false, // set true only if you use cookie-based auth
+  withCredentials: false,
 });
 
 const TOKEN_KEYS = ["token", "authToken", "accessToken", "jwt"];
-
-function decodeJwtTenantId(token) {
-  try {
-    const parts = String(token).split(".");
-    if (parts.length < 2) return null;
-    const json = JSON.parse(atob(parts[1]));
-    return (
-      json.tenantId ||
-      json.tenant_id ||
-      json.tid ||
-      json.tenant ||
-      null
-    );
-  } catch {
-    return null;
-  }
-}
+const TENANT_KEYS = ["tenantId", "x-tenant-id", "tenantID"];
 
 api.interceptors.request.use((config) => {
+  // bearer
   let token = null;
   for (const k of TOKEN_KEYS) {
     token = localStorage.getItem(k) || sessionStorage.getItem(k);
     if (token) break;
   }
-  if (token) {
-    config.headers.Authorization = `Bearer ${token.replace(/^Bearer /i, "")}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token.replace(/^Bearer /i, "")}`;
 
-  // Ensure every call carries the tenant id expected by the backend guards
-  if (!config.headers["x-tenant-id"]) {
-    const storedTid =
-      localStorage.getItem("tenantId") ||
-      sessionStorage.getItem("tenantId") ||
-      import.meta.env.VITE_TENANT_ID ||
-      decodeJwtTenantId(token);
-    if (storedTid) config.headers["x-tenant-id"] = storedTid;
+  // x-tenant-id
+  let tenantId = null;
+  for (const k of TENANT_KEYS) {
+    tenantId = localStorage.getItem(k) || sessionStorage.getItem(k);
+    if (tenantId) break;
   }
+  tenantId ||= import.meta.env.VITE_DEFAULT_TENANT_ID || null;
+  if (tenantId) config.headers["x-tenant-id"] = tenantId;
 
-  // Optional: pass a branch id if you store one client-side
-  const bid = localStorage.getItem("branchId") || sessionStorage.getItem("branchId");
-  if (bid && !config.headers["x-branch-id"]) {
-    config.headers["x-branch-id"] = bid;
-  }
-
+  // request id (helps tracing)
+  config.headers["x-request-id"] ||= (crypto?.randomUUID?.() || String(Date.now()));
   return config;
 });
 
