@@ -9,17 +9,19 @@ export default function Organization() {
   const [status, setStatus] = useState("loading"); // loading | ready | unavailable | error
   const [errMsg, setErrMsg] = useState("");
 
-  // Try a few likely endpoints, stop on the first success.
+  // Try a few likely endpoints, keep going on failures so we can fall back to /org/*
   async function tryGet(paths, opts) {
+    let lastErr = null;
     for (const p of paths) {
       try {
         const res = await api.get(p, opts);
         if (res?.data !== undefined) return res.data;
       } catch (e) {
-        if (e?.response?.status !== 404) throw e; // ignore only 404s
+        lastErr = e; // keep trying next candidate (even if 500)
+        continue;
       }
     }
-    const nf = new Error("Not Found"); nf.code = 404; throw nf;
+    throw lastErr || Object.assign(new Error("Not Found"), { code: 404 });
   }
 
   // Map ['loans.view', ...] -> { loans: true, ... } for the badges UI
@@ -50,7 +52,15 @@ export default function Organization() {
       );
       setTenant(t);
 
-      // Entitlements (old endpoints first), now also try /org/entitlements
+      // Remember tenant id for subsequent requests + axios interceptor
+      const tenantId = t?.id || t?.tenantId || null;
+      if (tenantId) {
+        localStorage.setItem("tenantId", tenantId);
+      }
+      const withTenant = (extra = {}) =>
+        tenantId ? { ...extra, headers: { ...(extra.headers || {}), "x-tenant-id": tenantId } } : extra;
+
+      // Entitlements (old endpoints first), also try /org/entitlements
       const entData = await tryGet(
         [
           "/tenants/me/entitlements",
@@ -59,7 +69,7 @@ export default function Organization() {
           "/account/organization/entitlements",
           "/org/entitlements",
         ],
-        {}
+        withTenant()
       ).catch(() => ({}));
       setEnt(entData || {});
 
@@ -72,7 +82,7 @@ export default function Organization() {
           "/account/organization/limits",
           "/org/limits",
         ],
-        {}
+        withTenant()
       ).catch(() => ({}));
 
       // If backend returned the org shape, pull out the nested limits
@@ -100,7 +110,7 @@ export default function Organization() {
           "/account/organization/invoices",
           "/org/invoices",
         ],
-        {}
+        withTenant()
       ).catch(() => []);
       // normalize array or { invoices: [...] }
       const invList = Array.isArray(inv) ? inv : (Array.isArray(inv?.invoices) ? inv.invoices : []);
@@ -153,13 +163,21 @@ export default function Organization() {
 
   const save = async () => {
     try {
-      await api.patch("/tenants/me", {
-        planCode: t.planCode,
-        trialEndsAt: t.trialEndsAt,
-        autoDisableOverdue: t.autoDisableOverdue,
-        graceDays: t.graceDays,
-        billingEmail: t.billingEmail,
-      });
+      const tenantId = t?.id || t?.tenantId || localStorage.getItem("tenantId") || null;
+      const withTenant = (extra = {}) =>
+        tenantId ? { ...extra, headers: { ...(extra.headers || {}), "x-tenant-id": tenantId } } : extra;
+
+      await api.patch(
+        "/tenants/me",
+        {
+          planCode: t.planCode,
+          trialEndsAt: t.trialEndsAt,
+          autoDisableOverdue: t.autoDisableOverdue,
+          graceDays: t.graceDays,
+          billingEmail: t.billingEmail,
+        },
+        withTenant()
+      );
       await load();
     } catch (err) {
       setStatus("error");

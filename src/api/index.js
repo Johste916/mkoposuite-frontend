@@ -12,13 +12,49 @@ const api = axios.create({
 
 const TOKEN_KEYS = ["token", "authToken", "accessToken", "jwt"];
 
+function decodeJwtTenantId(token) {
+  try {
+    const parts = String(token).split(".");
+    if (parts.length < 2) return null;
+    const json = JSON.parse(atob(parts[1]));
+    return (
+      json.tenantId ||
+      json.tenant_id ||
+      json.tid ||
+      json.tenant ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
 api.interceptors.request.use((config) => {
   let token = null;
   for (const k of TOKEN_KEYS) {
     token = localStorage.getItem(k) || sessionStorage.getItem(k);
     if (token) break;
   }
-  if (token) config.headers.Authorization = `Bearer ${token.replace(/^Bearer /i, "")}`;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token.replace(/^Bearer /i, "")}`;
+  }
+
+  // Ensure every call carries the tenant id expected by the backend guards
+  if (!config.headers["x-tenant-id"]) {
+    const storedTid =
+      localStorage.getItem("tenantId") ||
+      sessionStorage.getItem("tenantId") ||
+      import.meta.env.VITE_TENANT_ID ||
+      decodeJwtTenantId(token);
+    if (storedTid) config.headers["x-tenant-id"] = storedTid;
+  }
+
+  // Optional: pass a branch id if you store one client-side
+  const bid = localStorage.getItem("branchId") || sessionStorage.getItem("branchId");
+  if (bid && !config.headers["x-branch-id"]) {
+    config.headers["x-branch-id"] = bid;
+  }
+
   return config;
 });
 
