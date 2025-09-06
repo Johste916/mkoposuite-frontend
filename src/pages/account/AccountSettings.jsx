@@ -1,21 +1,39 @@
+// src/pages/account/AccountSettings.jsx
 import React, { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  FiUser, FiCreditCard, FiLock, FiShield, FiGrid, FiLogOut,
+  FiUser,
+  FiCreditCard,
+  FiLock,
+  FiShield,
+  FiGrid,
+  FiUsers,
+  FiLogOut,
 } from "react-icons/fi";
 
 export default function AccountSettings() {
   const navigate = useNavigate();
 
-  // read role once for simple gating of the Organization tile
-  const role = useMemo(() => {
+  // Read role(s) once – supports { role: "admin" }, { roles: ["admin"] }, or { Roles: [{name:"admin"}] }
+  const { role, roles } = useMemo(() => {
+    const lower = (s) => String(s || "").toLowerCase();
     try {
       const u = JSON.parse(localStorage.getItem("user") || "{}");
-      return (u.role || "").toLowerCase();
+      const primary = lower(u.role);
+      const list =
+        Array.isArray(u.roles)
+          ? u.roles.map((r) => lower(r))
+          : Array.isArray(u.Roles)
+          ? u.Roles.map((r) => lower(r?.name || r))
+          : [];
+      return { role: primary, roles: list };
     } catch {
-      return "";
+      return { role: "", roles: [] };
     }
   }, []);
+
+  const hasAnyRole = (...allowed) =>
+    allowed.some((r) => role === r || roles.includes(r));
 
   const items = [
     {
@@ -27,41 +45,65 @@ export default function AccountSettings() {
     {
       title: "Billing",
       desc: "Manage your subscription and invoices",
-      to: "/billing",
+      // point to the Account hub route (aliases to /billing still exist)
+      to: "/account/billing",
       icon: <FiCreditCard className="opacity-70" />,
     },
     {
       title: "Change Password",
       desc: "Update your account password",
-      to: "/change-password",
+      to: "/account/security/change-password",
       icon: <FiLock className="opacity-70" />,
     },
     {
       title: "Two-Factor Authentication",
       desc: "Secure your account with 2FA",
-      to: "/2fa",
+      to: "/account/security/2fa",
       icon: <FiShield className="opacity-70" />,
     },
-    // show Organization to admins/directors by default
-    ...(role === "admin" || role === "director"
-      ? [{
-          title: "Organization",
-          desc: "Plan, tenant details and entitlements",
-          to: "/account/organization",
-          icon: <FiGrid className="opacity-70" />,
-        }]
+    // Organization — visible to system_admin/admin/director
+    ...(hasAnyRole("system_admin", "admin", "director")
+      ? [
+          {
+            title: "Organization",
+            desc: "Plan, tenant details and entitlements",
+            to: "/account/organization",
+            icon: <FiGrid className="opacity-70" />,
+          },
+        ]
+      : []),
+    // Tenants manager (system admin engine inside Settings hub)
+    ...(hasAnyRole("system_admin", "admin", "director")
+      ? [
+          {
+            title: "Tenants",
+            desc: "Manage tenants, subscriptions, entitlements & billing",
+            to: "/account/tenants",
+            icon: <FiUsers className="opacity-70" />,
+          },
+        ]
       : []),
     {
       title: "Logout",
       desc: "Sign out of your account",
       onClick: () => {
         try {
-          // clear common auth keys
-          ["token","jwt","access_token","user","tenant","tenantId","tenantName","activeBranchId"]
-            .forEach(k => localStorage.removeItem(k));
+          // Clear common auth/tenant keys without touching other app caches
+          [
+            "token",
+            "jwt",
+            "authToken",
+            "accessToken",
+            "access_token",
+            "user",
+            "tenant",
+            "tenantId",
+            "tenantName",
+            "activeBranchId",
+          ].forEach((k) => localStorage.removeItem(k));
           sessionStorage?.clear?.();
         } catch {}
-        navigate("/login");
+        navigate("/login", { replace: true });
       },
       icon: <FiLogOut className="opacity-70" />,
     },
@@ -69,7 +111,9 @@ export default function AccountSettings() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">My Settings</h1>
+      <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
+        My Settings
+      </h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {items.map((it) => {
@@ -77,13 +121,16 @@ export default function AccountSettings() {
             <>
               <div className="flex items-center gap-2">
                 <span className="text-slate-600 dark:text-slate-300">{it.icon}</span>
-                <div className="font-medium text-slate-800 dark:text-slate-100">{it.title}</div>
+                <div className="font-medium text-slate-800 dark:text-slate-100">
+                  {it.title}
+                </div>
               </div>
-              <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{it.desc}</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {it.desc}
+              </div>
             </>
           );
 
-          // Use real links for navigation when we have a path, else a button for actions (logout)
           return it.to ? (
             <Link
               key={it.title}

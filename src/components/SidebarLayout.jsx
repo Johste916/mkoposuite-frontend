@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// src/components/SidebarLayout.jsx
+import React, { useMemo, useRef, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
@@ -150,6 +151,15 @@ const NAV = () => [
       { label: "All Entries", to: "/reports/all" },
     ]
   },
+  // --- Account hub entry (kept compact; real gating via routes/roles) ---
+  {
+    label: "Account", icon: <FiSettings />, to: "/account/settings", children: [
+      { label: "Profile & Settings", to: "/account/settings" },
+      { label: "Billing", to: "/account/billing" },
+      { label: "Organization", to: "/account/organization" },        // admins/directors/sysadmins use page gating
+      { label: "Tenants (SysAdmin)", to: "/account/tenants" },       // redirects to /admin/tenants
+    ]
+  },
 ];
 
 const pathIsIn = (pathname, base) => pathname === base || pathname.startsWith(base + "/");
@@ -159,7 +169,7 @@ const Section = ({ item, currentPath, onNavigate }) => {
   const isActiveSection = pathIsIn(currentPath, item.to);
   const [open, setOpen] = useState(isActiveSection || !hasChildren);
 
-  React.useEffect(() => { if (isActiveSection) setOpen(true); }, [isActiveSection]);
+  useEffect(() => { if (isActiveSection) setOpen(true); }, [isActiveSection]);
 
   const baseItem = "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
 
@@ -242,7 +252,7 @@ const SidebarLayout = () => {
   // Avatar menu
   const [avatarOpen, setAvatarOpen] = useState(false);
   const avatarRef = useRef(null);
-  React.useEffect(() => {
+  useEffect(() => {
     const onDoc = (e) => {
       if (!avatarRef.current) return;
       if (!avatarRef.current.contains(e.target)) setAvatarOpen(false);
@@ -251,12 +261,28 @@ const SidebarLayout = () => {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  const handleLogout = () => {
+  const logoutAndGo = () => {
     try {
       delete api.defaults.headers.common.Authorization;
-      ["token", "jwt", "access_token", "user"].forEach((k) => localStorage.removeItem(k));
+      [
+        "token","jwt","authToken","accessToken","access_token",
+        "user","tenant","tenantId","tenantName","activeBranchId",
+      ].forEach((k) => localStorage.removeItem(k));
+      sessionStorage?.clear?.();
     } catch {}
-    navigate("/login");
+    navigate("/login", { replace: true });
+  };
+
+  const lower = (s) => String(s || "").toLowerCase();
+  const hasAnyRole = (...allowed) => {
+    const primary = lower(user?.role);
+    const list =
+      Array.isArray(user?.roles)
+        ? user.roles.map(lower)
+        : Array.isArray(user?.Roles)
+        ? user.Roles.map((r) => lower(r?.name || r))
+        : [];
+    return allowed.some((r) => r === primary || list.includes(r));
   };
 
   /* theme + user + tenant load */
@@ -271,8 +297,10 @@ const SidebarLayout = () => {
     const tok =
       localStorage.getItem("token") ||
       localStorage.getItem("jwt") ||
-      localStorage.getItem("access_token");
-    if (tok) api.defaults.headers.common.Authorization = `Bearer ${tok}`;
+      localStorage.getItem("access_token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("accessToken");
+    if (tok) api.defaults.headers.common.Authorization = `Bearer ${tok.replace(/^Bearer /i, "")}`;
 
     try {
       const storedUser = localStorage.getItem("user");
@@ -344,7 +372,7 @@ const SidebarLayout = () => {
         setUser(data);
         localStorage.setItem("user", JSON.stringify(data));
       } catch (e) {
-        if (e?.response?.status === 401) handleLogout();
+        if (e?.response?.status === 401) logoutAndGo();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -359,7 +387,7 @@ const SidebarLayout = () => {
         setBranches(list);
         if (list.length && !activeBranchId) setActiveBranchId(String(list[0].id));
       } catch (e) {
-        if (e?.response?.status === 401) handleLogout();
+        if (e?.response?.status === 401) logoutAndGo();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -442,7 +470,7 @@ const SidebarLayout = () => {
                 {darkMode ? <FiSun /> : <FiMoon />}
               </button>
 
-              {/* Avatar dropdown (Profile & Settings / Admin / Logout) */}
+              {/* Avatar dropdown */}
               <div className="relative" ref={avatarRef}>
                 <button
                   onClick={() => setAvatarOpen((v) => !v)}
@@ -467,7 +495,6 @@ const SidebarLayout = () => {
                       </div>
                     </div>
                     <hr className="my-2 border-slate-200 dark:border-slate-700" />
-                    {/* ✅ canonical route to avoid 404s */}
                     <NavLink
                       to="/account/settings"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
@@ -475,6 +502,24 @@ const SidebarLayout = () => {
                     >
                       <span className="inline-flex items-center gap-2"><FiSettings /> Profile &amp; Settings</span>
                     </NavLink>
+                    {hasAnyRole("system_admin","super_admin","admin","director","developer") && (
+                      <>
+                        <NavLink
+                          to="/account/organization"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
+                        </NavLink>
+                        <NavLink
+                          to="/account/tenants"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants</span>
+                        </NavLink>
+                      </>
+                    )}
                     <NavLink
                       to="/admin"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
@@ -483,7 +528,7 @@ const SidebarLayout = () => {
                       <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
                     </NavLink>
                     <button
-                      onClick={handleLogout}
+                      onClick={logoutAndGo}
                       className="w-full text-left px-3 py-2 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-sm text-rose-600 dark:text-rose-300"
                     >
                       <span className="inline-flex items-center gap-2"><FiLogOut /> Logout</span>

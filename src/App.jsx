@@ -119,7 +119,7 @@ const Billing = lazy(() => import("./pages/account/Billing"));
 const ChangePassword = lazy(() => import("./pages/account/ChangePassword"));
 const TwoFactor = lazy(() => import("./pages/account/TwoFactor"));
 
-// Reports — ✅ imported so BorrowersReport exists
+// Reports
 const BorrowersReport = lazy(() => import("./pages/reports/BorrowersReport"));
 const LoanReport = lazy(() => import("./pages/reports/LoanReport"));
 const ArrearsAging = lazy(() => import("./pages/reports/ArrearsAging"));
@@ -192,7 +192,21 @@ function App() {
               {/* Account hub */}
               <Route path="account/settings" element={<AccountSettings />} />
               <Route path="account/profile" element={<Profile />} />
-              <Route path="account/organization" element={<Organization />} />
+              <Route
+                path="account/organization"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin", "developer"]}>
+                    <Organization />
+                  </RoleProtectedRoute>
+                }
+              />
+              {/* New hub routes */}
+              <Route path="account/billing" element={<Billing />} />
+              <Route path="account/security" element={<Navigate to="/account/security/change-password" replace />} />
+              <Route path="account/security/change-password" element={<ChangePassword />} />
+              <Route path="account/security/2fa" element={<TwoFactor />} />
+              {/* Tenants entry in the account hub -> delegates to Admin tenants */}
+              <Route path="account/tenants" element={<Navigate to="/admin/tenants" replace />} />
 
               {/* Aliases */}
               <Route path="profile" element={<Navigate to="/account/profile" replace />} />
@@ -202,7 +216,7 @@ function App() {
               <Route path="organization" element={<Navigate to="/account/organization" replace />} />
               <Route path="org" element={<Navigate to="/account/organization" replace />} />
 
-              {/* Canonical account */}
+              {/* Canonical account legacy paths */}
               <Route path="billing" element={<Billing />} />
               <Route path="change-password" element={<ChangePassword />} />
               <Route path="2fa" element={<TwoFactor />} />
@@ -211,7 +225,6 @@ function App() {
               <Route path="settings/billing" element={<Navigate to="/billing" replace />} />
               <Route path="settings/change-password" element={<Navigate to="/change-password" replace />} />
               <Route path="settings/2fa" element={<Navigate to="/2fa" replace />} />
-              {/* ✅ keep org aliases for robustness */}
               <Route path="settings/organization" element={<Navigate to="/account/organization" replace />} />
               <Route path="settings/org" element={<Navigate to="/account/organization" replace />} />
 
