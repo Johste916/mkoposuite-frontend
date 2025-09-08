@@ -1,4 +1,3 @@
-// src/components/SidebarLayout.jsx
 import React, { useMemo, useRef, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -155,9 +154,9 @@ const NAV = () => [
   {
     label: "Account", icon: <FiSettings />, to: "/account/settings", children: [
       { label: "Profile & Settings", to: "/account/settings" },
-      { label: "Billing", to: "/account/billing" },
-      { label: "Organization", to: "/account/organization" },        // admins/directors/sysadmins use page gating
-      { label: "Tenants (SysAdmin)", to: "/account/tenants" },       // redirects to /admin/tenants
+      { label: "Billing", to: "/billing" },                         // canonical
+      { label: "Organization", to: "/account/organization" },       // admins/directors/sysadmins use page gating
+      { label: "Tenants (SysAdmin)", to: "/admin/tenants" },        // admin path
     ]
   },
 ];
@@ -512,7 +511,7 @@ const SidebarLayout = () => {
                           <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
                         </NavLink>
                         <NavLink
-                          to="/account/tenants"
+                          to="/admin/tenants"     // admin path
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >

@@ -39,10 +39,11 @@ export default function AccountHub() {
       <div className="flex flex-wrap gap-2">
         <Tab to="/account/profile">Profile</Tab>
         <Tab to="/account/organization">Organization</Tab>
-        <Tab to="/account/billing">Billing</Tab>
-        {/* point Security tab to first security child */}
-        <Tab to="/account/security/change-password">Security</Tab>
-        {isSysAdmin && <Tab to="/account/tenants">Tenants</Tab>}
+        {/* Billing uses canonical route to avoid 404s */}
+        <Tab to="/billing">Billing</Tab>
+        {/* point Security tab to first security child (canonical route) */}
+        <Tab to="/change-password">Security</Tab>
+        {isSysAdmin && <Tab to="/admin/tenants">Tenants</Tab>}
       </div>
 
       <div className="pt-2">

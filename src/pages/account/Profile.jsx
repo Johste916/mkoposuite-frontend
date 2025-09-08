@@ -589,19 +589,19 @@ export default function Profile() {
             </div>
           </section>
 
-          {/* Security — with delete/disable/mute now added */}
+          {/* Security */}
           <section className="bg-white border rounded-2xl p-4 shadow-sm">
             <h2 className="text-lg font-semibold mb-3">Security</h2>
 
             <div className="flex flex-wrap gap-2">
               <Link
-                to="/2fa"
+                to="/2fa"               // canonical
                 className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50"
               >
                 Manage Two-Factor
               </Link>
               <Link
-                to="/change-password"
+                to="/change-password"   // canonical
                 className="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50"
               >
                 Change Password
@@ -645,7 +645,7 @@ export default function Profile() {
           </section>
         </div>
 
-        {/* RIGHT: section title renamed to “Refresh page” */}
+        {/* RIGHT */}
         <aside className="bg-white border rounded-2xl p-4 h-fit shadow-sm">
           <h2 className="text-lg font-semibold mb-3">Refresh page</h2>
 

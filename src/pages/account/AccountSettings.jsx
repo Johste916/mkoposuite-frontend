@@ -45,20 +45,20 @@ export default function AccountSettings() {
     {
       title: "Billing",
       desc: "Manage your subscription and invoices",
-      // point to the Account hub route (aliases to /billing still exist)
-      to: "/account/billing",
+      // canonical route (present in App.jsx)
+      to: "/billing",
       icon: <FiCreditCard className="opacity-70" />,
     },
     {
       title: "Change Password",
       desc: "Update your account password",
-      to: "/account/security/change-password",
+      to: "/change-password",
       icon: <FiLock className="opacity-70" />,
     },
     {
       title: "Two-Factor Authentication",
       desc: "Secure your account with 2FA",
-      to: "/account/security/2fa",
+      to: "/2fa",
       icon: <FiShield className="opacity-70" />,
     },
     // Organization — visible to system_admin/admin/director
@@ -72,13 +72,13 @@ export default function AccountSettings() {
           },
         ]
       : []),
-    // Tenants manager (system admin engine inside Settings hub)
+    // Tenants
     ...(hasAnyRole("system_admin", "admin", "director")
       ? [
           {
             title: "Tenants",
             desc: "Manage tenants, subscriptions, entitlements & billing",
-            to: "/account/tenants",
+            to: "/admin/tenants", // use admin path to avoid 404
             icon: <FiUsers className="opacity-70" />,
           },
         ]

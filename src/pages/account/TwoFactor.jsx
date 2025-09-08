@@ -123,7 +123,7 @@ export default function TwoFactor() {
                   className="border rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
                   placeholder="Enter 6-digit code"
                   value={token}
-                  onChange={(e) => setToken(e.target.value)}
+                  onChange={(e) => setToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 />
                 <button onClick={verify} className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">
                   Verify & Turn On
@@ -144,7 +144,7 @@ export default function TwoFactor() {
               className="border rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
               placeholder="Enter 6-digit code"
               value={token}
-              onChange={(e) => setToken(e.target.value)}
+              onChange={(e) => setToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
             />
             <button onClick={disable} className="px-3 py-1.5 rounded bg-rose-600 text-white hover:bg-rose-700">
               Disable 2FA
