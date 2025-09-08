@@ -1,20 +1,32 @@
+/*  ----------  TenantsList.jsx  ---------- */
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../../api";
 
+const withTimeout = (ms=9000)=>{const c=new AbortController();const t=setTimeout(()=>c.abort("timeout"),ms);return{signal:c.signal,done:()=>clearTimeout(t)}};
+
 async function tryGet(paths, opts) {
   let lastErr = null;
   for (const p of paths) {
+    const t = withTimeout();
     try {
-      const res = await api.get(p, opts);
+      const res = await api.get(p, { ...(opts||{}), signal: t.signal });
+      t.done();
       return res?.data ?? null;
-    } catch (e) {
-      lastErr = e;
-    }
+    } catch (e) { t.done(); lastErr = e; }
   }
   if (lastErr) throw lastErr;
   return null;
 }
+
+const norm = (t={}) => ({
+  id: t.id ?? t.tenantId ?? t._id ?? t.uuid ?? null,
+  name: t.name ?? t.tenantName ?? t.company ?? "—",
+  plan: (t.planCode ?? t.plan_code ?? t.plan?.code ?? "basic").toString().toLowerCase(),
+  status: (t.status ?? t.subscription?.status ?? "active").toString().toLowerCase(),
+  created: t.createdAt ?? t.created_at ?? "",
+  code: t.code ?? t.slug ?? "",
+});
 
 export default function TenantsList() {
   const [rows, setRows] = useState([]);
@@ -28,17 +40,21 @@ export default function TenantsList() {
     setErr("");
     try {
       const data = await tryGet(
-        [
-          "/admin/tenants",
-          "/system/tenants",
-          "/org/admin/tenants",
-          "/tenants/all", // optional fallback if your API exposes it
-        ],
+        ["/admin/tenants","/system/tenants","/org/admin/tenants","/tenants/all"],
         {}
       );
 
-      const list = Array.isArray(data?.tenants) ? data.tenants : Array.isArray(data) ? data : [];
-      setRows(list);
+      let list = Array.isArray(data?.tenants) ? data.tenants : Array.isArray(data) ? data : [];
+      if (!list.length) {
+        // fallback to self org
+        const self = await tryGet(
+          ["/tenants/me","/account/tenant","/org/me","/organization"],
+          {}
+        ).catch(()=>null);
+        list = self ? [self] : [];
+      }
+
+      setRows(list.map(norm));
       setStatus("ready");
     } catch (e) {
       setStatus("error");
@@ -52,7 +68,7 @@ export default function TenantsList() {
     const term = q.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((r) =>
-      [r.name, r.code, r.planCode, r.plan_code, r.status]
+      [r.name, r.code, r.plan, r.status]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(term))
     );
@@ -96,35 +112,18 @@ export default function TenantsList() {
             </thead>
             <tbody>
               {filtered.map((t) => {
-                const plan = t.planCode || t.plan_code || "basic";
-                const created =
-                  t.createdAt || t.created_at ? String(t.createdAt || t.created_at).slice(0, 10) : "-";
+                const created = t.created ? String(t.created).slice(0,10) : "-";
                 return (
-                  <tr key={t.id} className="border-t border-slate-200 dark:border-slate-800">
+                  <tr key={t.id || t.code || t.name} className="border-t border-slate-200 dark:border-slate-800">
                     <td className="py-2 pr-4">{t.name}</td>
                     <td className="py-2 pr-4">{t.code || "-"}</td>
-                    <td className="py-2 pr-4 capitalize">{plan}</td>
+                    <td className="py-2 pr-4 capitalize">{t.plan}</td>
                     <td className="py-2 pr-4">{t.status || "-"}</td>
                     <td className="py-2 pr-4">{created}</td>
                     <td className="py-2 pr-4 flex gap-2">
-                      <Link
-                        to={String(t.id)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        View
-                      </Link>
-                      <button
-                        onClick={() => navigate(`${t.id}/edit`)}
-                        className="text-slate-700 dark:text-slate-300 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <Link
-                        to={`${t.id}/billing`}
-                        className="text-slate-700 dark:text-slate-300 hover:underline"
-                      >
-                        Billing
-                      </Link>
+                      <Link to={String(t.id)} className="text-blue-600 hover:underline">View</Link>
+                      <button onClick={() => navigate(`${t.id}/edit`)} className="text-slate-700 dark:text-slate-300 hover:underline">Edit</button>
+                      <Link to={`${t.id}/billing`} className="text-slate-700 dark:text-slate-300 hover:underline">Billing</Link>
                     </td>
                   </tr>
                 );

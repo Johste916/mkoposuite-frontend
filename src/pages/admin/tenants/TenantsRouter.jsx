@@ -1,3 +1,4 @@
+/*  ----------  src/pages/admin/tenants/TenantsRouter.jsx  ---------- */
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
@@ -18,8 +19,8 @@ export default function TenantsRouter() {
         <Route path=":tenantId" element={<TenantDetails />} />
         <Route path=":tenantId/edit" element={<TenantEdit />} />
         <Route path=":tenantId/billing" element={<TenantBilling />} />
-        {/* helpful aliases */}
-        <Route path=":tenantId/organization" element={<Navigate to="../:tenantId/edit" replace />} />
+        {/* alias to edit */}
+        <Route path=":tenantId/organization" element={<TenantEdit />} />
         <Route path="*" element={<Navigate to=".." replace />} />
       </Routes>
     </Suspense>

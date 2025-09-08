@@ -1,13 +1,18 @@
+/*  ----------  TenantImpersonateButton.jsx  ---------- */
 import React, { useState } from "react";
 import api from "../../../api";
+
+const withTimeout = (ms=9000)=>{const c=new AbortController();const t=setTimeout(()=>c.abort("timeout"),ms);return{signal:c.signal,done:()=>clearTimeout(t)}};
 
 async function tryPost(paths, body, opts) {
   let lastErr = null;
   for (const p of paths) {
+    const t = withTimeout();
     try {
-      const res = await api.post(p, body, opts);
+      const res = await api.post(p, body, { ...(opts||{}), signal: t.signal });
+      t.done();
       return res?.data ?? {};
-    } catch (e) { lastErr = e; }
+    } catch (e) { t.done(); lastErr = e; }
   }
   if (lastErr) throw lastErr;
   return {};
@@ -31,11 +36,8 @@ export default function TenantImpersonateButton({ tenantId }) {
       const token = data?.token || data?.jwt || null;
       if (!token) throw new Error("No token returned from impersonation endpoint");
 
-      // store & open a new tab (your main.jsx already supports ?token=… bootstrap)
       const url = new URL(window.location.origin);
       url.searchParams.set("token", token);
-
-      // open new session/tab as tenant admin
       window.open(url.toString(), "_blank", "noopener,noreferrer");
     } catch (e) {
       alert(e?.response?.data?.error || e.message || "Impersonation failed");

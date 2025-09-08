@@ -1,4 +1,4 @@
-// src/pages/admin/Tenants.jsx
+/*  ----------  src/pages/admin/Tenants.jsx  ---------- */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../api";
 import {
@@ -120,16 +120,11 @@ function normalizeTenant(t = {}) {
     t.users?.length ??
     null;
   const trialEndsAt =
-    t.trialEndsAt ??
-    t.trial_end ??
-    t.trial_ends_at ??
-    t.subscription?.trial_end ??
-    "";
+    t.trialEndsAt ?? t.trial_end ?? t.trial_ends_at ?? t.subscription?.trial_end ?? "";
   const billingEmail =
     t.billingEmail ?? t.billing_email ?? t.billing?.email ?? t.ownerEmail ?? "";
   const currency = t.currency ?? t.billing?.currency ?? t.payment?.currency ?? "USD";
-  const createdAt =
-    t.createdAt ?? t.created_at ?? t.created ?? t.meta?.createdAt ?? "";
+  const createdAt = t.createdAt ?? t.created_at ?? t.created ?? t.meta?.createdAt ?? "";
 
   return {
     raw: t,
@@ -160,9 +155,7 @@ async function fetchTenantStats() {
     { timeoutMs: 8000 }
   ).catch(() => null);
   if (!raw) return {};
-  const list = Array.isArray(raw)
-    ? raw
-    : raw?.items || raw?.data || raw?.tenants || [];
+  const list = Array.isArray(raw) ? raw : raw?.items || raw?.data || raw?.tenants || [];
   const arr = Array.isArray(list) ? list : [];
   const map = {};
   arr.forEach((s) => {
@@ -171,12 +164,7 @@ async function fetchTenantStats() {
     if (!id) return;
     map[id] = {
       staffCount:
-        s.staffCount ??
-        s.usersCount ??
-        s.membersCount ??
-        s.users ??
-        s.staff ??
-        null,
+        s.staffCount ?? s.usersCount ?? s.membersCount ?? s.users ?? s.staff ?? null,
       seats:
         s.seats ??
         s.staffLimit ??
@@ -224,9 +212,7 @@ async function fetchTenants({ q = "" } = {}) {
   for (const params of paramAttempts) {
     try {
       const data = await tryGet(endpoints, { ...params, timeoutMs: 9000 });
-      const list = Array.isArray(data)
-        ? data
-        : data?.items || data?.data || data?.results || [];
+      const list = Array.isArray(data) ? data : data?.items || data?.data || data?.results || [];
       const arr = Array.isArray(list) ? list : [];
       if (arr.length) {
         const rows = arr.map(normalizeTenant);
@@ -439,7 +425,6 @@ export default function Tenants() {
       setList(items);
       setPlans(planList);
       if (!items.length) {
-        // Surface a gentle hint if no admin endpoints exist
         console.info(
           "[Tenants] No list returned. Your backend may only expose self org endpoints."
         );
@@ -827,6 +812,7 @@ export default function Tenants() {
                         <option value="trialing">trialing</option>
                         <option value="suspended">suspended</option>
                         <option value="cancelled">cancelled</option>
+                        <option value="past_due">past_due</option>
                       </select>
                     </label>
                   </div>

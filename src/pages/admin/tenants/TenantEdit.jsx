@@ -1,40 +1,12 @@
+/*  ----------  TenantEdit.jsx  ---------- */
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../../api";
 
-async function tryGet(paths, opts) {
-  let lastErr = null;
-  for (const p of paths) {
-    try {
-      const res = await api.get(p, opts);
-      return res?.data ?? null;
-    } catch (e) { lastErr = e; }
-  }
-  if (lastErr) throw lastErr;
-  return null;
-}
-async function tryPatch(paths, body, opts) {
-  let lastErr = null;
-  for (const p of paths) {
-    try {
-      const res = await api.patch(p, body, opts);
-      return res?.data ?? true;
-    } catch (e) { lastErr = e; }
-  }
-  if (lastErr) throw lastErr;
-  return null;
-}
-async function tryPost(paths, body, opts) {
-  let lastErr = null;
-  for (const p of paths) {
-    try {
-      const res = await api.post(p, body, opts);
-      return res?.data ?? true;
-    } catch (e) { lastErr = e; }
-  }
-  if (lastErr) throw lastErr;
-  return null;
-}
+const withTimeout = (ms=9000)=>{const c=new AbortController();const t=setTimeout(()=>c.abort("timeout"),ms);return{signal:c.signal,done:()=>clearTimeout(t)}};
+async function tryGet(paths, opts) { let e; for (const p of paths){const t=withTimeout(); try{const r=await api.get(p,{...(opts||{}),signal:t.signal}); t.done(); return r?.data??null;}catch(err){t.done(); e=err;}} if(e) throw e; return null; }
+async function tryPatch(paths, body, opts){ let e; for(const p of paths){const t=withTimeout(); try{const r=await api.patch(p,body,{...(opts||{}),signal:t.signal}); t.done(); return r?.data??true;}catch(err){t.done(); e=err;}} if(e) throw e; return null;}
+async function tryPost(paths, body, opts){ let e; for(const p of paths){const t=withTimeout(); try{const r=await api.post(p,body,{...(opts||{}),signal:t.signal}); t.done(); return r?.data??true;}catch(err){t.done(); e=err;}} if(e) throw e; return null;}
 
 const MODULE_KEYS = [
   "savings","loans","collections","accounting","sms","esignatures",
@@ -105,7 +77,7 @@ export default function TenantEdit() {
     try {
       setStatus("loading");
 
-      // 1) Update tenant core fields
+      // 1) Update tenant core fields (no plan_id)
       await tryPatch(
         [
           `/admin/tenants/${tenantId}`,
@@ -126,7 +98,7 @@ export default function TenantEdit() {
         {}
       ).catch(() => {});
 
-      // 2) Update entitlements (send either modules object or flat keys)
+      // 2) Update entitlements
       await tryPost(
         [
           `/admin/tenants/${tenantId}/entitlements`,

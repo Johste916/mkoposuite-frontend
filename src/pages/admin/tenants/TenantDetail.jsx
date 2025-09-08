@@ -1,3 +1,4 @@
+/*  ----------  TenantDetail.jsx  ---------- */
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../../api";
@@ -17,8 +18,11 @@ export default function TenantDetail() {
   async function load() {
     setMsg("");
     try {
-      const res = await api.get(`/admin/tenants/${id}`);
-      setData(res.data);
+      const res = await api.get(`/admin/tenants/${id}`).catch(async () => {
+        const alt = await api.get(`/system/tenants/${id}`).catch(()=>null);
+        return alt;
+      });
+      setData(res?.data || null);
     } catch (e) {
       setMsg(e?.response?.data?.error || e.message);
     }
@@ -29,12 +33,24 @@ export default function TenantDetail() {
     setPatching(true);
     setMsg("");
     try {
-      const t = data.tenant;
+      const t = data.tenant || data; // tolerate both shapes
       await api.patch(`/admin/tenants/${id}`, {
-        name: t.name, status: t.status, planCode: t.plan_code || t.plan?.code,
-        trialEndsAt: t.trial_ends_at, graceDays: t.grace_days,
-        autoDisableOverdue: t.auto_disable_overdue, billingEmail: t.billing_email,
-      });
+        name: t.name,
+        status: t.status,
+        planCode: t.plan_code || t.plan?.code || t.planCode,
+        trialEndsAt: t.trial_ends_at || t.trialEndsAt,
+        graceDays: t.grace_days ?? t.graceDays,
+        autoDisableOverdue: t.auto_disable_overdue ?? t.autoDisableOverdue,
+        billingEmail: t.billing_email ?? t.billingEmail,
+      }).catch(() => api.patch(`/system/tenants/${id}`, {
+        name: t.name,
+        status: t.status,
+        planCode: t.plan_code || t.plan?.code || t.planCode,
+        trialEndsAt: t.trial_ends_at || t.trialEndsAt,
+        graceDays: t.grace_days ?? t.graceDays,
+        autoDisableOverdue: t.auto_disable_overdue ?? t.autoDisableOverdue,
+        billingEmail: t.billing_email ?? t.billingEmail,
+      }));
       await load();
       setMsg("Saved.");
     } catch (e) {
@@ -45,7 +61,8 @@ export default function TenantDetail() {
   async function setOverride(key, enabled) {
     setMsg("");
     try {
-      await api.post(`/admin/tenants/${id}/entitlements`, { key, enabled });
+      await api.post(`/admin/tenants/${id}/entitlements`, { key, enabled })
+        .catch(()=>api.post(`/system/tenants/${id}/entitlements`, { key, enabled }));
       await load();
     } catch (e) {
       setMsg(e?.response?.data?.error || e.message);
@@ -55,7 +72,8 @@ export default function TenantDetail() {
   async function clearOverride(key) {
     setMsg("");
     try {
-      await api.delete(`/admin/tenants/${id}/entitlements/${encodeURIComponent(key)}`);
+      await api.delete(`/admin/tenants/${id}/entitlements/${encodeURIComponent(key)}`)
+        .catch(()=>api.delete(`/system/tenants/${id}/entitlements/${encodeURIComponent(key)}`));
       await load();
     } catch (e) {
       setMsg(e?.response?.data?.error || e.message);
@@ -66,7 +84,8 @@ export default function TenantDetail() {
     const amountCents = Number(prompt("Amount in cents (e.g., 5000 for $50)"));
     if (!amountCents) return;
     try {
-      await api.post(`/admin/tenants/${id}/invoices`, { amountCents });
+      await api.post(`/admin/tenants/${id}/invoices`, { amountCents })
+        .catch(()=>api.post(`/system/tenants/${id}/invoices`, { amountCents }));
       await load();
     } catch (e) {
       setMsg(e?.response?.data?.error || e.message);
@@ -75,7 +94,8 @@ export default function TenantDetail() {
 
   async function markPaid(invId) {
     try {
-      await api.post(`/admin/tenants/${id}/invoices/${invId}/pay`);
+      await api.post(`/admin/tenants/${id}/invoices/${invId}/pay`)
+        .catch(()=>api.post(`/system/tenants/${id}/invoices/${invId}/pay`));
       await load();
     } catch (e) {
       setMsg(e?.response?.data?.error || e.message);
@@ -84,8 +104,8 @@ export default function TenantDetail() {
 
   async function impersonate() {
     try {
-      const { data: { token } } = await api.post(`/admin/tenants/${id}/impersonate`);
-      // open a new tab passing ?token=... ; main.jsx will pick it up and store
+      const { data: { token } } = await api.post(`/admin/tenants/${id}/impersonate`)
+        .catch(()=>api.post(`/system/tenants/${id}/impersonate`));
       window.open(`/?token=${encodeURIComponent(token)}`, '_blank', 'noopener');
     } catch (e) {
       setMsg(e?.response?.data?.error || e.message);
@@ -94,15 +114,15 @@ export default function TenantDetail() {
 
   if (!data) return <div className="p-4 text-sm text-slate-500">Loading… {msg && <span className="text-rose-600 ml-2">{msg}</span>}</div>;
 
-  const { tenant: t, plan, modules, overrides, invoices } = data;
+  const { tenant: t = data, plan, modules = {}, overrides = {}, invoices = [] } = data;
 
   return (
     <div className="ms-card p-4 space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-lg font-semibold">{t.name}</h2>
-          <div className="text-xs text-slate-500">ID: {t.id}</div>
-          <div className="text-xs text-slate-500">Slug: {t.slug}</div>
+          {t.id && <div className="text-xs text-slate-500">ID: {t.id}</div>}
+          {t.slug && <div className="text-xs text-slate-500">Slug: {t.slug}</div>}
         </div>
         <div className="flex gap-2">
           <button onClick={impersonate} className="h-9 px-3 rounded bg-indigo-600 text-white">Impersonate</button>
@@ -126,7 +146,7 @@ export default function TenantDetail() {
         </label>
         <label>
           <div className="text-xs text-slate-500 mb-1">Plan</div>
-          <select value={t.plan_code || plan?.code || 'basic'} onChange={e=>setData({...data, tenant:{...t, plan_code:e.target.value}})} className="border rounded px-2 py-2 w-full">
+          <select value={t.plan_code || plan?.code || t.planCode || 'basic'} onChange={e=>setData({...data, tenant:{...t, plan_code:e.target.value, planCode:e.target.value}})} className="border rounded px-2 py-2 w-full">
             <option value="basic">Basic</option>
             <option value="pro">Pro</option>
             <option value="enterprise">Enterprise</option>
@@ -135,19 +155,19 @@ export default function TenantDetail() {
         </label>
         <label>
           <div className="text-xs text-slate-500 mb-1">Trial ends</div>
-          <input type="date" value={t.trial_ends_at || ''} onChange={e=>setData({...data, tenant:{...t, trial_ends_at:e.target.value}})} className="border rounded px-2 py-2 w-full"/>
+          <input type="date" value={t.trial_ends_at || t.trialEndsAt || ''} onChange={e=>setData({...data, tenant:{...t, trial_ends_at:e.target.value, trialEndsAt:e.target.value}})} className="border rounded px-2 py-2 w-full"/>
         </label>
         <label>
           <div className="text-xs text-slate-500 mb-1">Grace days</div>
-          <input type="number" value={t.grace_days ?? 7} min={0} max={90} onChange={e=>setData({...data, tenant:{...t, grace_days:Number(e.target.value||0)}})} className="border rounded px-2 py-2 w-full"/>
+          <input type="number" value={t.grace_days ?? t.graceDays ?? 7} min={0} max={90} onChange={e=>setData({...data, tenant:{...t, grace_days:Number(e.target.value||0), graceDays:Number(e.target.value||0)}})} className="border rounded px-2 py-2 w-full"/>
         </label>
         <label className="flex items-center gap-2">
-          <input type="checkbox" checked={!!t.auto_disable_overdue} onChange={e=>setData({...data, tenant:{...t, auto_disable_overdue:e.target.checked}})} />
+          <input type="checkbox" checked={!!(t.auto_disable_overdue ?? t.autoDisableOverdue)} onChange={e=>setData({...data, tenant:{...t, auto_disable_overdue:e.target.checked, autoDisableOverdue:e.target.checked}})} />
           <span>Auto suspend overdue</span>
         </label>
         <label className="md:col-span-2">
           <div className="text-xs text-slate-500 mb-1">Billing email</div>
-          <input type="email" value={t.billing_email || ''} onChange={e=>setData({...data, tenant:{...t, billing_email:e.target.value}})} className="border rounded px-2 py-2 w-full"/>
+          <input type="email" value={t.billing_email || t.billingEmail || ''} onChange={e=>setData({...data, tenant:{...t, billing_email:e.target.value, billingEmail:e.target.value}})} className="border rounded px-2 py-2 w-full"/>
         </label>
       </div>
 
@@ -161,16 +181,9 @@ export default function TenantDetail() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
           {ALL_KEYS.map((key) => {
             const label = key.replace('.view','').replace('.',' ').replace('_',' ');
-            const modEnabled = Object.values(modules).length ? ( (() => {
-              const map = {
-                'savings.view':'savings','accounting.view':'accounting','payroll.view':'payroll','collateral.view':'collateral',
-                'loans.view':'loans','sms.send':'sms','investors.view':'investors','collections.view':'collections',
-                'esign.view':'esignatures','assets.view':'assets','reports.view':'reports'
-              };
-              return modules[map[key]];
-            })() ) : false;
-
-            const overridden = Object.prototype.hasOwnProperty.call(overrides, key);
+            const map = { 'savings.view':'savings','accounting.view':'accounting','payroll.view':'payroll','collateral.view':'collateral','loans.view':'loans','sms.send':'sms','investors.view':'investors','collections.view':'collections','esign.view':'esignatures','assets.view':'assets','reports.view':'reports' };
+            const modEnabled = modules ? !!modules[map[key]] : false;
+            const overridden = overrides && Object.prototype.hasOwnProperty.call(overrides, key);
             return (
               <div key={key} className="flex items-center gap-2">
                 <span className="w-44 capitalize">{label}</span>
@@ -194,7 +207,7 @@ export default function TenantDetail() {
           <h3 className="font-semibold mb-2">Invoices</h3>
           <button className="h-9 px-3 rounded ms-btn" onClick={createInvoice}>New invoice</button>
         </div>
-        {(!data.invoices || data.invoices.length===0) ? (
+        {(!invoices || invoices.length===0) ? (
           <div className="text-sm text-slate-500">No invoices.</div>
         ) : (
           <div className="overflow-x-auto">
@@ -209,11 +222,11 @@ export default function TenantDetail() {
                 </tr>
               </thead>
               <tbody>
-                {data.invoices.map((inv) => (
+                {invoices.map((inv) => (
                   <tr key={inv.id} className="border-t">
-                    <td className="py-2 pr-4">{inv.number}</td>
+                    <td className="py-2 pr-4">{inv.number || inv.id}</td>
                     <td className="py-2 pr-4">
-                      {(Number(inv.amount_cents||0) / 100).toLocaleString(undefined, { style: "currency", currency: inv.currency || "USD" })}
+                      {(Number(inv.amount_cents||inv.total_cents||0) / 100).toLocaleString(undefined, { style: "currency", currency: inv.currency || "USD" })}
                     </td>
                     <td className="py-2 pr-4">{inv.due_date ? String(inv.due_date).slice(0,10) : '-'}</td>
                     <td className="py-2 pr-4">{inv.status}</td>
