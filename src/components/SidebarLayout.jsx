@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
   FiBarChart2, FiSearch, FiSettings, FiUserCheck, FiFileText, FiBriefcase,
-  FiDatabase, FiMenu, FiX, FiChevronDown, FiChevronUp, FiUser, FiHelpCircle, FiShield
+  FiDatabase, FiMenu, FiX, FiChevronDown, FiChevronUp, FiUser
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
@@ -128,9 +128,41 @@ const NAV = () => [
   },
   { label: "Branches", icon: <FiDatabase />, to: "/branches" },
   {
-    // Account hub: keep ONLY Profile & Settings here (others live in badge menu)
+    label: "Reports", icon: <FiBarChart2 />, to: "/reports", children: [
+      { label: "Borrowers Report", to: "/reports/borrowers" },
+      { label: "Loan Report", to: "/reports/loans" },
+      { label: "Loan Arrears Aging", to: "/reports/arrears-aging" },
+      { label: "Collections Report", to: "/reports/collections" },
+      { label: "Collector Report", to: "/reports/collector" },
+      { label: "Deferred Income", to: "/reports/deferred-income" },
+      { label: "Deferred Income Monthly", to: "/reports/deferred-income-monthly" },
+      { label: "Pro-Rata Collections", to: "/reports/pro-rata" },
+      { label: "Disbursement Report", to: "/reports/disbursement" },
+      { label: "Fees Report", to: "/reports/fees" },
+      { label: "Loan Officer Report", to: "/reports/loan-officer" },
+      { label: "Loan Products Report", to: "/reports/loan-products" },
+      { label: "MFRS Ratios", to: "/reports/mfrs" },
+      { label: "Daily Report", to: "/reports/daily" },
+      { label: "Monthly Report", to: "/reports/monthly" },
+      { label: "Outstanding Report", to: "/reports/outstanding" },
+      { label: "Portfolio At Risk (PAR)", to: "/reports/par" },
+      { label: "At a Glance", to: "/reports/at-a-glance" },
+      { label: "All Entries", to: "/reports/all" },
+    ]
+  },
+  // --- Account hub entry (kept compact; real gating via routes/roles) ---
+  {
     label: "Account", icon: <FiSettings />, to: "/account/settings", children: [
       { label: "Profile & Settings", to: "/account/settings" },
+      { label: "Billing", to: "/billing" },                         // canonical
+      { label: "Organization", to: "/account/organization" },       // admins/directors/sysadmins use page gating
+      { label: "Subscription", to: "/subscription" },               // NEW
+      { label: "Support Tickets", to: "/support-tickets" },         // NEW
+      { label: "SMS Console", to: "/sms-console" },                 // NEW
+      { label: "Billing by Phone", to: "/billing-by-phone" },       // NEW
+      { label: "Impersonate Tenant", to: "/impersonate-tenant" },   // NEW (route gated)
+      { label: "Tenants (New Admin)", to: "/tenants-admin" },       // NEW (route gated)
+      { label: "Tenants (SysAdmin)", to: "/admin/tenants" },        // existing admin path
     ]
   },
 ];
@@ -255,14 +287,6 @@ const SidebarLayout = () => {
         : [];
     return allowed.some((r) => r === primary || list.includes(r));
   };
-
-  const hasPerm = (perm) => {
-    const p = lower(perm);
-    const set = new Set((user?.permissions || []).map(lower));
-    return set.has(p);
-  };
-
-  const isSysAdmin = hasAnyRole("system_admin","super_admin") || hasPerm("sysadmin") || user?.isSysAdmin === true;
 
   /* theme + user + tenant load */
   useEffect(() => {
@@ -474,8 +498,6 @@ const SidebarLayout = () => {
                       </div>
                     </div>
                     <hr className="my-2 border-slate-200 dark:border-slate-700" />
-
-                    {/* Always-visible items */}
                     <NavLink
                       to="/account/settings"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
@@ -483,64 +505,59 @@ const SidebarLayout = () => {
                     >
                       <span className="inline-flex items-center gap-2"><FiSettings /> Profile &amp; Settings</span>
                     </NavLink>
-                    <NavLink
-                      to="/billing"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setAvatarOpen(false)}
-                    >
-                      <span className="inline-flex items-center gap-2"><FiCreditCard /> Subscription</span>
-                    </NavLink>
-                    <NavLink
-                      to="/support-tickets"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setAvatarOpen(false)}
-                    >
-                      <span className="inline-flex items-center gap-2"><FiHelpCircle /> Support Tickets</span>
-                    </NavLink>
-                    <NavLink
-                      to="/account/organization"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setAvatarOpen(false)}
-                    >
-                      <span className="inline-flex items-center gap-2"><FiBriefcase /> Organization</span>
-                    </NavLink>
-                    <NavLink
-                      to="/tenants"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setAvatarOpen(false)}
-                    >
-                      <span className="inline-flex items-center gap-2"><FiUsers /> Tenants</span>
-                    </NavLink>
-
-                    {/* SysAdmin-only section */}
-                    {isSysAdmin && (
+                    {hasAnyRole("system_admin","super_admin","admin","director","developer") && (
                       <>
-                        <hr className="my-2 border-slate-200 dark:border-slate-700" />
                         <NavLink
-                          to="/admin/tenants"
+                          to="/subscription"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2"><FiUsers /> All Tenants (SysAdmin)</span>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Subscription</span>
                         </NavLink>
                         <NavLink
-                          to="/admin/impersonate"
+                          to="/support-tickets"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2"><FiUserCheck /> Impersonate</span>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Support Tickets</span>
                         </NavLink>
                         <NavLink
-                          to="/admin"
+                          to="/impersonate-tenant"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2"><FiShield /> Admin</span>
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Impersonate</span>
+                        </NavLink>
+                        <NavLink
+                          to="/tenants-admin"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (New)</span>
+                        </NavLink>
+                        <NavLink
+                          to="/account/organization"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
+                        </NavLink>
+                        <NavLink
+                          to="/admin/tenants"     // existing admin path
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (SysAdmin)</span>
                         </NavLink>
                       </>
                     )}
-
-                    <hr className="my-2 border-slate-200 dark:border-slate-700" />
+                    <NavLink
+                      to="/admin"
+                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      onClick={() => setAvatarOpen(false)}
+                    >
+                      <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
+                    </NavLink>
                     <button
                       onClick={logoutAndGo}
                       className="w-full text-left px-3 py-2 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-sm text-rose-600 dark:text-rose-300"

@@ -1,1 +1,0 @@
-import{j as r}from"./index-Bebmb2Ue.js";import{R as o}from"./ReportShell-BsyoV5xF.js";function s(){return r.jsx(o,{title:"Loan Arrears Aging",endpoint:"/reports/arrears-aging",mode:"snapshot",columns:[]})}export{s as default};
