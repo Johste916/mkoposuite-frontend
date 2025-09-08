@@ -156,7 +156,13 @@ const NAV = () => [
       { label: "Profile & Settings", to: "/account/settings" },
       { label: "Billing", to: "/billing" },                         // canonical
       { label: "Organization", to: "/account/organization" },       // admins/directors/sysadmins use page gating
-      { label: "Tenants (SysAdmin)", to: "/admin/tenants" },        // admin path
+      { label: "Subscription", to: "/subscription" },               // NEW
+      { label: "Support Tickets", to: "/support-tickets" },         // NEW
+      { label: "SMS Console", to: "/sms-console" },                 // NEW
+      { label: "Billing by Phone", to: "/billing-by-phone" },       // NEW
+      { label: "Impersonate Tenant", to: "/impersonate-tenant" },   // NEW (route gated)
+      { label: "Tenants (New Admin)", to: "/tenants-admin" },       // NEW (route gated)
+      { label: "Tenants (SysAdmin)", to: "/admin/tenants" },        // existing admin path
     ]
   },
 ];
@@ -178,8 +184,7 @@ const Section = ({ item, currentPath, onNavigate }) => {
         to={item.to}
         className={({ isActive }) =>
           `${baseItem} ${isActive ? "bg-blue-600 text-white shadow-sm"
-            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"}`
-        }
+            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"}`}
         onClick={onNavigate}
       >
         <span className="shrink-0">{item.icon}</span>
@@ -216,8 +221,7 @@ const Section = ({ item, currentPath, onNavigate }) => {
                 className={({ isActive }) =>
                   `block px-2 py-1.5 rounded text-[13px] ${isActive
                     ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"}`
-                }
+                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"}`}
                 onClick={onNavigate}
               >
                 {c.label}
@@ -504,6 +508,34 @@ const SidebarLayout = () => {
                     {hasAnyRole("system_admin","super_admin","admin","director","developer") && (
                       <>
                         <NavLink
+                          to="/subscription"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Subscription</span>
+                        </NavLink>
+                        <NavLink
+                          to="/support-tickets"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Support Tickets</span>
+                        </NavLink>
+                        <NavLink
+                          to="/impersonate-tenant"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Impersonate</span>
+                        </NavLink>
+                        <NavLink
+                          to="/tenants-admin"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (New)</span>
+                        </NavLink>
+                        <NavLink
                           to="/account/organization"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
@@ -511,11 +543,11 @@ const SidebarLayout = () => {
                           <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
                         </NavLink>
                         <NavLink
-                          to="/admin/tenants"     // admin path
+                          to="/admin/tenants"     // existing admin path
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants</span>
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (SysAdmin)</span>
                         </NavLink>
                       </>
                     )}

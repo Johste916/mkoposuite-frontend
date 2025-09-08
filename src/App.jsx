@@ -1,4 +1,3 @@
-// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -72,7 +71,7 @@ const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 const Organization = lazy(() => import("./pages/account/Organization"));
 const Profile = lazy(() => import("./pages/account/Profile"));
-const AdminTenants = lazy(() => import("./pages/admin/Tenants")); // explicit tenants page
+const AdminTenants = lazy(() => import("./pages/admin/Tenants")); // existing tenants page
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -141,6 +140,14 @@ const ParReport = lazy(() => import("./pages/reports/ParReport"));
 const AtAGlance = lazy(() => import("./pages/reports/AtAGlance"));
 const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 
+/* ---------- NEW PAGES wired to src/pages/*.jsx we added ---------- */
+const Subscription = lazy(() => import("./pages/Subscription"));
+const SupportTickets = lazy(() => import("./pages/SupportTickets"));
+const SMSConsole = lazy(() => import("./pages/SMSConsole"));
+const BillingByPhone = lazy(() => import("./pages/BillingByPhone"));
+const ImpersonateTenant = lazy(() => import("./pages/ImpersonateTenant"));
+const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
+
 const Fallback = () => (
   <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
 );
@@ -187,7 +194,7 @@ function App() {
                 }
               >
                 <Route index element={<Admin />} />
-                {/* Tenants admin — now also allows `admin` (and `director` if you keep it) */}
+                {/* Tenants admin — existing page kept intact */}
                 <Route
                   path="tenants"
                   element={
@@ -490,7 +497,7 @@ function App() {
                 <Route path="pro-rata" element={<ProRataCollections />} />
                 <Route path="disbursement" element={<DisbursementReport />} />
                 <Route path="fees" element={<FeesReport />} />
-                <Route path="loan-officer" element={<LoanOfficerReport />} />
+                <Route path="loan-officer" element={<LoanProductsReport />} />
                 <Route path="loan-products" element={<LoanProductsReport />} />
                 <Route path="mfrs" element={<MfrsRatios />} />
                 <Route path="daily" element={<DailyReport />} />
@@ -500,6 +507,30 @@ function App() {
                 <Route path="at-a-glance" element={<AtAGlance />} />
                 <Route path="all" element={<AllEntries />} />
               </Route>
+
+              {/* NEW: Support & Subscription & Tools */}
+              <Route path="subscription" element={<Subscription />} />
+              <Route path="support-tickets" element={<SupportTickets />} />
+              <Route path="sms-console" element={<SMSConsole />} />
+              <Route path="billing-by-phone" element={<BillingByPhone />} />
+
+              {/* NEW: Admin tools */}
+              <Route
+                path="impersonate-tenant"
+                element={
+                  <RoleProtectedRoute allow={["system_admin", "super_admin", "admin", "director", "developer"]}>
+                    <ImpersonateTenant />
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="tenants-admin"
+                element={
+                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
+                    <TenantsAdminNew />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Legacy */}
               <Route path="disbursements" element={<Disbursements />} />
