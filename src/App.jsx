@@ -71,9 +71,8 @@ const Admin = lazy(() => import("./pages/Admin"));
 const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 const Organization = lazy(() => import("./pages/account/Organization"));
-const Profile = lazy(() => import("./pages/account/Profile")); // ✅ professional profile
-// ⬇️ New: explicit Tenants admin page (used by /admin/tenants and /account/tenants)
-const AdminTenants = lazy(() => import("./pages/admin/Tenants"));
+const Profile = lazy(() => import("./pages/account/Profile"));
+const AdminTenants = lazy(() => import("./pages/admin/Tenants")); // explicit tenants page
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -188,11 +187,11 @@ function App() {
                 }
               >
                 <Route index element={<Admin />} />
-                {/* ⬇️ Explicit Tenants admin page (further restricted to system owner/admin only) */}
+                {/* Tenants admin — now also allows `admin` (and `director` if you keep it) */}
                 <Route
                   path="tenants"
                   element={
-                    <RoleProtectedRoute allow={["system_admin", "owner", "super_admin"]}>
+                    <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
                       <AdminTenants />
                     </RoleProtectedRoute>
                   }
@@ -211,16 +210,17 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
-              {/* New hub routes */}
+              {/* Canonical account pages */}
               <Route path="account/billing" element={<Billing />} />
               <Route path="account/security" element={<Navigate to="/account/security/change-password" replace />} />
               <Route path="account/security/change-password" element={<ChangePassword />} />
               <Route path="account/security/2fa" element={<TwoFactor />} />
-              {/* Tenants entry in the account hub — render page directly with strict gating */}
+
+              {/* Tenants entry inside Account hub — same access as /admin/tenants */}
               <Route
                 path="account/tenants"
                 element={
-                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin"]}>
+                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
                     <AdminTenants />
                   </RoleProtectedRoute>
                 }
