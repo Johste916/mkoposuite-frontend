@@ -1,28 +1,33 @@
-/*  ----------  src/pages/admin/tenants/TenantsRouter.jsx  ---------- */
-import React, { Suspense, lazy } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+// server/routes/admin/tenantsRoutes.js
+'use strict';
+const express = require('express');
+const router = express.Router();
+const ctrl = require('../../controllers/admin/tenantsController');
 
-const TenantsList = lazy(() => import("./TenantsList"));
-const TenantDetails = lazy(() => import("./TenantDetails"));
-const TenantEdit = lazy(() => import("./TenantEdit"));
-const TenantBilling = lazy(() => import("./TenantBilling"));
+// List & read
+router.get('/', ctrl.list);
+router.get('/:id', ctrl.read);
 
-const Fallback = () => (
-  <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
-);
+// Update subscription/core fields (planCode, seats, trialEndsAt, billingEmail, status)
+router.patch('/:id', ctrl.updateCore);
+router.patch('/:id/subscription', ctrl.updateCore);
 
-export default function TenantsRouter() {
-  return (
-    <Suspense fallback={<Fallback />}>
-      <Routes>
-        <Route index element={<TenantsList />} />
-        <Route path=":tenantId" element={<TenantDetails />} />
-        <Route path=":tenantId/edit" element={<TenantEdit />} />
-        <Route path=":tenantId/billing" element={<TenantBilling />} />
-        {/* alias to edit */}
-        <Route path=":tenantId/organization" element={<TenantEdit />} />
-        <Route path="*" element={<Navigate to=".." replace />} />
-      </Routes>
-    </Suspense>
-  );
-}
+// Entitlements & limits
+router.post('/:id/entitlements', ctrl.setEntitlements);
+router.post('/:id/limits', ctrl.setLimits);
+
+// Invoices
+router.get('/:id/invoices', ctrl.listInvoices);
+router.post('/:id/invoices', ctrl.createInvoice);
+router.post('/:id/invoices/sync', ctrl.syncInvoices);
+router.post('/:id/invoices/:invoiceId/pay', ctrl.markPaid);
+router.post('/:id/invoices/:invoiceId/send', ctrl.resendInvoice);
+router.post('/:id/invoices/:invoiceId/resend', ctrl.resendInvoice);
+
+// Comms & support
+router.post('/:id/notify', ctrl.notify);
+
+// Impersonation
+router.post('/:id/impersonate', ctrl.impersonate);
+
+module.exports = router;
