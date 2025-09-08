@@ -1,1 +1,0 @@
-import{j as t}from"./index-JilupSCc.js";import{T as r}from"./TypesEditor-DRVcRTqj.js";import"./admin-DtLgG9KV.js";import"./index-C77B3lw5.js";function p(){return t.jsx(r,{title:"Collateral Types",category:"collateral-types"})}export{p as default};
