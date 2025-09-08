@@ -72,6 +72,8 @@ const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 const Organization = lazy(() => import("./pages/account/Organization"));
 const Profile = lazy(() => import("./pages/account/Profile")); // ✅ professional profile
+// ⬇️ New: explicit Tenants admin page (used by /admin/tenants and /account/tenants)
+const AdminTenants = lazy(() => import("./pages/admin/Tenants"));
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -186,6 +188,15 @@ function App() {
                 }
               >
                 <Route index element={<Admin />} />
+                {/* ⬇️ Explicit Tenants admin page (further restricted to system owner/admin only) */}
+                <Route
+                  path="tenants"
+                  element={
+                    <RoleProtectedRoute allow={["system_admin", "owner", "super_admin"]}>
+                      <AdminTenants />
+                    </RoleProtectedRoute>
+                  }
+                />
                 <Route path=":slug" element={<AdminRouter />} />
               </Route>
 
@@ -205,8 +216,15 @@ function App() {
               <Route path="account/security" element={<Navigate to="/account/security/change-password" replace />} />
               <Route path="account/security/change-password" element={<ChangePassword />} />
               <Route path="account/security/2fa" element={<TwoFactor />} />
-              {/* Tenants entry in the account hub -> delegates to Admin tenants */}
-              <Route path="account/tenants" element={<Navigate to="/admin/tenants" replace />} />
+              {/* Tenants entry in the account hub — render page directly with strict gating */}
+              <Route
+                path="account/tenants"
+                element={
+                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin"]}>
+                    <AdminTenants />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Aliases */}
               <Route path="profile" element={<Navigate to="/account/profile" replace />} />

@@ -1,7 +1,6 @@
 // src/pages/account/AccountHub.jsx
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
 
 function Tab({ to, children }) {
   return (
@@ -21,13 +20,7 @@ function Tab({ to, children }) {
 }
 
 export default function AccountHub() {
-  const { user } = useAuth() || {};
-  const role = String(user?.role || "").toLowerCase();
-  const roles = (user?.roles || []).map((r) => String(r).toLowerCase());
-  const isSysAdmin = ["system_admin", "admin", "director"].some(
-    (r) => role === r || roles.includes(r)
-  );
-
+  // Keep only the Profile tab in this hub.
   return (
     <div className="ms-card p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -38,12 +31,6 @@ export default function AccountHub() {
 
       <div className="flex flex-wrap gap-2">
         <Tab to="/account/profile">Profile</Tab>
-        <Tab to="/account/organization">Organization</Tab>
-        {/* Billing uses canonical route to avoid 404s */}
-        <Tab to="/billing">Billing</Tab>
-        {/* point Security tab to first security child (canonical route) */}
-        <Tab to="/change-password">Security</Tab>
-        {isSysAdmin && <Tab to="/admin/tenants">Tenants</Tab>}
       </div>
 
       <div className="pt-2">
