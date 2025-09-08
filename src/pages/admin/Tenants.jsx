@@ -12,8 +12,7 @@ import {
 } from "react-icons/fi";
 
 /* -------------------------------------------
-   Normalizers & tolerant API helpers
-   (adds per-attempt timeouts so UI never hangs)
+   Tolerant API helpers with per-attempt timeout
 -------------------------------------------- */
 const withTimeout = (ms = 9000) => {
   const controller = new AbortController();
@@ -36,6 +35,7 @@ const tryGet = async (urls, config = {}) => {
   }
   throw lastErr || new Error("All GET endpoints failed");
 };
+
 const tryPost = async (urls, body, config = {}) => {
   let lastErr;
   for (const u of urls) {
@@ -51,6 +51,7 @@ const tryPost = async (urls, body, config = {}) => {
   }
   throw lastErr || new Error("All POST endpoints failed");
 };
+
 const tryPatch = async (urls, body, config = {}) => {
   let lastErr;
   for (const u of urls) {
@@ -62,15 +63,16 @@ const tryPatch = async (urls, body, config = {}) => {
     } catch (e) {
       t.done();
       const code = e?.response?.status;
-      // tolerate 404/405 and keep trying
-      if (code !== 404 && code !== 405) lastErr = e;
+      if (code !== 404 && code !== 405) lastErr = e; // tolerate 404/405
     }
   }
   if (lastErr) throw lastErr;
   throw new Error("No PATCH endpoint matched");
 };
 
-/** Normalize a tenant object coming from various backends */
+/* -------------------------------------------
+   Normalizers
+-------------------------------------------- */
 function normalizeTenant(t = {}) {
   const id =
     t.id ?? t.tenantId ?? t.orgId ?? t.organizationId ?? t.uuid ?? t._id ?? null;
@@ -142,7 +144,9 @@ function normalizeTenant(t = {}) {
   };
 }
 
-/** Optional tenant-stats endpoint to enrich staff/seats if the list lacks them */
+/* -------------------------------------------
+   Fetchers
+-------------------------------------------- */
 async function fetchTenantStats() {
   const raw = await tryGet(
     [
@@ -166,18 +170,12 @@ async function fetchTenantStats() {
       staffCount:
         s.staffCount ?? s.usersCount ?? s.membersCount ?? s.users ?? s.staff ?? null,
       seats:
-        s.seats ??
-        s.staffLimit ??
-        s.usersLimit ??
-        s.maxUsers ??
-        s.limits?.users ??
-        null,
+        s.seats ?? s.staffLimit ?? s.usersLimit ?? s.maxUsers ?? s.limits?.users ?? null,
     };
   });
   return map;
 }
 
-/** Try to pull a single "self" org to at least render something when list APIs don't exist */
 async function fetchSelfTenant() {
   const data = await tryGet(
     [
@@ -202,7 +200,6 @@ async function fetchSelfTenant() {
   }
 }
 
-/** Pull list from flexible endpoints, support q/query/search and self fallback */
 async function fetchTenants({ q = "" } = {}) {
   const endpoints = ["/admin/tenants", "/system/tenants", "/tenants", "/orgs", "/organizations"];
   const paramAttempts = q
@@ -233,18 +230,17 @@ async function fetchTenants({ q = "" } = {}) {
       /* keep trying */
     }
   }
-
   // fallback to self org if no list endpoints exist
   return await fetchSelfTenant();
 }
 
-/** Pull invoices for a tenant (tolerant) */
 async function fetchTenantInvoices(tenantId) {
   const data = await tryGet(
     [
       `/admin/tenants/${tenantId}/invoices`,
       `/tenants/${tenantId}/invoices`,
       `/orgs/${tenantId}/invoices`,
+      `/organizations/${tenantId}/invoices`,
     ],
     { timeoutMs: 9000 }
   ).catch(() => []);
@@ -268,7 +264,6 @@ async function fetchTenantInvoices(tenantId) {
   }));
 }
 
-/** Pull available plans (fallback to static) */
 async function fetchPlans() {
   const data = await tryGet(
     ["/admin/plans", "/system/plans", "/billing/plans", "/plans"],
@@ -295,7 +290,6 @@ async function fetchPlans() {
   ];
 }
 
-/** Update subscription (generic fields; no plan_id usage) */
 async function updateSubscription(tenantId, body) {
   const payload = {
     planCode: body.planCode,
@@ -312,32 +306,6 @@ async function updateSubscription(tenantId, body) {
     `/organizations/${tenantId}`,
   ];
   return tryPatch(urls, payload, { timeoutMs: 9000 });
-}
-
-/** Update entitlements (send both formats if needed) */
-async function updateEntitlements(tenantId, ent) {
-  const modules = ent.modules || {};
-  const keys = ent.keys || [];
-  const bodyA = { modules };
-  const bodyB = {
-    entitlements:
-      keys.length > 0
-        ? keys
-        : Object.entries(modules)
-            .filter(([, v]) => v)
-            .map(([k]) => `${k}.view`),
-  };
-
-  const urls = [
-    `/admin/tenants/${tenantId}/entitlements`,
-    `/tenants/${tenantId}/entitlements`,
-    `/orgs/${tenantId}/entitlements`,
-  ];
-  try {
-    return await tryPost(urls, bodyA, { timeoutMs: 9000 });
-  } catch {
-    return await tryPost(urls, bodyB, { timeoutMs: 9000 });
-  }
 }
 
 async function sendAnnouncement(tenantId, payload) {
@@ -398,7 +366,7 @@ function useToasts() {
 /* -------------------------------------------
    UI
 -------------------------------------------- */
-export default function Tenants() {
+export default function TenantsAdmin() {
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -426,7 +394,7 @@ export default function Tenants() {
       setPlans(planList);
       if (!items.length) {
         console.info(
-          "[Tenants] No list returned. Your backend may only expose self org endpoints."
+          "[Admin/Tenants] No list returned. Backend may only expose self org endpoints."
         );
       }
     } catch (e) {
@@ -836,7 +804,7 @@ export default function Tenants() {
                   </div>
                 </section>
 
-                {/* Announcements & Support */}
+                {/* Reach out */}
                 <section className="border rounded-2xl p-3">
                   <div className="font-semibold mb-2">Reach out</div>
                   <AnnouncementForm
