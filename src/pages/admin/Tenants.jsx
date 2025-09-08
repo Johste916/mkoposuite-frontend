@@ -13,14 +13,24 @@ import {
 
 /* -------------------------------------------
    Normalizers & tolerant API helpers
+   (adds per-attempt timeouts so UI never hangs)
 -------------------------------------------- */
+const withTimeout = (ms = 9000) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("timeout"), ms);
+  return { signal: controller.signal, done: () => clearTimeout(timer) };
+};
+
 const tryGet = async (urls, config = {}) => {
   let lastErr;
   for (const u of urls) {
+    const t = withTimeout(config.timeoutMs || 9000);
     try {
-      const res = await api.get(u, config);
+      const res = await api.get(u, { ...config, signal: t.signal });
+      t.done();
       return res?.data;
     } catch (e) {
+      t.done();
       lastErr = e;
     }
   }
@@ -29,10 +39,13 @@ const tryGet = async (urls, config = {}) => {
 const tryPost = async (urls, body, config = {}) => {
   let lastErr;
   for (const u of urls) {
+    const t = withTimeout(config.timeoutMs || 9000);
     try {
-      const res = await api.post(u, body, config);
+      const res = await api.post(u, body, { ...config, signal: t.signal });
+      t.done();
       return res?.data ?? true;
     } catch (e) {
+      t.done();
       lastErr = e;
     }
   }
@@ -41,12 +54,15 @@ const tryPost = async (urls, body, config = {}) => {
 const tryPatch = async (urls, body, config = {}) => {
   let lastErr;
   for (const u of urls) {
+    const t = withTimeout(config.timeoutMs || 9000);
     try {
-      const res = await api.patch(u, body, config);
+      const res = await api.patch(u, body, { ...config, signal: t.signal });
+      t.done();
       return res?.data ?? true;
     } catch (e) {
-      // tolerate 404/405 and keep trying next
+      t.done();
       const code = e?.response?.status;
+      // tolerate 404/405 and keep trying
       if (code !== 404 && code !== 405) lastErr = e;
     }
   }
@@ -56,18 +72,10 @@ const tryPatch = async (urls, body, config = {}) => {
 
 /** Normalize a tenant object coming from various backends */
 function normalizeTenant(t = {}) {
-  // id
   const id =
     t.id ?? t.tenantId ?? t.orgId ?? t.organizationId ?? t.uuid ?? t._id ?? null;
-  // name
   const name =
-    t.name ??
-    t.tenantName ??
-    t.company ??
-    t.orgName ??
-    t.organization ??
-    "—";
-  // plan code/label
+    t.name ?? t.tenantName ?? t.company ?? t.orgName ?? t.organization ?? "—";
   const planCode = (
     t.planCode ??
     t.plan_code ??
@@ -86,7 +94,6 @@ function normalizeTenant(t = {}) {
     (planCode
       ? planCode.replace(/(^|_)(\w)/g, (_, a, c) => (a ? " " : "") + c.toUpperCase())
       : "—");
-  // status
   const status = (
     t.status ??
     t.subscription?.status ??
@@ -95,7 +102,6 @@ function normalizeTenant(t = {}) {
   )
     .toString()
     .toLowerCase();
-  // seats & staff
   const seats =
     t.seats ??
     t.subscription?.seats ??
@@ -113,19 +119,15 @@ function normalizeTenant(t = {}) {
     t.staff?.length ??
     t.users?.length ??
     null;
-  // trial end
   const trialEndsAt =
     t.trialEndsAt ??
     t.trial_end ??
     t.trial_ends_at ??
     t.subscription?.trial_end ??
     "";
-  // billing email
   const billingEmail =
     t.billingEmail ?? t.billing_email ?? t.billing?.email ?? t.ownerEmail ?? "";
-  // currency
   const currency = t.currency ?? t.billing?.currency ?? t.payment?.currency ?? "USD";
-  // created date
   const createdAt =
     t.createdAt ?? t.created_at ?? t.created ?? t.meta?.createdAt ?? "";
 
@@ -145,33 +147,7 @@ function normalizeTenant(t = {}) {
   };
 }
 
-/** Try to pull a single "self" org to at least render something when list APIs don't exist */
-async function fetchSelfTenant() {
-  const data = await tryGet(
-    [
-      "/tenants/me",
-      "/tenant/me",
-      "/account/tenant",
-      "/account/organization",
-      "/org/tenant",
-      "/org/me",
-      "/org",
-      "/organization",
-    ],
-    {}
-  ).catch(() => null);
-  if (data && typeof data === "object") return [normalizeTenant(data)];
-  // fallback via /auth/me embedding org info
-  try {
-    const { data: me } = await api.get("/auth/me");
-    const t = me?.tenant || me?.organization || me?.org || null;
-    return t ? [normalizeTenant(t)] : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Optional backends expose a stats endpoint we can merge onto rows */
+/** Optional tenant-stats endpoint to enrich staff/seats if the list lacks them */
 async function fetchTenantStats() {
   const raw = await tryGet(
     [
@@ -181,21 +157,15 @@ async function fetchTenantStats() {
       "/orgs/stats",
       "/organizations/stats",
     ],
-    {}
+    { timeoutMs: 8000 }
   ).catch(() => null);
   if (!raw) return {};
   const list = Array.isArray(raw)
     ? raw
-    : Array.isArray(raw?.items)
-    ? raw.items
-    : Array.isArray(raw?.data)
-    ? raw.data
-    : Array.isArray(raw?.tenants)
-    ? raw.tenants
-    : [];
-
+    : raw?.items || raw?.data || raw?.tenants || [];
+  const arr = Array.isArray(list) ? list : [];
   const map = {};
-  list.forEach((s) => {
+  arr.forEach((s) => {
     const id =
       s.id ?? s.tenantId ?? s.orgId ?? s.organizationId ?? s.uuid ?? s._id ?? null;
     if (!id) return;
@@ -219,29 +189,47 @@ async function fetchTenantStats() {
   return map;
 }
 
-/** Pull list from flexible endpoints, support q / query / search param names and self fallback */
+/** Try to pull a single "self" org to at least render something when list APIs don't exist */
+async function fetchSelfTenant() {
+  const data = await tryGet(
+    [
+      "/tenants/me",
+      "/tenant/me",
+      "/account/tenant",
+      "/account/organization",
+      "/org/tenant",
+      "/org/me",
+      "/org",
+      "/organization",
+    ],
+    { timeoutMs: 6000 }
+  ).catch(() => null);
+  if (data && typeof data === "object") return [normalizeTenant(data)];
+  try {
+    const { data: me } = await api.get("/auth/me");
+    const t = me?.tenant || me?.organization || me?.org || null;
+    return t ? [normalizeTenant(t)] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Pull list from flexible endpoints, support q/query/search and self fallback */
 async function fetchTenants({ q = "" } = {}) {
   const endpoints = ["/admin/tenants", "/system/tenants", "/tenants", "/orgs", "/organizations"];
   const paramAttempts = q
     ? [{ params: { q } }, { params: { query: q } }, { params: { search: q } }]
     : [{}];
 
-  // attempt with different param names
   for (const params of paramAttempts) {
     try {
-      const data = await tryGet(endpoints, params);
+      const data = await tryGet(endpoints, { ...params, timeoutMs: 9000 });
       const list = Array.isArray(data)
         ? data
-        : Array.isArray(data?.items)
-        ? data.items
-        : Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data?.results)
-        ? data.results
-        : [];
-      if (list.length) {
-        const rows = list.map(normalizeTenant);
-        // try merge stats if some rows are missing counts
+        : data?.items || data?.data || data?.results || [];
+      const arr = Array.isArray(list) ? list : [];
+      if (arr.length) {
+        const rows = arr.map(normalizeTenant);
         if (rows.some((r) => r.staffCount == null || r.seats == null)) {
           const stats = await fetchTenantStats().catch(() => ({}));
           rows.forEach((r) => {
@@ -272,7 +260,7 @@ async function fetchTenantInvoices(tenantId) {
       `/tenants/${tenantId}/invoices`,
       `/orgs/${tenantId}/invoices`,
     ],
-    {}
+    { timeoutMs: 9000 }
   ).catch(() => []);
   const list = Array.isArray(data)
     ? data
@@ -298,7 +286,7 @@ async function fetchTenantInvoices(tenantId) {
 async function fetchPlans() {
   const data = await tryGet(
     ["/admin/plans", "/system/plans", "/billing/plans", "/plans"],
-    {}
+    { timeoutMs: 7000 }
   ).catch(() => []);
   const list = Array.isArray(data)
     ? data
@@ -321,10 +309,9 @@ async function fetchPlans() {
   ];
 }
 
-/** Update subscription (tolerant to different endpoints/shapes). */
+/** Update subscription (generic fields; no plan_id usage) */
 async function updateSubscription(tenantId, body) {
   const payload = {
-    // send generic, backend-safe fields; DO NOT send plan_id etc.
     planCode: body.planCode,
     seats: body.seats ?? null,
     trialEndsAt: body.trialEndsAt ?? null,
@@ -338,12 +325,11 @@ async function updateSubscription(tenantId, body) {
     `/orgs/${tenantId}`,
     `/organizations/${tenantId}`,
   ];
-  return tryPatch(urls, payload);
+  return tryPatch(urls, payload, { timeoutMs: 9000 });
 }
 
 /** Update entitlements (send both formats if needed) */
 async function updateEntitlements(tenantId, ent) {
-  // Accept either { modules: { loans: true, ... } } or flat array of keys
   const modules = ent.modules || {};
   const keys = ent.keys || [];
   const bodyA = { modules };
@@ -362,9 +348,9 @@ async function updateEntitlements(tenantId, ent) {
     `/orgs/${tenantId}/entitlements`,
   ];
   try {
-    return await tryPost(urls, bodyA);
+    return await tryPost(urls, bodyA, { timeoutMs: 9000 });
   } catch {
-    return await tryPost(urls, bodyB);
+    return await tryPost(urls, bodyB, { timeoutMs: 9000 });
   }
 }
 
@@ -374,7 +360,7 @@ async function sendAnnouncement(tenantId, payload) {
     `/notifications/tenants/${tenantId}`,
     `/announce/tenants/${tenantId}`,
   ];
-  return tryPost(urls, payload);
+  return tryPost(urls, payload, { timeoutMs: 9000 });
 }
 
 async function openSupportTicket(tenantId, payload) {
@@ -384,7 +370,7 @@ async function openSupportTicket(tenantId, payload) {
     `/system/support/tickets`,
   ];
   const enriched = { ...payload, tenantId };
-  return tryPost(urls, enriched);
+  return tryPost(urls, enriched, { timeoutMs: 9000 });
 }
 
 async function syncInvoices(tenantId) {
@@ -393,7 +379,7 @@ async function syncInvoices(tenantId) {
     `/billing/tenants/${tenantId}/invoices/sync`,
     `/tenants/${tenantId}/invoices/sync`,
   ];
-  return tryPost(urls, {});
+  return tryPost(urls, {}, { timeoutMs: 9000 });
 }
 
 /* -------------------------------------------
@@ -452,6 +438,12 @@ export default function Tenants() {
       ]);
       setList(items);
       setPlans(planList);
+      if (!items.length) {
+        // Surface a gentle hint if no admin endpoints exist
+        console.info(
+          "[Tenants] No list returned. Your backend may only expose self org endpoints."
+        );
+      }
     } catch (e) {
       toast(
         e?.response?.data?.error || e?.message || "Failed to load tenants",
@@ -465,9 +457,8 @@ export default function Tenants() {
   useEffect(() => {
     reload("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // initial
+  }, []);
 
-  // debounced search
   const onSearch = () => reload(q);
 
   const openDrawer = async (t) => {
@@ -508,15 +499,14 @@ export default function Tenants() {
       });
       toast("Subscription updated");
       await reload(q);
-      // refresh selected item
-      const fresh = (await fetchTenants({ q })).find((x) => x.id === t.id) || t;
+      const fresh =
+        (await fetchTenants({ q })).find((x) => x.id === t.id) || t;
       setDrawer((d) => ({ ...d, t: fresh, busy: false }));
     } catch (e) {
       setDrawer((d) => ({
         ...d,
         busy: false,
-        err:
-          e?.response?.data?.error || e?.message || "Save failed",
+        err: e?.response?.data?.error || e?.message || "Save failed",
       }));
     }
   };
@@ -557,8 +547,7 @@ export default function Tenants() {
       setDrawer((d) => ({
         ...d,
         busy: false,
-        err:
-          e?.response?.data?.error || e?.message || "Failed to create ticket",
+        err: e?.response?.data?.error || e?.message || "Failed to create ticket",
       }));
     }
   };
@@ -576,8 +565,7 @@ export default function Tenants() {
       setDrawer((d) => ({
         ...d,
         busy: false,
-        err:
-          e?.response?.data?.error || e?.message || "Failed to sync invoices",
+        err: e?.response?.data?.error || e?.message || "Failed to sync invoices",
       }));
     }
   };
@@ -586,7 +574,6 @@ export default function Tenants() {
     const staff = list.reduce((a, b) => a + (Number(b.staffCount) || 0), 0);
     const seats = list.reduce((a, b) => a + (Number(b.seats) || 0), 0);
     return { tenants: list.length, staff, seats };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list]);
 
   return (
@@ -694,10 +681,7 @@ export default function Tenants() {
               ))}
               {!list.length && (
                 <tr>
-                  <td
-                    colSpan={8}
-                    className="py-6 text-center text-slate-500"
-                  >
+                  <td colSpan={8} className="py-6 text-center text-slate-500">
                     No tenants found.
                   </td>
                 </tr>

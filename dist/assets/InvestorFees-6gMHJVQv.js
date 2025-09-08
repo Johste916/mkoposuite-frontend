@@ -1,1 +1,0 @@
-import{j as t}from"./index-xa1xRnXx.js";import{T as e}from"./TypesEditor-Dy9a2X3T.js";import"./admin-DX0zQGQd.js";import"./index-BzsQs-Ig.js";function m(){return t.jsx(e,{title:"Investor Fees",category:"investor-fees"})}export{m as default};
