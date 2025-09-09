@@ -56,32 +56,26 @@ const Login = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-[radial-gradient(1200px_600px_at_50%_-10%,#ffffff_0%,#f3faf6_50%,#f8fbff_100%)]">
-      {/* soft vignette */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_40%_at_50%_0%,rgba(255,255,255,.9),rgba(255,255,255,0)_70%)]" />
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md">
           {/* Card */}
           <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-xl ring-1 ring-black/5">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand header: “Welcome to” + BIG logo */}
+              {/* Brand only (no heading text) */}
               <div className="flex flex-col items-center text-center">
-                <div className="flex flex-wrap items-center justify-center gap-4">
-                  <span className="text-[28px] sm:text-[32px] font-extrabold tracking-tight text-slate-800">
-                    Welcome to
-                  </span>
-                  {/* scale ensures visual size even if PNG has whitespace */}
-                  <div className="origin-left scale-[1.35] sm:scale-[1.6]">
-                    <img
-                      src={BRAND_LOGO}
-                      alt="Mkopo Suite"
-                      className="h-16 sm:h-20 md:h-24 w-auto object-contain drop-shadow-sm select-none"
-                      draggable={false}
-                      loading="eager"
-                      fetchpriority="high"
-                    />
-                  </div>
+                {/* scale ensures presence even if PNG has outer whitespace */}
+                <div className="origin-center scale-[1.35] sm:scale-[1.55]">
+                  <img
+                    src={BRAND_LOGO}
+                    alt="MkopoSuite"
+                    className="h-20 sm:h-24 md:h-28 w-auto object-contain drop-shadow-sm select-none"
+                    draggable={false}
+                    loading="eager"
+                    fetchpriority="high"
+                  />
                 </div>
-                <p className="mt-2 text-xs sm:text-sm text-slate-500">
+                <p className="mt-3 text-xs sm:text-sm text-slate-500">
                   Please login to continue
                 </p>
               </div>
