@@ -148,7 +148,10 @@ api.interceptors.response.use(
       console.warn("401 Unauthorized. Redirecting to login…");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+      if (
+        typeof window !== "undefined" &&
+        !window.location.pathname.includes("/login")
+      ) {
         window.location.href = "/login";
       }
       return Promise.reject(err);
@@ -159,7 +162,12 @@ api.interceptors.response.use(
     const isGet = (cfg.method || "get").toLowerCase() === "get";
     cfg.__retryCount = cfg.__retryCount || 0;
 
-    if (MAX_GET_RETRIES > 0 && isGet && transient && cfg.__retryCount < MAX_GET_RETRIES) {
+    if (
+      MAX_GET_RETRIES > 0 &&
+      isGet &&
+      transient &&
+      cfg.__retryCount < MAX_GET_RETRIES
+    ) {
       cfg.__retryCount += 1;
       const backoff = Math.min(1000 * 2 ** (cfg.__retryCount - 1), 4000); // 1s, 2s, 4s cap
       await new Promise((r) => setTimeout(r, backoff));
@@ -171,11 +179,16 @@ api.interceptors.response.use(
 );
 
 /** Convenience helpers that return data directly */
-api.getJSON    = async (url, config) => (await api.get(   normalizePath(url), config)).data;
-api.postJSON   = async (url, data, config) => (await api.post(  normalizePath(url), data, config)).data;
-api.putJSON    = async (url, data, config) => (await api.put(   normalizePath(url), data, config)).data;
-api.patchJSON  = async (url, data, config) => (await api.patch( normalizePath(url), data, config)).data;
-api.deleteJSON = async (url, config) => (await api.delete(normalizePath(url), config)).data;
+api.getJSON = async (url, config) =>
+  (await api.get(normalizePath(url), config)).data;
+api.postJSON = async (url, data, config) =>
+  (await api.post(normalizePath(url), data, config)).data;
+api.putJSON = async (url, data, config) =>
+  (await api.put(normalizePath(url), data, config)).data;
+api.patchJSON = async (url, data, config) =>
+  (await api.patch(normalizePath(url), data, config)).data;
+api.deleteJSON = async (url, config) =>
+  (await api.delete(normalizePath(url), config)).data;
 
 /**
  * Try a list of endpoints (first that works).
@@ -199,11 +212,16 @@ async function firstOk(method, paths, payload, config) {
   throw lastErr;
 }
 
-api.getFirst    = (paths, config)        => firstOk("get",    paths, undefined, config);
-api.postFirst   = (paths, data, config)  => firstOk("post",   paths, data,      config);
-api.patchFirst  = (paths, data, config)  => firstOk("patch",  paths, data,      config);
-api.putFirst    = (paths, data, config)  => firstOk("put",    paths, data,      config);
-api.deleteFirst = (paths, config)        => firstOk("delete", paths, undefined, config);
+api.getFirst = (paths, config) =>
+  firstOk("get", paths, undefined, config);
+api.postFirst = (paths, data, config) =>
+  firstOk("post", paths, data, config);
+api.patchFirst = (paths, data, config) =>
+  firstOk("patch", paths, data, config);
+api.putFirst = (paths, data, config) =>
+  firstOk("put", paths, data, config);
+api.deleteFirst = (paths, config) =>
+  firstOk("delete", paths, undefined, config);
 
 /** Path utility + sugar methods mirroring axios verbs with normalization */
 api.path = normalizePath;
@@ -237,3 +255,5 @@ api.getTenantId = () =>
   })();
 
 export default api;
+// also export as named to support `import { api } from '...';` if used elsewhere
+export { api };
