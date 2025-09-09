@@ -14,7 +14,7 @@ const RAW_BASE =
 const BASE = RAW_BASE.replace(/\/+$/, "");
 const LOGIN_URL = /\/api$/i.test(BASE) ? `${BASE}/login` : `${BASE}/api/login`;
 
-/* Public logo (ensure this exists at /public/brand/mkoposuite-logo.png) */
+/* Public logo */
 const BRAND_LOGO = "/brand/mkoposuite-logo.png";
 
 const Login = () => {
@@ -52,32 +52,34 @@ const Login = () => {
   return (
     <div
       className={
-        // Deep charcoal background — professional and low glare
+        // Calm, professional background (light, not bright)
         "min-h-screen relative overflow-hidden " +
-        "bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950"
+        "bg-gradient-to-br from-slate-100 via-stone-100 to-slate-100"
       }
     >
-      {/* Very subtle, low-opacity accents */}
+      {/* very subtle brand tints in corners */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 opacity-[.18] bg-[radial-gradient(900px_480px_at_20%_8%,rgba(16,185,129,0.18),transparent_70%)]" />
-        <div className="absolute inset-0 opacity-[.12] bg-[radial-gradient(820px_420px_at_98%_95%,rgba(245,158,11,0.15),transparent_70%)]" />
+        <div className="absolute inset-0 opacity-[.10] bg-[radial-gradient(900px_520px_at_15%_-10%,rgba(16,185,129,0.18),transparent_70%)]" />
+        <div className="absolute inset-0 opacity-[.07] bg-[radial-gradient(780px_420px_at_95%_98%,rgba(245,158,11,0.15),transparent_70%)]" />
       </div>
 
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md">
           {/* Card */}
-          <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-[0_15px_60px_-15px_rgba(0,0,0,0.55)] ring-1 ring-slate-900/10">
+          <div className="rounded-2xl bg-white/98 backdrop-blur-sm shadow-[0_12px_40px_-10px_rgba(15,23,42,0.25)] ring-1 ring-slate-200">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand only (no text heading) */}
+              {/* Integrated brand badge (no "Welcome") */}
               <div className="flex flex-col items-center text-center">
-                <img
-                  src={BRAND_LOGO}
-                  alt="MkopoSuite"
-                  className="h-24 sm:h-28 md:h-32 w-auto object-contain drop-shadow-sm select-none"
-                  draggable={false}
-                  loading="eager"
-                />
-                <p className="mt-3 text-xs sm:text-sm text-slate-500">
+                <div className="grid place-items-center h-24 w-24 rounded-2xl bg-emerald-50 ring-1 ring-emerald-200/70 shadow-sm">
+                  <img
+                    src={BRAND_LOGO}
+                    alt="MkopoSuite"
+                    className="h-14 w-auto object-contain select-none"
+                    draggable={false}
+                    loading="eager"
+                  />
+                </div>
+                <p className="mt-4 text-xs sm:text-sm text-slate-500">
                   Please login to continue
                 </p>
               </div>
@@ -148,7 +150,7 @@ const Login = () => {
                 <div className="flex items-center justify-end text-sm">
                   <Link
                     to="/forgot-password"
-                    className="text-emerald-600 hover:text-emerald-700"
+                    className="text-emerald-700 hover:text-emerald-800"
                   >
                     Forgot password?
                   </Link>
@@ -175,7 +177,7 @@ const Login = () => {
                 Don’t have an account?{" "}
                 <Link
                   to="/signup"
-                  className="font-medium text-emerald-600 hover:text-emerald-700"
+                  className="font-medium text-emerald-700 hover:text-emerald-800"
                 >
                   Create one
                 </Link>
@@ -187,8 +189,8 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Subtle base accent under the card */}
-          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-amber-300/20 blur-md" />
+          {/* soft badge glow */}
+          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-emerald-300/25 blur-md" />
         </div>
       </div>
     </div>
