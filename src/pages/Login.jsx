@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -16,10 +16,10 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/login`, {
-        email,
-        password,
-      });
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_BASE_URL}/login`,
+        { email, password }
+      );
 
       const { token, user } = response.data;
 
@@ -28,7 +28,11 @@ const Login = () => {
       localStorage.setItem('user', JSON.stringify(user));
       navigate('/');
     } catch (err) {
-      setError('Invalid email or password');
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        'Invalid email or password';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -82,6 +86,17 @@ const Login = () => {
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
+
+        {/* Sign up discoverability */}
+        <p className="mt-6 text-center text-sm text-gray-600">
+          Don’t have an account?{' '}
+          <Link
+            to="/signup"
+            className="text-blue-600 hover:underline font-medium"
+          >
+            Create one
+          </Link>
+        </p>
 
         <p className="mt-4 text-center text-sm text-gray-500">
           &copy; {new Date().getFullYear()} MkopoSuite. All rights reserved.
