@@ -1,1 +1,0 @@
-import{j as t}from"./index-CPepfGRk.js";import{T as e}from"./TypesEditor-CEBGQ8qG.js";import"./admin-CkayReOg.js";import"./index-DskXkS4d.js";function o(){return t.jsx(e,{title:"Asset Management Types",category:"asset-management-types"})}export{o as default};
