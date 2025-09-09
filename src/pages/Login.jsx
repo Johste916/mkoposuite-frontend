@@ -68,18 +68,23 @@ const Login = () => {
           {/* Card */}
           <div className="rounded-2xl bg-white/98 backdrop-blur-sm shadow-[0_12px_40px_-10px_rgba(15,23,42,0.25)] ring-1 ring-slate-200">
             <div className="px-8 pt-8 pb-6">
-              {/* Integrated brand badge (no "Welcome") */}
+              {/* Brand masthead (bigger logo + gentle glow) */}
               <div className="flex flex-col items-center text-center">
-                <div className="grid place-items-center h-24 w-24 rounded-2xl bg-emerald-50 ring-1 ring-emerald-200/70 shadow-sm">
-                  <img
-                    src={BRAND_LOGO}
-                    alt="MkopoSuite"
-                    className="h-14 w-auto object-contain select-none"
-                    draggable={false}
-                    loading="eager"
-                  />
+                <div className="relative">
+                  {/* glow behind the badge */}
+                  <div className="pointer-events-none absolute -inset-3 rounded-[1.4rem] bg-gradient-to-b from-emerald-200/50 to-transparent blur-xl" />
+                  {/* badge with logo */}
+                  <div className="relative grid place-items-center h-28 w-28 sm:h-32 sm:w-32 rounded-2xl bg-emerald-50 ring-1 ring-emerald-200/70 shadow-sm">
+                    <img
+                      src={BRAND_LOGO}
+                      alt="MkopoSuite"
+                      className="h-20 w-auto sm:h-24 object-contain select-none"
+                      draggable={false}
+                      loading="eager"
+                    />
+                  </div>
                 </div>
-                <p className="mt-4 text-xs sm:text-sm text-slate-500">
+                <p className="mt-5 text-xs sm:text-sm text-slate-500">
                   Please login to continue
                 </p>
               </div>
