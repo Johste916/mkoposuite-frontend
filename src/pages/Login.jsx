@@ -4,12 +4,7 @@ import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiUnlock, FiEye, FiEyeOff, FiLoader } from "react-icons/fi";
 
-/**
- * Backend URL:
- * - Uses VITE_API_BASE_URL or VITE_API_BASE if provided
- * - Falls back to same-origin + /api
- * - Ensures final POST goes to .../api/login
- */
+/* Backend URL (same logic as before) */
 const ORIGIN =
   typeof window !== "undefined" ? window.location.origin : "http://localhost:10000";
 const RAW_BASE =
@@ -19,7 +14,7 @@ const RAW_BASE =
 const BASE = RAW_BASE.replace(/\/+$/, "");
 const LOGIN_URL = /\/api$/i.test(BASE) ? `${BASE}/login` : `${BASE}/api/login`;
 
-// Public asset placed at: public/brand/mkoposuite-logo.png
+/* Public logo */
 const BRAND_LOGO = "/brand/mkoposuite-logo.png";
 
 const Login = () => {
@@ -55,17 +50,27 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[radial-gradient(1200px_600px_at_50%_-10%,#ffffff_0%,#f3faf6_50%,#f8fbff_100%)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_40%_at_50%_0%,rgba(255,255,255,.9),rgba(255,255,255,0)_70%)]" />
+    <div
+      className={
+        // Subtle, professional background
+        "min-h-screen relative overflow-hidden " +
+        "bg-gradient-to-br from-slate-50 via-emerald-50/25 to-slate-100"
+      }
+    >
+      {/* Soft, desaturated halos (top & bottom-right) */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(800px_420px_at_50%_-10%,rgba(16,185,129,0.12),rgba(255,255,255,0)_65%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(520px_320px_at_85%_95%,rgba(2,132,199,0.08),rgba(255,255,255,0)_60%)]" />
+      </div>
+
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md">
           {/* Card */}
-          <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-xl ring-1 ring-black/5">
+          <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-2xl ring-1 ring-black/5">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand only (no heading text) */}
+              {/* Brand only */}
               <div className="flex flex-col items-center text-center">
-                {/* scale ensures presence even if PNG has outer whitespace */}
-                <div className="origin-center scale-[1.35] sm:scale-[1.55]">
+                <div className="origin-center scale-[1.45] sm:scale-[1.6]">
                   <img
                     src={BRAND_LOGO}
                     alt="MkopoSuite"
@@ -113,7 +118,7 @@ const Login = () => {
                   </div>
                 </div>
 
-                {/* Password with eye toggle */}
+                {/* Password */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
                     Password
@@ -185,8 +190,8 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Bottom accent shadow */}
-          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-gradient-to-r from-amber-300/60 via-amber-400/60 to-amber-300/60 blur-md" />
+          {/* Subtle base accent under the card */}
+          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-emerald-300/30 blur-md" />
         </div>
       </div>
     </div>
