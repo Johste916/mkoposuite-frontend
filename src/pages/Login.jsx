@@ -14,7 +14,7 @@ const RAW_BASE =
 const BASE = RAW_BASE.replace(/\/+$/, "");
 const LOGIN_URL = /\/api$/i.test(BASE) ? `${BASE}/login` : `${BASE}/api/login`;
 
-/* Public logo */
+/* Public logo (ensure this exists at /public/brand/mkoposuite-logo.png) */
 const BRAND_LOGO = "/brand/mkoposuite-logo.png";
 
 const Login = () => {
@@ -52,35 +52,31 @@ const Login = () => {
   return (
     <div
       className={
-        // 🌟 Warm Gray + Gold palette (professional & brand-friendly)
+        // Deep charcoal background — professional and low glare
         "min-h-screen relative overflow-hidden " +
-        "bg-gradient-to-br from-stone-50 via-stone-100 to-stone-50"
+        "bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950"
       }
     >
-      {/* Subtle halos for depth */}
+      {/* Very subtle, low-opacity accents */}
       <div className="pointer-events-none absolute inset-0">
-        {/* soft neutral top glow */}
-        <div className="absolute inset-0 bg-[radial-gradient(800px_420px_at_50%_-10%,rgba(120,113,108,0.08),rgba(255,255,255,0)_65%)]" />
-        {/* gentle gold echo bottom-right */}
-        <div className="absolute inset-0 bg-[radial-gradient(520px_320px_at_85%_95%,rgba(245,158,11,0.08),rgba(255,255,255,0)_60%)]" />
+        <div className="absolute inset-0 opacity-[.18] bg-[radial-gradient(900px_480px_at_20%_8%,rgba(16,185,129,0.18),transparent_70%)]" />
+        <div className="absolute inset-0 opacity-[.12] bg-[radial-gradient(820px_420px_at_98%_95%,rgba(245,158,11,0.15),transparent_70%)]" />
       </div>
 
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md">
           {/* Card */}
-          <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-2xl ring-1 ring-black/5">
+          <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-[0_15px_60px_-15px_rgba(0,0,0,0.55)] ring-1 ring-slate-900/10">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand only (large) */}
+              {/* Brand only (no text heading) */}
               <div className="flex flex-col items-center text-center">
-                <div className="origin-center scale-[1.5] sm:scale-[1.65]">
-                  <img
-                    src={BRAND_LOGO}
-                    alt="MkopoSuite"
-                    className="h-20 sm:h-24 md:h-28 w-auto object-contain drop-shadow-sm select-none"
-                    draggable={false}
-                    loading="eager"
-                  />
-                </div>
+                <img
+                  src={BRAND_LOGO}
+                  alt="MkopoSuite"
+                  className="h-24 sm:h-28 md:h-32 w-auto object-contain drop-shadow-sm select-none"
+                  draggable={false}
+                  loading="eager"
+                />
                 <p className="mt-3 text-xs sm:text-sm text-slate-500">
                   Please login to continue
                 </p>
@@ -152,7 +148,7 @@ const Login = () => {
                 <div className="flex items-center justify-end text-sm">
                   <Link
                     to="/forgot-password"
-                    className="text-emerald-700 hover:text-emerald-800"
+                    className="text-emerald-600 hover:text-emerald-700"
                   >
                     Forgot password?
                   </Link>
@@ -179,7 +175,7 @@ const Login = () => {
                 Don’t have an account?{" "}
                 <Link
                   to="/signup"
-                  className="font-medium text-emerald-700 hover:text-emerald-800"
+                  className="font-medium text-emerald-600 hover:text-emerald-700"
                 >
                   Create one
                 </Link>
@@ -191,8 +187,8 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Subtle gold accent under the card */}
-          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-gradient-to-r from-amber-300/40 via-amber-400/50 to-amber-300/40 blur-md" />
+          {/* Subtle base accent under the card */}
+          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-amber-300/20 blur-md" />
         </div>
       </div>
     </div>
