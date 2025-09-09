@@ -1,48 +1,20 @@
-import React, { useState, useMemo } from "react";
+// src/pages/Login.jsx
+import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiUnlock, FiEye, FiEyeOff, FiLoader } from "react-icons/fi";
 
-/** --- API config --------------------------------------------------------- */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 const LOGIN_URL = `${API_BASE}/login`;
-
-/** --- Brand colors (tweak if needed) ------------------------------------ */
-const BRAND_GREEN = "#0b7a3a";
-const BRAND_GREEN_HOVER = "#096a33";
-const BRAND_GOLD = "#f2a42b";
-
-/** --- Logo resolver (tries env, then common public paths) ---------------- */
-function useLogoSrc() {
-  const candidates = useMemo(
-    () =>
-      [
-        import.meta.env.VITE_LOGIN_LOGO,  // e.g. /brand/logo.png
-        "/logo.svg",
-        "/logo.png",
-        "/Johsta Icon 1.png",             // your uploaded file name
-      ].filter(Boolean),
-    []
-  );
-
-  const [index, setIndex] = useState(0);
-  const src = candidates[index] || "";
-
-  const onError = () => {
-    if (index < candidates.length - 1) setIndex(index + 1);
-  };
-  return { src, onError };
-}
+const BRAND_LOGO = "/brand/mkoposuite-logo.png"; // place your provided PNG here
 
 const Login = () => {
-  const navigate = useNavigate();
-  const { src: logoSrc, onError: onLogoError } = useLogoSrc();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -53,7 +25,6 @@ const Login = () => {
       const { data } = await axios.post(LOGIN_URL, { email, password });
       const { token, user } = data || {};
       if (!token) throw new Error("No token received from server");
-
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user || {}));
       navigate("/");
@@ -69,38 +40,36 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-amber-50">
-      {/* subtle corners glow */}
-      <div className="pointer-events-none absolute -top-32 -left-32 h-64 w-64 rounded-full bg-emerald-200/30 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-32 h-64 w-64 rounded-full bg-amber-200/30 blur-3xl" />
-
+    <div className="min-h-screen relative overflow-hidden bg-[conic-gradient(at_120%_-20%,#fefcf5_0deg,#eef8f2_120deg,#f7fbff_240deg,#fefcf5_360deg)]">
+      {/* soft vignette */}
+      <div className="pointer-events-none absolute inset-0 opacity-[.9] bg-[radial-gradient(55%_50%_at_50%_0%,rgba(255,255,255,.85),rgba(255,255,255,0)_70%)]" />
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md">
           {/* Card */}
-          <div className="rounded-2xl bg-white/95 backdrop-blur shadow-xl ring-1 ring-black/5">
+          <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-xl ring-1 ring-black/5">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand header */}
+              {/* Brand */}
               <div className="flex flex-col items-center text-center">
-                {logoSrc ? (
-                  <img
-                    src={logoSrc}
-                    onError={onLogoError}
-                    alt="MkopoSuite"
-                    className="h-12 w-12 object-contain"
-                    draggable={false}
-                  />
-                ) : null}
-                <h1 className="mt-3 text-2xl font-semibold text-slate-800">
+                <img
+                  src={BRAND_LOGO}
+                  alt="Mkopo Suite"
+                  className="h-14 w-auto object-contain select-none"
+                  draggable={false}
+                />
+                <h1 className="mt-4 text-xl sm:text-2xl font-semibold text-slate-800">
                   Welcome to MkopoSuite
                 </h1>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-xs sm:text-sm text-slate-500">
                   Please login to continue
                 </p>
               </div>
 
               {/* Error */}
               {error ? (
-                <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                <div
+                  role="alert"
+                  className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                >
                   {error}
                 </div>
               ) : null}
@@ -120,16 +89,15 @@ const Login = () => {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 py-2 text-sm shadow-sm outline-none transition focus:border-[var(--brand-green)] focus:ring-2 focus:ring-[var(--brand-green)]/15"
+                      className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 py-2 text-sm shadow-sm outline-none ring-0 transition focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-100"
                       required
                       placeholder="admin@example.com"
                       autoComplete="email"
-                      style={{ ["--brand-green"]: BRAND_GREEN }}
                     />
                   </div>
                 </div>
 
-                {/* Password */}
+                {/* Password with eye toggle */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
                     Password
@@ -142,11 +110,10 @@ const Login = () => {
                       type={showPwd ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-10 py-2 text-sm shadow-sm outline-none transition focus:border-[var(--brand-green)] focus:ring-2 focus:ring-[var(--brand-green)]/15"
+                      className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-10 py-2 text-sm shadow-sm outline-none ring-0 transition focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-100"
                       required
                       placeholder="Enter your password"
                       autoComplete="current-password"
-                      style={{ ["--brand-green"]: BRAND_GREEN }}
                     />
                     <button
                       type="button"
@@ -163,11 +130,7 @@ const Login = () => {
                 <div className="flex items-center justify-end text-sm">
                   <Link
                     to="/forgot-password"
-                    className="text-[var(--brand-green)] hover:text-[var(--brand-green-hover)]"
-                    style={{
-                      ["--brand-green"]: BRAND_GREEN,
-                      ["--brand-green-hover"]: BRAND_GREEN_HOVER,
-                    }}
+                    className="text-emerald-700 hover:text-emerald-800"
                   >
                     Forgot password?
                   </Link>
@@ -176,11 +139,7 @@ const Login = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--brand-green)] px-4 py-2.5 text-sm font-medium text-white shadow hover:bg-[var(--brand-green-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-green)]/30 disabled:opacity-60"
-                  style={{
-                    ["--brand-green"]: BRAND_GREEN,
-                    ["--brand-green-hover"]: BRAND_GREEN_HOVER,
-                  }}
+                  className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white shadow hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:opacity-60"
                 >
                   {loading ? (
                     <>
@@ -198,11 +157,7 @@ const Login = () => {
                 Don’t have an account?{" "}
                 <Link
                   to="/signup"
-                  className="font-medium text-[var(--brand-green)] hover:text-[var(--brand-green-hover)]"
-                  style={{
-                    ["--brand-green"]: BRAND_GREEN,
-                    ["--brand-green-hover"]: BRAND_GREEN_HOVER,
-                  }}
+                  className="font-medium text-emerald-700 hover:text-emerald-800"
                 >
                   Create one
                 </Link>
@@ -212,13 +167,10 @@ const Login = () => {
                 © {new Date().getFullYear()} MkopoSuite. All rights reserved.
               </div>
             </div>
-
-            {/* gold accent bar */}
-            <div
-              className="h-1.5 w-full rounded-b-2xl"
-              style={{ backgroundColor: BRAND_GOLD }}
-            />
           </div>
+
+          {/* Bottom accent shadow */}
+          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-gradient-to-r from-amber-300/60 via-amber-400/60 to-amber-300/60 blur-md" />
         </div>
       </div>
     </div>
