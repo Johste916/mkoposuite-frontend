@@ -52,15 +52,17 @@ const Login = () => {
   return (
     <div
       className={
-        // Subtle, professional background
+        // 🌟 Warm Gray + Gold palette (professional & brand-friendly)
         "min-h-screen relative overflow-hidden " +
-        "bg-gradient-to-br from-slate-50 via-emerald-50/25 to-slate-100"
+        "bg-gradient-to-br from-stone-50 via-stone-100 to-stone-50"
       }
     >
-      {/* Soft, desaturated halos (top & bottom-right) */}
+      {/* Subtle halos for depth */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(800px_420px_at_50%_-10%,rgba(16,185,129,0.12),rgba(255,255,255,0)_65%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(520px_320px_at_85%_95%,rgba(2,132,199,0.08),rgba(255,255,255,0)_60%)]" />
+        {/* soft neutral top glow */}
+        <div className="absolute inset-0 bg-[radial-gradient(800px_420px_at_50%_-10%,rgba(120,113,108,0.08),rgba(255,255,255,0)_65%)]" />
+        {/* gentle gold echo bottom-right */}
+        <div className="absolute inset-0 bg-[radial-gradient(520px_320px_at_85%_95%,rgba(245,158,11,0.08),rgba(255,255,255,0)_60%)]" />
       </div>
 
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
@@ -68,16 +70,15 @@ const Login = () => {
           {/* Card */}
           <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-2xl ring-1 ring-black/5">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand only */}
+              {/* Brand only (large) */}
               <div className="flex flex-col items-center text-center">
-                <div className="origin-center scale-[1.45] sm:scale-[1.6]">
+                <div className="origin-center scale-[1.5] sm:scale-[1.65]">
                   <img
                     src={BRAND_LOGO}
                     alt="MkopoSuite"
                     className="h-20 sm:h-24 md:h-28 w-auto object-contain drop-shadow-sm select-none"
                     draggable={false}
                     loading="eager"
-                    fetchpriority="high"
                   />
                 </div>
                 <p className="mt-3 text-xs sm:text-sm text-slate-500">
@@ -190,8 +191,8 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Subtle base accent under the card */}
-          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-emerald-300/30 blur-md" />
+          {/* Subtle gold accent under the card */}
+          <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-gradient-to-r from-amber-300/40 via-amber-400/50 to-amber-300/40 blur-md" />
         </div>
       </div>
     </div>
