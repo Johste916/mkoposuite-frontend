@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import React, { useState } from 'react';
-import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import api from '../api';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -10,27 +10,68 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  async function tryLogin() {
+    // 1) Candidate endpoints (we’ll try in this order)
+    const paths = ['/login', '/auth/login', '/auth/signin'];
+
+    // 2) Candidate payloads (some backends want username or login)
+    const payloads = [
+      { email, password },
+      { username: email, password },
+      { login: email, password },
+    ];
+
+    // 3) Attempt each combination until one succeeds
+    let lastErr;
+    for (const body of payloads) {
+      try {
+        const data = await api.postFirst(paths, body);
+        return data; // success
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr;
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/login`,
-        { email, password }
-      );
+      const data = await tryLogin();
 
-      const { token, user } = response.data;
+      // Accept common token field names
+      const token =
+        data?.token ||
+        data?.accessToken ||
+        data?.access_token ||
+        data?.jwt ||
+        null;
+
+      const user =
+        data?.user ||
+        data?.profile ||
+        data?.account ||
+        null;
 
       if (!token) throw new Error('No token received');
+
       localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      if (user) localStorage.setItem('user', JSON.stringify(user));
+
+      // Optional: set activeTenantId if your API returns one on login
+      const tenantId =
+        user?.tenantId || user?.tenant?.id || data?.tenantId || null;
+      if (tenantId) localStorage.setItem('activeTenantId', tenantId);
+
       navigate('/');
     } catch (err) {
       const msg =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
+        err?.normalizedMessage ||
         'Invalid email or password';
       setError(msg);
     } finally {
@@ -87,13 +128,10 @@ const Login = () => {
           </button>
         </form>
 
-        {/* Sign up discoverability */}
+        {/* Self-service signup entry point */}
         <p className="mt-6 text-center text-sm text-gray-600">
           Don’t have an account?{' '}
-          <Link
-            to="/signup"
-            className="text-blue-600 hover:underline font-medium"
-          >
+          <Link to="/signup" className="text-blue-600 hover:underline font-medium">
             Create one
           </Link>
         </p>
