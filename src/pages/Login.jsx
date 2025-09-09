@@ -4,9 +4,23 @@ import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiUnlock, FiEye, FiEyeOff, FiLoader } from "react-icons/fi";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-const LOGIN_URL = `${API_BASE}/login`;
-const BRAND_LOGO = "/brand/mkoposuite-logo.png"; // place your provided PNG here
+/**
+ * Backend URL:
+ * - Uses VITE_API_BASE_URL or VITE_API_BASE if provided
+ * - Falls back to same-origin + /api
+ * - Ensures final POST goes to .../api/login
+ */
+const ORIGIN =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:10000";
+const RAW_BASE =
+  (import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_BASE ||
+    `${ORIGIN}/api`).toString();
+const BASE = RAW_BASE.replace(/\/+$/, "");
+const LOGIN_URL = /\/api$/i.test(BASE) ? `${BASE}/login` : `${BASE}/api/login`;
+
+// Public asset placed at: public/brand/mkoposuite-logo.png
+const BRAND_LOGO = "/brand/mkoposuite-logo.png";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -25,6 +39,7 @@ const Login = () => {
       const { data } = await axios.post(LOGIN_URL, { email, password });
       const { token, user } = data || {};
       if (!token) throw new Error("No token received from server");
+
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user || {}));
       navigate("/");
@@ -40,26 +55,28 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[conic-gradient(at_120%_-20%,#fefcf5_0deg,#eef8f2_120deg,#f7fbff_240deg,#fefcf5_360deg)]">
+    <div className="min-h-screen relative overflow-hidden bg-[radial-gradient(1200px_600px_at_50%_-10%,#ffffff_0%,#f3faf6_50%,#f8fbff_100%)]">
       {/* soft vignette */}
-      <div className="pointer-events-none absolute inset-0 opacity-[.9] bg-[radial-gradient(55%_50%_at_50%_0%,rgba(255,255,255,.85),rgba(255,255,255,0)_70%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_40%_at_50%_0%,rgba(255,255,255,.9),rgba(255,255,255,0)_70%)]" />
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md">
           {/* Card */}
           <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-xl ring-1 ring-black/5">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand */}
+              {/* Brand header: “Welcome to” + big logo */}
               <div className="flex flex-col items-center text-center">
-                <img
-                  src={BRAND_LOGO}
-                  alt="Mkopo Suite"
-                  className="h-14 w-auto object-contain select-none"
-                  draggable={false}
-                />
-                <h1 className="mt-4 text-xl sm:text-2xl font-semibold text-slate-800">
-                  Welcome to MkopoSuite
-                </h1>
-                <p className="mt-1 text-xs sm:text-sm text-slate-500">
+                <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+                  <span className="text-[22px] sm:text-[26px] font-semibold text-slate-800">
+                    Welcome to
+                  </span>
+                  <img
+                    src={BRAND_LOGO}
+                    alt="Mkopo Suite"
+                    className="h-12 sm:h-14 md:h-16 w-auto object-contain drop-shadow-sm select-none"
+                    draggable={false}
+                  />
+                </div>
+                <p className="mt-2 text-xs sm:text-sm text-slate-500">
                   Please login to continue
                 </p>
               </div>
@@ -89,7 +106,7 @@ const Login = () => {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 py-2 text-sm shadow-sm outline-none ring-0 transition focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-100"
+                      className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 py-2 text-sm shadow-sm outline-none transition focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-100"
                       required
                       placeholder="admin@example.com"
                       autoComplete="email"
@@ -110,7 +127,7 @@ const Login = () => {
                       type={showPwd ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-10 py-2 text-sm shadow-sm outline-none ring-0 transition focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-100"
+                      className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-10 py-2 text-sm shadow-sm outline-none transition focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-100"
                       required
                       placeholder="Enter your password"
                       autoComplete="current-password"
