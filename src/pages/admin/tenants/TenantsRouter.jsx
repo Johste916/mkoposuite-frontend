@@ -1,33 +1,42 @@
-// server/routes/admin/tenantsRoutes.js
+// server/routes/tenantRoutes.js
 'use strict';
 const express = require('express');
 const router = express.Router();
-const ctrl = require('../../controllers/admin/tenantsController');
 
-// List & read
-router.get('/', ctrl.list);
-router.get('/:id', ctrl.read);
+/* Safe helpers in case app didn’t attach them (no breaking change) */
+router.use((req, res, next) => {
+  if (!res.ok)   res.ok   = (data, extra = {}) => {
+    if (typeof extra.total === 'number') res.setHeader('X-Total-Count', String(extra.total));
+    return res.json(data);
+  };
+  if (!res.fail) res.fail = (status, message, extra = {}) => res.status(status).json({ error: message, ...extra });
+  next();
+});
 
-// Update subscription/core fields (planCode, seats, trialEndsAt, billingEmail, status)
-router.patch('/:id', ctrl.updateCore);
-router.patch('/:id/subscription', ctrl.updateCore);
+let authenticateUser;
+try {
+  ({ authenticateUser } = require('../middleware/authMiddleware'));
+} catch {
+  // If auth middleware is missing, fall back to a no-op to avoid crashing dev environments.
+  authenticateUser = (_req, _res, next) => next();
+}
 
-// Entitlements & limits
-router.post('/:id/entitlements', ctrl.setEntitlements);
-router.post('/:id/limits', ctrl.setLimits);
+const ctrl = require('../controllers/tenantController');
 
-// Invoices
-router.get('/:id/invoices', ctrl.listInvoices);
-router.post('/:id/invoices', ctrl.createInvoice);
-router.post('/:id/invoices/sync', ctrl.syncInvoices);
-router.post('/:id/invoices/:invoiceId/pay', ctrl.markPaid);
-router.post('/:id/invoices/:invoiceId/send', ctrl.resendInvoice);
-router.post('/:id/invoices/:invoiceId/resend', ctrl.resendInvoice);
+// Current company
+router.get('/me', authenticateUser, ctrl.me);
+router.patch('/me', authenticateUser, ctrl.updateMe);
+router.get('/me/entitlements', authenticateUser, ctrl.entitlements);
 
-// Comms & support
-router.post('/:id/notify', ctrl.notify);
+// Self-service limits & invoices
+router.get('/me/limits', authenticateUser, ctrl.getLimits);
+router.patch('/me/limits', authenticateUser, ctrl.setLimits);
+router.get('/me/invoices', authenticateUser, ctrl.listInvoices);
 
-// Impersonation
-router.post('/:id/impersonate', ctrl.impersonate);
+// Optional: generic path some frontends try (/tenants/:id/invoices)
+router.get('/:id/invoices', authenticateUser, ctrl.listInvoices);
+
+// Billing checker (ops) — leaving auth optional to match original intent
+router.post('/admin/billing/cron-check', ctrl.cronCheck);
 
 module.exports = router;
