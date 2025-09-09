@@ -63,18 +63,23 @@ const Login = () => {
           {/* Card */}
           <div className="rounded-2xl bg-white/95 backdrop-blur-sm shadow-xl ring-1 ring-black/5">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand header: “Welcome to” + big logo */}
+              {/* Brand header: “Welcome to” + BIG logo */}
               <div className="flex flex-col items-center text-center">
-                <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-                  <span className="text-[22px] sm:text-[26px] font-semibold text-slate-800">
+                <div className="flex flex-wrap items-center justify-center gap-4">
+                  <span className="text-[28px] sm:text-[32px] font-extrabold tracking-tight text-slate-800">
                     Welcome to
                   </span>
-                  <img
-                    src={BRAND_LOGO}
-                    alt="Mkopo Suite"
-                    className="h-12 sm:h-14 md:h-16 w-auto object-contain drop-shadow-sm select-none"
-                    draggable={false}
-                  />
+                  {/* scale ensures visual size even if PNG has whitespace */}
+                  <div className="origin-left scale-[1.35] sm:scale-[1.6]">
+                    <img
+                      src={BRAND_LOGO}
+                      alt="Mkopo Suite"
+                      className="h-16 sm:h-20 md:h-24 w-auto object-contain drop-shadow-sm select-none"
+                      draggable={false}
+                      loading="eager"
+                      fetchpriority="high"
+                    />
+                  </div>
                 </div>
                 <p className="mt-2 text-xs sm:text-sm text-slate-500">
                   Please login to continue
