@@ -17,6 +17,10 @@ const LOGIN_URL = /\/api$/i.test(BASE) ? `${BASE}/login` : `${BASE}/api/login`;
 /* Public logo */
 const BRAND_LOGO = "/brand/mkoposuite-logo.png";
 
+/* Optional tagline from env (fallback provided) */
+const TAGLINE =
+  (import.meta.env.VITE_LOGIN_TAGLINE || "Please login to continue").toString();
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,12 +56,12 @@ const Login = () => {
   return (
     <div
       className={
-        // Calm, professional background (light, not bright)
+        // Calm, professional background
         "min-h-screen relative overflow-hidden " +
         "bg-gradient-to-br from-slate-100 via-stone-100 to-slate-100"
       }
     >
-      {/* very subtle brand tints in corners */}
+      {/* subtle brand tints */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 opacity-[.10] bg-[radial-gradient(900px_520px_at_15%_-10%,rgba(16,185,129,0.18),transparent_70%)]" />
         <div className="absolute inset-0 opacity-[.07] bg-[radial-gradient(780px_420px_at_95%_98%,rgba(245,158,11,0.15),transparent_70%)]" />
@@ -68,24 +72,26 @@ const Login = () => {
           {/* Card */}
           <div className="rounded-2xl bg-white/98 backdrop-blur-sm shadow-[0_12px_40px_-10px_rgba(15,23,42,0.25)] ring-1 ring-slate-200">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand masthead (bigger logo + gentle glow) */}
+              {/* Brand masthead — BIG badge + soft glow */}
               <div className="flex flex-col items-center text-center">
                 <div className="relative">
-                  {/* glow behind the badge */}
-                  <div className="pointer-events-none absolute -inset-3 rounded-[1.4rem] bg-gradient-to-b from-emerald-200/50 to-transparent blur-xl" />
-                  {/* badge with logo */}
-                  <div className="relative grid place-items-center h-28 w-28 sm:h-32 sm:w-32 rounded-2xl bg-emerald-50 ring-1 ring-emerald-200/70 shadow-sm">
+                  {/* Glow */}
+                  <div className="pointer-events-none absolute -inset-4 rounded-[1.8rem] bg-[conic-gradient(from_200deg_at_50%_0%,rgba(16,185,129,0.25),transparent_40%,rgba(245,158,11,0.22),transparent_85%)] blur-2xl" />
+                  {/* Badge */}
+                  <div className="relative grid place-items-center h-36 w-36 sm:h-40 sm:w-40 rounded-3xl bg-emerald-50 ring-1 ring-emerald-200/80 shadow">
                     <img
                       src={BRAND_LOGO}
                       alt="MkopoSuite"
-                      className="h-20 w-auto sm:h-24 object-contain select-none"
+                      className="h-28 w-auto sm:h-32 object-contain select-none"
                       draggable={false}
                       loading="eager"
                     />
                   </div>
                 </div>
-                <p className="mt-5 text-xs sm:text-sm text-slate-500">
-                  Please login to continue
+
+                {/* tiny, neutral tagline */}
+                <p className="mt-5 text-[13px] text-slate-500">
+                  {TAGLINE}
                 </p>
               </div>
 
@@ -194,7 +200,7 @@ const Login = () => {
             </div>
           </div>
 
-          {/* soft badge glow */}
+          {/* soft base glow */}
           <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-emerald-300/25 blur-md" />
         </div>
       </div>
