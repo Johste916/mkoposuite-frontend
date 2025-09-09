@@ -3,6 +3,7 @@ import { Suspense, lazy } from "react";
 
 // Auth/public
 const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/public/Signup")); // ⬅️ NEW
 
 // Shell
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -130,7 +131,6 @@ const DeferredIncomeMonthly = lazy(() => import("./pages/reports/DeferredIncomeM
 const ProRataCollections = lazy(() => import("./pages/reports/ProRataCollections"));
 const DisbursementReport = lazy(() => import("./pages/reports/DisbursementReport"));
 const FeesReport = lazy(() => import("./pages/reports/FeesReport"));
-const LoanOfficerReport = lazy(() => import("./pages/reports/LoanOfficerReport"));
 const LoanProductsReport = lazy(() => import("./pages/reports/LoanProductsReport"));
 const MfrsRatios = lazy(() => import("./pages/reports/MfrsRatios"));
 const DailyReport = lazy(() => import("./pages/reports/DailyReport"));
@@ -171,6 +171,7 @@ function App() {
           <Routes>
             {/* Public */}
             <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} /> {/* ⬅️ NEW public route */}
 
             {/* Protected shell */}
             <Route

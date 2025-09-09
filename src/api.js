@@ -5,38 +5,49 @@ import axios from "axios";
  * Base URL rules
  * - Prefer VITE_API_BASE_URL or VITE_API_BASE (full origin, may include /api)
  * - Fallback to same-origin + /api for local dev
+ * - Ensure final baseURL ends WITH /api (but avoid /api/api)
  */
-const envBaseRaw =
-  (import.meta.env?.VITE_API_BASE_URL ||
-    import.meta.env?.VITE_API_BASE ||
-    ""
-  ).toString();
+const envBaseRaw = (
+  import.meta.env?.VITE_API_BASE_URL ||
+  import.meta.env?.VITE_API_BASE ||
+  ""
+).toString();
 
-const envBase = envBaseRaw.replace(/\/+$/, ""); // trim trailing /
-const fallbackBase =
-  typeof window !== "undefined" ? `${window.location.origin}/api` : "/api";
-const baseURL = envBase || fallbackBase;
+const trimmed = envBaseRaw.replace(/\/+$/, "");
+const fallbackOrigin =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:10000";
+
+// If no env provided, use same-origin; then ensure /api
+const rawBase = trimmed || fallbackOrigin;
+const base = rawBase.replace(/\/+$/, "");
+const baseURL = /\/api$/i.test(base) ? base : `${base}/api`; // <- canonical
+
+// Optional knobs (safe defaults)
+const WITH_CREDENTIALS =
+  (import.meta.env?.VITE_API_WITH_CREDENTIALS ?? "0").toString() === "1";
+const TIMEOUT_MS = Number(import.meta.env?.VITE_API_TIMEOUT ?? 30000); // 30s
+const MAX_GET_RETRIES = Number(import.meta.env?.VITE_API_RETRIES ?? 0); // off by default
 
 /** Axios instance */
 const api = axios.create({
   baseURL, // ends WITHOUT trailing slash
-  withCredentials:
-    (import.meta.env?.VITE_API_WITH_CREDENTIALS ?? "0").toString() === "1",
+  withCredentials: WITH_CREDENTIALS,
+  timeout: TIMEOUT_MS,
   headers: {
     Accept: "application/json",
+    // 'X-Requested-With': 'XMLHttpRequest', // uncomment if your server checks it
   },
 });
 
 /** Normalize paths so consumers can pass 'users', '/users', or '/api/users' */
+const BASE_HAS_API = /\/api$/i.test(baseURL);
 function normalizePath(input) {
   if (!input) return "/";
-  if (/^https?:\/\//i.test(input)) return input;
+  if (/^https?:\/\//i.test(input)) return input; // absolute pass-through
 
-  const baseHasApi = /\/api$/i.test(api.defaults.baseURL || "");
   let url = String(input).trim();
-
   if (!url.startsWith("/")) url = `/${url}`;
-  if (baseHasApi && url.startsWith("/api/")) url = url.slice(4); // drop duplicate /api
+  if (BASE_HAS_API && url.startsWith("/api/")) url = url.slice(4); // drop duplicate /api
   url = url.replace(/\/{2,}/g, "/");
   return url;
 }
@@ -54,6 +65,7 @@ let overrideTenantId = null;
 const SEND_TZ_HEADERS =
   (import.meta.env?.VITE_SEND_TZ_HEADERS ?? "1").toString() !== "0";
 
+/* ----------------------------- Request interceptor ---------------------------- */
 api.interceptors.request.use((config) => {
   // Normalize relative URL
   if (config.url && !/^https?:\/\//i.test(config.url)) {
@@ -107,12 +119,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/** Consistent error normalization + 401 handler */
+/* ----------------------------- Response interceptor ----------------------------- */
+/** Consistent error normalization + 401 handler + optional safe GET retries */
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
     const status = err?.response?.status;
+    const cfg = err?.config || {};
 
+    // Normalize message
     if (!status) {
       err.normalizedMessage =
         err?.message === "Network Error"
@@ -136,16 +151,30 @@ api.interceptors.response.use(
       if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
         window.location.href = "/login";
       }
+      return Promise.reject(err);
     }
+
+    // Optional: retry **GET** on transient errors (disabled unless VITE_API_RETRIES>0)
+    const transient = status && [429, 502, 503, 504].includes(status);
+    const isGet = (cfg.method || "get").toLowerCase() === "get";
+    cfg.__retryCount = cfg.__retryCount || 0;
+
+    if (MAX_GET_RETRIES > 0 && isGet && transient && cfg.__retryCount < MAX_GET_RETRIES) {
+      cfg.__retryCount += 1;
+      const backoff = Math.min(1000 * 2 ** (cfg.__retryCount - 1), 4000); // 1s, 2s, 4s cap
+      await new Promise((r) => setTimeout(r, backoff));
+      return api.request(cfg);
+    }
+
     return Promise.reject(err);
   }
 );
 
 /** Convenience helpers that return data directly */
-api.getJSON = async (url, config) => (await api.get(normalizePath(url), config)).data;
-api.postJSON = async (url, data, config) => (await api.post(normalizePath(url), data, config)).data;
-api.putJSON = async (url, data, config) => (await api.put(normalizePath(url), data, config)).data;
-api.patchJSON = async (url, data, config) => (await api.patch(normalizePath(url), data, config)).data;
+api.getJSON    = async (url, config) => (await api.get(   normalizePath(url), config)).data;
+api.postJSON   = async (url, data, config) => (await api.post(  normalizePath(url), data, config)).data;
+api.putJSON    = async (url, data, config) => (await api.put(   normalizePath(url), data, config)).data;
+api.patchJSON  = async (url, data, config) => (await api.patch( normalizePath(url), data, config)).data;
 api.deleteJSON = async (url, config) => (await api.delete(normalizePath(url), config)).data;
 
 /**
@@ -164,21 +193,17 @@ async function firstOk(method, paths, payload, config) {
       return res.data;
     } catch (e) {
       lastErr = e;
-      // Try next on common API mismatches
-      const status = e?.response?.status;
-      if (![400, 401, 403, 404, 409, 422, 500].includes(status)) {
-        // unknown — still attempt next
-      }
+      // continue to the next candidate
     }
   }
   throw lastErr;
 }
 
-api.getFirst = (paths, config) => firstOk("get", paths, undefined, config);
-api.postFirst = (paths, data, config) => firstOk("post", paths, data, config);
-api.patchFirst = (paths, data, config) => firstOk("patch", paths, data, config);
-api.putFirst = (paths, data, config) => firstOk("put", paths, data, config);
-api.deleteFirst = (paths, config) => firstOk("delete", paths, undefined, config);
+api.getFirst    = (paths, config)        => firstOk("get",    paths, undefined, config);
+api.postFirst   = (paths, data, config)  => firstOk("post",   paths, data,      config);
+api.patchFirst  = (paths, data, config)  => firstOk("patch",  paths, data,      config);
+api.putFirst    = (paths, data, config)  => firstOk("put",    paths, data,      config);
+api.deleteFirst = (paths, config)        => firstOk("delete", paths, undefined, config);
 
 /** Path utility + sugar methods mirroring axios verbs with normalization */
 api.path = normalizePath;
