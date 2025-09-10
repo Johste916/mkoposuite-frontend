@@ -4,7 +4,7 @@ import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiUnlock, FiEye, FiEyeOff, FiLoader } from "react-icons/fi";
 
-/* Backend URL (same logic as before) */
+/* Backend URL */
 const ORIGIN =
   typeof window !== "undefined" ? window.location.origin : "http://localhost:10000";
 const RAW_BASE =
@@ -16,8 +16,6 @@ const LOGIN_URL = /\/api$/i.test(BASE) ? `${BASE}/login` : `${BASE}/api/login`;
 
 /* Public logo */
 const BRAND_LOGO = "/brand/mkoposuite-logo.png";
-
-/* Optional tagline from env (fallback provided) */
 const TAGLINE =
   (import.meta.env.VITE_LOGIN_TAGLINE || "Please login to continue").toString();
 
@@ -36,11 +34,20 @@ const Login = () => {
 
     try {
       const { data } = await axios.post(LOGIN_URL, { email, password });
-      const { token, user } = data || {};
+      const { token, user, tenantId } = data || {};
       if (!token) throw new Error("No token received from server");
 
+      // Seed auth + tenant context
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user || {}));
+      const tid =
+        tenantId ||
+        user?.tenantId ||
+        user?.tenant?.id ||
+        import.meta.env.VITE_DEFAULT_TENANT_ID ||
+        null;
+      if (tid) localStorage.setItem("activeTenantId", String(tid));
+
       navigate("/");
     } catch (err) {
       const message =
@@ -71,12 +78,10 @@ const Login = () => {
           {/* Card */}
           <div className="rounded-2xl bg-white/98 backdrop-blur-sm shadow-[0_12px_40px_-10px_rgba(15,23,42,0.25)] ring-1 ring-slate-200">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand masthead — BIG badge + soft glow */}
+              {/* Brand masthead */}
               <div className="flex flex-col items-center text-center">
                 <div className="relative">
-                  {/* Glow */}
                   <div className="pointer-events-none absolute -inset-4 rounded-[1.8rem] bg-[conic-gradient(from_200deg_at_50%_0%,rgba(16,185,129,0.25),transparent_40%,rgba(245,158,11,0.22),transparent_85%)] blur-2xl" />
-                  {/* Badge */}
                   <div className="relative grid place-items-center h-36 w-36 sm:h-40 sm:w-40 rounded-3xl bg-emerald-50 ring-1 ring-emerald-200/80 shadow">
                     <img
                       src={BRAND_LOGO}
@@ -87,11 +92,7 @@ const Login = () => {
                     />
                   </div>
                 </div>
-
-                {/* tiny, neutral tagline */}
-                <p className="mt-5 text-[13px] text-slate-500">
-                  {TAGLINE}
-                </p>
+                <p className="mt-5 text-[13px] text-slate-500">{TAGLINE}</p>
               </div>
 
               {/* Error */}
@@ -106,7 +107,6 @@ const Login = () => {
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-                {/* Email */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
                     Email
@@ -127,7 +127,6 @@ const Login = () => {
                   </div>
                 </div>
 
-                {/* Password */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
                     Password
@@ -156,7 +155,6 @@ const Login = () => {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center justify-end text-sm">
                   <Link
                     to="/forgot-password"
@@ -182,7 +180,6 @@ const Login = () => {
                 </button>
               </form>
 
-              {/* Footer */}
               <div className="mt-5 text-center text-sm text-slate-500">
                 Don’t have an account?{" "}
                 <Link
@@ -199,7 +196,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* soft base glow */}
           <div className="mx-auto mt-2 h-2 w-56 rounded-full bg-emerald-300/25 blur-md" />
         </div>
       </div>
