@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FiMail, FiUnlock, FiEye, FiEyeOff, FiLoader } from "react-icons/fi";
 
 /* Backend URL */
@@ -19,13 +19,21 @@ const BRAND_LOGO = "/brand/mkoposuite-logo.png";
 const TAGLINE =
   (import.meta.env.VITE_LOGIN_TAGLINE || "Please login to continue").toString();
 
-const Login = () => {
+export default function Login() {
+  const nav = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+
+  // Prefill email from /login?email=...
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const e = params.get("email");
+    if (e) setEmail(e);
+  }, [location.search]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -37,7 +45,6 @@ const Login = () => {
       const { token, user, tenantId } = data || {};
       if (!token) throw new Error("No token received from server");
 
-      // Seed auth + tenant context
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user || {}));
       const tid =
@@ -48,7 +55,7 @@ const Login = () => {
         null;
       if (tid) localStorage.setItem("activeTenantId", String(tid));
 
-      navigate("/");
+      nav("/");
     } catch (err) {
       const message =
         err?.response?.data?.error ||
@@ -61,12 +68,7 @@ const Login = () => {
   }
 
   return (
-    <div
-      className={
-        "min-h-screen relative overflow-hidden " +
-        "bg-gradient-to-br from-slate-100 via-stone-100 to-slate-100"
-      }
-    >
+    <div className={"min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-100 via-stone-100 to-slate-100"}>
       {/* subtle brand tints */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 opacity-[.10] bg-[radial-gradient(900px_520px_at_15%_-10%,rgba(16,185,129,0.18),transparent_70%)]" />
@@ -75,10 +77,8 @@ const Login = () => {
 
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md">
-          {/* Card */}
           <div className="rounded-2xl bg-white/98 backdrop-blur-sm shadow-[0_12px_40px_-10px_rgba(15,23,42,0.25)] ring-1 ring-slate-200">
             <div className="px-8 pt-8 pb-6">
-              {/* Brand masthead */}
               <div className="flex flex-col items-center text-center">
                 <div className="relative">
                   <div className="pointer-events-none absolute -inset-4 rounded-[1.8rem] bg-[conic-gradient(from_200deg_at_50%_0%,rgba(16,185,129,0.25),transparent_40%,rgba(245,158,11,0.22),transparent_85%)] blur-2xl" />
@@ -95,22 +95,15 @@ const Login = () => {
                 <p className="mt-5 text-[13px] text-slate-500">{TAGLINE}</p>
               </div>
 
-              {/* Error */}
               {error ? (
-                <div
-                  role="alert"
-                  className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
-                >
+                <div role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                   {error}
                 </div>
               ) : null}
 
-              {/* Form */}
               <form onSubmit={handleSubmit} className="mt-5 space-y-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Email
-                  </label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
                   <div className="relative">
                     <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                       <FiMail />
@@ -128,9 +121,7 @@ const Login = () => {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Password
-                  </label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
                   <div className="relative">
                     <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                       <FiUnlock />
@@ -156,10 +147,7 @@ const Login = () => {
                 </div>
 
                 <div className="flex items-center justify-end text-sm">
-                  <Link
-                    to="/forgot-password"
-                    className="text-emerald-700 hover:text-emerald-800"
-                  >
+                  <Link to="/forgot-password" className="text-emerald-700 hover:text-emerald-800">
                     Forgot password?
                   </Link>
                 </div>
@@ -182,10 +170,7 @@ const Login = () => {
 
               <div className="mt-5 text-center text-sm text-slate-500">
                 Don’t have an account?{" "}
-                <Link
-                  to="/signup"
-                  className="font-medium text-emerald-700 hover:text-emerald-800"
-                >
+                <Link to="/signup" className="font-medium text-emerald-700 hover:text-emerald-800">
                   Create one
                 </Link>
               </div>
@@ -201,6 +186,4 @@ const Login = () => {
       </div>
     </div>
   );
-};
-
-export default Login;
+}
