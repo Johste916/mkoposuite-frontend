@@ -4,7 +4,7 @@ import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { FiMail, FiUnlock, FiEye, FiEyeOff, FiLoader } from "react-icons/fi";
 
-/* Backend URL (stable + canonical /auth/login) */
+/* Backend URL (same logic as before) */
 const ORIGIN =
   typeof window !== "undefined" ? window.location.origin : "http://localhost:10000";
 const RAW_BASE =
@@ -12,8 +12,7 @@ const RAW_BASE =
     import.meta.env.VITE_API_BASE ||
     `${ORIGIN}/api`).toString();
 const BASE = RAW_BASE.replace(/\/+$/, "");
-// Always hit canonical /auth/login (router supports /api/login as legacy alias)
-const LOGIN_URL = /\/api$/i.test(BASE) ? `${BASE}/auth/login` : `${BASE}/api/auth/login`;
+const LOGIN_URL = /\/api$/i.test(BASE) ? `${BASE}/login` : `${BASE}/api/login`;
 
 /* Public logo */
 const BRAND_LOGO = "/brand/mkoposuite-logo.png";
@@ -47,7 +46,7 @@ const Login = () => {
       const message =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
-        (err?.response?.status === 401 ? "Invalid email or password" : "Login failed");
+        "Invalid email or password";
       setError(message);
     } finally {
       setLoading(false);
@@ -57,7 +56,6 @@ const Login = () => {
   return (
     <div
       className={
-        // Calm, professional background (balanced light neutrals)
         "min-h-screen relative overflow-hidden " +
         "bg-gradient-to-br from-slate-100 via-stone-100 to-slate-100"
       }
@@ -89,6 +87,8 @@ const Login = () => {
                     />
                   </div>
                 </div>
+
+                {/* tiny, neutral tagline */}
                 <p className="mt-5 text-[13px] text-slate-500">
                   {TAGLINE}
                 </p>
@@ -184,7 +184,7 @@ const Login = () => {
 
               {/* Footer */}
               <div className="mt-5 text-center text-sm text-slate-500">
-                Don’t have an account{" "}
+                Don’t have an account?{" "}
                 <Link
                   to="/signup"
                   className="font-medium text-emerald-700 hover:text-emerald-800"
