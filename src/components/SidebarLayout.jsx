@@ -3,13 +3,15 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
   FiBarChart2, FiSearch, FiSettings, FiUserCheck, FiFileText, FiBriefcase,
-  FiDatabase, FiMenu, FiX, FiChevronDown, FiChevronUp, FiUser
+  FiDatabase, FiMenu, FiX, FiChevronDown, FiChevronUp, FiUser,
+  FiMessageSquare, FiPhone
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
 import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigContext";
 
 /* ---------- NAV CONFIG (Admin controls visibility via FeatureConfig) ---------- */
+/* NOTE: The "Account" section has been removed to avoid duplication with the avatar dropdown */
 const NAV = () => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
   {
@@ -148,21 +150,6 @@ const NAV = () => [
       { label: "Portfolio At Risk (PAR)", to: "/reports/par" },
       { label: "At a Glance", to: "/reports/at-a-glance" },
       { label: "All Entries", to: "/reports/all" },
-    ]
-  },
-  // --- Account hub entry (kept compact; real gating via routes/roles) ---
-  {
-    label: "Account", icon: <FiSettings />, to: "/account/settings", children: [
-      { label: "Profile & Settings", to: "/account/settings" },
-      { label: "Billing", to: "/billing" },                         // canonical
-      { label: "Organization", to: "/account/organization" },       // admins/directors/sysadmins use page gating
-      { label: "Subscription", to: "/subscription" },               // NEW
-      { label: "Support Tickets", to: "/support-tickets" },         // NEW
-      { label: "SMS Console", to: "/sms-console" },                 // NEW
-      { label: "Billing by Phone", to: "/billing-by-phone" },       // NEW
-      { label: "Impersonate Tenant", to: "/impersonate-tenant" },   // NEW (route gated)
-      { label: "Tenants (New Admin)", to: "/tenants-admin" },       // NEW (route gated)
-      { label: "Tenants (SysAdmin)", to: "/admin/tenants" },        // existing admin path
     ]
   },
 ];
@@ -498,6 +485,7 @@ const SidebarLayout = () => {
                       </div>
                     </div>
                     <hr className="my-2 border-slate-200 dark:border-slate-700" />
+                    {/* Always available */}
                     <NavLink
                       to="/account/settings"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
@@ -505,6 +493,29 @@ const SidebarLayout = () => {
                     >
                       <span className="inline-flex items-center gap-2"><FiSettings /> Profile &amp; Settings</span>
                     </NavLink>
+                    <NavLink
+                      to="/billing"
+                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      onClick={() => setAvatarOpen(false)}
+                    >
+                      <span className="inline-flex items-center gap-2"><FiCreditCard /> Billing</span>
+                    </NavLink>
+                    <NavLink
+                      to="/sms-console"
+                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      onClick={() => setAvatarOpen(false)}
+                    >
+                      <span className="inline-flex items-center gap-2"><FiMessageSquare /> SMS Console</span>
+                    </NavLink>
+                    <NavLink
+                      to="/billing-by-phone"
+                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      onClick={() => setAvatarOpen(false)}
+                    >
+                      <span className="inline-flex items-center gap-2"><FiPhone /> Billing by Phone</span>
+                    </NavLink>
+
+                    {/* Admin/gated items unchanged */}
                     {hasAnyRole("system_admin","super_admin","admin","director","developer") && (
                       <>
                         <NavLink
