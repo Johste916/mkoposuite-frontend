@@ -55,7 +55,7 @@ const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayment
 
 // Misc (legacy/back-compat)
 const Disbursements = lazy(() => import("./pages/Disbursements"));
-const Sms = lazy(() => import("./pages/Sms"));
+const Sms = lazy(() => import("./pages/Sms")); // legacy borrowers/sms page
 const Bank = lazy(() => import("./pages/Bank"));
 
 // User management
@@ -143,7 +143,7 @@ const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 /* ---------- NEW PAGES wired to src/pages/*.jsx we added ---------- */
 const Subscription = lazy(() => import("./pages/Subscription"));
 const SupportTickets = lazy(() => import("./pages/SupportTickets"));
-const SMSConsole = lazy(() => import("./pages/SMSConsole"));
+const SMSConsole = lazy(() => import("./pages/SMSConsole")); // legacy/simple console
 const BillingByPhone = lazy(() => import("./pages/BillingByPhone"));
 const ImpersonateTenant = lazy(() => import("./pages/ImpersonateTenant"));
 const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
@@ -516,10 +516,8 @@ function App() {
               <Route path="subscription" element={<Subscription />} />
               <Route path="support-tickets" element={<SupportTickets />} />
               <Route path="sms-console" element={<SMSConsole />} />
-
               {/* ⬇️ NEW modern SMS Center route */}
               <Route path="sms-center" element={<SmsCenter />} />
-
               <Route path="billing-by-phone" element={<BillingByPhone />} />
 
               {/* NEW: Admin tools */}
