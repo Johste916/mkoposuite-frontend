@@ -148,6 +148,9 @@ const BillingByPhone = lazy(() => import("./pages/BillingByPhone"));
 const ImpersonateTenant = lazy(() => import("./pages/ImpersonateTenant"));
 const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
 
+// ⬇️ NEW: Modern SMS Center page
+const SmsCenter = lazy(() => import("./pages/SmsCenter"));
+
 const Fallback = () => (
   <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
 );
@@ -513,6 +516,10 @@ function App() {
               <Route path="subscription" element={<Subscription />} />
               <Route path="support-tickets" element={<SupportTickets />} />
               <Route path="sms-console" element={<SMSConsole />} />
+
+              {/* ⬇️ NEW modern SMS Center route */}
+              <Route path="sms-center" element={<SmsCenter />} />
+
               <Route path="billing-by-phone" element={<BillingByPhone />} />
 
               {/* NEW: Admin tools */}
