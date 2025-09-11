@@ -8,6 +8,7 @@ import 'react-toastify/dist/ReactToastify.css';
 export default function Signup() {
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
   const [status, setStatus] = useState({
     enabled: true,
     defaultTrialDays: 14,
@@ -52,18 +53,32 @@ export default function Signup() {
     setLoading(true);
     try {
       const { data } = await api.post('/signup', form);
+
+      // If your backend chooses to require email verification and indicates it
       if (data.requireEmailVerification) {
         toast.success('Check your email to verify your account.');
-        nav('/login'); // or show a “verify sent” page
+        nav('/login');
         return;
       }
+
+      // Success: default to login
       toast.success('Account created! Redirecting to login…');
       const next = data?.next?.loginUrl || '/login';
-      // Don’t persist token here; follow your existing login flow
       window.location.href = next;
     } catch (err) {
-      const msg =
-        err?.response?.data?.error || err.message || 'Failed to sign up';
+      const status = err?.response?.status;
+      const payload = err?.response?.data || {};
+      // Duplicate email case (backend sends code + redirect)
+      if (status === 409 && payload?.code === 'ALREADY_REGISTERED') {
+        const msg = payload?.error || 'User already registered in the system.';
+        toast.warning(msg);
+        const redirect = payload?.redirectTo || `/login?email=${encodeURIComponent(form.email)}`;
+        // Prefer a hard redirect so the login page sees the prefilled email even in non-SPA loads
+        window.location.href = redirect;
+        return;
+      }
+
+      const msg = payload?.error || err.message || 'Failed to sign up';
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -136,16 +151,27 @@ export default function Signup() {
 
           <div>
             <label className="block text-sm font-medium mb-1">Password</label>
-            <input
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={onChange}
-              required
-              minLength={8}
-              className="w-full border rounded-lg px-3 py-2"
-              placeholder="At least 8 characters"
-            />
+            <div className="relative">
+              <input
+                name="password"
+                type={showPwd ? 'text' : 'password'}
+                value={form.password}
+                onChange={onChange}
+                required
+                minLength={8}
+                className="w-full border rounded-lg px-3 py-2 pr-12"
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd(s => !s)}
+                className="absolute inset-y-0 right-0 px-3 text-sm text-gray-500 hover:text-gray-700"
+                aria-label={showPwd ? 'Hide password' : 'Show password'}
+              >
+                {showPwd ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
 
           <div>
