@@ -3,7 +3,7 @@ import { Suspense, lazy } from "react";
 
 // Auth/public
 const Login = lazy(() => import("./pages/Login"));
-const Signup = lazy(() => import("./pages/public/Signup")); // ⬅️ NEW
+const Signup = lazy(() => import("./pages/public/Signup"));
 
 // Shell
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -55,7 +55,7 @@ const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayment
 
 // Misc (legacy/back-compat)
 const Disbursements = lazy(() => import("./pages/Disbursements"));
-const Sms = lazy(() => import("./pages/Sms")); // legacy borrowers/sms page
+const Sms = lazy(() => import("./pages/Sms")); // legacy/simple console
 const Bank = lazy(() => import("./pages/Bank"));
 
 // User management
@@ -72,7 +72,7 @@ const AdminRouter = lazy(() => import("./pages/admin/AdminRouter"));
 const AccountSettings = lazy(() => import("./pages/account/AccountSettings"));
 const Organization = lazy(() => import("./pages/account/Organization"));
 const Profile = lazy(() => import("./pages/account/Profile"));
-const AdminTenants = lazy(() => import("./pages/admin/Tenants")); // existing tenants page
+const AdminTenants = lazy(() => import("./pages/admin/Tenants"));
 
 // NEW MODULES
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
@@ -140,15 +140,15 @@ const ParReport = lazy(() => import("./pages/reports/ParReport"));
 const AtAGlance = lazy(() => import("./pages/reports/AtAGlance"));
 const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 
-/* ---------- NEW PAGES wired to src/pages/*.jsx we added ---------- */
+/* ---------- NEW PAGES wired to src/pages/*.jsx ---------- */
 const Subscription = lazy(() => import("./pages/Subscription"));
 const SupportTickets = lazy(() => import("./pages/SupportTickets"));
-const SMSConsole = lazy(() => import("./pages/SMSConsole")); // legacy/simple console
+const SMSConsole = lazy(() => import("./pages/SMSConsole")); // legacy/simple console replacement
 const BillingByPhone = lazy(() => import("./pages/BillingByPhone"));
 const ImpersonateTenant = lazy(() => import("./pages/ImpersonateTenant"));
 const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
 
-// ⬇️ NEW: Modern SMS Center page
+// NEW: Modern SMS Center page
 const SmsCenter = lazy(() => import("./pages/SmsCenter"));
 
 const Fallback = () => (
@@ -157,9 +157,7 @@ const Fallback = () => (
 
 const Forbidden = () => (
   <div className="p-6">
-    <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">
-      403 — Forbidden
-    </h1>
+    <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">403 — Forbidden</h1>
     <p className="mt-2 text-slate-700 dark:text-slate-300">
       You don’t have permission to access this area.
     </p>
@@ -174,7 +172,7 @@ function App() {
           <Routes>
             {/* Public */}
             <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} /> {/* ⬅️ NEW public route */}
+            <Route path="/signup" element={<Signup />} />
 
             {/* Protected shell */}
             <Route
@@ -198,7 +196,6 @@ function App() {
                 }
               >
                 <Route index element={<Admin />} />
-                {/* Tenants admin — existing page kept intact */}
                 <Route
                   path="tenants"
                   element={
@@ -227,7 +224,7 @@ function App() {
               <Route path="account/security/change-password" element={<ChangePassword />} />
               <Route path="account/security/2fa" element={<TwoFactor />} />
 
-              {/* Tenants entry inside Account hub — same access as /admin/tenants */}
+              {/* Tenants entry inside Account hub */}
               <Route
                 path="account/tenants"
                 element={
@@ -468,7 +465,7 @@ function App() {
               <Route path="assets" element={<Assets />} />
               <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
 
-              {/* Accounting (grouped) */}
+              {/* Accounting */}
               <Route
                 path="accounting"
                 element={
@@ -512,15 +509,14 @@ function App() {
                 <Route path="all" element={<AllEntries />} />
               </Route>
 
-              {/* NEW: Support & Subscription & Tools */}
+              {/* Support & Subscription & Tools */}
               <Route path="subscription" element={<Subscription />} />
               <Route path="support-tickets" element={<SupportTickets />} />
               <Route path="sms-console" element={<SMSConsole />} />
-              {/* ⬇️ NEW modern SMS Center route */}
               <Route path="sms-center" element={<SmsCenter />} />
               <Route path="billing-by-phone" element={<BillingByPhone />} />
 
-              {/* NEW: Admin tools */}
+              {/* Admin tools */}
               <Route
                 path="impersonate-tenant"
                 element={

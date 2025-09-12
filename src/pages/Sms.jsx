@@ -4,9 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 const gsm7 =
   "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñü^{}\\[~]|€";
 function usesUnicode(s) {
-  for (const ch of s) {
-    if (!gsm7.includes(ch)) return true;
-  }
+  for (const ch of s) if (!gsm7.includes(ch)) return true;
   return false;
 }
 function smsSegments(text) {
@@ -36,7 +34,7 @@ function formatTZ(msisdn) {
 }
 
 /** ---------- API base ---------- */
-const API_BASE = import.meta.env.VITE_API_BASE || ""; // e.g., https://mkoposuite-backend…/api
+const API_BASE = import.meta.env.VITE_API_BASE || ""; // e.g., https://backend.example.com
 const withApi = (p) => `${API_BASE.replace(/\/+$/,"")}/api${p}`;
 
 /** ---------- Simple toast ---------- */
@@ -107,7 +105,6 @@ export default function Sms() {
     const ctrl = new AbortController();
     (async () => {
       try {
-        // Your API supports many shapes; this keeps it tolerant
         const q = new URLSearchParams();
         if (brwSearch) q.set("q", brwSearch);
         q.set("page", String(brwPage));
@@ -153,7 +150,6 @@ export default function Sms() {
     if (!text.trim()) return notice("err", "Please type a message");
     setBusy(true);
     try {
-      // Let the backend resolve borrower IDs to phones to avoid leaking logic to the client
       const r = await fetch(withApi("/sms/to-borrowers"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },

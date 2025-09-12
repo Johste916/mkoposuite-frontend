@@ -1,4 +1,3 @@
-// src/pages/SMSConsole.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../api";
 
@@ -11,18 +10,20 @@ const postFirst = (paths, body) => api.postFirst(paths, body);
 // GSM-7 vs Unicode estimation
 const GSM7 =
   "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñü^{}\\[~]|€";
-const isUnicode = (s="") => [...String(s)].some(ch => !GSM7.includes(ch));
+const isUnicode = (s = "") => [...String(s)].some((ch) => !GSM7.includes(ch));
 function segInfo(text) {
   const uni = isUnicode(text);
-  const len = String(text||"").length;
+  const len = String(text || "").length;
   if (len === 0) return { uni, segs: 0, per: uni ? 70 : 160, left: uni ? 70 : 160 };
   if (!uni) {
     if (len <= 160) return { uni, segs: 1, per: 160, left: 160 - len };
-    const segs = Math.ceil(len / 153), rem = len % 153;
+    const segs = Math.ceil(len / 153),
+      rem = len % 153;
     return { uni, segs, per: 153, left: rem === 0 ? 0 : 153 - rem };
   }
   if (len <= 70) return { uni, segs: 1, per: 70, left: 70 - len };
-  const segs = Math.ceil(len / 67), rem = len % 67;
+  const segs = Math.ceil(len / 67),
+    rem = len % 67;
   return { uni, segs, per: 67, left: rem === 0 ? 0 : 67 - rem };
 }
 const applyTemplate = (tpl, vars = {}) =>
@@ -90,7 +91,9 @@ export default function SMSConsole() {
         "/notifications/sms/balance",
       ]);
       setBalance(b || null);
-    } catch { setBalance(null); }
+    } catch {
+      setBalance(null);
+    }
   }
   async function loadLogs() {
     try {
@@ -101,10 +104,16 @@ export default function SMSConsole() {
       ]);
       const items = Array.isArray(r) ? r : r.items || r.messages || [];
       setLogs(items.slice(0, 100));
-    } catch { setLogs([]); }
+    } catch {
+      setLogs([]);
+    }
   }
 
-  useEffect(() => { loadCaps(); loadBalance(); loadLogs(); }, []);
+  useEffect(() => {
+    loadCaps();
+    loadBalance();
+    loadLogs();
+  }, []);
 
   /** Borrower quick search (with graceful fallbacks) */
   useEffect(() => {
@@ -340,9 +349,7 @@ export default function SMSConsole() {
           const message = lookup(cols, "message"); // optional
           const name = lookup(cols, "name");
           const firstName = lookup(cols, "firstName") || (name ? name.split(" ")[0] : "");
-          const lastName =
-            lookup(cols, "lastName") ||
-            (name ? name.split(" ").slice(1).join(" ") : "");
+          const lastName = lookup(cols, "lastName") || (name ? name.split(" ").slice(1).join(" ") : "");
           const vars = { name, firstName, lastName };
           return {
             to: phone,
@@ -355,7 +362,6 @@ export default function SMSConsole() {
 
       if (!messages.length) throw new Error("No valid rows (need a 'phone' column).");
 
-      // Prefer /sms/bulk with {template, messages}
       await postFirst(
         ["/sms/bulk", "/communications/sms/bulk", "/notifications/sms/bulk"],
         { messages, template: csvTemplate || undefined, defaultFrom: from }
@@ -379,9 +385,7 @@ export default function SMSConsole() {
             <div className="text-sm text-gray-500">Balance</div>
             <div className="text-2xl font-semibold">{balanceText}</div>
             {balance?.checkedAt && (
-              <div className="text-xs text-gray-400">
-                Checked {dt(balance.checkedAt)}
-              </div>
+              <div className="text-xs text-gray-400">Checked {dt(balance.checkedAt)}</div>
             )}
           </div>
           <button
@@ -406,7 +410,7 @@ export default function SMSConsole() {
 
   const SegMetaLine = ({ meta }) => (
     <div className="text-xs text-gray-500">
-      {meta.uni ? "Unicode" : "GSM-7"} • {meta.segs} segment{meta.segs===1?"":"s"} • {meta.left} chars left
+      {meta.uni ? "Unicode" : "GSM-7"} • {meta.segs} segment{meta.segs === 1 ? "" : "s"} • {meta.left} chars left
     </div>
   );
 
@@ -657,9 +661,7 @@ export default function SMSConsole() {
                     {m.status || m.deliveryStatus || "—"}
                   </div>
                 </div>
-                <div className="text-gray-600">
-                  {m.message || m.text || m.body || ""}
-                </div>
+                <div className="text-gray-600">{m.message || m.text || m.body || ""}</div>
                 <div className="text-xs text-gray-400">
                   {dt(m.at || m.createdAt || m.sentAt || m.timestamp)}
                 </div>

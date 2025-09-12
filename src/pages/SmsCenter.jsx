@@ -1,4 +1,3 @@
-// src/pages/SmsCenter.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../api";
 
@@ -63,9 +62,9 @@ export default function SmsCenter() {
 
   // CRM Groups / Segments
   const [segBranch, setSegBranch] = useState("");
-  const [segStatus, setSegStatus] = useState("");           // any | active | closed | defaulted
-  const [segOverdue, setSegOverdue] = useState(false);      // in arrears
-  const [segOfficer, setSegOfficer] = useState("");         // officer id/name (free text)
+  const [segStatus, setSegStatus] = useState(""); // any | active | closed | defaulted
+  const [segOverdue, setSegOverdue] = useState(false); // in arrears
+  const [segOfficer, setSegOfficer] = useState(""); // officer id/name (free text)
   const [segTemplate, setSegTemplate] = useState("Dear {{name}}, …");
   const [segFrom, setSegFrom] = useState("");
 
@@ -114,7 +113,11 @@ export default function SmsCenter() {
     }
   }
 
-  useEffect(() => { loadCaps(); loadBalance(); loadLogs(); }, []);
+  useEffect(() => {
+    loadCaps();
+    loadBalance();
+    loadLogs();
+  }, []);
 
   /** Borrower quick search */
   useEffect(() => {
@@ -173,7 +176,8 @@ export default function SmsCenter() {
     const to = singleTo.trim();
     const message = singleMsg.trim();
     if (!to || !message) return setErr("Phone and message are required.");
-    setBusy(true); setErr("");
+    setBusy(true);
+    setErr("");
     try {
       const from = caps.allowBodySender ? (singleFrom || undefined) : undefined;
       const r = await postFirst(
@@ -183,8 +187,11 @@ export default function SmsCenter() {
       if (r && r.ok === false) throw new Error(r.error || "Send failed");
       setSingleMsg("");
       await loadLogs();
-    } catch (e) { setErr(e?.message || "Failed to send SMS."); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setErr(e?.message || "Failed to send SMS.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function sendToBorrowers() {
@@ -192,7 +199,8 @@ export default function SmsCenter() {
     const template = borrowerMsg.trim();
     if (!template) return setErr("Message is required.");
 
-    setBusy(true); setErr("");
+    setBusy(true);
+    setErr("");
     try {
       const from = caps.allowBodySender ? (borrowerFrom || undefined) : undefined;
       const messages = picked.map((p) => {
@@ -215,15 +223,20 @@ export default function SmsCenter() {
           );
         }
       }
-      setPicked([]); await loadLogs();
-    } catch (e) { setErr(e?.message || "Bulk send failed."); }
-    finally { setBusy(false); }
+      setPicked([]);
+      await loadLogs();
+    } catch (e) {
+      setErr(e?.message || "Bulk send failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function sendSegment() {
     const template = segTemplate.trim();
     if (!template) return setErr("Template is required.");
-    setBusy(true); setErr("");
+    setBusy(true);
+    setErr("");
 
     const filter = {
       branchId: segBranch || undefined,
@@ -238,15 +251,19 @@ export default function SmsCenter() {
       // Prefer server side
       try {
         const r = await postFirst(["/sms/to-segment"], { filter, template, from });
-        if (r && r.ok) { await loadLogs(); setBusy(false); return; }
-      } catch { /* fallback below */ }
+        if (r && r.ok) {
+          await loadLogs();
+          setBusy(false);
+          return;
+        }
+      } catch {
+        /* fallback below */
+      }
 
       // Fallback: fetch borrowers then bulk
       const q = new URLSearchParams({ limit: "500", branchId: filter.branchId || "" }).toString();
-      const res = (await getFirst([
-        `/sms/recipients/borrowers?${q}`,
-        `/borrowers?${q}`,
-      ])) || {};
+      const res =
+        (await getFirst([`/sms/recipients/borrowers?${q}`, `/borrowers?${q}`])) || {};
       const items = res.items || res.results || res.rows || [];
       const recipients = (items || [])
         .map((b) => ({
@@ -267,19 +284,23 @@ export default function SmsCenter() {
         { messages, template, defaultFrom: from }
       );
       await loadLogs();
-    } catch (e) { setErr(e?.message || "Segment send failed."); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setErr(e?.message || "Segment send failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function uploadCsvAndSend() {
     if (!csvFile) return setErr("Choose a CSV first.");
-    setBusy(true); setErr("");
+    setBusy(true);
+    setErr("");
     try {
       const text = await csvFile.text();
       const rows = text.split(/\r?\n/).filter((l) => l.trim().length);
       if (rows.length === 0) throw new Error("Empty CSV.");
 
-      // very light CSV split (handles simple quoted commas)
+      // handle simple quoted commas
       const smartSplit = (line) => {
         const out = [];
         let cur = "";
@@ -287,7 +308,11 @@ export default function SmsCenter() {
         for (let i = 0; i < line.length; i++) {
           const c = line[i];
           if (c === '"') q = !q;
-          else if (c === "," && !q) { out.push(cur); cur = ""; continue; }
+          else if (c === "," && !q) {
+            out.push(cur);
+            cur = "";
+            continue;
+          }
           cur += c;
         }
         out.push(cur);
@@ -322,9 +347,13 @@ export default function SmsCenter() {
         { messages, template: csvTemplate || undefined, defaultFrom: from }
       );
 
-      setCsvFile(null); await loadLogs();
-    } catch (e) { setErr(e?.message || "CSV upload failed."); }
-    finally { setBusy(false); }
+      setCsvFile(null);
+      await loadLogs();
+    } catch (e) {
+      setErr(e?.message || "CSV upload failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   /** ────────────── UI ────────────── */
@@ -339,7 +368,9 @@ export default function SmsCenter() {
               <div className="text-xs text-gray-400">Checked {dt(balance.checkedAt)}</div>
             )}
           </div>
-          <button onClick={loadBalance} className="px-3 py-2 rounded-xl border hover:bg-gray-50">Refresh</button>
+          <button onClick={loadBalance} className="px-3 py-2 rounded-xl border hover:bg-gray-50">
+            Refresh
+          </button>
         </div>
       </div>
     );
@@ -400,22 +431,28 @@ export default function SmsCenter() {
         {tab === 0 && (
           <div className="p-4 space-y-3">
             <div className="grid sm:grid-cols-2 gap-3">
-              <input className="w-full rounded-xl border p-2"
-                     placeholder="Phone number (e.g. 0784…, +255…)"
-                     value={singleTo}
-                     onChange={(e) => setSingleTo(e.target.value)} />
+              <input
+                className="w-full rounded-xl border p-2"
+                placeholder="Phone number (e.g. 0784…, +255…)"
+                value={singleTo}
+                onChange={(e) => setSingleTo(e.target.value)}
+              />
               <SenderHint label="Single Sender ID" />
             </div>
             <div className="space-y-1">
-              <textarea className="w-full rounded-xl border p-2 h-28"
-                        placeholder="Message text"
-                        value={singleMsg}
-                        onChange={(e) => setSingleMsg(e.target.value)} />
+              <textarea
+                className="w-full rounded-xl border p-2 h-28"
+                placeholder="Message text"
+                value={singleMsg}
+                onChange={(e) => setSingleMsg(e.target.value)}
+              />
               <SegMeta info={singleInfo} />
             </div>
-            <button disabled={busy}
-                    onClick={sendSingle}
-                    className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50">
+            <button
+              disabled={busy}
+              onClick={sendSingle}
+              className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+            >
               {busy ? "Sending…" : "Send"}
             </button>
             <p className="text-xs text-gray-500">Tip: avoid emojis to keep it single-segment (GSM-7).</p>
@@ -426,10 +463,12 @@ export default function SmsCenter() {
         {tab === 1 && (
           <div className="p-4 space-y-4">
             <div className="grid sm:grid-cols-2 gap-3">
-              <input className="rounded-xl border p-2"
-                     placeholder="Search borrowers by name, phone, NID, account…"
-                     value={pickQuery}
-                     onChange={(e) => setPickQuery(e.target.value)} />
+              <input
+                className="rounded-xl border p-2"
+                placeholder="Search borrowers by name, phone, NID, account…"
+                value={pickQuery}
+                onChange={(e) => setPickQuery(e.target.value)}
+              />
               <SenderHint label="Borrower Sender ID" />
             </div>
 
@@ -439,11 +478,13 @@ export default function SmsCenter() {
                   const on = picked.some((p) => p.id === o.id);
                   return (
                     <label key={o.id} className="flex items-center gap-2 p-2 border-b">
-                      <input type="checkbox"
-                             checked={on}
-                             onChange={() =>
-                               setPicked((prev) => on ? prev.filter((x) => x.id !== o.id) : [...prev, o])
-                             } />
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() =>
+                          setPicked((prev) => (on ? prev.filter((x) => x.id !== o.id) : [...prev, o]))
+                        }
+                      />
                       <div className="flex-1">
                         <div className="font-medium">{o.name}</div>
                         <div className="text-xs text-gray-500">{o.phone}</div>
@@ -455,19 +496,23 @@ export default function SmsCenter() {
             )}
 
             <div className="space-y-1">
-              <textarea className="w-full rounded-xl border p-2 h-28"
-                        placeholder="Template e.g. Hello {{name}}, your loan is due…"
-                        value={borrowerMsg}
-                        onChange={(e) => setBorrowerMsg(e.target.value)} />
+              <textarea
+                className="w-full rounded-xl border p-2 h-28"
+                placeholder="Template e.g. Hello {{name}}, your loan is due…"
+                value={borrowerMsg}
+                onChange={(e) => setBorrowerMsg(e.target.value)}
+              />
               <div className="flex items-center justify-between text-xs text-gray-500">
                 <span>Variables: {"{{name}}"} {"{{firstName}}"} {"{{lastName}}"}</span>
                 <SegMeta info={borrowerInfo} />
               </div>
             </div>
 
-            <button disabled={busy || picked.length === 0}
-                    onClick={sendToBorrowers}
-                    className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50">
+            <button
+              disabled={busy || picked.length === 0}
+              onClick={sendToBorrowers}
+              className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+            >
               Send to {picked.length} borrower{picked.length === 1 ? "" : "s"}
             </button>
           </div>
@@ -477,40 +522,52 @@ export default function SmsCenter() {
         {tab === 2 && (
           <div className="p-4 space-y-3">
             <div className="grid sm:grid-cols-5 gap-3">
-              <input className="rounded-xl border p-2"
-                     placeholder="Branch ID"
-                     value={segBranch}
-                     onChange={(e) => setSegBranch(e.target.value)} />
-              <select className="rounded-xl border p-2"
-                      value={segStatus}
-                      onChange={(e) => setSegStatus(e.target.value)}>
+              <input
+                className="rounded-xl border p-2"
+                placeholder="Branch ID"
+                value={segBranch}
+                onChange={(e) => setSegBranch(e.target.value)}
+              />
+              <select
+                className="rounded-xl border p-2"
+                value={segStatus}
+                onChange={(e) => setSegStatus(e.target.value)}
+              >
                 <option value="">Any status</option>
                 <option value="active">Active</option>
                 <option value="closed">Closed</option>
                 <option value="defaulted">Defaulted</option>
               </select>
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox"
-                       checked={segOverdue}
-                       onChange={(e) => setSegOverdue(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={segOverdue}
+                  onChange={(e) => setSegOverdue(e.target.checked)}
+                />
                 In arrears
               </label>
-              <input className="rounded-xl border p-2"
-                     placeholder="Loan officer (ID/name)"
-                     value={segOfficer}
-                     onChange={(e) => setSegOfficer(e.target.value)} />
+              <input
+                className="rounded-xl border p-2"
+                placeholder="Loan officer (ID/name)"
+                value={segOfficer}
+                onChange={(e) => setSegOfficer(e.target.value)}
+              />
               <SenderHint label="Segment Sender ID" />
             </div>
             <div className="space-y-1">
-              <textarea className="w-full rounded-xl border p-2 h-28"
-                        placeholder="Template e.g. Dear {{name}}, …"
-                        value={segTemplate}
-                        onChange={(e) => setSegTemplate(e.target.value)} />
+              <textarea
+                className="w-full rounded-xl border p-2 h-28"
+                placeholder="Template e.g. Dear {{name}}, …"
+                value={segTemplate}
+                onChange={(e) => setSegTemplate(e.target.value)}
+              />
               <SegMeta info={segTplInfo} />
             </div>
-            <button disabled={busy}
-                    onClick={sendSegment}
-                    className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50">
+            <button
+              disabled={busy}
+              onClick={sendSegment}
+              className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+            >
               Send to group
             </button>
             <div className="text-xs text-gray-500">
@@ -524,22 +581,30 @@ export default function SmsCenter() {
         {tab === 3 && (
           <div className="p-4 space-y-3">
             <div className="grid sm:grid-cols-2 gap-3 items-center">
-              <input type="file" accept=".csv,text/csv" onChange={(e) => setCsvFile(e.target.files?.[0] || null)} />
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+              />
               <SenderHint label="CSV Sender ID" />
             </div>
             <div className="space-y-1">
-              <textarea className="w-full rounded-xl border p-2 h-24"
-                        placeholder="Optional template (uses CSV column names: Hello {{name}})"
-                        value={csvTemplate}
-                        onChange={(e) => setCsvTemplate(e.target.value)} />
+              <textarea
+                className="w-full rounded-xl border p-2 h-24"
+                placeholder="Optional template (uses CSV column names: Hello {{name}})"
+                value={csvTemplate}
+                onChange={(e) => setCsvTemplate(e.target.value)}
+              />
               <SegMeta info={csvTplInfo} />
             </div>
             <div className="text-xs text-gray-500">
               CSV columns: <code>phone</code>, <code>message</code> (optional), <code>name</code>, <code>firstName</code>, <code>lastName</code>…
             </div>
-            <button disabled={busy}
-                    onClick={uploadCsvAndSend}
-                    className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50">
+            <button
+              disabled={busy}
+              onClick={uploadCsvAndSend}
+              className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+            >
               Upload &amp; Send
             </button>
           </div>
@@ -562,11 +627,15 @@ export default function SmsCenter() {
               <div key={m.id || m.messageId || i} className="py-2 text-sm">
                 <div className="flex justify-between">
                   <div className="font-medium">{m.to || m.phone || m.msisdn}</div>
-                  <div className={`text-xs ${
-                      (m.status || "").includes("fail") ? "text-rose-600"
-                        : (m.status || "").includes("queued") ? "text-emerald-600"
+                  <div
+                    className={`text-xs ${
+                      (m.status || "").includes("fail")
+                        ? "text-rose-600"
+                        : (m.status || "").includes("queued")
+                        ? "text-emerald-600"
                         : "text-gray-500"
-                    }`}>
+                    }`}
+                  >
                     {m.status || m.deliveryStatus || "—"}
                   </div>
                 </div>
