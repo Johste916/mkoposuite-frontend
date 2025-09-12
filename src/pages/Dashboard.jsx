@@ -550,15 +550,15 @@ const Dashboard = () => {
         {/* Main */}
         <main className="space-y-6">
           {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-28" />
+                <Skeleton key={i} className="h-32" />
               ))}
             </div>
           ) : (
             <>
-              {/* Summary Cards (enlarged) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {/* Summary Cards (enlarged, auto-fit) */}
+              <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
                 <SummaryCard tone="indigo" title="Total Borrowers" value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />} />
                 <SummaryCard tone="sky"    title="Total Loans" value={n(summary?.totalLoans).toLocaleString()} icon={<CreditCard className="w-6 h-6" />} />
                 <SummaryCard tone="blue"   title="Total Disbursed" value={money(summary?.totalDisbursed)} icon={<CreditCard className="w-6 h-6" />} />
@@ -902,33 +902,82 @@ const Dashboard = () => {
   );
 };
 
-/** KPI card with welcoming tone colors and larger footprint */
-const SummaryCard = ({ title, value, icon, tone = 'indigo' }) => {
-  const tones =
-    ({
-      indigo:  { ring: 'ring-indigo-100 dark:ring-indigo-900/40',  icon: 'text-indigo-700 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-950/40' },
-      sky:     { ring: 'ring-sky-100 dark:ring-sky-900/40',        icon: 'text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/40' },
-      blue:    { ring: 'ring-blue-100 dark:ring-blue-900/40',      icon: 'text-blue-700 bg-blue-50 dark:text-blue-300 dark:bg-blue-950/40' },
-      emerald: { ring: 'ring-emerald-100 dark:ring-emerald-900/40',icon: 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' },
-      cyan:    { ring: 'ring-cyan-100 dark:ring-cyan-900/40',      icon: 'text-cyan-700 bg-cyan-50 dark:text-cyan-300 dark:bg-cyan-950/40' },
-      amber:   { ring: 'ring-amber-100 dark:ring-amber-900/40',    icon: 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' },
-      violet:  { ring: 'ring-violet-100 dark:ring-violet-900/40',  icon: 'text-violet-700 bg-violet-50 dark:text-violet-300 dark:bg-violet-950/40' },
-      rose:    { ring: 'ring-rose-100 dark:ring-rose-900/40',      icon: 'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40' },
-      slate:   { ring: 'ring-slate-100 dark:ring-slate-800',       icon: 'text-slate-700 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' },
-    }[tone]) || { ring: 'ring-slate-100 dark:ring-slate-800', icon: 'text-slate-700 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' };
+/** Fancy KPI card: glass surface, gradient border, tone accents, optional delta + sparkline */
+const SummaryCard = ({
+  title,
+  value,
+  icon,
+  tone = 'indigo',
+  // optional extras (kept for future; not required by callers)
+  delta = null,         // e.g. +4.2 or -1.8
+  deltaLabel = '',      // e.g. "vs last month"
+  spark = null          // e.g. [12,15,9,18,21,19]
+}) => {
+  const tones = ({
+    indigo:  { from: 'from-indigo-300/60',  to: 'to-indigo-500/40',  iconBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300' },
+    sky:     { from: 'from-sky-300/60',     to: 'to-sky-500/40',     iconBg: 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300' },
+    blue:    { from: 'from-blue-300/60',    to: 'to-blue-500/40',    iconBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' },
+    emerald: { from: 'from-emerald-300/60', to: 'to-emerald-500/40', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' },
+    cyan:    { from: 'from-cyan-300/60',    to: 'to-cyan-500/40',    iconBg: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300' },
+    amber:   { from: 'from-amber-300/60',   to: 'to-amber-500/40',   iconBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' },
+    violet:  { from: 'from-violet-300/60',  to: 'to-violet-500/40',  iconBg: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300' },
+    rose:    { from: 'from-rose-300/60',    to: 'to-rose-500/40',    iconBg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300' },
+    slate:   { from: 'from-slate-300/60',   to: 'to-slate-500/40',   iconBg: 'bg-slate-50 dark:bg-slate-950/40 text-slate-700 dark:text-slate-300' },
+  }[tone]) || { from: 'from-slate-300/60', to: 'to-slate-500/40', iconBg: 'bg-slate-50 dark:bg-slate-950/40 text-slate-700 dark:text-slate-300' };
+
+  // Tiny sparkline (dependency-free)
+  const Spark = () => {
+    if (!Array.isArray(spark) || spark.length < 2) return null;
+    const w = 96, h = 28, pad = 2;
+    const min = Math.min(...spark), max = Math.max(...spark);
+    const range = Math.max(max - min, 1e-6);
+    const stepX = (w - pad * 2) / (spark.length - 1);
+    const pts = spark.map((v, i) => {
+      const x = pad + i * stepX;
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return [x, y];
+    });
+    const d = 'M ' + pts.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L ');
+    return (
+      <svg width={w} height={h} className="mt-2 opacity-70">
+        <path d={d} fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  };
+
+  const deltaColor =
+    delta == null ? '' : delta >= 0 ? 'text-emerald-600 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-900/30'
+                                   : 'text-rose-600 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-900/30';
 
   return (
-    <div
-      className={`group bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 ring-1 ${tones.ring} min-h-[10.5rem]
-                  transition-transform will-change-transform hover:-translate-y-0.5`}
-    >
-      <div className="flex items-start gap-3">
-        <div className={`p-3 rounded-full ${tones.icon}`}>{icon}</div>
-        <div className="min-w-0">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate">{title}</h3>
-          <p className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white break-words leading-snug">
-            {value ?? '—'}
-          </p>
+    <div className="group relative rounded-2xl transition-transform hover:-translate-y-0.5">
+      {/* gradient border */}
+      <div className={`p-[1px] rounded-2xl bg-gradient-to-br ${tones.from} ${tones.to}`}>
+        {/* glass card */}
+        <div className="rounded-2xl bg-white/85 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm
+                        border border-white/60 dark:border-slate-800 shadow-sm p-5 min-h-[11rem]">
+          <div className="flex items-start justify-between gap-3">
+            <div className={`p-3 rounded-full ${tones.iconBg}`}>{icon}</div>
+
+            {delta != null && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${deltaColor}`}>
+                {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toLocaleString()}%
+                {deltaLabel && <span className="opacity-70">&nbsp;{deltaLabel}</span>}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-3 min-w-0">
+            <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 truncate">{title}</h3>
+            <p className="text-[28px] md:text-[32px] leading-tight font-semibold text-slate-900 dark:text-white
+                          font-mono tabular-nums break-words">
+              {value ?? '—'}
+            </p>
+          </div>
+
+          <div className="text-slate-400 dark:text-slate-500">
+            <Spark />
+          </div>
         </div>
       </div>
     </div>
