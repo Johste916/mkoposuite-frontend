@@ -1,17 +1,34 @@
-import React, { useMemo, useRef, useEffect, useState } from "react";
+// src/layouts/SidebarLayout.jsx
+import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  FiLogOut, FiSun, FiMoon, FiUsers, FiHome, FiCreditCard, FiDollarSign,
-  FiBarChart2, FiSearch, FiSettings, FiUserCheck, FiFileText, FiBriefcase,
-  FiDatabase, FiMenu, FiX, FiChevronDown, FiChevronUp, FiUser,
-  FiMessageSquare, FiPhone
+  FiBarChart2,
+  FiBriefcase,
+  FiChevronDown,
+  FiChevronUp,
+  FiCreditCard,
+  FiDatabase,
+  FiDollarSign,
+  FiHome,
+  FiLogOut,
+  FiMenu,
+  FiMessageSquare,
+  FiMoon,
+  FiPhone,
+  FiSearch,
+  FiSettings,
+  FiSun,
+  FiUser,
+  FiUserCheck,
+  FiUsers,
+  FiX,
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
 import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigContext";
 
-/* ---------- NAV CONFIG (Admin controls visibility via FeatureConfig) ---------- */
-/* NOTE: The "Account" section has been removed to avoid duplication with the avatar dropdown */
+/* ------------------------------- NAV CONFIG --------------------------------
+   NOTE: “Account” items live in the avatar dropdown to avoid duplication. */
 const NAV = () => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
   {
@@ -59,7 +76,7 @@ const NAV = () => [
   },
   { label: "Collateral Register", icon: <FiBriefcase />, to: "/collateral" },
   {
-    label: "Collection Sheets", icon: <FiFileText />, to: "/collections", children: [
+    label: "Collection Sheets", icon: <FiCreditCard />, to: "/collections", children: [
       { label: "Daily Collection Sheet", to: "/collections/daily" },
       { label: "Missed Repayment Sheet", to: "/collections/missed" },
       { label: "Past Maturity Loans", to: "/collections/past-maturity" },
@@ -156,22 +173,27 @@ const NAV = () => [
 
 const pathIsIn = (pathname, base) => pathname === base || pathname.startsWith(base + "/");
 
-const Section = ({ item, currentPath, onNavigate }) => {
+/* ------------------------------- Section item ------------------------------ */
+const Section = memo(({ item, currentPath, onNavigate }) => {
   const hasChildren = !!item.children?.length;
   const isActiveSection = pathIsIn(currentPath, item.to);
   const [open, setOpen] = useState(isActiveSection || !hasChildren);
 
   useEffect(() => { if (isActiveSection) setOpen(true); }, [isActiveSection]);
 
-  const baseItem = "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
+  const baseItem =
+    "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
 
   if (!hasChildren) {
     return (
       <NavLink
         to={item.to}
         className={({ isActive }) =>
-          `${baseItem} ${isActive ? "bg-blue-600 text-white shadow-sm"
-            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"}`}
+          `${baseItem} ${
+            isActive
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+          }`}
         onClick={onNavigate}
       >
         <span className="shrink-0">{item.icon}</span>
@@ -180,16 +202,28 @@ const Section = ({ item, currentPath, onNavigate }) => {
     );
   }
 
+  const panelId = `nav-${item.to.replace(/[^\w-]/g, "_")}`;
+
+  const toggle = useCallback(() => setOpen(v => !v), []);
+  const onKeyDown = useCallback((e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle();
+    }
+  }, [toggle]);
+
   return (
     <div className="rounded-md">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
+        onKeyDown={onKeyDown}
         className={`${baseItem} ${isActiveSection
           ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
           : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
         } w-full justify-between`}
         aria-expanded={open}
+        aria-controls={panelId}
       >
         <span className="inline-flex items-center gap-2">
           <span className="shrink-0">{item.icon}</span>
@@ -198,29 +232,35 @@ const Section = ({ item, currentPath, onNavigate }) => {
         {open ? <FiChevronUp /> : <FiChevronDown />}
       </button>
 
-      {open && (
-        <div className="mt-1 ml-2 border-l border-slate-200 dark:border-slate-700">
-          <div className="pl-3 py-1 space-y-1">
-            {item.children.map((c) => (
-              <NavLink
-                key={c.to}
-                to={c.to}
-                className={({ isActive }) =>
-                  `block px-2 py-1.5 rounded text-[13px] ${isActive
+      <div
+        id={panelId}
+        hidden={!open}
+        className="mt-1 ml-2 border-l border-slate-200 dark:border-slate-700"
+      >
+        <div className="pl-3 py-1 space-y-1">
+          {item.children.map((c) => (
+            <NavLink
+              key={c.to}
+              to={c.to}
+              className={({ isActive }) =>
+                `block px-2 py-1.5 rounded text-[13px] ${
+                  isActive
                     ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"}`}
-                onClick={onNavigate}
-              >
-                {c.label}
-              </NavLink>
-            ))}
-          </div>
+                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                }`}
+              onClick={onNavigate}
+            >
+              {c.label}
+            </NavLink>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
-};
+});
+Section.displayName = "Section";
 
+/* --------------------------------- Layout ---------------------------------- */
 const SidebarLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -228,14 +268,14 @@ const SidebarLayout = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState(null);
 
-  // tenant state (for multi-tenant header + API header)
-  const [tenant, setTenant] = useState(null); // { id, name } recommended
+  // tenant for multi-tenant header + API header
+  const [tenant, setTenant] = useState(null); // { id, name }
 
   const [branches, setBranches] = useState([]);
   const [activeBranchId, setActiveBranchId] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Admin-driven feature config (authoritative)
+  // Feature flags (admin-controlled)
   const featureCtx = useFeatureConfig();
   const { loading: featuresLoading, features } = featureCtx;
 
@@ -251,17 +291,19 @@ const SidebarLayout = () => {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  const logoutAndGo = () => {
+  const logoutAndGo = useCallback(() => {
     try {
       delete api.defaults.headers.common.Authorization;
       [
         "token","jwt","authToken","accessToken","access_token",
         "user","tenant","tenantId","tenantName","activeBranchId",
       ].forEach((k) => localStorage.removeItem(k));
-      sessionStorage?.clear?.();
+      if (typeof sessionStorage !== "undefined") {
+        try { sessionStorage.clear(); } catch {}
+      }
     } catch {}
     navigate("/login", { replace: true });
-  };
+  }, [navigate]);
 
   const lower = (s) => String(s || "").toLowerCase();
   const hasAnyRole = (...allowed) => {
@@ -278,12 +320,9 @@ const SidebarLayout = () => {
   /* theme + user + tenant load */
   useEffect(() => {
     const storedDark = localStorage.getItem("darkMode");
-    if (storedDark === "true") {
-      setDarkMode(true);
-      document.documentElement.classList.add("dark");
-    }
+    setDarkMode(storedDark === "true");
 
-    // inject Authorization header from local storage (works even if api.ts forgets)
+    // inject Authorization header from local storage
     const tok =
       localStorage.getItem("token") ||
       localStorage.getItem("jwt") ||
@@ -321,7 +360,7 @@ const SidebarLayout = () => {
     if (storedBranch) setActiveBranchId(storedBranch);
   }, []);
 
-  // keep API headers in sync with tenant & branch changes
+  // sync API headers with tenant & branch changes
   useEffect(() => {
     if (tenant?.id) {
       api.defaults.headers.common["x-tenant-id"] = tenant.id;
@@ -340,11 +379,11 @@ const SidebarLayout = () => {
   }, [activeBranchId]);
 
   useEffect(() => {
-    localStorage.setItem("darkMode", darkMode);
+    localStorage.setItem("darkMode", darkMode ? "true" : "false");
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  // React to branch changes triggered by Profile page (optional)
+  // Branch changes triggered by external pages (optional)
   useEffect(() => {
     const onBranch = (e) => {
       const id = String(e?.detail?.id || "");
@@ -354,7 +393,7 @@ const SidebarLayout = () => {
     return () => window.removeEventListener("ms:branch-changed", onBranch);
   }, []);
 
-  // Fetch current user from API and keep localStorage in sync
+  // Fetch current user
   useEffect(() => {
     (async () => {
       try {
@@ -385,13 +424,13 @@ const SidebarLayout = () => {
 
   const userRole = (user?.role || "").toLowerCase();
 
-  // Build full NAV, then apply Admin filters/labels
+  // Build full NAV, then apply feature filters
   const computedNav = useMemo(() => {
     const base = NAV();
     return filterNavByFeatures(base, features, userRole, featureCtx);
   }, [features, userRole, featureCtx]);
 
-  /* close mobile when route changes & close avatar menu */
+  /* close mobile + avatar when route changes */
   useEffect(() => {
     setMobileOpen(false);
     setAvatarOpen(false);
@@ -399,6 +438,9 @@ const SidebarLayout = () => {
 
   const initial =
     (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
+
+  const toggleDark = useCallback(() => setDarkMode(v => !v), []);
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   return (
     <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
@@ -409,7 +451,7 @@ const SidebarLayout = () => {
             <div className="flex items-center gap-2">
               <button
                 className="lg:hidden p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                onClick={() => setMobileOpen((v) => !v)}
+                onClick={() => setMobileOpen(v => !v)}
                 aria-label={mobileOpen ? "Close menu" : "Open menu"}
               >
                 {mobileOpen ? <FiX /> : <FiMenu />}
@@ -419,7 +461,7 @@ const SidebarLayout = () => {
                 <span className="text-slate-800 dark:text-slate-200">Suite</span>
               </span>
 
-              {/* subtle tenant badge */}
+              {/* Tenant badge */}
               {tenant?.name && (
                 <span className="ml-2 px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                   {tenant.name}
@@ -453,7 +495,7 @@ const SidebarLayout = () => {
               </select>
 
               <button
-                onClick={() => setDarkMode((v) => !v)}
+                onClick={toggleDark}
                 className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
                 aria-label="Toggle dark mode"
               >
@@ -463,7 +505,7 @@ const SidebarLayout = () => {
               {/* Avatar dropdown */}
               <div className="relative" ref={avatarRef}>
                 <button
-                  onClick={() => setAvatarOpen((v) => !v)}
+                  onClick={() => setAvatarOpen(v => !v)}
                   className="inline-flex items-center gap-2 h-9 px-2 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
                   aria-expanded={avatarOpen}
                   title="Account"
@@ -515,7 +557,7 @@ const SidebarLayout = () => {
                       <span className="inline-flex items-center gap-2"><FiPhone /> Billing by Phone</span>
                     </NavLink>
 
-                    {/* Admin/gated items unchanged */}
+                    {/* Admin/gated items */}
                     {hasAnyRole("system_admin","super_admin","admin","director","developer") && (
                       <>
                         <NavLink
@@ -554,7 +596,7 @@ const SidebarLayout = () => {
                           <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
                         </NavLink>
                         <NavLink
-                          to="/admin/tenants"     // existing admin path
+                          to="/admin/tenants"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
@@ -621,7 +663,11 @@ const SidebarLayout = () => {
           <div className="w-72 max-w-[80vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
             <div className="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800">
               <span className="font-semibold">Menu</span>
-              <button className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setMobileOpen(false)} aria-label="Close">
+              <button
+                className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={closeMobile}
+                aria-label="Close"
+              >
                 <FiX />
               </button>
             </div>
@@ -635,14 +681,18 @@ const SidebarLayout = () => {
                       key={item.label + item.to}
                       item={item}
                       currentPath={location.pathname}
-                      onNavigate={() => setMobileOpen(false)}
+                      onNavigate={closeMobile}
                     />
                   ))}
                 </nav>
               )}
             </div>
           </div>
-          <button className="flex-1 bg-black/40" aria-label="Close overlay" onClick={() => setMobileOpen(false)} />
+          <button
+            className="flex-1 bg-black/40"
+            aria-label="Close overlay"
+            onClick={closeMobile}
+          />
         </div>
       )}
     </div>
