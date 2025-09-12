@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
-  ThumbsDown, Info, BarChart2, MessageSquare, UserPlus, Download, PlusCircle
+  ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -47,7 +47,7 @@ const Dashboard = () => {
   const [timeRange, setTimeRange] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(0); // minutes
 
-  // General communications (ticker)
+  // General communications (single ribbon)
   const [comms, setComms] = useState([]);
   const [loadingComms, setLoadingComms] = useState(false);
 
@@ -156,6 +156,7 @@ const Dashboard = () => {
         if (res?.data && Array.isArray(res.data)) {
           setComms(res.data);
         } else {
+          // Fallback to summary-provided comms (if backend merges there)
           setComms(Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : []);
         }
       } finally {
@@ -346,9 +347,6 @@ const Dashboard = () => {
     pushToast(`Opening ${files.length} attachment${files.length > 1 ? 's' : ''}…`, 'info');
   };
 
-  // Dashboard curated message
-  const dashMsg = summary?.dashboardMessage;
-
   // Chart palette that adapts to theme
   const chartColors = isDark
     ? {
@@ -481,76 +479,7 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Important Notice (amber) */}
-      {summary?.importantNotice && (
-        <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 p-4">
-          <div className="flex gap-2 items-start">
-            <Info className="w-5 h-5 mt-0.5" />
-            <div className="min-w-0">
-              <p className="font-semibold truncate">Important Notice</p>
-              <p className="text-sm break-words">{summary.importantNotice}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Company Message (blue) */}
-      {summary?.companyMessage ? (
-        <div className="rounded-xl border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 text-blue-700 dark:text-blue-200 p-4">
-          <div className="flex items-start gap-2">
-            <Info className="w-5 h-5 shrink-0" />
-            <p className="text-sm font-medium break-words">{summary.companyMessage}</p>
-          </div>
-        </div>
-      ) : loading ? (
-        <Skeleton className="h-12" />
-      ) : null}
-
-      {/* Dashboard Message (curated) */}
-      {dashMsg && (
-        <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-sm p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              {dashMsg.title && <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100 truncate">{dashMsg.title}</h3>}
-              {dashMsg.text && <p className="text-sm text-gray-700 dark:text-slate-300 mt-1 break-words">{dashMsg.text}</p>}
-              {Array.isArray(dashMsg.attachments) && dashMsg.attachments.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-1">Attachments</p>
-                  <div className="flex flex-wrap gap-3">
-                    {dashMsg.attachments.map((a) => (
-                      <a
-                        key={`${a.id || a.fileUrl}`}
-                        href={a.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-blue-600 dark:text-blue-300 underline"
-                        title={a.fileName}
-                      >
-                        {a.fileName || 'Attachment'}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            {Array.isArray(dashMsg.attachments) && dashMsg.attachments.length > 0 && (
-              <button
-                onClick={() => {
-                  dashMsg.attachments.forEach((a, i) => {
-                    if (a.fileUrl) setTimeout(() => window.open(a.fileUrl, '_blank', 'noopener,noreferrer'), i * 150);
-                  });
-                }}
-                className="text-xs flex items-center gap-1 border rounded px-2 py-1 h-8 dark:border-slate-700 dark:hover:bg-slate-800 shrink-0"
-                title="Open all attachments"
-              >
-                <Download className="w-3 h-3" /> Open all
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* General Communications Ticker */}
+      {/* === Single-layer communications ribbon (compact) === */}
       {(comms?.length ?? 0) > 0 && (
         <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 dark:bg-slate-800/40 dark:border-slate-700">
@@ -623,33 +552,33 @@ const Dashboard = () => {
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-24" />
+                <Skeleton key={i} className="h-28" />
               ))}
             </div>
           ) : (
             <>
-              {/* Summary Cards */}
+              {/* Summary Cards (enlarged) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <SummaryCard tone="indigo" title="Total Borrowers" value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-5 h-5" />} />
-                <SummaryCard tone="sky"    title="Total Loans" value={n(summary?.totalLoans).toLocaleString()} icon={<CreditCard className="w-5 h-5" />} />
-                <SummaryCard tone="blue"   title="Total Disbursed" value={money(summary?.totalDisbursed)} icon={<CreditCard className="w-5 h-5" />} />
+                <SummaryCard tone="indigo" title="Total Borrowers" value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />} />
+                <SummaryCard tone="sky"    title="Total Loans" value={n(summary?.totalLoans).toLocaleString()} icon={<CreditCard className="w-6 h-6" />} />
+                <SummaryCard tone="blue"   title="Total Disbursed" value={money(summary?.totalDisbursed)} icon={<CreditCard className="w-6 h-6" />} />
 
-                <SummaryCard tone="emerald" title="Total Paid" value={money(summary?.totalPaid)} icon={<DollarSign className="w-5 h-5" />} />
-                <SummaryCard tone="emerald" title="Total Repaid" value={money(summary?.totalRepaid)} icon={<DollarSign className="w-5 h-5" />} />
-                <SummaryCard tone="indigo"  title="Expected Repayments" value={money(summary?.totalExpectedRepayments)} icon={<ClipboardList className="w-5 h-5" />} />
+                <SummaryCard tone="emerald" title="Total Paid" value={money(summary?.totalPaid)} icon={<DollarSign className="w-6 h-6" />} />
+                <SummaryCard tone="emerald" title="Total Repaid" value={money(summary?.totalRepaid)} icon={<DollarSign className="w-6 h-6" />} />
+                <SummaryCard tone="indigo"  title="Expected Repayments" value={money(summary?.totalExpectedRepayments)} icon={<ClipboardList className="w-6 h-6" />} />
 
-                <SummaryCard tone="cyan"  title="Total Deposits" value={money(summary?.totalDeposits)} icon={<DollarSign className="w-5 h-5" />} />
-                <SummaryCard tone="amber" title="Total Withdrawals" value={money(summary?.totalWithdrawals)} icon={<DollarSign className="w-5 h-5" />} />
-                <SummaryCard tone="blue"  title="Net Savings" value={money(summary?.netSavings)} icon={<DollarSign className="w-5 h-5" />} />
+                <SummaryCard tone="cyan"  title="Total Deposits" value={money(summary?.totalDeposits)} icon={<DollarSign className="w-6 h-6" />} />
+                <SummaryCard tone="amber" title="Total Withdrawals" value={money(summary?.totalWithdrawals)} icon={<DollarSign className="w-6 h-6" />} />
+                <SummaryCard tone="blue"  title="Net Savings" value={money(summary?.netSavings)} icon={<DollarSign className="w-6 h-6" />} />
 
-                <SummaryCard tone="rose"   title="Defaulted Loan" value={money(summary?.defaultedLoan)} icon={<AlertTriangle className="w-5 h-5" />} />
-                <SummaryCard tone="rose"   title="Defaulted Interest" value={money(summary?.defaultedInterest)} icon={<AlertTriangle className="w-5 h-5" />} />
+                <SummaryCard tone="rose"   title="Defaulted Loan" value={money(summary?.defaultedLoan)} icon={<AlertTriangle className="w-6 h-6" />} />
+                <SummaryCard tone="rose"   title="Defaulted Interest" value={money(summary?.defaultedInterest)} icon={<AlertTriangle className="w-6 h-6" />} />
 
-                <SummaryCard tone="violet" title="Outstanding Loan" value={money(summary?.outstandingLoan)} icon={<CreditCard className="w-5 h-5" />} />
-                <SummaryCard tone="violet" title="Outstanding Interest" value={money(summary?.outstandingInterest)} icon={<DollarSign className="w-5 h-5" />} />
+                <SummaryCard tone="violet" title="Outstanding Loan" value={money(summary?.outstandingLoan)} icon={<CreditCard className="w-6 h-6" />} />
+                <SummaryCard tone="violet" title="Outstanding Interest" value={money(summary?.outstandingInterest)} icon={<DollarSign className="w-6 h-6" />} />
 
-                <SummaryCard tone="slate"  title="Written Off" value={money(summary?.writtenOff)} icon={<ThumbsDown className="w-5 h-5" />} />
-                <SummaryCard tone="indigo" title="PAR (Portfolio at Risk)" value={`${n(summary?.parPercent)}%`} icon={<BarChart2 className="w-5 h-5" />} />
+                <SummaryCard tone="slate"  title="Written Off" value={money(summary?.writtenOff)} icon={<ThumbsDown className="w-6 h-6" />} />
+                <SummaryCard tone="indigo" title="PAR (Portfolio at Risk)" value={`${n(summary?.parPercent)}%`} icon={<BarChart2 className="w-6 h-6" />} />
               </div>
 
               {/* Monthly Trends */}
@@ -973,31 +902,33 @@ const Dashboard = () => {
   );
 };
 
-/** KPI card with subtle motion and tone accents */
+/** KPI card with welcoming tone colors and larger footprint */
 const SummaryCard = ({ title, value, icon, tone = 'indigo' }) => {
   const tones =
     ({
-      indigo:  { ring: 'ring-indigo-100 dark:ring-indigo-900/40',  icon: 'text-indigo-600 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-950/40' },
-      sky:     { ring: 'ring-sky-100 dark:ring-sky-900/40',        icon: 'text-sky-600 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/40' },
-      blue:    { ring: 'ring-blue-100 dark:ring-blue-900/40',      icon: 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-950/40' },
-      emerald: { ring: 'ring-emerald-100 dark:ring-emerald-900/40',icon: 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' },
-      cyan:    { ring: 'ring-cyan-100 dark:ring-cyan-900/40',      icon: 'text-cyan-600 bg-cyan-50 dark:text-cyan-300 dark:bg-cyan-950/40' },
-      amber:   { ring: 'ring-amber-100 dark:ring-amber-900/40',    icon: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' },
-      violet:  { ring: 'ring-violet-100 dark:ring-violet-900/40',  icon: 'text-violet-600 bg-violet-50 dark:text-violet-300 dark:bg-violet-950/40' },
-      rose:    { ring: 'ring-rose-100 dark:ring-rose-900/40',      icon: 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40' },
-      slate:   { ring: 'ring-slate-100 dark:ring-slate-800',       icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' },
-    }[tone]) || { ring: 'ring-slate-100 dark:ring-slate-800', icon: 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' };
+      indigo:  { ring: 'ring-indigo-100 dark:ring-indigo-900/40',  icon: 'text-indigo-700 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-950/40' },
+      sky:     { ring: 'ring-sky-100 dark:ring-sky-900/40',        icon: 'text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/40' },
+      blue:    { ring: 'ring-blue-100 dark:ring-blue-900/40',      icon: 'text-blue-700 bg-blue-50 dark:text-blue-300 dark:bg-blue-950/40' },
+      emerald: { ring: 'ring-emerald-100 dark:ring-emerald-900/40',icon: 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' },
+      cyan:    { ring: 'ring-cyan-100 dark:ring-cyan-900/40',      icon: 'text-cyan-700 bg-cyan-50 dark:text-cyan-300 dark:bg-cyan-950/40' },
+      amber:   { ring: 'ring-amber-100 dark:ring-amber-900/40',    icon: 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' },
+      violet:  { ring: 'ring-violet-100 dark:ring-violet-900/40',  icon: 'text-violet-700 bg-violet-50 dark:text-violet-300 dark:bg-violet-950/40' },
+      rose:    { ring: 'ring-rose-100 dark:ring-rose-900/40',      icon: 'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40' },
+      slate:   { ring: 'ring-slate-100 dark:ring-slate-800',       icon: 'text-slate-700 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' },
+    }[tone]) || { ring: 'ring-slate-100 dark:ring-slate-800', icon: 'text-slate-700 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40' };
 
   return (
     <div
-      className={`group bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring} min-h-[8rem]
+      className={`group bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 ring-1 ${tones.ring} min-h-[10.5rem]
                   transition-transform will-change-transform hover:-translate-y-0.5`}
     >
-      <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-full ${tones.icon}`}>{icon}</div>
+      <div className="flex items-start gap-3">
+        <div className={`p-3 rounded-full ${tones.icon}`}>{icon}</div>
         <div className="min-w-0">
-          <h3 className="text-xs font-medium text-gray-500 dark:text-slate-400 truncate">{title}</h3>
-          <p className="text-xl font-semibold text-gray-900 dark:text-white break-words">{value ?? '—'}</p>
+          <h3 className="text-sm font-medium text-gray-500 dark:text-slate-400 truncate">{title}</h3>
+          <p className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white break-words leading-snug">
+            {value ?? '—'}
+          </p>
         </div>
       </div>
     </div>
