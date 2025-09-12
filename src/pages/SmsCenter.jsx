@@ -1,13 +1,39 @@
+// src/pages/SmsCenter.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../api";
 
-/** Utils */
+/** ────────────── Utils ────────────── */
 const nf = new Intl.NumberFormat();
 const dt = (s) => (s ? new Date(s).toLocaleString() : "—");
 const getFirst = (paths) => api.getFirst(paths);
 const postFirst = (paths, body) => api.postFirst(paths, body);
 
-/** SMS Center */
+// GSM-7 vs Unicode segment estimation
+const GSM7 =
+  "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ`¿abcdefghijklmnopqrstuvwxyzäöñü^{}\\[~]|€";
+function isUnicode(msg = "") {
+  for (const ch of String(msg)) if (!GSM7.includes(ch)) return true;
+  return false;
+}
+function segmentInfo(text) {
+  const uni = isUnicode(text);
+  const len = String(text || "").length;
+  if (len === 0) return { uni, segs: 0, per: uni ? 70 : 160, left: uni ? 70 : 160 };
+  if (!uni) {
+    if (len <= 160) return { uni, segs: 1, per: 160, left: 160 - len };
+    const segs = Math.ceil(len / 153);
+    const rem = len % 153;
+    return { uni, segs, per: 153, left: rem === 0 ? 0 : 153 - rem };
+  }
+  if (len <= 70) return { uni, segs: 1, per: 70, left: 70 - len };
+  const segs = Math.ceil(len / 67);
+  const rem = len % 67;
+  return { uni, segs, per: 67, left: rem === 0 ? 0 : 67 - rem };
+}
+const applyTemplate = (tpl, vars = {}) =>
+  String(tpl || "").replace(/\{\{(\w+)\}\}/g, (_, k) => (k in vars ? String(vars[k]) : ""));
+
+/** ────────────── Page ────────────── */
 export default function SmsCenter() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -48,7 +74,7 @@ export default function SmsCenter() {
   const [csvTemplate, setCsvTemplate] = useState("Hello {{name}}, …");
   const [csvFrom, setCsvFrom] = useState("");
 
-  /** Loaders */
+  /** ────────────── Loaders ────────────── */
   async function loadCaps() {
     try {
       const c = await getFirst([
@@ -70,7 +96,9 @@ export default function SmsCenter() {
         "/notifications/sms/balance",
       ]);
       setBalance(b || null);
-    } catch { setBalance(null); }
+    } catch {
+      setBalance(null);
+    }
   }
   async function loadLogs() {
     try {
@@ -81,7 +109,9 @@ export default function SmsCenter() {
       ]);
       const items = Array.isArray(r) ? r : r.items || r.messages || [];
       setLogs(items.slice(0, 100));
-    } catch { setLogs([]); }
+    } catch {
+      setLogs([]);
+    }
   }
 
   useEffect(() => { loadCaps(); loadBalance(); loadLogs(); }, []);
@@ -113,7 +143,7 @@ export default function SmsCenter() {
     return () => clearTimeout(t);
   }, [pickQuery]);
 
-  /** Nice balance string */
+  /** Friendly balance string */
   const balanceText = useMemo(() => {
     if (!balance) return "—";
     if (balance.ok === false) return balance.error || "N/A";
@@ -132,10 +162,13 @@ export default function SmsCenter() {
     return `${nf.format(Number(credits.toFixed ? credits.toFixed(2) : credits))} ${unit}${seg}`;
   }, [balance]);
 
-  const applyTemplate = (tpl, vars = {}) =>
-    String(tpl || "").replace(/\{\{(\w+)\}\}/g, (_, k) => (k in vars ? String(vars[k]) : ""));
+  // Segment counters for textareas
+  const singleInfo = useMemo(() => segmentInfo(singleMsg), [singleMsg]);
+  const borrowerInfo = useMemo(() => segmentInfo(borrowerMsg), [borrowerMsg]);
+  const segTplInfo = useMemo(() => segmentInfo(segTemplate), [segTemplate]);
+  const csvTplInfo = useMemo(() => segmentInfo(csvTemplate), [csvTemplate]);
 
-  /* ----------------------------- Actions ---------------------------------- */
+  /** ────────────── Actions ────────────── */
   async function sendSingle() {
     const to = singleTo.trim();
     const message = singleMsg.trim();
@@ -245,13 +278,29 @@ export default function SmsCenter() {
       const text = await csvFile.text();
       const rows = text.split(/\r?\n/).filter((l) => l.trim().length);
       if (rows.length === 0) throw new Error("Empty CSV.");
-      const headers = rows[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
-      const lookup = (row, key) => {
+
+      // very light CSV split (handles simple quoted commas)
+      const smartSplit = (line) => {
+        const out = [];
+        let cur = "";
+        let q = false;
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (c === '"') q = !q;
+          else if (c === "," && !q) { out.push(cur); cur = ""; continue; }
+          cur += c;
+        }
+        out.push(cur);
+        return out;
+      };
+
+      const headers = smartSplit(rows[0]).map((h) => h.trim().replace(/^"|"$/g, ""));
+      const lookup = (cols, key) => {
         const i = headers.findIndex((h) => h.toLowerCase() === key.toLowerCase());
         if (i < 0) return "";
-        return (row[i] || "").replace(/^"|"$/g, "").trim();
+        return (cols[i] || "").replace(/^"|"$/g, "").trim();
       };
-      const items = rows.slice(1).map((line) => line.split(","));
+      const items = rows.slice(1).map((line) => smartSplit(line));
       const from = caps.allowBodySender ? (csvFrom || undefined) : undefined;
 
       const messages = items
@@ -278,7 +327,7 @@ export default function SmsCenter() {
     finally { setBusy(false); }
   }
 
-  /* ------------------------------ UI -------------------------------------- */
+  /** ────────────── UI ────────────── */
   function BalanceCard() {
     return (
       <div className="rounded-2xl border p-4 shadow-sm bg-white">
@@ -321,6 +370,12 @@ export default function SmsCenter() {
       </div>
     );
 
+  const SegMeta = ({ info }) => (
+    <div className="text-xs text-gray-500">
+      {info.uni ? "Unicode" : "GSM-7"} • {info.segs} segment{info.segs === 1 ? "" : "s"} • {info.left} chars left
+    </div>
+  );
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 p-4">
       <h1 className="text-2xl font-bold">SMS Center</h1>
@@ -351,10 +406,13 @@ export default function SmsCenter() {
                      onChange={(e) => setSingleTo(e.target.value)} />
               <SenderHint label="Single Sender ID" />
             </div>
-            <textarea className="w-full rounded-xl border p-2 h-28"
-                      placeholder="Message text"
-                      value={singleMsg}
-                      onChange={(e) => setSingleMsg(e.target.value)} />
+            <div className="space-y-1">
+              <textarea className="w-full rounded-xl border p-2 h-28"
+                        placeholder="Message text"
+                        value={singleMsg}
+                        onChange={(e) => setSingleMsg(e.target.value)} />
+              <SegMeta info={singleInfo} />
+            </div>
             <button disabled={busy}
                     onClick={sendSingle}
                     className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50">
@@ -396,11 +454,16 @@ export default function SmsCenter() {
               </div>
             )}
 
-            <textarea className="w-full rounded-xl border p-2 h-28"
-                      placeholder="Template e.g. Hello {{name}}, your loan is due…"
-                      value={borrowerMsg}
-                      onChange={(e) => setBorrowerMsg(e.target.value)} />
-            <div className="text-xs text-gray-500">Variables: {"{{name}}"} {"{{firstName}}"} {"{{lastName}}"}</div>
+            <div className="space-y-1">
+              <textarea className="w-full rounded-xl border p-2 h-28"
+                        placeholder="Template e.g. Hello {{name}}, your loan is due…"
+                        value={borrowerMsg}
+                        onChange={(e) => setBorrowerMsg(e.target.value)} />
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>Variables: {"{{name}}"} {"{{firstName}}"} {"{{lastName}}"}</span>
+                <SegMeta info={borrowerInfo} />
+              </div>
+            </div>
 
             <button disabled={busy || picked.length === 0}
                     onClick={sendToBorrowers}
@@ -438,10 +501,13 @@ export default function SmsCenter() {
                      onChange={(e) => setSegOfficer(e.target.value)} />
               <SenderHint label="Segment Sender ID" />
             </div>
-            <textarea className="w-full rounded-xl border p-2 h-28"
-                      placeholder="Template e.g. Dear {{name}}, …"
-                      value={segTemplate}
-                      onChange={(e) => setSegTemplate(e.target.value)} />
+            <div className="space-y-1">
+              <textarea className="w-full rounded-xl border p-2 h-28"
+                        placeholder="Template e.g. Dear {{name}}, …"
+                        value={segTemplate}
+                        onChange={(e) => setSegTemplate(e.target.value)} />
+              <SegMeta info={segTplInfo} />
+            </div>
             <button disabled={busy}
                     onClick={sendSegment}
                     className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50">
@@ -461,10 +527,13 @@ export default function SmsCenter() {
               <input type="file" accept=".csv,text/csv" onChange={(e) => setCsvFile(e.target.files?.[0] || null)} />
               <SenderHint label="CSV Sender ID" />
             </div>
-            <textarea className="w-full rounded-xl border p-2 h-24"
-                      placeholder="Optional template (uses CSV column names: Hello {{name}})"
-                      value={csvTemplate}
-                      onChange={(e) => setCsvTemplate(e.target.value)} />
+            <div className="space-y-1">
+              <textarea className="w-full rounded-xl border p-2 h-24"
+                        placeholder="Optional template (uses CSV column names: Hello {{name}})"
+                        value={csvTemplate}
+                        onChange={(e) => setCsvTemplate(e.target.value)} />
+              <SegMeta info={csvTplInfo} />
+            </div>
             <div className="text-xs text-gray-500">
               CSV columns: <code>phone</code>, <code>message</code> (optional), <code>name</code>, <code>firstName</code>, <code>lastName</code>…
             </div>
