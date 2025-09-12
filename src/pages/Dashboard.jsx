@@ -47,6 +47,11 @@ const Dashboard = () => {
   const [timeRange, setTimeRange] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(0); // minutes
 
+  // For UX: last update + next auto refresh countdown
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [nextRefreshAt, setNextRefreshAt] = useState(null);
+  const [now, setNow] = useState(Date.now());
+
   // General communications (single ribbon)
   const [comms, setComms] = useState([]);
   const [loadingComms, setLoadingComms] = useState(false);
@@ -216,8 +221,10 @@ const Dashboard = () => {
   const loadAll = useCallback(
     async (signal) => {
       await Promise.all([fetchSummary(signal), fetchActivity({}, signal), fetchTrends(signal)]);
+      setLastUpdatedAt(new Date());
+      if (autoRefresh > 0) setNextRefreshAt(Date.now() + autoRefresh * 60000);
     },
-    [fetchSummary, fetchActivity, fetchTrends]
+    [fetchSummary, fetchActivity, fetchTrends, autoRefresh]
   );
 
   useEffect(() => {
@@ -259,17 +266,28 @@ const Dashboard = () => {
     if (Array.isArray(summary.officerPerformance)) setOfficerPerformance(summary.officerPerformance);
   }, [summary]);
 
-  // Auto-refresh (minutes)
+  // Auto-refresh (minutes) + visible countdown
   useEffect(() => {
-    if (!autoRefresh || autoRefresh <= 0) return;
-    const id = setInterval(() => {
+    if (!autoRefresh || autoRefresh <= 0) {
+      setNextRefreshAt(null);
+      return;
+    }
+    const tick = () => {
       const ac = new AbortController();
       Promise.all([loadAll(ac.signal), fetchCommunications(ac.signal)])
         .catch(() => {})
         .finally(() => ac.abort());
-    }, autoRefresh * 60000);
+    };
+    const id = setInterval(tick, autoRefresh * 60000);
+    setNextRefreshAt(Date.now() + autoRefresh * 60000);
     return () => clearInterval(id);
   }, [autoRefresh, loadAll, fetchCommunications]);
+
+  // 1s heartbeat for countdown text
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // ---------- Activity actions ----------
   const submitComment = async (activityId) => {
@@ -369,13 +387,17 @@ const Dashboard = () => {
       };
 
   // ---------- RENDER ----------
+  const secsLeft = nextRefreshAt ? Math.max(0, Math.floor((nextRefreshAt - now) / 1000)) : 0;
+  const mm = String(Math.floor(secsLeft / 60)).padStart(2, '0');
+  const ss = String(secsLeft % 60).padStart(2, '0');
+
   return (
     <div className="space-y-6">
-      {/* Gradient header band */}
-      <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 border border-blue-100 dark:border-slate-700 p-4 md:p-6">
+      {/* Top bar */}
+      <div className="rounded-2xl bg-white/80 dark:bg-slate-900/70 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm border border-slate-200 dark:border-slate-800 p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Dashboard
             </h1>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
@@ -383,7 +405,7 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* Filters (wrap as needed; no clipping) */}
+          {/* Filters (wrap as needed) */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <select
               aria-label="Filter by branch"
@@ -452,6 +474,8 @@ const Dashboard = () => {
                 ])
                   .then(() => {
                     setActivityPage(1);
+                    setLastUpdatedAt(new Date());
+                    if (autoRefresh > 0) setNextRefreshAt(Date.now() + autoRefresh * 60000);
                     pushToast('Dashboard refreshed', 'success');
                   })
                   .catch(() => pushToast('Refresh failed', 'error'))
@@ -462,6 +486,17 @@ const Dashboard = () => {
               Refresh
             </button>
           </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+          <span>
+            {lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleString()}` : 'Loading…'}
+          </span>
+          {autoRefresh > 0 && nextRefreshAt && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5">
+              Auto-refresh in {mm}:{ss}
+            </span>
+          )}
         </div>
       </div>
 
@@ -557,7 +592,7 @@ const Dashboard = () => {
             </div>
           ) : (
             <>
-              {/* Summary Cards (enlarged, auto-fit) */}
+              {/* Summary Cards (auto-fit) */}
               <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
                 <SummaryCard tone="indigo" title="Total Borrowers" value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />} />
                 <SummaryCard tone="sky"    title="Total Loans" value={n(summary?.totalLoans).toLocaleString()} icon={<CreditCard className="w-6 h-6" />} />
@@ -902,16 +937,15 @@ const Dashboard = () => {
   );
 };
 
-/** Fancy KPI card: glass surface, gradient border, tone accents, optional delta + sparkline */
+/** Fancy KPI card: gradient border + glass surface + mono numerals + optional delta/sparkline */
 const SummaryCard = ({
   title,
   value,
   icon,
   tone = 'indigo',
-  // optional extras (kept for future; not required by callers)
-  delta = null,         // e.g. +4.2 or -1.8
+  delta = null,         // e.g. +4.2 or -1.8 (optional)
   deltaLabel = '',      // e.g. "vs last month"
-  spark = null          // e.g. [12,15,9,18,21,19]
+  spark = null          // e.g. [12,15,9,18,21,19] (optional)
 }) => {
   const tones = ({
     indigo:  { from: 'from-indigo-300/60',  to: 'to-indigo-500/40',  iconBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300' },
@@ -954,7 +988,7 @@ const SummaryCard = ({
       {/* gradient border */}
       <div className={`p-[1px] rounded-2xl bg-gradient-to-br ${tones.from} ${tones.to}`}>
         {/* glass card */}
-        <div className="rounded-2xl bg-white/85 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm
+        <div className="rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm
                         border border-white/60 dark:border-slate-800 shadow-sm p-5 min-h-[11rem]">
           <div className="flex items-start justify-between gap-3">
             <div className={`p-3 rounded-full ${tones.iconBg}`}>{icon}</div>
