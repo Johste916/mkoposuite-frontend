@@ -54,6 +54,15 @@ const DISBURSE_METHODS = [
   { value: "other", label: "Other" },
 ];
 
+const MOBILE_PROVIDERS = [
+  { value: "mpesa", label: "M-Pesa" },
+  { value: "tigopesa", label: "Tigo Pesa" },
+  { value: "airtelmoney", label: "Airtel Money" },
+  { value: "halopesa", label: "HaloPesa" },
+  { value: "ttclpesa", label: "TTCL Pesa" },
+  { value: "other", label: "Other" },
+];
+
 const STATUS_LABELS = [
   "new loan",
   "open",
@@ -88,7 +97,7 @@ export default function LoanApplications() {
     durationMonths: "",
     collateralType: "",
     collateralAmount: "",
-    collateralOther: "",            // NEW: only used when collateralType === "Other"
+    collateralOther: "",
 
     // interest
     interestMethod: "flat",
@@ -109,7 +118,13 @@ export default function LoanApplications() {
     disbursementMethod: "cash",
     disbursementBankId: "",
     disbursementReference: "",
-    disbursementOther: "",         // NEW: only used when disbursementMethod === "other"
+    // mobile money specifics
+    mobileProvider: "",
+    mobileProviderOther: "",
+    mobilePhone: "",
+    // other method specifics
+    disbursementOther: "",
+    disbursementOtherDetails: "",
 
     // guarantors
     guarantors: [],
@@ -143,7 +158,7 @@ export default function LoanApplications() {
         setProducts([]);
         setBorrowers([]);
       }
-      // optional banks list
+      // banks list (managed elsewhere, multi-tenant aware via API)
       try {
         const r = await api.get("/banks");
         setBanks(toArray(r.data));
@@ -249,28 +264,57 @@ export default function LoanApplications() {
     if (!form.principal || Number(form.principal) <= 0) return alert("Enter a principal amount");
     if (!form.durationMonths) return alert("Enter loan duration (months)");
 
-    // NEW: require details when “Other” is chosen
+    // “Other” collateral detail
     if (form.collateralType === "Other" && !form.collateralOther.trim()) {
       return alert("Please specify the collateral for 'Other'.");
     }
+
+    // Disbursement method validations & folding
     if (form.disbursementMethod === "other" && !form.disbursementOther.trim()) {
       return alert("Please specify the disbursement method for 'Other'.");
+    }
+    if (form.disbursementMethod === "mobile_money") {
+      if (!form.mobileProvider) return alert("Select a mobile money provider.");
+      if (form.mobileProvider === "other" && !form.mobileProviderOther.trim()) {
+        return alert("Please specify the mobile money provider.");
+      }
+      if (!form.mobilePhone.trim()) return alert("Enter the mobile money phone number.");
+      // very light validation (do not block real world formats)
+      const digits = form.mobilePhone.replace(/\D/g, "");
+      if (digits.length < 9 || digits.length > 15) {
+        return alert("Mobile money phone number looks invalid.");
+      }
     }
 
     setSubmitting(true);
     try {
-      // safe folding of “Other” values into existing fields (no backend changes needed)
+      // fold collateral "Other"
       const foldedCollateralType =
         form.collateralType === "Other" && form.collateralOther.trim()
           ? `Other: ${form.collateralOther.trim()}`
           : form.collateralType || null;
 
-      const withMethodDetail =
-        form.disbursementMethod === "other" && form.disbursementOther.trim()
-          ? (form.disbursementReference
-              ? `${form.disbursementReference} | Method: ${form.disbursementOther.trim()}`
-              : `Method: ${form.disbursementOther.trim()}`)
-          : form.disbursementReference || null;
+      // fold disbursement-specific details into disbursementReference
+      let disbursementReference = form.disbursementReference?.trim() || "";
+      if (form.disbursementMethod === "mobile_money") {
+        const providerLabel =
+          form.mobileProvider === "other"
+            ? form.mobileProviderOther.trim()
+            : (MOBILE_PROVIDERS.find(p => p.value === form.mobileProvider)?.label || form.mobileProvider);
+        const parts = [
+          `Provider: ${providerLabel}`,
+          `Phone: ${form.mobilePhone.trim()}`,
+          disbursementReference ? `Ref: ${disbursementReference}` : null,
+        ].filter(Boolean);
+        disbursementReference = parts.join(" | ");
+      } else if (form.disbursementMethod === "other") {
+        const parts = [
+          `Method: ${form.disbursementOther.trim()}`,
+          form.disbursementOtherDetails?.trim() ? `Details: ${form.disbursementOtherDetails.trim()}` : null,
+          disbursementReference ? `Ref: ${disbursementReference}` : null,
+        ].filter(Boolean);
+        disbursementReference = parts.join(" | ");
+      }
 
       const payload = {
         // core
@@ -283,7 +327,7 @@ export default function LoanApplications() {
         currency: "TZS",
         releaseDate: form.releaseDate || today(),
         durationMonths: form.durationMonths,
-        collateralType: foldedCollateralType,       // ← folded “Other”
+        collateralType: foldedCollateralType,
         collateralAmount: form.collateralAmount || null,
 
         // interest
@@ -295,9 +339,9 @@ export default function LoanApplications() {
         fees: form.fees,
         repaymentCycle: form.repaymentCycle,
         numberOfRepayments: form.numberOfRepayments,
-        disbursementMethod: form.disbursementMethod, // keep enum value
-        disbursementBankId: form.disbursementBankId || null,
-        disbursementReference: withMethodDetail,     // ← append detail for “other”
+        disbursementMethod: form.disbursementMethod,
+        disbursementBankId: form.disbursementMethod === "bank" ? (form.disbursementBankId || null) : null,
+        disbursementReference: disbursementReference || null,
 
         // guarantors
         guarantors: form.guarantors,
@@ -400,7 +444,6 @@ export default function LoanApplications() {
                   setForm({
                     ...form,
                     productId: id,
-                    // apply defaults if available
                     interestMethod: prod?.interestMethod || form.interestMethod,
                     interestRate: prod?.interestRate ?? form.interestRate,
                   });
@@ -696,41 +739,127 @@ export default function LoanApplications() {
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-gray-600">Method</label>
-              <select className={clsInput} value={form.disbursementMethod} onChange={(e)=>setForm({...form, disbursementMethod:e.target.value})}>
+              <select
+                className={clsInput}
+                value={form.disbursementMethod}
+                onChange={(e)=>{
+                  const method = e.target.value;
+                  // reset method-specific fields to avoid stale data
+                  setForm({
+                    ...form,
+                    disbursementMethod: method,
+                    disbursementBankId: "",
+                    mobileProvider: "",
+                    mobileProviderOther: "",
+                    mobilePhone: "",
+                    disbursementOther: "",
+                    disbursementOtherDetails: "",
+                  });
+                }}
+              >
                 {DISBURSE_METHODS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
               </select>
-              {form.disbursementMethod === "other" && (
-                <div className="mt-2">
+            </div>
+
+            {/* Reference (generic) */}
+            <div>
+              <label className="text-xs text-gray-600">Reference (optional)</label>
+              <input
+                className={clsInput}
+                value={form.disbursementReference}
+                onChange={(e)=>setForm({...form, disbursementReference:e.target.value})}
+                placeholder="Txn ref / slip #"
+              />
+            </div>
+
+            {/* BANK */}
+            {form.disbursementMethod === "bank" && (
+              <>
+                <div className="md:col-span-2">
+                  <label className="text-xs text-gray-600">Bank</label>
+                  <div className="flex gap-2">
+                    <select
+                      className={`${clsInput} flex-1`}
+                      value={form.disbursementBankId}
+                      onChange={(e)=>setForm({...form, disbursementBankId:e.target.value})}
+                    >
+                      <option value="">Select bank…</option>
+                      {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    <Link to="/banks/add" target="_blank" className="px-3 py-2 rounded-lg border hover:bg-gray-50 inline-flex items-center gap-2">
+                      <PlusCircle className="h-4 w-4" /> Add
+                    </Link>
+                    <Link to="/banks" target="_blank" className="px-3 py-2 rounded-lg border hover:bg-gray-50">
+                      Manage
+                    </Link>
+                  </div>
+                  {banks.length === 0 && (
+                    <p className="text-[11px] text-amber-600 mt-1">No banks found. Use “Add” to register banks; this list is tenant-scoped via your API.</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* MOBILE MONEY */}
+            {form.disbursementMethod === "mobile_money" && (
+              <>
+                <div>
+                  <label className="text-xs text-gray-600">Provider</label>
+                  <select
+                    className={clsInput}
+                    value={form.mobileProvider}
+                    onChange={(e)=>setForm({...form, mobileProvider: e.target.value})}
+                  >
+                    <option value="">Select provider…</option>
+                    {MOBILE_PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                  {form.mobileProvider === "other" && (
+                    <div className="mt-2">
+                      <input
+                        className={clsInput}
+                        placeholder="Specify provider"
+                        value={form.mobileProviderOther}
+                        onChange={(e)=>setForm({...form, mobileProviderOther: e.target.value})}
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Phone Number</label>
                   <input
                     className={clsInput}
-                    placeholder="Specify method (e.g., cheque, voucher)"
+                    placeholder="e.g. 07xxxxxxxx or +2557xxxxxxxx"
+                    value={form.mobilePhone}
+                    onChange={(e)=>setForm({...form, mobilePhone: e.target.value})}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* OTHER */}
+            {form.disbursementMethod === "other" && (
+              <>
+                <div>
+                  <label className="text-xs text-gray-600">Specify method</label>
+                  <input
+                    className={clsInput}
+                    placeholder="e.g., cheque, voucher, petty cash"
                     value={form.disbursementOther}
                     onChange={(e)=>setForm({...form, disbursementOther: e.target.value})}
                     required
                   />
                 </div>
-              )}
-            </div>
-            {form.disbursementMethod === "bank" && (
-              <>
                 <div>
-                  <label className="text-xs text-gray-600">Bank</label>
-                  <select className={clsInput} value={form.disbursementBankId} onChange={(e)=>setForm({...form, disbursementBankId:e.target.value})}>
-                    <option value="">Select bank…</option>
-                    {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs text-gray-600">Reference (optional)</label>
-                  <input className={clsInput} value={form.disbursementReference} onChange={(e)=>setForm({...form, disbursementReference:e.target.value})} placeholder="Txn ref / slip #" />
+                  <label className="text-xs text-gray-600">Details (optional)</label>
+                  <input
+                    className={clsInput}
+                    placeholder="Instructions / place of collection"
+                    value={form.disbursementOtherDetails}
+                    onChange={(e)=>setForm({...form, disbursementOtherDetails: e.target.value})}
+                  />
                 </div>
               </>
-            )}
-            {form.disbursementMethod !== "bank" && (
-              <div className="md:col-span-2">
-                <label className="text-xs text-gray-600">Reference (optional)</label>
-                <input className={clsInput} value={form.disbursementReference} onChange={(e)=>setForm({...form, disbursementReference:e.target.value})} placeholder="Txn ref / slip #" />
-              </div>
             )}
           </div>
         </section>
