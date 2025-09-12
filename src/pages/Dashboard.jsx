@@ -11,6 +11,24 @@ import {
 } from 'recharts';
 import api from '../api';
 
+// =================== CONFIGURE THESE ROUTES IF NEEDED ===================
+const ROUTE_PATHS = {
+  borrowers: '/borrowers',
+  loans: '/loans',
+  repayments: '/repayments',         // total paid / total repaid
+  expectedRepayments: '/repayments', // add ?tab=expected
+  deposits: '/deposits',
+  withdrawals: '/withdrawals',
+  savings: '/savings',
+  defaultedLoans: '/loans',          // add ?tab=defaulted
+  defaultedInterest: '/loans',       // add ?tab=defaulted-interest
+  outstandingLoan: '/loans',         // add ?tab=outstanding
+  outstandingInterest: '/loans',     // add ?tab=outstanding-interest
+  writtenOff: '/loans',              // add ?tab=written-off
+  par: '/loans',                     // add ?tab=par
+};
+// ========================================================================
+
 // Local storage keys
 const LS_KEY = 'ms_dash_filters_v1';
 const LS_AUTO = 'ms_dash_auto_refresh_v1';
@@ -129,6 +147,23 @@ const Dashboard = () => {
   const money = (v) => {
     const num = n(v);
     return Number.isNaN(num) ? 'TZS —' : `TZS ${TZS.format(num)}`;
+  };
+
+  // Build "to" with current filters appended as query params
+  const makeTo = (base, extra = {}) => {
+    try {
+      const qs = new URLSearchParams();
+      if (branchId) qs.set('branchId', branchId);
+      if (officerId) qs.set('officerId', officerId);
+      if (timeRange) qs.set('timeRange', timeRange);
+      Object.entries(extra).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && String(v) !== '') qs.set(k, v);
+      });
+      const query = qs.toString();
+      return query ? `${base}?${query}` : base;
+    } catch {
+      return base;
+    }
   };
 
   const branchNameById = (id) =>
@@ -353,7 +388,7 @@ const Dashboard = () => {
         dueDate: draft.dueDate || null,
         note: draft.note || '',
       });
-      setAssignDraft((d) => ({ ...d, [activityId]: { assigneeId: '', dueDate: '', note: '' } }));
+      setAssignDraft((d) => ({ ...d, [a.id]: { assigneeId: '', dueDate: '', note: '' } }));
       await fetchActivity();
       pushToast('Task assigned', 'success');
     } catch (err) {
@@ -548,7 +583,7 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* === Single-layer communications ribbon (compact) === */}
+      {/* === Communications ribbon === */}
       {(comms?.length ?? 0) > 0 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 dark:bg-slate-800/60 dark:border-slate-700">
@@ -643,26 +678,101 @@ const Dashboard = () => {
             <>
               {/* Summary Cards (auto-fit) */}
               <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
-                <SummaryCard tone="indigo" title="Total Borrowers" value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />} />
-                <SummaryCard tone="sky"    title="Total Loans" value={n(summary?.totalLoans).toLocaleString()} icon={<CreditCard className="w-6 h-6" />} />
-                <SummaryCard tone="blue"   title="Total Disbursed" value={money(summary?.totalDisbursed)} icon={<CreditCard className="w-6 h-6" />} />
+                <SummaryCard
+                  tone="indigo" title="Total Borrowers"
+                  value={n(summary?.totalBorrowers).toLocaleString()}
+                  icon={<Users className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.borrowers)}
+                />
+                <SummaryCard
+                  tone="sky" title="Total Loans"
+                  value={n(summary?.totalLoans).toLocaleString()}
+                  icon={<CreditCard className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.loans)}
+                />
+                <SummaryCard
+                  tone="blue" title="Total Disbursed"
+                  value={money(summary?.totalDisbursed)}
+                  icon={<CreditCard className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })}
+                />
 
-                <SummaryCard tone="emerald" title="Total Paid" value={money(summary?.totalPaid)} icon={<DollarSign className="w-6 h-6" />} />
-                <SummaryCard tone="emerald" title="Total Repaid" value={money(summary?.totalRepaid)} icon={<DollarSign className="w-6 h-6" />} />
-                <SummaryCard tone="indigo"  title="Expected Repayments" value={money(summary?.totalExpectedRepayments)} icon={<ClipboardList className="w-6 h-6" />} />
+                <SummaryCard
+                  tone="emerald" title="Total Paid"
+                  value={money(summary?.totalPaid)}
+                  icon={<DollarSign className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })}
+                />
+                <SummaryCard
+                  tone="emerald" title="Total Repaid"
+                  value={money(summary?.totalRepaid)}
+                  icon={<DollarSign className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })}
+                />
+                <SummaryCard
+                  tone="indigo" title="Expected Repayments"
+                  value={money(summary?.totalExpectedRepayments)}
+                  icon={<ClipboardList className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })}
+                />
 
-                <SummaryCard tone="cyan"  title="Total Deposits" value={money(summary?.totalDeposits)} icon={<DollarSign className="w-6 h-6" />} />
-                <SummaryCard tone="amber" title="Total Withdrawals" value={money(summary?.totalWithdrawals)} icon={<DollarSign className="w-6 h-6" />} />
-                <SummaryCard tone="blue"  title="Net Savings" value={money(summary?.netSavings)} icon={<DollarSign className="w-6 h-6" />} />
+                <SummaryCard
+                  tone="cyan" title="Total Deposits"
+                  value={money(summary?.totalDeposits)}
+                  icon={<DollarSign className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.deposits)}
+                />
+                <SummaryCard
+                  tone="amber" title="Total Withdrawals"
+                  value={money(summary?.totalWithdrawals)}
+                  icon={<DollarSign className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.withdrawals)}
+                />
+                <SummaryCard
+                  tone="blue" title="Net Savings"
+                  value={money(summary?.netSavings)}
+                  icon={<DollarSign className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.savings)}
+                />
 
-                <SummaryCard tone="rose"   title="Defaulted Loan" value={money(summary?.defaultedLoan)} icon={<AlertTriangle className="w-6 h-6" />} />
-                <SummaryCard tone="rose"   title="Defaulted Interest" value={money(summary?.defaultedInterest)} icon={<AlertTriangle className="w-6 h-6" />} />
+                <SummaryCard
+                  tone="rose" title="Defaulted Loan"
+                  value={money(summary?.defaultedLoan)}
+                  icon={<AlertTriangle className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })}
+                />
+                <SummaryCard
+                  tone="rose" title="Defaulted Interest"
+                  value={money(summary?.defaultedInterest)}
+                  icon={<AlertTriangle className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })}
+                />
 
-                <SummaryCard tone="violet" title="Outstanding Loan" value={money(summary?.outstandingLoan)} icon={<CreditCard className="w-6 h-6" />} />
-                <SummaryCard tone="violet" title="Outstanding Interest" value={money(summary?.outstandingInterest)} icon={<DollarSign className="w-6 h-6" />} />
+                <SummaryCard
+                  tone="violet" title="Outstanding Loan"
+                  value={money(summary?.outstandingLoan)}
+                  icon={<CreditCard className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })}
+                />
+                <SummaryCard
+                  tone="violet" title="Outstanding Interest"
+                  value={money(summary?.outstandingInterest)}
+                  icon={<DollarSign className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })}
+                />
 
-                <SummaryCard tone="slate"  title="Written Off" value={money(summary?.writtenOff)} icon={<ThumbsDown className="w-6 h-6" />} />
-                <SummaryCard tone="indigo" title="PAR (Portfolio at Risk)" value={`${n(summary?.parPercent)}%`} icon={<BarChart2 className="w-6 h-6" />} />
+                <SummaryCard
+                  tone="slate" title="Written Off"
+                  value={money(summary?.writtenOff)}
+                  icon={<ThumbsDown className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })}
+                />
+                <SummaryCard
+                  tone="indigo" title="PAR (Portfolio at Risk)"
+                  value={`${n(summary?.parPercent)}%`}
+                  icon={<BarChart2 className="w-6 h-6" />}
+                  to={makeTo(ROUTE_PATHS.par, { tab: 'par' })}
+                />
               </div>
 
               {/* Monthly Trends */}
@@ -851,12 +961,7 @@ const Dashboard = () => {
               <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-white to-transparent dark:from-slate-900" />
               <div className="max-h-[520px] overflow-y-auto pr-1 space-y-3">
                 {activity.length === 0 ? (
-                  <p
-                    className="text-gray-700 dark:text-slate-300 text-sm"
-                    style={{ background: 'transparent', border: 0, padding: 0 }}
-                  >
-                    No activity.
-                  </p>
+                  <p className="text-gray-700 dark:text-slate-300 text-sm">No activity.</p>
                 ) : (
                   activity.map((a) => (
                     <div key={a.id} className="border rounded p-3 border-slate-200 dark:border-slate-700">
@@ -990,62 +1095,27 @@ const Dashboard = () => {
   );
 };
 
-/** Fancy KPI card: strong dark-mode contrast + colored background glow per tone */
+/** Fancy KPI card with optional link (`to`) to make the entire card clickable */
 const SummaryCard = ({
   title,
   value,
   icon,
   tone = 'indigo',
+  to = null,        // <-- NEW: pass a route to make it clickable
   delta = null,
   deltaLabel = '',
   spark = null
 }) => {
   const tones = ({
-    indigo:  {
-      border: 'from-indigo-300/70 to-indigo-500/40',
-      icon:   'bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-300',
-      glow:   'from-indigo-50/90 to-transparent dark:from-indigo-900/35 dark:to-transparent'
-    },
-    sky:     {
-      border: 'from-sky-300/70 to-sky-500/40',
-      icon:   'bg-sky-500/10 dark:bg-sky-400/10 text-sky-600 dark:text-sky-300',
-      glow:   'from-sky-50/90 to-transparent dark:from-sky-900/35 dark:to-transparent'
-    },
-    blue:    {
-      border: 'from-blue-300/70 to-blue-500/40',
-      icon:   'bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-300',
-      glow:   'from-blue-50/90 to-transparent dark:from-blue-900/35 dark:to-transparent'
-    },
-    emerald: {
-      border: 'from-emerald-300/70 to-emerald-500/40',
-      icon:   'bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-300',
-      glow:   'from-emerald-50/90 to-transparent dark:from-emerald-900/35 dark:to-transparent'
-    },
-    cyan:    {
-      border: 'from-cyan-300/70 to-cyan-500/40',
-      icon:   'bg-cyan-500/10 dark:bg-cyan-400/10 text-cyan-600 dark:text-cyan-300',
-      glow:   'from-cyan-50/90 to-transparent dark:from-cyan-900/35 dark:to-transparent'
-    },
-    amber:   {
-      border: 'from-amber-300/70 to-amber-500/40',
-      icon:   'bg-amber-500/10 dark:bg-amber-400/10 text-amber-600 dark:text-amber-300',
-      glow:   'from-amber-50/90 to-transparent dark:from-amber-900/35 dark:to-transparent'
-    },
-    violet:  {
-      border: 'from-violet-300/70 to-violet-500/40',
-      icon:   'bg-violet-500/10 dark:bg-violet-400/10 text-violet-600 dark:text-violet-300',
-      glow:   'from-violet-50/90 to-transparent dark:from-violet-900/35 dark:to-transparent'
-    },
-    rose:    {
-      border: 'from-rose-300/70 to-rose-500/40',
-      icon:   'bg-rose-500/10 dark:bg-rose-400/10 text-rose-600 dark:text-rose-300',
-      glow:   'from-rose-50/90 to-transparent dark:from-rose-900/35 dark:to-transparent'
-    },
-    slate:   {
-      border: 'from-slate-300/70 to-slate-500/40',
-      icon:   'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',
-      glow:   'from-slate-50/90 to-transparent dark:from-slate-900/35 dark:to-transparent'
-    },
+    indigo:  { border: 'from-indigo-300/70 to-indigo-500/40', icon: 'bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-300', glow: 'from-indigo-50/90 to-transparent dark:from-indigo-900/35 dark:to-transparent' },
+    sky:     { border: 'from-sky-300/70 to-sky-500/40',       icon: 'bg-sky-500/10 dark:bg-sky-400/10 text-sky-600 dark:text-sky-300',       glow: 'from-sky-50/90 to-transparent dark:from-sky-900/35 dark:to-transparent' },
+    blue:    { border: 'from-blue-300/70 to-blue-500/40',     icon: 'bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-300',     glow: 'from-blue-50/90 to-transparent dark:from-blue-900/35 dark:to-transparent' },
+    emerald: { border: 'from-emerald-300/70 to-emerald-500/40',icon:'bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-300',glow:'from-emerald-50/90 to-transparent dark:from-emerald-900/35 dark:to-transparent' },
+    cyan:    { border: 'from-cyan-300/70 to-cyan-500/40',     icon: 'bg-cyan-500/10 dark:bg-cyan-400/10 text-cyan-600 dark:text-cyan-300',     glow: 'from-cyan-50/90 to-transparent dark:from-cyan-900/35 dark:to-transparent' },
+    amber:   { border: 'from-amber-300/70 to-amber-500/40',   icon: 'bg-amber-500/10 dark:bg-amber-400/10 text-amber-600 dark:text-amber-300',   glow: 'from-amber-50/90 to-transparent dark:from-amber-900/35 dark:to-transparent' },
+    violet:  { border: 'from-violet-300/70 to-violet-500/40', icon: 'bg-violet-500/10 dark:bg-violet-400/10 text-violet-600 dark:text-violet-300', glow: 'from-violet-50/90 to-transparent dark:from-violet-900/35 dark:to-transparent' },
+    rose:    { border: 'from-rose-300/70 to-rose-500/40',     icon: 'bg-rose-500/10 dark:bg-rose-400/10 text-rose-600 dark:text-rose-300',     glow: 'from-rose-50/90 to-transparent dark:from-rose-900/35 dark:to-transparent' },
+    slate:   { border: 'from-slate-300/70 to-slate-500/40',   icon: 'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',   glow: 'from-slate-50/90 to-transparent dark:from-slate-900/35 dark:to-transparent' },
   }[tone]) || {
     border: 'from-slate-300/70 to-slate-500/40',
     icon: 'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',
@@ -1078,8 +1148,18 @@ const SummaryCard = ({
 
   return (
     <div className="group relative rounded-2xl transition-transform hover:-translate-y-0.5">
+      {/* Make whole card clickable when `to` provided */}
+      {to && (
+        <Link
+          to={to}
+          className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+          aria-label={`View ${title} details`}
+          title={`View ${title} details`}
+        />
+      )}
+
       {/* gradient border */}
-      <div className={`p-[1px] rounded-2xl bg-gradient-to-br ${tones.border}`}>
+      <div className={`p-[1px] rounded-2xl bg-gradient-to-br ${tones.border} ${to ? 'cursor-pointer' : ''}`}>
         {/* glass card */}
         <div className="relative rounded-2xl bg-white/95 dark:bg-slate-900/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm
                         border border-white/60 dark:border-slate-800 shadow-sm p-5 min-h-[11rem]">
