@@ -10,7 +10,7 @@ import {
 const today = () => new Date().toISOString().slice(0, 10);
 const clsInput =
   "w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
-const card = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-5 md:p-7"; // slightly larger card, not bulky
+const card = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-5 md:p-7";
 
 // normalize any backend list shape to an array
 const toArray = (data) =>
@@ -88,6 +88,7 @@ export default function LoanApplications() {
     durationMonths: "",
     collateralType: "",
     collateralAmount: "",
+    collateralOther: "",            // NEW: only used when collateralType === "Other"
 
     // interest
     interestMethod: "flat",
@@ -108,6 +109,7 @@ export default function LoanApplications() {
     disbursementMethod: "cash",
     disbursementBankId: "",
     disbursementReference: "",
+    disbursementOther: "",         // NEW: only used when disbursementMethod === "other"
 
     // guarantors
     guarantors: [],
@@ -247,8 +249,29 @@ export default function LoanApplications() {
     if (!form.principal || Number(form.principal) <= 0) return alert("Enter a principal amount");
     if (!form.durationMonths) return alert("Enter loan duration (months)");
 
+    // NEW: require details when “Other” is chosen
+    if (form.collateralType === "Other" && !form.collateralOther.trim()) {
+      return alert("Please specify the collateral for 'Other'.");
+    }
+    if (form.disbursementMethod === "other" && !form.disbursementOther.trim()) {
+      return alert("Please specify the disbursement method for 'Other'.");
+    }
+
     setSubmitting(true);
     try {
+      // safe folding of “Other” values into existing fields (no backend changes needed)
+      const foldedCollateralType =
+        form.collateralType === "Other" && form.collateralOther.trim()
+          ? `Other: ${form.collateralOther.trim()}`
+          : form.collateralType || null;
+
+      const withMethodDetail =
+        form.disbursementMethod === "other" && form.disbursementOther.trim()
+          ? (form.disbursementReference
+              ? `${form.disbursementReference} | Method: ${form.disbursementOther.trim()}`
+              : `Method: ${form.disbursementOther.trim()}`)
+          : form.disbursementReference || null;
+
       const payload = {
         // core
         productId: form.productId,
@@ -260,7 +283,7 @@ export default function LoanApplications() {
         currency: "TZS",
         releaseDate: form.releaseDate || today(),
         durationMonths: form.durationMonths,
-        collateralType: form.collateralType || null,
+        collateralType: foldedCollateralType,       // ← folded “Other”
         collateralAmount: form.collateralAmount || null,
 
         // interest
@@ -272,9 +295,9 @@ export default function LoanApplications() {
         fees: form.fees,
         repaymentCycle: form.repaymentCycle,
         numberOfRepayments: form.numberOfRepayments,
-        disbursementMethod: form.disbursementMethod,
+        disbursementMethod: form.disbursementMethod, // keep enum value
         disbursementBankId: form.disbursementBankId || null,
-        disbursementReference: form.disbursementReference || null,
+        disbursementReference: withMethodDetail,     // ← append detail for “other”
 
         // guarantors
         guarantors: form.guarantors,
@@ -337,14 +360,14 @@ export default function LoanApplications() {
 
       {/* single-column guided form */}
       <form onSubmit={onSubmit} className="max-w-6xl mx-auto space-y-5 md:space-y-6">
-        {/* 1. Borrower & Product */}
+        {/* 1) Borrower & Product */}
         <section className={card}>
           <div className="flex items-center gap-2 mb-5">
             <Wallet className="h-5 w-5 text-indigo-600" />
             <h2 className="font-semibold text-lg">1) Borrower & Product</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            {/* Borrower first */}
+            {/* Borrower */}
             <div>
               <label className="text-xs text-gray-600">Borrower</label>
               <div className="flex gap-2">
@@ -365,7 +388,7 @@ export default function LoanApplications() {
               </div>
             </div>
 
-            {/* Product second */}
+            {/* Product */}
             <div>
               <label className="text-xs text-gray-600">Loan Product</label>
               <select
@@ -400,7 +423,7 @@ export default function LoanApplications() {
           </div>
         </section>
 
-        {/* 2. Loan Terms */}
+        {/* 2) Loan Terms */}
         <section className={card}>
           <div className="flex items-center gap-2 mb-5">
             <Building2 className="h-5 w-5 text-indigo-600" />
@@ -417,10 +440,25 @@ export default function LoanApplications() {
             </div>
             <div>
               <label className="text-xs text-gray-600">Collateral Type</label>
-              <select className={clsInput} value={form.collateralType} onChange={(e)=>setForm({...form, collateralType:e.target.value})}>
+              <select
+                className={clsInput}
+                value={form.collateralType}
+                onChange={(e)=>setForm({...form, collateralType:e.target.value})}
+              >
                 <option value="">Select…</option>
                 {COLLATERAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
+              {form.collateralType === "Other" && (
+                <div className="mt-2">
+                  <input
+                    className={clsInput}
+                    placeholder="Specify collateral"
+                    value={form.collateralOther}
+                    onChange={(e)=>setForm({...form, collateralOther: e.target.value})}
+                    required
+                  />
+                </div>
+              )}
             </div>
             <div>
               <label className="text-xs text-gray-600">Collateral Amount</label>
@@ -433,7 +471,7 @@ export default function LoanApplications() {
           </div>
         </section>
 
-        {/* 3. Interest */}
+        {/* 3) Interest */}
         <section className={card}>
           <div className="flex items-center gap-2 mb-5">
             <Landmark className="h-5 w-5 text-indigo-600" />
@@ -464,7 +502,7 @@ export default function LoanApplications() {
           </div>
         </section>
 
-        {/* 4. Repayments */}
+        {/* 4) Repayments */}
         <section className={card}>
           <div className="flex items-center gap-2 mb-5">
             <Calendar className="h-5 w-5 text-indigo-600" />
@@ -491,7 +529,7 @@ export default function LoanApplications() {
           </div>
         </section>
 
-        {/* 5. Fees */}
+        {/* 5) Fees */}
         <section className={card}>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
@@ -524,7 +562,7 @@ export default function LoanApplications() {
           <p className="text-xs text-gray-500 mt-2">Unpaid fees will be included in the repayment schedule.</p>
         </section>
 
-        {/* 6. Guarantors */}
+        {/* 6) Guarantors */}
         <section className={card}>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
@@ -581,7 +619,7 @@ export default function LoanApplications() {
           )}
         </section>
 
-        {/* 7. Attachments */}
+        {/* 7) Attachments */}
         <section className={card}>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
@@ -649,7 +687,7 @@ export default function LoanApplications() {
           <p className="text-xs text-gray-500 mt-2">Accepted images/PDFs as supported by your backend.</p>
         </section>
 
-        {/* 8. Disbursement */}
+        {/* 8) Disbursement */}
         <section className={card}>
           <div className="flex items-center gap-2 mb-5">
             <Wallet className="h-5 w-5 text-indigo-600" />
@@ -661,6 +699,17 @@ export default function LoanApplications() {
               <select className={clsInput} value={form.disbursementMethod} onChange={(e)=>setForm({...form, disbursementMethod:e.target.value})}>
                 {DISBURSE_METHODS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
               </select>
+              {form.disbursementMethod === "other" && (
+                <div className="mt-2">
+                  <input
+                    className={clsInput}
+                    placeholder="Specify method (e.g., cheque, voucher)"
+                    value={form.disbursementOther}
+                    onChange={(e)=>setForm({...form, disbursementOther: e.target.value})}
+                    required
+                  />
+                </div>
+              )}
             </div>
             {form.disbursementMethod === "bank" && (
               <>
@@ -677,10 +726,16 @@ export default function LoanApplications() {
                 </div>
               </>
             )}
+            {form.disbursementMethod !== "bank" && (
+              <div className="md:col-span-2">
+                <label className="text-xs text-gray-600">Reference (optional)</label>
+                <input className={clsInput} value={form.disbursementReference} onChange={(e)=>setForm({...form, disbursementReference:e.target.value})} placeholder="Txn ref / slip #" />
+              </div>
+            )}
           </div>
         </section>
 
-        {/* 9. Spouse (optional) */}
+        {/* 9) Spouse (optional) */}
         <section className={card}>
           <div className="flex items-center gap-2 mb-5">
             <User className="h-5 w-5 text-indigo-600" />
