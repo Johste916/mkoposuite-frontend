@@ -3,7 +3,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
-  ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle
+  ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle,
+  ChevronDown, Calendar
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -32,6 +33,39 @@ const useIsDarkMode = () => {
 };
 
 const TZS = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+
+/* ---------- Unified field components to guarantee dark-mode contrast ---------- */
+const baseInput =
+  'h-10 w-full rounded-lg border text-sm outline-none transition ' +
+  'bg-white text-slate-900 border-slate-300 ' +
+  'focus:ring-2 focus:ring-indigo-500/50 ' +
+  'dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700';
+
+const SelectField = ({ className = '', children, ...props }) => (
+  <div className={`relative ${className}`}>
+    <select {...props} className={`${baseInput} pr-9 appearance-none`}>
+      {children}
+    </select>
+    <ChevronDown
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
+      aria-hidden="true"
+    />
+  </div>
+);
+
+const DateField = ({ className = '', ...props }) => (
+  <div className={`relative ${className}`}>
+    <input type="date" {...props} className={`${baseInput} pr-9`} />
+    <Calendar
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
+      aria-hidden="true"
+    />
+  </div>
+);
+
+const TextField = ({ className = '', ...props }) => (
+  <input {...props} className={`${baseInput} ${className}`} />
+);
 
 const Dashboard = () => {
   const isDark = useIsDarkMode();
@@ -410,11 +444,11 @@ const Dashboard = () => {
 
           {/* Filters (wrap as needed) */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <select
+            <SelectField
               aria-label="Filter by branch"
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
-              className="ms-select"
+              className="min-w-[11rem]"
             >
               <option value="">All Branches</option>
               {branches.map((b) => (
@@ -422,13 +456,13 @@ const Dashboard = () => {
                   {b.name}
                 </option>
               ))}
-            </select>
+            </SelectField>
 
-            <select
+            <SelectField
               aria-label="Filter by loan officer"
               value={officerId}
               onChange={(e) => setOfficerId(e.target.value)}
-              className="ms-select min-w-[12rem]"
+              className="min-w-[12rem]"
             >
               <option value="">All Loan Officers</option>
               {officers.map((o) => (
@@ -436,13 +470,13 @@ const Dashboard = () => {
                   {o.name || o.email}
                 </option>
               ))}
-            </select>
+            </SelectField>
 
-            <select
+            <SelectField
               aria-label="Filter by time range"
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="ms-select ms-select--sm"
+              className="min-w-[10rem]"
             >
               <option value="">All Time</option>
               <option value="today">Today</option>
@@ -451,22 +485,24 @@ const Dashboard = () => {
               <option value="quarter">This Quarter</option>
               <option value="semiAnnual">Semi-Annual</option>
               <option value="annual">Annual</option>
-            </select>
+            </SelectField>
 
-            <select
+            <SelectField
               aria-label="Auto refresh interval"
               value={autoRefresh}
               onChange={(e) => setAutoRefresh(Number(e.target.value))}
-              className="ms-select"
+              className="min-w-[12rem]"
             >
               <option value={0}>No Auto-Refresh</option>
               <option value={1}>Every 1 min</option>
               <option value={5}>Every 5 mins</option>
               <option value={15}>Every 15 mins</option>
-            </select>
+            </SelectField>
 
             <button
-              className="ms-btn h-10 px-3.5 sm:px-4 inline-flex items-center justify-center whitespace-nowrap shrink-0"
+              className="ms-btn h-10 px-3.5 sm:px-4 inline-flex items-center justify-center whitespace-nowrap shrink-0
+                         bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700
+                         hover:bg-slate-50 dark:hover:bg-slate-800/80 rounded-lg"
               onClick={() => {
                 const ac = new AbortController();
                 Promise.all([
@@ -567,13 +603,28 @@ const Dashboard = () => {
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
-        <Link to="/loans/add" className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm">
+        <Link
+          to="/loans/add"
+          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm rounded-lg
+                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
+                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
+        >
           <PlusCircle className="w-4 h-4" /> Add Loan
         </Link>
-        <Link to="/borrowers/add" className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm">
+        <Link
+          to="/borrowers/add"
+          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm rounded-lg
+                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
+                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
+        >
           <PlusCircle className="w-4 h-4" /> Add Borrower
         </Link>
-        <Link to="/repayments/new" className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm">
+        <Link
+          to="/repayments/new"
+          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm rounded-lg
+                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
+                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
+        >
           <PlusCircle className="w-4 h-4" /> Record Repayment
         </Link>
       </div>
@@ -779,20 +830,12 @@ const Dashboard = () => {
 
             {/* Date search */}
             <div className="grid grid-cols-2 gap-2 mb-3">
-              <input
-                type="date"
-                className="ms-input h-9"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-              <input
-                type="date"
-                className="ms-input h-9"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
+              <DateField value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
+              <DateField value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
               <button
-                className="ms-btn col-span-2 h-9 text-sm"
+                className="ms-btn col-span-2 h-9 text-sm rounded-lg
+                           bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
+                           border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
                 onClick={() => {
                   setActivityPage(1);
                   fetchActivity({ page: 1 });
@@ -808,7 +851,12 @@ const Dashboard = () => {
               <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-white to-transparent dark:from-slate-900" />
               <div className="max-h-[520px] overflow-y-auto pr-1 space-y-3">
                 {activity.length === 0 ? (
-                  <p className="text-gray-700 dark:text-slate-300 text-sm">No activity.</p>
+                  <p
+                    className="text-gray-700 dark:text-slate-300 text-sm"
+                    style={{ background: 'transparent', border: 0, padding: 0 }}
+                  >
+                    No activity.
+                  </p>
                 ) : (
                   activity.map((a) => (
                     <div key={a.id} className="border rounded p-3 border-slate-200 dark:border-slate-700">
@@ -836,28 +884,30 @@ const Dashboard = () => {
 
                       {/* reply + assign */}
                       <div className="mt-2 flex gap-2">
-                        <input
+                        <TextField
                           value={commentDraft[a.id] || ''}
                           onChange={(e) => setCommentDraft((d) => ({ ...d, [a.id]: e.target.value }))}
                           placeholder="Reply…"
-                          className="ms-input flex-1 h-9 text-xs"
+                          className="flex-1 h-9 text-xs"
                         />
                         <button
                           onClick={() => submitComment(a.id)}
                           disabled={submitting[`c-${a.id}`]}
-                          className="ms-btn h-9 px-2 text-xs disabled:opacity-50 flex items-center gap-1"
+                          className="ms-btn h-9 px-2 text-xs disabled:opacity-50 flex items-center gap-1 rounded-lg
+                                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
+                                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
                         >
                           <MessageSquare className="w-3 h-3" /> Reply
                         </button>
                       </div>
 
                       <div className="mt-2 grid grid-cols-4 gap-2">
-                        <select
+                        <SelectField
                           value={assignDraft[a.id]?.assigneeId || ''}
                           onChange={(e) =>
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), assigneeId: e.target.value } }))
                           }
-                          className="ms-select col-span-2 h-9 text-xs"
+                          className="col-span-2 h-9 text-xs"
                         >
                           <option value="">Assign to…</option>
                           {officers.map((o) => (
@@ -865,29 +915,30 @@ const Dashboard = () => {
                               {o.name || o.email}
                             </option>
                           ))}
-                        </select>
-                        <input
-                          type="date"
+                        </SelectField>
+                        <DateField
                           value={assignDraft[a.id]?.dueDate || ''}
                           onChange={(e) =>
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), dueDate: e.target.value } }))
                           }
-                          className="ms-input h-9 text-xs"
+                          className="h-9 text-xs"
                         />
                         <button
                           onClick={() => submitAssignment(a.id)}
                           disabled={submitting[`a-${a.id}`]}
-                          className="ms-btn h-9 px-2 text-xs disabled:opacity-50 flex items-center justify-center gap-1"
+                          className="ms-btn h-9 px-2 text-xs disabled:opacity-50 flex items-center justify-center gap-1 rounded-lg
+                                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
+                                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
                         >
                           <UserPlus className="w-3 h-3" /> Assign
                         </button>
-                        <input
+                        <TextField
                           value={assignDraft[a.id]?.note || ''}
                           onChange={(e) =>
                             setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), note: e.target.value } }))
                           }
                           placeholder="Note…"
-                          className="ms-input col-span-4 h-9 text-xs"
+                          className="col-span-4 h-9 text-xs"
                         />
                       </div>
                     </div>
@@ -908,7 +959,9 @@ const Dashboard = () => {
                       fetchActivity({ page: p });
                     }}
                     disabled={activityPage === 1}
-                    className="ms-btn px-2 py-1 disabled:opacity-50"
+                    className="ms-btn px-2 py-1 disabled:opacity-50 rounded-lg
+                               bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
+                               border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
                   >
                     Prev
                   </button>
@@ -921,7 +974,9 @@ const Dashboard = () => {
                       }
                     }}
                     disabled={activityPage * activityPageSize >= activityTotal}
-                    className="ms-btn px-2 py-1 disabled:opacity-50"
+                    className="ms-btn px-2 py-1 disabled:opacity-50 rounded-lg
+                               bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
+                               border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
                   >
                     Next
                   </button>
@@ -945,7 +1000,6 @@ const SummaryCard = ({
   deltaLabel = '',
   spark = null
 }) => {
-  // Each tone has: gradient border, icon chip color, and a LIGHT/DARK background glow
   const tones = ({
     indigo:  {
       border: 'from-indigo-300/70 to-indigo-500/40',
