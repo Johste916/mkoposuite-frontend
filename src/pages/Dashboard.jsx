@@ -337,9 +337,9 @@ const Dashboard = () => {
     const pct = m > 0 ? Math.round((v / m) * 100) : 0;
     return (
       <div className="space-y-1">
-        <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
+        <div className="flex justify-between text-xs text-gray-600 dark:text-slate-300">
           <span>{label}</span>
-          <span>{v.toLocaleString()}</span>
+          <span className="tabular-nums">{v.toLocaleString()}</span>
         </div>
         <div className="h-2 w-full bg-gray-100 dark:bg-slate-800 rounded">
           <div
@@ -369,16 +369,16 @@ const Dashboard = () => {
   const chartColors = isDark
     ? {
         grid: '#334155',
-        axis: '#94a3b8',
+        axis: '#cbd5e1',
         legend: '#e2e8f0',
-        tooltipBg: '#0f172a',
+        tooltipBg: '#0b1220',
         tooltipText: '#e2e8f0',
         bar1: '#60a5fa',
         bar2: '#34d399',
       }
     : {
         grid: '#e2e8f0',
-        axis: '#475569',
+        axis: '#334155',
         legend: '#334155',
         tooltipBg: '#ffffff',
         tooltipText: '#0f172a',
@@ -394,14 +394,17 @@ const Dashboard = () => {
   return (
     <div className="space-y-6">
       {/* Top bar */}
-      <div className="rounded-2xl bg-white/80 dark:bg-slate-900/70 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm border border-slate-200 dark:border-slate-800 p-4 md:p-6">
+      <div className="rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm border border-slate-200 dark:border-slate-800 p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Dashboard
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+            <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
               Quick snapshot of borrowers, loans, repayments and savings.
+            </p>
+            <p className="text-xs text-slate-600 dark:text-slate-300/90 mt-1">
+              {lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleString()}` : 'Loading…'}
             </p>
           </div>
 
@@ -488,16 +491,11 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <span>
-            {lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleString()}` : 'Loading…'}
-          </span>
-          {autoRefresh > 0 && nextRefreshAt && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5">
-              Auto-refresh in {mm}:{ss}
-            </span>
-          )}
-        </div>
+        {autoRefresh > 0 && nextRefreshAt && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
+            Auto-refresh in {mm}:{ss}
+          </div>
+        )}
       </div>
 
       {/* Toasts */}
@@ -516,9 +514,9 @@ const Dashboard = () => {
 
       {/* === Single-layer communications ribbon (compact) === */}
       {(comms?.length ?? 0) > 0 && (
-        <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 dark:bg-slate-800/40 dark:border-slate-700">
-            <div className="text-xs font-medium text-gray-600 dark:text-slate-300">General Communications</div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 dark:bg-slate-800/60 dark:border-slate-700">
+            <div className="text-xs font-semibold text-gray-700 dark:text-slate-200">General Communications</div>
             {comms.some((c) => Array.isArray(c.attachments) && c.attachments.length > 0) && (
               <button
                 onClick={downloadAllAttachments}
@@ -533,7 +531,7 @@ const Dashboard = () => {
           <div className="relative h-10">
             <style>{`@keyframes ms-marquee{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
             <div
-              className="absolute whitespace-nowrap will-change-transform text-sm text-gray-700 dark:text-slate-200 flex items-center gap-8 px-3"
+              className="absolute whitespace-nowrap will-change-transform text-sm text-gray-800 dark:text-slate-100 flex items-center gap-8 px-3"
               style={{ animation: 'ms-marquee 18s linear infinite' }}
             >
               {comms.map((c, idx) => (
@@ -621,7 +619,7 @@ const Dashboard = () => {
                 <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <BarChart2 className="w-5 h-5 text-indigo-600 dark:text-indigo-300" />
-                    <h3 className="font-semibold text-gray-800 dark:text-slate-100">
+                    <h3 className="font-semibold text-gray-900 dark:text-slate-100">
                       {`Monthly Trends${(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}`}
                     </h3>
                   </div>
@@ -673,16 +671,16 @@ const Dashboard = () => {
                 <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 overflow-x-auto">
                   <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Top Borrowers</h3>
                   {topBorrowers.length === 0 ? (
-                    <p className="text-gray-500 dark:text-slate-400 text-sm">No data available.</p>
+                    <p className="text-gray-700 dark:text-slate-300 text-sm">No data available.</p>
                   ) : (
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="text-left text-gray-600 dark:text-slate-300">
+                        <tr className="text-left text-gray-700 dark:text-slate-300">
                           <th className="py-1 pr-4">Name</th>
                           <th className="py-1 pr-4">Outstanding</th>
                         </tr>
                       </thead>
-                      <tbody className="text-slate-800 dark:text-slate-200">
+                      <tbody className="text-slate-900 dark:text-slate-100">
                         {topBorrowers.map((b) => (
                           <tr key={b.id} className="border-t border-slate-200 dark:border-slate-700">
                             <td className="py-1 pr-4">{b.name}</td>
@@ -697,17 +695,17 @@ const Dashboard = () => {
                 <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 overflow-x-auto">
                   <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Upcoming Repayments</h3>
                   {upcomingRepayments.length === 0 ? (
-                    <p className="text-gray-500 dark:text-slate-400 text-sm">No data available.</p>
+                    <p className="text-gray-700 dark:text-slate-300 text-sm">No data available.</p>
                   ) : (
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="text-left text-gray-600 dark:text-slate-300">
+                        <tr className="text-left text-gray-700 dark:text-slate-300">
                           <th className="py-1 pr-4">Borrower</th>
                           <th className="py-1 pr-4">Due Date</th>
                           <th className="py-1 pr-4">Amount</th>
                         </tr>
                       </thead>
-                      <tbody className="text-slate-800 dark:text-slate-200">
+                      <tbody className="text-slate-900 dark:text-slate-100">
                         {upcomingRepayments.map((r) => (
                           <tr key={r.id} className="border-t border-slate-200 dark:border-slate-700">
                             <td className="py-1 pr-4">{r.borrower}</td>
@@ -726,7 +724,7 @@ const Dashboard = () => {
                 <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
                   <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Branch Performance</h3>
                   {branchPerformance.length === 0 ? (
-                    <p className="text-gray-500 dark:text-slate-400 text-sm">No data available.</p>
+                    <p className="text-gray-700 dark:text-slate-300 text-sm">No data available.</p>
                   ) : (
                     <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={branchPerformance}>
@@ -748,7 +746,7 @@ const Dashboard = () => {
                 <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
                   <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Officer Performance</h3>
                   {officerPerformance.length === 0 ? (
-                    <p className="text-gray-500 dark:text-slate-400 text-sm">No data available.</p>
+                    <p className="text-gray-700 dark:text-slate-300 text-sm">No data available.</p>
                   ) : (
                     <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={officerPerformance}>
@@ -776,7 +774,7 @@ const Dashboard = () => {
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
             <div className="flex items-center gap-2 mb-3">
               <ClipboardList className="w-5 h-5 text-indigo-600 dark:text-indigo-300" />
-              <h2 className="font-semibold text-gray-800 dark:text-slate-100">Recent Activity</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Recent Activity</h2>
             </div>
 
             {/* Date search */}
@@ -810,15 +808,15 @@ const Dashboard = () => {
               <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-white to-transparent dark:from-slate-900" />
               <div className="max-h-[520px] overflow-y-auto pr-1 space-y-3">
                 {activity.length === 0 ? (
-                  <p className="text-gray-500 dark:text-slate-400 text-sm">No activity.</p>
+                  <p className="text-gray-700 dark:text-slate-300 text-sm">No activity.</p>
                 ) : (
                   activity.map((a) => (
                     <div key={a.id} className="border rounded p-3 border-slate-200 dark:border-slate-700">
-                      <p className="text-sm font-medium text-gray-800 dark:text-slate-100">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                         {a.type} • {a.entityType} #{a.entityId}
                       </p>
-                      <p className="text-xs text-gray-600 dark:text-slate-300 break-words">{a.message}</p>
-                      <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-1">
+                      <p className="text-xs text-slate-800 dark:text-slate-200 break-words">{a.message}</p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                         by {a.createdBy?.name || a.createdBy?.email} • {new Date(a.createdAt).toLocaleString()}
                       </p>
 
@@ -827,8 +825,8 @@ const Dashboard = () => {
                         <div className="mt-2 space-y-1">
                           {a.comments.map((c) => (
                             <div key={c.id} className="bg-gray-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-2">
-                              <p className="text-xs text-gray-800 dark:text-slate-200 break-words">{c.comment}</p>
-                              <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-0.5">
+                              <p className="text-xs text-gray-900 dark:text-slate-100 break-words">{c.comment}</p>
+                              <p className="text-[11px] text-gray-600 dark:text-slate-400 mt-0.5">
                                 — {c.createdBy?.name || c.createdBy?.email} • {new Date(c.createdAt).toLocaleString()}
                               </p>
                             </div>
@@ -900,7 +898,7 @@ const Dashboard = () => {
 
             {/* pagination */}
             {activityTotal > activityPageSize && (
-              <div className="flex justify-between items-center mt-3 text-xs text-slate-700 dark:text-slate-300">
+              <div className="flex justify-between items-center mt-3 text-xs text-slate-800 dark:text-slate-200">
                 <span>{Math.min(activityPage * activityPageSize, activityTotal)} of {activityTotal}</span>
                 <div className="flex gap-2">
                   <button
@@ -937,27 +935,68 @@ const Dashboard = () => {
   );
 };
 
-/** Fancy KPI card: gradient border + glass surface + mono numerals + optional delta/sparkline */
+/** Fancy KPI card: strong dark-mode contrast + colored background glow per tone */
 const SummaryCard = ({
   title,
   value,
   icon,
   tone = 'indigo',
-  delta = null,         // e.g. +4.2 or -1.8 (optional)
-  deltaLabel = '',      // e.g. "vs last month"
-  spark = null          // e.g. [12,15,9,18,21,19] (optional)
+  delta = null,
+  deltaLabel = '',
+  spark = null
 }) => {
+  // Each tone has: gradient border, icon chip color, and a LIGHT/DARK background glow
   const tones = ({
-    indigo:  { from: 'from-indigo-300/60',  to: 'to-indigo-500/40',  iconBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300' },
-    sky:     { from: 'from-sky-300/60',     to: 'to-sky-500/40',     iconBg: 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300' },
-    blue:    { from: 'from-blue-300/60',    to: 'to-blue-500/40',    iconBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' },
-    emerald: { from: 'from-emerald-300/60', to: 'to-emerald-500/40', iconBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' },
-    cyan:    { from: 'from-cyan-300/60',    to: 'to-cyan-500/40',    iconBg: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300' },
-    amber:   { from: 'from-amber-300/60',   to: 'to-amber-500/40',   iconBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' },
-    violet:  { from: 'from-violet-300/60',  to: 'to-violet-500/40',  iconBg: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300' },
-    rose:    { from: 'from-rose-300/60',    to: 'to-rose-500/40',    iconBg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300' },
-    slate:   { from: 'from-slate-300/60',   to: 'to-slate-500/40',   iconBg: 'bg-slate-50 dark:bg-slate-950/40 text-slate-700 dark:text-slate-300' },
-  }[tone]) || { from: 'from-slate-300/60', to: 'to-slate-500/40', iconBg: 'bg-slate-50 dark:bg-slate-950/40 text-slate-700 dark:text-slate-300' };
+    indigo:  {
+      border: 'from-indigo-300/70 to-indigo-500/40',
+      icon:   'bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-300',
+      glow:   'from-indigo-50/90 to-transparent dark:from-indigo-900/35 dark:to-transparent'
+    },
+    sky:     {
+      border: 'from-sky-300/70 to-sky-500/40',
+      icon:   'bg-sky-500/10 dark:bg-sky-400/10 text-sky-600 dark:text-sky-300',
+      glow:   'from-sky-50/90 to-transparent dark:from-sky-900/35 dark:to-transparent'
+    },
+    blue:    {
+      border: 'from-blue-300/70 to-blue-500/40',
+      icon:   'bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-300',
+      glow:   'from-blue-50/90 to-transparent dark:from-blue-900/35 dark:to-transparent'
+    },
+    emerald: {
+      border: 'from-emerald-300/70 to-emerald-500/40',
+      icon:   'bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-300',
+      glow:   'from-emerald-50/90 to-transparent dark:from-emerald-900/35 dark:to-transparent'
+    },
+    cyan:    {
+      border: 'from-cyan-300/70 to-cyan-500/40',
+      icon:   'bg-cyan-500/10 dark:bg-cyan-400/10 text-cyan-600 dark:text-cyan-300',
+      glow:   'from-cyan-50/90 to-transparent dark:from-cyan-900/35 dark:to-transparent'
+    },
+    amber:   {
+      border: 'from-amber-300/70 to-amber-500/40',
+      icon:   'bg-amber-500/10 dark:bg-amber-400/10 text-amber-600 dark:text-amber-300',
+      glow:   'from-amber-50/90 to-transparent dark:from-amber-900/35 dark:to-transparent'
+    },
+    violet:  {
+      border: 'from-violet-300/70 to-violet-500/40',
+      icon:   'bg-violet-500/10 dark:bg-violet-400/10 text-violet-600 dark:text-violet-300',
+      glow:   'from-violet-50/90 to-transparent dark:from-violet-900/35 dark:to-transparent'
+    },
+    rose:    {
+      border: 'from-rose-300/70 to-rose-500/40',
+      icon:   'bg-rose-500/10 dark:bg-rose-400/10 text-rose-600 dark:text-rose-300',
+      glow:   'from-rose-50/90 to-transparent dark:from-rose-900/35 dark:to-transparent'
+    },
+    slate:   {
+      border: 'from-slate-300/70 to-slate-500/40',
+      icon:   'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',
+      glow:   'from-slate-50/90 to-transparent dark:from-slate-900/35 dark:to-transparent'
+    },
+  }[tone]) || {
+    border: 'from-slate-300/70 to-slate-500/40',
+    icon: 'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',
+    glow: 'from-slate-50/90 to-transparent dark:from-slate-900/35 dark:to-transparent'
+  };
 
   // Tiny sparkline (dependency-free)
   const Spark = () => {
@@ -980,18 +1019,21 @@ const SummaryCard = ({
   };
 
   const deltaColor =
-    delta == null ? '' : delta >= 0 ? 'text-emerald-600 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-900/30'
-                                   : 'text-rose-600 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-900/30';
+    delta == null ? '' : delta >= 0 ? 'text-emerald-600 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-900/30'
+                                   : 'text-rose-600 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-900/30';
 
   return (
     <div className="group relative rounded-2xl transition-transform hover:-translate-y-0.5">
       {/* gradient border */}
-      <div className={`p-[1px] rounded-2xl bg-gradient-to-br ${tones.from} ${tones.to}`}>
+      <div className={`p-[1px] rounded-2xl bg-gradient-to-br ${tones.border}`}>
         {/* glass card */}
-        <div className="rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm
+        <div className="relative rounded-2xl bg-white/95 dark:bg-slate-900/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm
                         border border-white/60 dark:border-slate-800 shadow-sm p-5 min-h-[11rem]">
-          <div className="flex items-start justify-between gap-3">
-            <div className={`p-3 rounded-full ${tones.iconBg}`}>{icon}</div>
+          {/* colored glow background */}
+          <div className={`pointer-events-none absolute inset-0 rounded-2xl opacity-80 bg-gradient-to-br ${tones.glow}`} />
+
+          <div className="relative flex items-start justify-between gap-3">
+            <div className={`p-3 rounded-full ${tones.icon}`}>{icon}</div>
 
             {delta != null && (
               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${deltaColor}`}>
@@ -1001,15 +1043,15 @@ const SummaryCard = ({
             )}
           </div>
 
-          <div className="mt-3 min-w-0">
-            <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 truncate">{title}</h3>
+          <div className="relative mt-3 min-w-0">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{title}</h3>
             <p className="text-[28px] md:text-[32px] leading-tight font-semibold text-slate-900 dark:text-white
                           font-mono tabular-nums break-words">
               {value ?? '—'}
             </p>
           </div>
 
-          <div className="text-slate-400 dark:text-slate-500">
+          <div className="relative text-slate-400 dark:text-slate-500">
             <Spark />
           </div>
         </div>
