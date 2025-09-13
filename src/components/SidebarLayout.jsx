@@ -92,12 +92,11 @@ const NAV = () => [
       { label: "Savings Report", to: "/savings/report" },
     ]
   },
-  /* ✅ Banking section */
+  /* ✅ Banking section (new module only; legacy removed) */
   {
     label: "Banking", icon: <BsBank />, to: "/banks", children: [
       { label: "Banks", to: "/banks" },
       { label: "Add Bank", to: "/banks/add" },
-      { label: "Bank Transactions", to: "/bank" }, // legacy page retained
     ]
   },
   {
@@ -165,8 +164,7 @@ const NAV = () => [
       { label: "Pro-Rata Collections", to: "/reports/pro-rata" },
       { label: "Disbursement Report", to: "/reports/disbursement" },
       { label: "Fees Report", to: "/reports/fees" },
-      { label: "Loan Officer Report", to: "/reports/loan-officer" },
-      { label: "Loan Products Report", to: "/reports/loan-products" },
+      { label: "Loan Officer Report", to: "/reports/loan-products" },
       { label: "MFRS Ratios", to: "/reports/mfrs" },
       { label: "Daily Report", to: "/reports/daily" },
       { label: "Monthly Report", to: "/reports/monthly" },
@@ -178,7 +176,8 @@ const NAV = () => [
   },
 ];
 
-const pathIsIn = (pathname, base) => pathname === base || pathname.startsWith(base + "/");
+const pathIsIn = (pathname, base) =>
+  pathname === base || pathname.startsWith(base + "/");
 
 /* ------------------------------- Section item ------------------------------ */
 const Section = memo(({ item, currentPath, onNavigate }) => {
@@ -186,7 +185,9 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
   const isActiveSection = pathIsIn(currentPath, item.to);
   const [open, setOpen] = useState(isActiveSection || !hasChildren);
 
-  useEffect(() => { if (isActiveSection) setOpen(true); }, [isActiveSection]);
+  useEffect(() => {
+    if (isActiveSection) setOpen(true);
+  }, [isActiveSection]);
 
   const baseItem =
     "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
@@ -200,7 +201,8 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
             isActive
               ? "bg-blue-600 text-white shadow-sm"
               : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-          }`}
+          }`
+        }
         onClick={onNavigate}
       >
         <span className="shrink-0">{item.icon}</span>
@@ -211,13 +213,16 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
 
   const panelId = `nav-${item.to.replace(/[^\w-]/g, "_")}`;
 
-  const toggle = useCallback(() => setOpen(v => !v), []);
-  const onKeyDown = useCallback((e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggle();
-    }
-  }, [toggle]);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const onKeyDown = useCallback(
+    (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    },
+    [toggle]
+  );
 
   return (
     <div className="rounded-md">
@@ -225,7 +230,9 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
         type="button"
         onClick={toggle}
         onKeyDown={onKeyDown}
-        className={`${baseItem} ${isActiveSection
+        className={`${
+          baseItem
+        } ${isActiveSection
           ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
           : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
         } w-full justify-between`}
@@ -254,7 +261,8 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
                   isActive
                     ? "bg-blue-600 text-white shadow-sm"
                     : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                }`}
+                }`
+              }
               onClick={onNavigate}
             >
               {c.label}
@@ -444,7 +452,7 @@ const SidebarLayout = () => {
   const initial =
     (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
 
-  const toggleDark = useCallback(() => setDarkMode(v => !v), []);
+  const toggleDark = useCallback(() => setDarkMode((v) => !v), []);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   return (
@@ -456,7 +464,7 @@ const SidebarLayout = () => {
             <div className="flex items-center gap-2">
               <button
                 className="lg:hidden p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                onClick={() => setMobileOpen(v => !v)}
+                onClick={() => setMobileOpen((v) => !v)}
                 aria-label={mobileOpen ? "Close menu" : "Open menu"}
               >
                 {mobileOpen ? <FiX /> : <FiMenu />}
@@ -510,7 +518,7 @@ const SidebarLayout = () => {
               {/* Avatar dropdown */}
               <div className="relative" ref={avatarRef}>
                 <button
-                  onClick={() => setAvatarOpen(v => !v)}
+                  onClick={() => setAvatarOpen((v) => !v)}
                   className="inline-flex items-center gap-2 h-9 px-2 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
                   aria-expanded={avatarOpen}
                   title="Account"

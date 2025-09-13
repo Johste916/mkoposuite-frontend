@@ -56,11 +56,11 @@ const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayment
 // Misc (legacy/back-compat)
 const Disbursements = lazy(() => import("./pages/Disbursements"));
 const Sms = lazy(() => import("./pages/Sms")); // legacy/simple console
-const Bank = lazy(() => import("./pages/Bank"));
 
 // ✅ Banking (new)
 const BanksList = lazy(() => import("./pages/banks/BanksList"));
 const BankForm = lazy(() => import("./pages/banks/BankForm"));
+const BankDetails = lazy(() => import("./pages/banks/BankDetails"));
 
 // User management
 const Users = lazy(() => import("./pages/user-management/Users"));
@@ -336,8 +336,7 @@ function App() {
               <Route path="repayments/charts" element={<RepaymentCharts />} />
               <Route path="repayments/approve" element={<ApproveRepayments />} />
 
-              {/* Collateral */
-              }
+              {/* Collateral */}
               <Route path="collateral" element={<CollateralList />} />
               <Route
                 path="collateral/new"
@@ -392,10 +391,14 @@ function App() {
               {/* ✅ Banking */}
               <Route path="banks" element={<BanksList />} />
               <Route path="banks/add" element={<BankForm />} />
+              <Route path="banks/:id" element={<BankDetails />} />
               <Route path="banks/:id/edit" element={<BankForm />} />
               {/* Helpful aliases */}
               <Route path="bank-accounts" element={<Navigate to="/banks" replace />} />
               <Route path="bank-accounts/add" element={<Navigate to="/banks/add" replace />} />
+              {/* Legacy redirects */}
+              <Route path="bank" element={<Navigate to="/banks" replace />} />
+              <Route path="banking" element={<Navigate to="/banks" replace />} />
 
               {/* Investors */}
               <Route path="investors" element={<Investors />} />
@@ -547,10 +550,9 @@ function App() {
                 }
               />
 
-              {/* Legacy */}
+              {/* Legacy (kept Disbursements & Sms) */}
               <Route path="disbursements" element={<Disbursements />} />
-              <Route path="bank" element={<Bank />} />
-              <Route path="banking" element={<Bank />} />
+              <Route path="sms" element={<Sms />} />
 
               {/* 404 inside shell */}
               <Route path="*" element={<NotFound />} />
