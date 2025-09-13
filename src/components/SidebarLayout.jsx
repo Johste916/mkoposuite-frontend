@@ -1,4 +1,3 @@
-// src/layouts/SidebarLayout.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -91,6 +90,14 @@ const NAV = () => [
       { label: "Upload CSV", to: "/savings/transactions/csv" },
       { label: "Approve Transactions", to: "/savings/transactions/approve" },
       { label: "Savings Report", to: "/savings/report" },
+    ]
+  },
+  /* ✅ Banking section */
+  {
+    label: "Banking", icon: <BsBank />, to: "/banks", children: [
+      { label: "Banks", to: "/banks" },
+      { label: "Add Bank", to: "/banks/add" },
+      { label: "Bank Transactions", to: "/bank" }, // legacy page retained
     ]
   },
   {
@@ -404,8 +411,7 @@ const SidebarLayout = () => {
         if (e?.response?.status === 401) logoutAndGo();
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [logoutAndGo]);
 
   // Branch list
   useEffect(() => {
@@ -419,8 +425,7 @@ const SidebarLayout = () => {
         if (e?.response?.status === 401) logoutAndGo();
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeBranchId, logoutAndGo]);
 
   const userRole = (user?.role || "").toLowerCase();
 

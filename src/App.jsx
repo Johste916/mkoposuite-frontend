@@ -58,6 +58,10 @@ const Disbursements = lazy(() => import("./pages/Disbursements"));
 const Sms = lazy(() => import("./pages/Sms")); // legacy/simple console
 const Bank = lazy(() => import("./pages/Bank"));
 
+// ✅ Banking (new)
+const BanksList = lazy(() => import("./pages/banks/BanksList"));
+const BankForm = lazy(() => import("./pages/banks/BankForm"));
+
 // User management
 const Users = lazy(() => import("./pages/user-management/Users"));
 const Roles = lazy(() => import("./pages/user-management/Roles"));
@@ -332,7 +336,8 @@ function App() {
               <Route path="repayments/charts" element={<RepaymentCharts />} />
               <Route path="repayments/approve" element={<ApproveRepayments />} />
 
-              {/* Collateral */}
+              {/* Collateral */
+              }
               <Route path="collateral" element={<CollateralList />} />
               <Route
                 path="collateral/new"
@@ -383,6 +388,14 @@ function App() {
               <Route path="savings/transactions/approve" element={<ApproveSavingsTx />} />
               <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
               <Route path="savings-transactions/*" element={<Navigate to="/savings/transactions" replace />} />
+
+              {/* ✅ Banking */}
+              <Route path="banks" element={<BanksList />} />
+              <Route path="banks/add" element={<BankForm />} />
+              <Route path="banks/:id/edit" element={<BankForm />} />
+              {/* Helpful aliases */}
+              <Route path="bank-accounts" element={<Navigate to="/banks" replace />} />
+              <Route path="bank-accounts/add" element={<Navigate to="/banks/add" replace />} />
 
               {/* Investors */}
               <Route path="investors" element={<Investors />} />
@@ -537,6 +550,7 @@ function App() {
               {/* Legacy */}
               <Route path="disbursements" element={<Disbursements />} />
               <Route path="bank" element={<Bank />} />
+              <Route path="banking" element={<Bank />} />
 
               {/* 404 inside shell */}
               <Route path="*" element={<NotFound />} />
