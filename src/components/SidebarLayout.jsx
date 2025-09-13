@@ -92,11 +92,27 @@ const NAV = () => [
       { label: "Savings Report", to: "/savings/report" },
     ]
   },
-  /* ✅ Banking section (new module only; legacy removed) */
+  /* ✅ Banking section (richer children) */
   {
     label: "Banking", icon: <BsBank />, to: "/banks", children: [
-      { label: "Banks", to: "/banks" },
+      // Banks
+      { label: "View Banks", to: "/banks" },
       { label: "Add Bank", to: "/banks/add" },
+
+      // Bank transactions
+      { label: "View Bank Transactions", to: "/banks/transactions" },
+      { label: "Transfers", to: "/banks/transfers" },
+      { label: "Reconciliation", to: "/banks/reconciliation" },
+      { label: "Statements", to: "/banks/statements" },
+      { label: "Import Bank CSV", to: "/banks/import" },
+      { label: "Approvals", to: "/banks/approvals" },
+      { label: "Rules & GL Mapping", to: "/banks/rules" },
+
+      // Cash management
+      { label: "View Cash Transactions", to: "/cash/transactions" },
+      { label: "Add Cash Transaction", to: "/cash/transactions/add" },
+      { label: "Cash Reconciliation", to: "/cash/reconciliation" },
+      { label: "Cash Statement", to: "/cash/statements" },
     ]
   },
   {
@@ -230,11 +246,10 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
         type="button"
         onClick={toggle}
         onKeyDown={onKeyDown}
-        className={`${
-          baseItem
-        } ${isActiveSection
-          ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
-          : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+        className={`${baseItem} ${
+          isActiveSection
+            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
+            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
         } w-full justify-between`}
         aria-expanded={open}
         aria-controls={panelId}
