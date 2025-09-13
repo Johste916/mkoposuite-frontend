@@ -20,6 +20,9 @@ export default function BankForm() {
     swift: "",
     phone: "",
     address: "",
+    currency: "TZS",
+    openingBalance: "",
+    currentBalance: "",
     isActive: true,
   });
   const [saving, setSaving] = useState(false);
@@ -41,6 +44,9 @@ export default function BankForm() {
           swift: b.swift || "",
           phone: b.phone || "",
           address: b.address || "",
+          currency: b.currency || "TZS",
+          openingBalance: b.openingBalance ?? "",
+          currentBalance: b.currentBalance ?? "",
           isActive: b.isActive !== false,
         });
       } catch (e) {
@@ -58,9 +64,18 @@ export default function BankForm() {
     setSaving(true);
     try {
       if (isEdit) {
-        await api.put(`/banks/${id}`, form);
+        await api.put(`/banks/${id}`, {
+          ...form,
+          openingBalance: form.openingBalance === "" ? null : Number(form.openingBalance),
+          currentBalance: form.currentBalance === "" ? null : Number(form.currentBalance),
+        });
       } else {
-        await api.post("/banks", form);
+        await api.post("/banks", {
+          ...form,
+          openingBalance: form.openingBalance === "" ? 0 : Number(form.openingBalance),
+          currentBalance:
+            form.currentBalance === "" ? (form.openingBalance === "" ? 0 : Number(form.openingBalance)) : Number(form.currentBalance),
+        });
       }
       navigate("/banks");
     } catch (e) {
@@ -76,7 +91,7 @@ export default function BankForm() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{isEdit ? "Edit Bank" : "Add Bank"}</h1>
-          <p className="text-sm text-gray-500">Banks are used for disbursing loans to borrowers.</p>
+          <p className="text-sm text-gray-500">Banks are used for disbursing loans and receiving repayments.</p>
         </div>
         <Link to="/banks" className="text-indigo-600 hover:underline text-sm">Back to Banks</Link>
       </div>
@@ -114,9 +129,28 @@ export default function BankForm() {
               <label className="text-xs text-gray-600">Phone (optional)</label>
               <input className={clsInput} value={form.phone} onChange={(e)=>setForm({...form, phone: e.target.value})} />
             </div>
+            <div>
+              <label className="text-xs text-gray-600">Currency</label>
+              <input className={clsInput} value={form.currency} onChange={(e)=>setForm({...form, currency: e.target.value})} />
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-600">Opening Balance</label>
+              <input type="number" step="0.01" className={clsInput} value={form.openingBalance} onChange={(e)=>setForm({...form, openingBalance: e.target.value})} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-600">Current Balance (optional)</label>
+              <input type="number" step="0.01" className={clsInput} value={form.currentBalance} onChange={(e)=>setForm({...form, currentBalance: e.target.value})} />
+            </div>
+
             <div className="md:col-span-2">
               <label className="text-xs text-gray-600">Address (optional)</label>
               <textarea className={`${clsInput} min-h-[84px]`} value={form.address} onChange={(e)=>setForm({...form, address: e.target.value})}/>
+            </div>
+
+            <div className="md:col-span-2 flex items-center gap-2">
+              <input id="active" type="checkbox" checked={form.isActive} onChange={(e)=>setForm({...form, isActive: e.target.checked})} />
+              <label htmlFor="active" className="text-sm text-gray-700">Active</label>
             </div>
 
             <div className="md:col-span-2 flex justify-end gap-3 pt-2">

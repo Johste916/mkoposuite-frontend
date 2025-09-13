@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api";
-import { PlusCircle, Pencil, Trash2 } from "lucide-react";
+import { PlusCircle, Pencil, Trash2, Eye } from "lucide-react";
 
 const card = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-5 md:p-7";
 const clsInput = "w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
@@ -9,21 +9,34 @@ const clsInput = "w-full border rounded-lg px-3 py-2 focus:outline-none focus:ri
 export default function BanksList() {
   const navigate = useNavigate();
   const [banks, setBanks] = useState([]);
+  const [overview, setOverview] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await api.get("/banks", { params: { search } });
-      const items = Array.isArray(r.data) ? r.data
-        : Array.isArray(r.data?.items) ? r.data.items
-        : Array.isArray(r.data?.rows) ? r.data.rows
+      const [banksRes, ovRes] = await Promise.all([
+        api.get("/banks", { params: { search } }),
+        api.get("/banks/__internal/overview"),
+      ]);
+      const items = Array.isArray(banksRes.data)
+        ? banksRes.data
+        : Array.isArray(banksRes.data?.items)
+        ? banksRes.data.items
+        : Array.isArray(banksRes.data?.rows)
+        ? banksRes.data.rows
         : [];
       setBanks(items);
+
+      const map = {};
+      const ovs = ovRes?.data?.items || [];
+      for (const b of ovs) map[b.bankId] = b;
+      setOverview(map);
     } catch (e) {
       console.error(e);
       setBanks([]);
+      setOverview({});
     } finally {
       setLoading(false);
     }
@@ -54,7 +67,7 @@ export default function BanksList() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Banks</h1>
-          <p className="text-sm text-gray-500">Tenant-scoped list of banks used for loan disbursements.</p>
+          <p className="text-sm text-gray-500">Tenant-scoped bank & balance overview (disbursements, repayments, transfers).</p>
         </div>
         <Link to="/banks/add" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50">
           <PlusCircle className="h-4 w-4" /> Add Bank
@@ -85,39 +98,51 @@ export default function BanksList() {
                   <th className="py-2 pr-4">Branch</th>
                   <th className="py-2 pr-4">Account Name</th>
                   <th className="py-2 pr-4">Account #</th>
-                  <th className="py-2 pr-4">SWIFT</th>
+                  <th className="py-2 pr-4">Currency</th>
+                  <th className="py-2 pr-4">Current</th>
                   <th className="py-2 pr-4"></th>
                 </tr>
               </thead>
               <tbody>
-                {list.map((b) => (
-                  <tr key={b.id} className="border-t">
-                    <td className="py-2 pr-4">{b.name}</td>
-                    <td className="py-2 pr-4">{b.code || "—"}</td>
-                    <td className="py-2 pr-4">{b.branch || "—"}</td>
-                    <td className="py-2 pr-4">{b.accountName || "—"}</td>
-                    <td className="py-2 pr-4">{b.accountNumber || "—"}</td>
-                    <td className="py-2 pr-4">{b.swift || "—"}</td>
-                    <td className="py-2 pr-4">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => navigate(`/banks/${b.id}/edit`)}
-                          className="px-2 py-1 rounded border hover:bg-gray-50 inline-flex items-center gap-1"
-                          title="Edit"
-                        >
-                          <Pencil className="h-4 w-4" /> Edit
-                        </button>
-                        <button
-                          onClick={() => onDelete(b.id)}
-                          className="px-2 py-1 rounded border hover:bg-gray-50 inline-flex items-center gap-1"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" /> Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {list.map((b) => {
+                  const ov = overview[b.id] || {};
+                  return (
+                    <tr key={b.id} className="border-t">
+                      <td className="py-2 pr-4">{b.name}</td>
+                      <td className="py-2 pr-4">{b.code || "—"}</td>
+                      <td className="py-2 pr-4">{b.branch || "—"}</td>
+                      <td className="py-2 pr-4">{b.accountName || "—"}</td>
+                      <td className="py-2 pr-4">{b.accountNumber || "—"}</td>
+                      <td className="py-2 pr-4">{b.currency || "—"}</td>
+                      <td className="py-2 pr-4 font-medium">{ov.current != null ? Number(ov.current).toLocaleString() : "—"}</td>
+                      <td className="py-2 pr-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => navigate(`/banks/${b.id}`)}
+                            className="px-2 py-1 rounded border hover:bg-gray-50 inline-flex items-center gap-1"
+                            title="View"
+                          >
+                            <Eye className="h-4 w-4" /> View
+                          </button>
+                          <button
+                            onClick={() => navigate(`/banks/${b.id}/edit`)}
+                            className="px-2 py-1 rounded border hover:bg-gray-50 inline-flex items-center gap-1"
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" /> Edit
+                          </button>
+                          <button
+                            onClick={() => onDelete(b.id)}
+                            className="px-2 py-1 rounded border hover:bg-gray-50 inline-flex items-center gap-1"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" /> Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
