@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api";
 import { PlusCircle, Pencil, Trash2, Eye } from "lucide-react";
@@ -12,13 +12,14 @@ export default function BanksList() {
   const [overview, setOverview] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const debounceRef = useRef();
 
-  const load = async () => {
+  const load = async (signal) => {
     setLoading(true);
     try {
       const [banksRes, ovRes] = await Promise.all([
-        api.get("/banks", { params: { search } }),
-        api.get("/banks/__internal/overview"),
+        api.get("/banks", { params: { search }, signal }),
+        api.get("/banks/__internal/overview", { signal }),
       ]);
       const items = Array.isArray(banksRes.data)
         ? banksRes.data
@@ -34,6 +35,7 @@ export default function BanksList() {
       for (const b of ovs) map[b.bankId] = b;
       setOverview(map);
     } catch (e) {
+      if (e?.code === "ERR_CANCELED") return;
       console.error(e);
       setBanks([]);
       setOverview({});
@@ -42,10 +44,22 @@ export default function BanksList() {
     }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
   useEffect(() => {
-    const t = setTimeout(load, 300);
-    return () => clearTimeout(t);
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // debounce search
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const ac = new AbortController();
+    debounceRef.current = setTimeout(() => load(ac.signal), 350);
+    return () => {
+      clearTimeout(debounceRef.current);
+      ac.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
@@ -53,10 +67,12 @@ export default function BanksList() {
     if (!window.confirm("Delete this bank?")) return;
     try {
       await api.delete(`/banks/${id}`);
-      await load();
+      const ac = new AbortController();
+      await load(ac.signal);
+      ac.abort();
     } catch (e) {
       console.error(e);
-      alert("Failed to delete bank");
+      alert(e?.normalizedMessage || "Failed to delete bank");
     }
   };
 
@@ -80,7 +96,8 @@ export default function BanksList() {
             className={clsInput}
             placeholder="Search by name, code, account…"
             value={search}
-            onChange={(e)=>setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search banks"
           />
         </div>
 
@@ -114,7 +131,9 @@ export default function BanksList() {
                       <td className="py-2 pr-4">{b.accountName || "—"}</td>
                       <td className="py-2 pr-4">{b.accountNumber || "—"}</td>
                       <td className="py-2 pr-4">{b.currency || "—"}</td>
-                      <td className="py-2 pr-4 font-medium">{ov.current != null ? Number(ov.current).toLocaleString() : "—"}</td>
+                      <td className="py-2 pr-4 font-medium">
+                        {ov.current != null ? numberFmt(ov.current, b.currency) : "—"}
+                      </td>
                       <td className="py-2 pr-4">
                         <div className="flex gap-2">
                           <button
@@ -150,4 +169,14 @@ export default function BanksList() {
       </section>
     </div>
   );
+}
+
+function numberFmt(n, currency) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "TZS" }).format(x);
+  } catch {
+    return x.toLocaleString();
+  }
 }

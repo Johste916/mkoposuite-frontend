@@ -30,10 +30,11 @@ export default function BankForm() {
 
   useEffect(() => {
     if (!isEdit) return;
+    const ac = new AbortController();
     (async () => {
       setLoading(true);
       try {
-        const r = await api.get(`/banks/${id}`);
+        const r = await api.get(`/banks/${id}`, { signal: ac.signal });
         const b = r.data || {};
         setForm({
           name: b.name || "",
@@ -50,12 +51,15 @@ export default function BankForm() {
           isActive: b.isActive !== false,
         });
       } catch (e) {
-        console.error(e);
-        alert("Failed to load bank");
+        if (e?.code !== "ERR_CANCELED") {
+          console.error(e);
+          alert(e?.normalizedMessage || "Failed to load bank");
+        }
       } finally {
         setLoading(false);
       }
     })();
+    return () => ac.abort();
   }, [id, isEdit]);
 
   const onSubmit = async (e) => {
@@ -63,24 +67,24 @@ export default function BankForm() {
     if (!form.name.trim()) return alert("Bank name is required.");
     setSaving(true);
     try {
+      const body = {
+        ...form,
+        openingBalance: form.openingBalance === "" ? (isEdit ? null : 0) : Number(form.openingBalance),
+        currentBalance:
+          form.currentBalance === ""
+            ? (isEdit ? null : (form.openingBalance === "" ? 0 : Number(form.openingBalance)))
+            : Number(form.currentBalance),
+      };
+
       if (isEdit) {
-        await api.put(`/banks/${id}`, {
-          ...form,
-          openingBalance: form.openingBalance === "" ? null : Number(form.openingBalance),
-          currentBalance: form.currentBalance === "" ? null : Number(form.currentBalance),
-        });
+        await api.put(`/banks/${id}`, body);
       } else {
-        await api.post("/banks", {
-          ...form,
-          openingBalance: form.openingBalance === "" ? 0 : Number(form.openingBalance),
-          currentBalance:
-            form.currentBalance === "" ? (form.openingBalance === "" ? 0 : Number(form.openingBalance)) : Number(form.currentBalance),
-        });
+        await api.post("/banks", body);
       }
       navigate("/banks");
     } catch (e) {
       console.error(e);
-      alert("Failed to save bank");
+      alert(e?.normalizedMessage || "Failed to save bank");
     } finally {
       setSaving(false);
     }
