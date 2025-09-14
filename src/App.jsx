@@ -71,10 +71,10 @@ const BankApprovals = lazy(() => import("./pages/banks/BankApprovals"));
 const BankRules = lazy(() => import("./pages/banks/BankRules"));
 
 // ✅ Cash pages under Banking
-const CashTransactions = lazy(() => import("./pages/cash/CashTransactions"));
-const CashTransactionForm = lazy(() => import("./pages/cash/CashTransactionForm"));
-const CashReconciliation = lazy(() => import("./pages/cash/CashReconciliation"));
-const CashStatements = lazy(() => import("./pages/cash/CashStatements"));
+const CashTransactions = lazy(() => import("./pages/banks/CashTransactions"));
+const CashTransactionForm = lazy(() => import("./pages/banks/CashTransactionForm"));
+const CashReconciliation = lazy(() => import("./pages/banks/CashReconciliation"));
+const CashStatements = lazy(() => import("./pages/banks/CashStatements"));
 
 // User management
 const Users = lazy(() => import("./pages/user-management/Users"));
