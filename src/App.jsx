@@ -57,10 +57,24 @@ const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayment
 const Disbursements = lazy(() => import("./pages/Disbursements"));
 const Sms = lazy(() => import("./pages/Sms")); // legacy/simple console
 
-// ✅ Banking (new)
+// ✅ Banking (existing)
 const BanksList = lazy(() => import("./pages/banks/BanksList"));
 const BankForm = lazy(() => import("./pages/banks/BankForm"));
 const BankDetails = lazy(() => import("./pages/banks/BankDetails"));
+// ✅ Banking (new pages)
+const BankTransactions = lazy(() => import("./pages/banks/BankTransactions"));
+const BankTransfers = lazy(() => import("./pages/banks/BankTransfers"));
+const BankReconciliation = lazy(() => import("./pages/banks/BankReconciliation"));
+const BankStatements = lazy(() => import("./pages/banks/BankStatements"));
+const BankImport = lazy(() => import("./pages/banks/BankImport"));
+const BankApprovals = lazy(() => import("./pages/banks/BankApprovals"));
+const BankRules = lazy(() => import("./pages/banks/BankRules"));
+
+// ✅ Cash pages under Banking
+const CashTransactions = lazy(() => import("./pages/cash/CashTransactions"));
+const CashTransactionForm = lazy(() => import("./pages/cash/CashTransactionForm"));
+const CashReconciliation = lazy(() => import("./pages/cash/CashReconciliation"));
+const CashStatements = lazy(() => import("./pages/cash/CashStatements"));
 
 // User management
 const Users = lazy(() => import("./pages/user-management/Users"));
@@ -393,6 +407,22 @@ function App() {
               <Route path="banks/add" element={<BankForm />} />
               <Route path="banks/:id" element={<BankDetails />} />
               <Route path="banks/:id/edit" element={<BankForm />} />
+
+              {/* Banking features under the same section */}
+              <Route path="banks/transactions" element={<BankTransactions />} />
+              <Route path="banks/transfers" element={<BankTransfers />} />
+              <Route path="banks/reconciliation" element={<BankReconciliation />} />
+              <Route path="banks/statements" element={<BankStatements />} />
+              <Route path="banks/import" element={<BankImport />} />
+              <Route path="banks/approvals" element={<BankApprovals />} />
+              <Route path="banks/rules" element={<BankRules />} />
+
+              {/* Cash under Banking */}
+              <Route path="cash/transactions" element={<CashTransactions />} />
+              <Route path="cash/transactions/add" element={<CashTransactionForm />} />
+              <Route path="cash/reconciliation" element={<CashReconciliation />} />
+              <Route path="cash/statements" element={<CashStatements />} />
+
               {/* Helpful aliases */}
               <Route path="bank-accounts" element={<Navigate to="/banks" replace />} />
               <Route path="bank-accounts/add" element={<Navigate to="/banks/add" replace />} />
