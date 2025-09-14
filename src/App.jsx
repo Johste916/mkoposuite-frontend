@@ -1,3 +1,4 @@
+
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -61,20 +62,23 @@ const Sms = lazy(() => import("./pages/Sms")); // legacy/simple console
 const BanksList = lazy(() => import("./pages/banks/BanksList"));
 const BankForm = lazy(() => import("./pages/banks/BankForm"));
 const BankDetails = lazy(() => import("./pages/banks/BankDetails"));
-// ✅ Banking (new pages)
+// ✅ Banking (generic features)
 const BankTransactions = lazy(() => import("./pages/banks/BankTransactions"));
 const BankTransfers = lazy(() => import("./pages/banks/BankTransfers"));
 const BankReconciliation = lazy(() => import("./pages/banks/BankReconciliation"));
 const BankStatements = lazy(() => import("./pages/banks/BankStatements"));
-const BankImport = lazy(() => import("./pages/banks/BankImport"));
-const BankApprovals = lazy(() => import("./pages/banks/BankApprovals"));
-const BankRules = lazy(() => import("./pages/banks/BankRules"));
 
-// ✅ Cash pages under Banking
+// ✅ New Banking pages (from ./pages/banking/*)
+const BankApprovals = lazy(() => import("./pages/banking/BankApprovals"));
+const RulesGlMapping = lazy(() => import("./pages/banking/RulesGlMapping"));
+const ImportBankCsv = lazy(() => import("./pages/banking/ImportBankCsv"));
+const CashStatement = lazy(() => import("./pages/banking/CashStatement"));
+const CashReconciliation = lazy(() => import("./pages/banking/CashReconciliation"));
+
+// ✅ Cash pages previously under /pages/banks (kept if you already have them)
 const CashTransactions = lazy(() => import("./pages/banks/CashTransactions"));
 const CashTransactionForm = lazy(() => import("./pages/banks/CashTransactionForm"));
-const CashReconciliation = lazy(() => import("./pages/banks/CashReconciliation"));
-const CashStatements = lazy(() => import("./pages/banks/CashStatements"));
+// (CashStatements older page is replaced by CashStatement from ./pages/banking)
 
 // User management
 const Users = lazy(() => import("./pages/user-management/Users"));
@@ -413,15 +417,15 @@ function App() {
               <Route path="banks/transfers" element={<BankTransfers />} />
               <Route path="banks/reconciliation" element={<BankReconciliation />} />
               <Route path="banks/statements" element={<BankStatements />} />
-              <Route path="banks/import" element={<BankImport />} />
+              <Route path="banks/import" element={<ImportBankCsv />} />
               <Route path="banks/approvals" element={<BankApprovals />} />
-              <Route path="banks/rules" element={<BankRules />} />
+              <Route path="banks/rules" element={<RulesGlMapping />} />
 
               {/* Cash under Banking */}
               <Route path="cash/transactions" element={<CashTransactions />} />
               <Route path="cash/transactions/add" element={<CashTransactionForm />} />
               <Route path="cash/reconciliation" element={<CashReconciliation />} />
-              <Route path="cash/statements" element={<CashStatements />} />
+              <Route path="cash/statements" element={<CashStatement />} />
 
               {/* Helpful aliases */}
               <Route path="bank-accounts" element={<Navigate to="/banks" replace />} />
