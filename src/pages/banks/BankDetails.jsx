@@ -25,9 +25,9 @@ export default function BankDetails() {
   const [bank, setBank] = useState(null);
   const [balance, setBalance] = useState(null);
   const [codes, setCodes] = useState({
-    transactionTypes: [],
-    statuses: [],
-    channels: [],
+    transactionTypes: ["deposit", "withdrawal", "loan_repayment", "disbursement", "fee", "transfer_in", "transfer_out", "other"],
+    statuses: ["posted", "pending", "void"],
+    channels: ["bank", "cash", "mobile", "card", "other"],
   });
   const [txs, setTxs] = useState([]);
   const [filters, setFilters] = useState({
@@ -93,6 +93,10 @@ export default function BankDetails() {
       });
       setTxs(list.data || []);
       setBanks((allBanks.data || []).filter((x) => String(x.id) !== String(id)));
+      // ensure newTx type exists even if server config is custom
+      if (c.data?.transactionTypes?.length && !c.data.transactionTypes.includes(newTx.type)) {
+        setNewTx((s) => ({ ...s, type: c.data.transactionTypes[0], direction: inferDirection(c.data.transactionTypes[0]) }));
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -138,9 +142,11 @@ export default function BankDetails() {
         amount: Number(newTx.amount),
         occurredAt: newTx.occurredAt || undefined,
         direction: inferDirection(newTx.type),
+        // auto-attach currency from bank to ensure consistency on mixed tenants
+        currency: bank?.currency,
       });
       setNewTx({
-        type: "deposit",
+        type: codes.transactionTypes?.[0] || "deposit",
         direction: "in",
         amount: "",
         occurredAt: "",
@@ -163,6 +169,7 @@ export default function BankDetails() {
         ...repay,
         amount: Number(repay.amount),
         occurredAt: repay.occurredAt || undefined,
+        currency: bank?.currency,
       });
       setRepay({ loanId: "", amount: "", occurredAt: "", reference: "" });
       await load();
@@ -181,6 +188,7 @@ export default function BankDetails() {
         ...transfer,
         amount: Number(transfer.amount),
         occurredAt: transfer.occurredAt || undefined,
+        currency: bank?.currency,
       });
       setTransfer({ toBankId: "", amount: "", occurredAt: "", reference: "" });
       await load();
@@ -199,6 +207,7 @@ export default function BankDetails() {
         ...cash,
         amount: Number(cash.amount),
         occurredAt: cash.occurredAt || undefined,
+        currency: bank?.currency,
       });
       setCash({ cashAccountId: "", amount: "", occurredAt: "", reference: "" });
       await load();
@@ -244,13 +253,14 @@ export default function BankDetails() {
   };
 
   const txList = useMemo(() => (Array.isArray(txs) ? txs : []), [txs]);
+  const ccy = bank?.currency || "TZS";
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-            {bank?.name || "Bank"}
+            {bank?.name || "Bank"}{bank?.branch ? ` — ${bank.branch}` : ""} <span className="text-sm text-gray-500">({ccy})</span>
           </h1>
           <p className="text-sm text-gray-500">
             Manage transactions, repayments, transfers and reconciliation.
@@ -266,8 +276,8 @@ export default function BankDetails() {
           <button onClick={downloadStatement} className={clsBtn}>
             <Download className="h-4 w-4" /> Statement
           </button>
-          <button onClick={load} className={clsBtn}>
-            <RefreshCw className="h-4 w-4" /> Refresh
+          <button onClick={load} className={clsBtn} disabled={loading}>
+            <RefreshCw className="h-4 w-4" /> {loading ? "Loading…" : "Refresh"}
           </button>
         </div>
       </div>
@@ -278,14 +288,14 @@ export default function BankDetails() {
           <h2 className="font-semibold mb-3">Balances</h2>
           <div className="text-sm grid grid-cols-2 gap-2">
             <div className="text-gray-500">Opening</div>
-            <div className="text-right font-medium">{fmt(balance?.opening)}</div>
+            <div className="text-right font-medium">{fmt(balance?.opening, ccy)}</div>
             <div className="text-gray-500">Inflow</div>
-            <div className="text-right font-medium">{fmt(balance?.inflow)}</div>
+            <div className="text-right font-medium">{fmt(balance?.inflow, ccy)}</div>
             <div className="text-gray-500">Outflow</div>
-            <div className="text-right font-medium">{fmt(balance?.outflow)}</div>
+            <div className="text-right font-medium">{fmt(balance?.outflow, ccy)}</div>
             <div className="text-gray-500">Closing</div>
             <div className="text-right font-semibold">
-              {fmt(balance?.closing)}
+              {fmt(balance?.closing, ccy)}
             </div>
           </div>
           <div className="mt-4 text-xs text-gray-500">
@@ -367,7 +377,7 @@ export default function BankDetails() {
                 }
               />
             </div>
-            <button className={clsPrimary}>
+            <button className={clsPrimary} disabled={loading}>
               <Plus className="h-4 w-4" /> Create
             </button>
           </form>
@@ -426,7 +436,7 @@ export default function BankDetails() {
                 }
               />
             </div>
-            <button className={clsPrimary}>
+            <button className={clsPrimary} disabled={loading}>
               <BadgeCheck className="h-4 w-4" /> Record Repayment
             </button>
           </form>
@@ -491,7 +501,7 @@ export default function BankDetails() {
                 }
               />
             </div>
-            <button className={clsBtn}>
+            <button className={clsBtn} disabled={loading}>
               <ArrowRightLeft className="h-4 w-4" /> Transfer
             </button>
           </form>
@@ -552,7 +562,7 @@ export default function BankDetails() {
                 }
               />
             </div>
-            <button className={clsBtn}>
+            <button className={clsBtn} disabled={loading}>
               <ArrowRightLeft className="h-4 w-4" /> Transfer
             </button>
           </form>
@@ -660,7 +670,7 @@ export default function BankDetails() {
                   <td className="py-2 pr-4">{tx.type}</td>
                   <td className="py-2 pr-4">{tx.direction}</td>
                   <td className="py-2 pr-4 text-right font-medium">
-                    {fmt(tx.amount)}
+                    {fmt(tx.amount, tx.currency || ccy)}
                   </td>
                   <td className="py-2 pr-4">{tx.reference || "—"}</td>
                   <td className="py-2 pr-4">
@@ -703,11 +713,11 @@ export default function BankDetails() {
   );
 }
 
-function fmt(n) {
+function fmt(n, ccy = "TZS") {
   if (n == null) return "—";
   const x = Number(n);
   if (Number.isNaN(x)) return String(n);
-  return x.toLocaleString();
+  return `${x.toLocaleString()} ${ccy}`;
 }
 function fmtDate(s) {
   return s ? new Date(s).toLocaleString() : "—";
