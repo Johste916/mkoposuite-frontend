@@ -92,7 +92,7 @@ const NAV = () => [
       { label: "Savings Report", to: "/savings/report" },
     ]
   },
-  /* ✅ Banking section (richer children) */
+  /* ✅ Banking section (now includes Cash Accounts management) */
   {
     label: "Banking", icon: <BsBank />, to: "/banks", children: [
       // Banks
@@ -109,6 +109,8 @@ const NAV = () => [
       { label: "Rules & GL Mapping", to: "/banks/rules" },
 
       // Cash management
+      { label: "Cash Accounts", to: "/cash/accounts" },
+      { label: "Add Cash Account", to: "/cash/accounts/new" },
       { label: "View Cash Transactions", to: "/cash/transactions" },
       { label: "Add Cash Transaction", to: "/cash/transactions/add" },
       { label: "Cash Reconciliation", to: "/cash/reconciliation" },

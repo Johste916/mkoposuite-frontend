@@ -1,4 +1,3 @@
-
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -68,17 +67,19 @@ const BankTransfers = lazy(() => import("./pages/banks/BankTransfers"));
 const BankReconciliation = lazy(() => import("./pages/banks/BankReconciliation"));
 const BankStatements = lazy(() => import("./pages/banks/BankStatements"));
 
-// ✅ New Banking pages (from ./pages/banking/*)
+// ✅ New Banking pages
 const BankApprovals = lazy(() => import("./pages/banks/BankApprovals"));
 const RulesGlMapping = lazy(() => import("./pages/banks/RulesGlMapping"));
 const ImportBankCsv = lazy(() => import("./pages/banks/ImportBankCsv"));
 const CashStatement = lazy(() => import("./pages/banks/CashStatements"));
 const CashReconciliation = lazy(() => import("./pages/banks/CashReconciliation"));
 
-// ✅ Cash pages previously under /pages/banks (kept if you already have them)
+// ✅ Cash pages
 const CashTransactions = lazy(() => import("./pages/banks/CashTransactions"));
 const CashTransactionForm = lazy(() => import("./pages/banks/CashTransactionForm"));
-// (CashStatements older page is replaced by CashStatement from ./pages/banking)
+// NEW: Cash Accounts management
+const CashAccountsList = lazy(() => import("./pages/banks/CashAccountsList"));
+const CashAccountForm = lazy(() => import("./pages/banks/CashAccountForm"));
 
 // User management
 const Users = lazy(() => import("./pages/user-management/Users"));
@@ -422,6 +423,8 @@ function App() {
               <Route path="banks/rules" element={<RulesGlMapping />} />
 
               {/* Cash under Banking */}
+              <Route path="cash/accounts" element={<CashAccountsList />} />
+              <Route path="cash/accounts/new" element={<CashAccountForm />} />
               <Route path="cash/transactions" element={<CashTransactions />} />
               <Route path="cash/transactions/add" element={<CashTransactionForm />} />
               <Route path="cash/reconciliation" element={<CashReconciliation />} />
