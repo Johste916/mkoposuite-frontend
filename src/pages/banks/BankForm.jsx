@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import api from "../../api";
+import { getBank, createBank, updateBank } from "../../services/banking";
 import { Save } from "lucide-react";
 
 const card = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-5 md:p-7";
@@ -34,8 +34,7 @@ export default function BankForm() {
     (async () => {
       setLoading(true);
       try {
-        const r = await api.get(`/banks/${id}`, { signal: ac.signal });
-        const b = r.data || {};
+        const b = await getBank(id, { signal: ac.signal });
         setForm({
           name: b.name || "",
           code: b.code || "",
@@ -77,9 +76,9 @@ export default function BankForm() {
       };
 
       if (isEdit) {
-        await api.put(`/banks/${id}`, body);
+        await updateBank(id, body);
       } else {
-        await api.post("/banks", body);
+        await createBank(body);
       }
       navigate("/banks");
     } catch (e) {

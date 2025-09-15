@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../../api";
+import { listBanks, getBanksOverview, deleteBank } from "../../services/banking";
 import { PlusCircle, Pencil, Trash2, Eye } from "lucide-react";
 
 const card = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-5 md:p-7";
@@ -18,20 +18,21 @@ export default function BanksList() {
     setLoading(true);
     try {
       const [banksRes, ovRes] = await Promise.all([
-        api.get("/banks", { params: { search }, signal }),
-        api.get("/banks/__internal/overview", { signal }),
+        listBanks({ search, signal }),
+        getBanksOverview({ signal }),
       ]);
-      const items = Array.isArray(banksRes.data)
-        ? banksRes.data
-        : Array.isArray(banksRes.data?.items)
-        ? banksRes.data.items
-        : Array.isArray(banksRes.data?.rows)
-        ? banksRes.data.rows
+
+      const items = Array.isArray(banksRes)
+        ? banksRes
+        : Array.isArray(banksRes?.items)
+        ? banksRes.items
+        : Array.isArray(banksRes?.rows)
+        ? banksRes.rows
         : [];
       setBanks(items);
 
       const map = {};
-      const ovs = ovRes?.data?.items || [];
+      const ovs = ovRes?.items || [];
       for (const b of ovs) map[b.bankId] = b;
       setOverview(map);
     } catch (e) {
@@ -52,7 +53,6 @@ export default function BanksList() {
   }, []);
 
   useEffect(() => {
-    // debounce search
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const ac = new AbortController();
     debounceRef.current = setTimeout(() => load(ac.signal), 350);
@@ -66,7 +66,7 @@ export default function BanksList() {
   const onDelete = async (id) => {
     if (!window.confirm("Delete this bank?")) return;
     try {
-      await api.delete(`/banks/${id}`);
+      await deleteBank(id);
       const ac = new AbortController();
       await load(ac.signal);
       ac.abort();

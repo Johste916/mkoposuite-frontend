@@ -1,1 +1,0 @@
-import{j as e}from"./index-BR01ehMu.js";import{T as t}from"./TypesEditor-V62oR3SL.js";import"./admin-D0RyFapt.js";import"./index-Ce1AmqHa.js";function i(){return e.jsx(t,{title:"Expense Types",category:"expense-types"})}export{i as default};

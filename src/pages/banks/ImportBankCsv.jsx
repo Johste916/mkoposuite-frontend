@@ -1,6 +1,5 @@
-// src/pages/banking/ImportBankCsv.jsx
 import { useEffect, useState } from "react";
-import { listBanks, importBankRows } from "../../services/banking";
+import { listBanks, importBankCsvRows } from "../../services/banking";
 
 function parseCsv(text) {
   const lines = text.split(/\r?\n/).filter(Boolean);
@@ -9,7 +8,7 @@ function parseCsv(text) {
   return lines.slice(1).map(line => {
     const cols = line.split(",").map(c => c.trim());
     const o = {};
-    headers.forEach((h, i) => o[h] = cols[i]);
+    headers.forEach((h, i) => (o[h] = cols[i]));
     if (o.amount != null) o.amount = Number(o.amount);
     if (o.occurredAt) o.occurredAt = new Date(o.occurredAt).toISOString();
     return o;
@@ -34,8 +33,8 @@ export default function ImportBankCsv() {
   const doImport = async () => {
     if (!bankId || !rows.length) return;
     try {
-      const resp = await importBankRows(bankId, rows);
-      setResult(resp);
+      const resp = await importBankCsvRows(bankId, rows);
+      setResult({ created: Array.isArray(resp) ? resp.length : 0 });
     } catch (e) { setErr(e?.normalizedMessage || String(e)); }
   };
 
@@ -43,7 +42,7 @@ export default function ImportBankCsv() {
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Import Bank CSV</h1>
-        <div className="text-xs text-gray-500">/api/banks/:id/import</div>
+        <div className="text-xs text-gray-500">/api/banks/:id/transactions</div>
       </div>
 
       <div className="flex flex-wrap gap-3 items-end">

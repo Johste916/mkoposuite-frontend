@@ -1,4 +1,3 @@
-// src/api.js
 import axios from "axios";
 
 /**
@@ -255,5 +254,4 @@ api.getTenantId = () =>
   })();
 
 export default api;
-// also export as named to support `import { api } from '...';` if used elsewhere
 export { api };

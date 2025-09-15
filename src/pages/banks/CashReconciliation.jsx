@@ -1,10 +1,9 @@
-// src/pages/banking/CashReconciliation.jsx
 import { useEffect, useState } from "react";
 import {
   listCashAccounts,
-  cashAccountTransactions,
-  cashReconcile,
-  cashUnreconcile,
+  listCashTransactions,
+  reconcileCashTx,
+  unreconcileCashTx,
 } from "../../services/banking";
 
 export default function CashReconciliation() {
@@ -14,22 +13,24 @@ export default function CashReconciliation() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
 
-  useEffect(() => { listCashAccounts().then(setAccounts).catch(e=>setErr(e?.normalizedMessage || String(e))); }, []);
+  useEffect(() => {
+    listCashAccounts().then(setAccounts).catch(e=>setErr(e?.normalizedMessage || String(e)));
+  }, []);
 
   const load = async () => {
     if (!accountId) return;
     setLoading(true); setErr(null);
     try {
-      const data = await cashAccountTransactions(accountId, { status: "posted" });
-      setRows(data);
+      const data = await listCashTransactions(accountId, { status: "posted" });
+      setRows(data || []);
     } catch (e) { setErr(e?.normalizedMessage || String(e)); }
     finally { setLoading(false); }
   };
 
   const toggle = async (tx) => {
     try {
-      if (tx.reconciled) await cashUnreconcile(tx.id);
-      else await cashReconcile(tx.id);
+      if (tx.reconciled) await unreconcileCashTx(tx.id);
+      else await reconcileCashTx(tx.id);
       await load();
     } catch (e) { setErr(e?.normalizedMessage || String(e)); }
   };
@@ -71,7 +72,7 @@ export default function CashReconciliation() {
           <tbody>
             {rows.map(r => (
               <tr key={r.id}>
-                <td className="border px-2 py-1">{new Date(r.occurredAt).toLocaleString()}</td>
+                <td className="border px-2 py-1">{r.occurredAt ? new Date(r.occurredAt).toLocaleString() : "—"}</td>
                 <td className="border px-2 py-1">{r.type}</td>
                 <td className="border px-2 py-1">{r.direction}</td>
                 <td className="border px-2 py-1 text-right">{Number(r.amount).toLocaleString()}</td>

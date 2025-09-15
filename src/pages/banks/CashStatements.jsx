@@ -1,6 +1,5 @@
-// src/pages/banking/CashStatement.jsx
 import { useEffect, useState } from "react";
-import { listCashAccounts, cashAccountStatement } from "../../services/banking";
+import { listCashAccounts, getCashStatement } from "../../services/banking";
 
 export default function CashStatement() {
   const [accounts, setAccounts] = useState([]);
@@ -20,7 +19,7 @@ export default function CashStatement() {
     if (!accountId) return;
     setLoading(true); setErr(null);
     try {
-      const s = await cashAccountStatement(accountId, { from, to, includeOpening });
+      const s = await getCashStatement(accountId, { from, to, includeOpening });
       setStmt(s);
     } catch (e) {
       setErr(e?.normalizedMessage || String(e));
@@ -84,7 +83,7 @@ export default function CashStatement() {
               <tbody>
                 {stmt.items?.map(tx => (
                   <tr key={tx.id}>
-                    <td className="border px-2 py-1">{new Date(tx.occurredAt).toLocaleString()}</td>
+                    <td className="border px-2 py-1">{tx.occurredAt ? new Date(tx.occurredAt).toLocaleString() : "—"}</td>
                     <td className="border px-2 py-1">{tx.type}</td>
                     <td className="border px-2 py-1">{tx.direction}</td>
                     <td className="border px-2 py-1 text-right">{Number(tx.amount).toLocaleString()}</td>

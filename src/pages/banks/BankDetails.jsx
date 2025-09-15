@@ -1,6 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import api from "../../api";
+import {
+  getBank,
+  getBankBalanceAsOf,
+  getBankingCodes,
+  listBankTransactions,
+  listBanks,
+  listCashAccounts,
+  createBankTransaction,
+  repayLoanViaBank,
+  transferBetweenBanks,
+  transferBankToCash,
+  reconcileBankTx,
+  unreconcileBankTx,
+  getBankStatement,
+} from "../../services/banking";
 import {
   RefreshCw,
   CheckCircle2,
@@ -25,9 +39,9 @@ export default function BankDetails() {
   const [bank, setBank] = useState(null);
   const [balance, setBalance] = useState(null);
   const [codes, setCodes] = useState({
-    transactionTypes: ["deposit", "withdrawal", "loan_repayment", "disbursement", "fee", "transfer_in", "transfer_out", "other"],
-    statuses: ["posted", "pending", "void"],
-    channels: ["bank", "cash", "mobile", "card", "other"],
+    transactionTypes: ["deposit","withdrawal","loan_repayment","disbursement","fee","transfer_in","transfer_out","other"],
+    statuses: ["posted","pending","void"],
+    channels: ["bank","cash","mobile","card","other"],
   });
   const [txs, setTxs] = useState([]);
   const [filters, setFilters] = useState({
@@ -76,26 +90,26 @@ export default function BankDetails() {
     setLoading(true);
     try {
       const [b, bal, c, list, allBanks] = await Promise.all([
-        api.get(`/banks/${id}`),
-        api.get(`/banks/${id}/balance`),
-        api.get(`/banks/codes`),
-        api.get(`/banks/${id}/transactions`, { params: cleanFilters(filters) }),
-        api.get(`/banks`),
+        getBank(id),
+        getBankBalanceAsOf(id, {}),
+        getBankingCodes(),
+        listBankTransactions(id, cleanFilters(filters)),
+        listBanks(),
       ]);
-      setBank(b.data);
-      setBalance(bal.data);
+
+      setBank(b);
+      setBalance(bal);
       setCodes({
-        transactionTypes: Array.isArray(c.data?.transactionTypes)
-          ? c.data.transactionTypes
-          : [],
-        statuses: Array.isArray(c.data?.statuses) ? c.data.statuses : [],
-        channels: Array.isArray(c.data?.channels) ? c.data.channels : [],
+        transactionTypes: Array.isArray(c?.transactionTypes) ? c.transactionTypes : [],
+        statuses: Array.isArray(c?.statuses) ? c.statuses : [],
+        channels: Array.isArray(c?.channels) ? c.channels : [],
       });
-      setTxs(list.data || []);
-      setBanks((allBanks.data || []).filter((x) => String(x.id) !== String(id)));
-      // ensure newTx type exists even if server config is custom
-      if (c.data?.transactionTypes?.length && !c.data.transactionTypes.includes(newTx.type)) {
-        setNewTx((s) => ({ ...s, type: c.data.transactionTypes[0], direction: inferDirection(c.data.transactionTypes[0]) }));
+      setTxs(list || []);
+      setBanks((allBanks || []).filter((x) => String(x.id) !== String(id)));
+
+      if (c?.transactionTypes?.length && !c.transactionTypes.includes(newTx.type)) {
+        const first = c.transactionTypes[0];
+        setNewTx((s) => ({ ...s, type: first, direction: inferDirection(first) }));
       }
     } catch (e) {
       console.error(e);
@@ -106,8 +120,8 @@ export default function BankDetails() {
 
   const loadCash = async () => {
     try {
-      const r = await api.get(`/banks/cash/accounts`);
-      setCashAccounts(r.data || []);
+      const r = await listCashAccounts();
+      setCashAccounts(r || []);
     } catch (e) {
       console.error(e);
     }
@@ -122,10 +136,8 @@ export default function BankDetails() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await api.get(`/banks/${id}/transactions`, {
-          params: cleanFilters(filters),
-        });
-        setTxs(r.data || []);
+        const r = await listBankTransactions(id, cleanFilters(filters));
+        setTxs(r || []);
       } catch (e) {
         console.error(e);
       }
@@ -137,12 +149,11 @@ export default function BankDetails() {
     e.preventDefault();
     if (!newTx.amount) return alert("Amount is required");
     try {
-      await api.post(`/banks/${id}/transactions`, {
+      await createBankTransaction(id, {
         ...newTx,
         amount: Number(newTx.amount),
         occurredAt: newTx.occurredAt || undefined,
         direction: inferDirection(newTx.type),
-        // auto-attach currency from bank to ensure consistency on mixed tenants
         currency: bank?.currency,
       });
       setNewTx({
@@ -165,7 +176,7 @@ export default function BankDetails() {
     if (!repay.loanId || !repay.amount)
       return alert("Loan ID and amount are required");
     try {
-      await api.post(`/banks/${id}/repayments`, {
+      await repayLoanViaBank(id, {
         ...repay,
         amount: Number(repay.amount),
         occurredAt: repay.occurredAt || undefined,
@@ -184,7 +195,7 @@ export default function BankDetails() {
     if (!transfer.toBankId || !transfer.amount)
       return alert("Target bank and amount are required");
     try {
-      await api.post(`/banks/${id}/transfer`, {
+      await transferBetweenBanks(id, {
         ...transfer,
         amount: Number(transfer.amount),
         occurredAt: transfer.occurredAt || undefined,
@@ -203,7 +214,7 @@ export default function BankDetails() {
     if (!cash.cashAccountId || !cash.amount)
       return alert("Cash account and amount are required");
     try {
-      await api.post(`/banks/${id}/transfer-to-cash`, {
+      await transferBankToCash(id, {
         ...cash,
         amount: Number(cash.amount),
         occurredAt: cash.occurredAt || undefined,
@@ -220,9 +231,9 @@ export default function BankDetails() {
   const toggleReconcile = async (tx) => {
     try {
       if (tx.reconciled) {
-        await api.post(`/banks/transactions/${tx.id}/unreconcile`);
+        await unreconcileBankTx(tx.id);
       } else {
-        await api.post(`/banks/transactions/${tx.id}/reconcile`, {
+        await reconcileBankTx(tx.id, {
           bankRef: tx.bankRef || "",
           note: tx.note || "",
         });
@@ -236,10 +247,10 @@ export default function BankDetails() {
 
   const downloadStatement = async () => {
     try {
-      const r = await api.get(`/banks/${id}/statement`, {
-        params: cleanFilters({ ...filters, includeOpening: 1 }),
+      const data = await getBankStatement(id, {
+        ...cleanFilters({ ...filters, includeOpening: 1 }),
       });
-      const blob = new Blob([JSON.stringify(r.data, null, 2)], {
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: "application/json",
       });
       const a = document.createElement("a");

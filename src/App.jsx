@@ -72,7 +72,7 @@ const BankStatements = lazy(() => import("./pages/banks/BankStatements"));
 const BankApprovals = lazy(() => import("./pages/banks/BankApprovals"));
 const RulesGlMapping = lazy(() => import("./pages/banks/RulesGlMapping"));
 const ImportBankCsv = lazy(() => import("./pages/banks/ImportBankCsv"));
-const CashStatement = lazy(() => import("./pages/banks/CashStatement"));
+const CashStatement = lazy(() => import("./pages/banks/CashStatements"));
 const CashReconciliation = lazy(() => import("./pages/banks/CashReconciliation"));
 
 // ✅ Cash pages previously under /pages/banks (kept if you already have them)

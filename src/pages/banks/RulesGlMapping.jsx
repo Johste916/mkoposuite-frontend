@@ -1,4 +1,3 @@
-// src/pages/banking/RulesGlMapping.jsx
 import { useEffect, useState } from "react";
 import { getGlMapping, saveGlMapping } from "../../services/banking";
 
