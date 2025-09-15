@@ -69,11 +69,11 @@ const BankReconciliation = lazy(() => import("./pages/banks/BankReconciliation")
 const BankStatements = lazy(() => import("./pages/banks/BankStatements"));
 
 // ✅ New Banking pages (from ./pages/banking/*)
-const BankApprovals = lazy(() => import("./pages/banking/BankApprovals"));
-const RulesGlMapping = lazy(() => import("./pages/banking/RulesGlMapping"));
-const ImportBankCsv = lazy(() => import("./pages/banking/ImportBankCsv"));
-const CashStatement = lazy(() => import("./pages/banking/CashStatement"));
-const CashReconciliation = lazy(() => import("./pages/banking/CashReconciliation"));
+const BankApprovals = lazy(() => import("./pages/banks/BankApprovals"));
+const RulesGlMapping = lazy(() => import("./pages/banks/RulesGlMapping"));
+const ImportBankCsv = lazy(() => import("./pages/banks/ImportBankCsv"));
+const CashStatement = lazy(() => import("./pages/banks/CashStatement"));
+const CashReconciliation = lazy(() => import("./pages/banks/CashReconciliation"));
 
 // ✅ Cash pages previously under /pages/banks (kept if you already have them)
 const CashTransactions = lazy(() => import("./pages/banks/CashTransactions"));
