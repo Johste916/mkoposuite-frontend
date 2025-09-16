@@ -587,6 +587,24 @@ function App() {
                 }
               />
 
+              {/* ✅ NEW: User Management routes (ADDED) */}
+              <Route
+                path="user-management"
+                element={
+                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin"]}>
+                    <Outlet />
+                  </RoleProtectedRoute>
+                }
+              >
+                <Route index element={<Navigate to="/user-management/users" replace />} />
+                <Route path="users" element={<Users />} />
+                <Route path="roles" element={<Roles />} />
+                <Route path="permissions" element={<Permissions />} />
+              </Route>
+
+              {/* Branches */}
+              <Route path="branches" element={<Branches />} />
+
               {/* Legacy (kept Disbursements & Sms) */}
               <Route path="disbursements" element={<Disbursements />} />
               <Route path="sms" element={<Sms />} />

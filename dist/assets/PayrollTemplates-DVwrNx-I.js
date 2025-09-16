@@ -1,1 +1,0 @@
-import{j as t}from"./index-DyuA89p_.js";import{T as r}from"./TypesEditor-BmWKFrYG.js";import"./admin-GU6GWlex.js";import"./index-FEDHmzN8.js";function p(){return t.jsx(r,{title:"Payroll Templates",category:"payroll-templates"})}export{p as default};

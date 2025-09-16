@@ -1,1 +1,0 @@
-import{c as t}from"./client-Byl8X6WH.js";async function n(){const{data:a}=await t.get("/banks/cash/accounts");return a}async function o(a){const{data:c}=await t.post("/banks/cash/accounts",a);return c}export{o as c,n as l};
