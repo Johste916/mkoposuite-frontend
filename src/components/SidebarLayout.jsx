@@ -1,3 +1,4 @@
+// src/components/SidebarLayout.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -25,6 +26,11 @@ import {
 import { BsBank } from "react-icons/bs";
 import api from "../api";
 import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigContext";
+
+/* -------------------------------- helpers --------------------------------- */
+const isUuid = (v) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
+const isNumericId = (v) => /^\d+$/.test(String(v || ""));
 
 /* ------------------------------- NAV CONFIG --------------------------------
    NOTE: “Account” items live in the avatar dropdown to avoid duplication. */
@@ -293,8 +299,6 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
 Section.displayName = "Section";
 
 /* --------------------------------- Layout ---------------------------------- */
-const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 const SidebarLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -335,6 +339,8 @@ const SidebarLayout = () => {
       if (typeof sessionStorage !== "undefined") {
         try { sessionStorage.clear(); } catch {}
       }
+      delete api.defaults.headers.common["x-tenant-id"];
+      delete api.defaults.headers.common["x-branch-id"];
     } catch {}
     navigate("/login", { replace: true });
   }, [navigate]);
@@ -365,20 +371,13 @@ const SidebarLayout = () => {
       localStorage.getItem("accessToken");
     if (tok) api.defaults.headers.common.Authorization = `Bearer ${tok.replace(/^Bearer /i, "")}`;
 
-    try {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) setUser(JSON.parse(storedUser));
-    } catch {
-      localStorage.removeItem("user");
-    }
-
-    // load tenant from localStorage (sanitize header)
+    // load tenant from localStorage (set header only if UUID)
     try {
       const rawTenant = localStorage.getItem("tenant");
       if (rawTenant) {
         const t = JSON.parse(rawTenant);
         setTenant(t);
-        if (t?.id && UUID_V4_RE.test(String(t.id))) {
+        if (t?.id && isUuid(t.id)) {
           api.defaults.headers.common["x-tenant-id"] = t.id;
         } else {
           delete api.defaults.headers.common["x-tenant-id"];
@@ -386,30 +385,25 @@ const SidebarLayout = () => {
       } else {
         const tenantId = localStorage.getItem("tenantId");
         const tenantName = localStorage.getItem("tenantName");
-        if (tenantId || tenantName) {
-          const t = { id: tenantId || null, name: tenantName || "" };
-          setTenant(t);
-          if (tenantId && UUID_V4_RE.test(String(tenantId))) {
-            api.defaults.headers.common["x-tenant-id"] = tenantId;
-          } else {
-            delete api.defaults.headers.common["x-tenant-id"];
-          }
+        const t = { id: tenantId || null, name: tenantName || "" };
+        setTenant(t);
+        if (tenantId && isUuid(tenantId)) {
+          api.defaults.headers.common["x-tenant-id"] = tenantId;
+        } else {
+          delete api.defaults.headers.common["x-tenant-id"];
         }
       }
-    } catch {}
+    } catch {
+      delete api.defaults.headers.common["x-tenant-id"];
+    }
 
     const storedBranch = localStorage.getItem("activeBranchId");
-    if (storedBranch && Number.isFinite(Number(storedBranch))) {
-      setActiveBranchId(String(Number(storedBranch)));
-      api.defaults.headers.common["x-branch-id"] = String(Number(storedBranch));
-    } else {
-      delete api.defaults.headers.common["x-branch-id"];
-    }
+    if (storedBranch) setActiveBranchId(String(storedBranch));
   }, []);
 
   // sync API headers with tenant & branch changes
   useEffect(() => {
-    if (tenant?.id && UUID_V4_RE.test(String(tenant.id))) {
+    if (tenant?.id && isUuid(tenant.id)) {
       api.defaults.headers.common["x-tenant-id"] = tenant.id;
     } else {
       delete api.defaults.headers.common["x-tenant-id"];
@@ -417,10 +411,9 @@ const SidebarLayout = () => {
   }, [tenant?.id]);
 
   useEffect(() => {
-    if (activeBranchId && Number.isFinite(Number(activeBranchId))) {
-      const val = String(Number(activeBranchId));
-      api.defaults.headers.common["x-branch-id"] = val;
-      localStorage.setItem("activeBranchId", val);
+    if (activeBranchId && isNumericId(activeBranchId)) {
+      api.defaults.headers.common["x-branch-id"] = String(activeBranchId);
+      localStorage.setItem("activeBranchId", String(activeBranchId));
     } else {
       delete api.defaults.headers.common["x-branch-id"];
       localStorage.removeItem("activeBranchId");
@@ -436,7 +429,7 @@ const SidebarLayout = () => {
   useEffect(() => {
     const onBranch = (e) => {
       const id = String(e?.detail?.id || "");
-      if (id && Number.isFinite(Number(id))) setActiveBranchId(String(Number(id)));
+      if (id && isNumericId(id)) setActiveBranchId(id);
     };
     window.addEventListener("ms:branch-changed", onBranch);
     return () => window.removeEventListener("ms:branch-changed", onBranch);
@@ -460,9 +453,15 @@ const SidebarLayout = () => {
     (async () => {
       try {
         const res = await api.get("/branches");
-        const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+        const list =
+          Array.isArray(res.data) ? res.data :
+          Array.isArray(res.data?.items) ? res.data.items :
+          res.data?.data || [];
         setBranches(list);
-        if (list.length && !activeBranchId) setActiveBranchId(String(list[0].id));
+        if (list.length && !activeBranchId) {
+          const firstId = String(list[0]?.id ?? "");
+          if (isNumericId(firstId)) setActiveBranchId(firstId);
+        }
       } catch (e) {
         if (e?.response?.status === 401) logoutAndGo();
       }
@@ -537,7 +536,7 @@ const SidebarLayout = () => {
               >
                 <option value="">Branch</option>
                 {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
+                  <option key={b.id} value={String(b.id)}>{b.name}</option>
                 ))}
               </select>
 
