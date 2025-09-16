@@ -1,10 +1,18 @@
 // src/pages/user-management/Roles.jsx
-import React, { useEffect, useState } from 'react';
-import api from '../../api';
+import React, { useEffect, useState } from "react";
+import api from "../../api";
+
+/**
+ * Roles admin:
+ *  GET    /roles
+ *  POST   /roles
+ *  PUT    /roles/:id    (optional; if not supported, you can keep only POST+DELETE)
+ *  DELETE /roles/:id
+ */
 
 const Roles = () => {
   const [roles, setRoles] = useState([]);
-  const [newRole, setNewRole] = useState('');
+  const [newRole, setNewRole] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -12,30 +20,38 @@ const Roles = () => {
   const fetchRoles = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/roles');
+      const res = await api.get("/roles");
       setRoles(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error('Error fetching roles:', err);
+      console.error("Error fetching roles:", err);
+      alert(err?.response?.data?.error || "Failed to load roles");
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchRoles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmit = async () => {
-    if (!newRole.trim()) return alert('Please enter a role name');
+    const name = newRole.trim();
+    if (!name) return alert("Please enter a role name");
     try {
       if (editId) {
-        await api.put(`/roles/${editId}`, { name: newRole.trim() });
+        // Will work if your backend supports PUT /roles/:id
+        await api.put(`/roles/${editId}`, { name });
       } else {
-        await api.post('/roles', { name: newRole.trim() });
+        await api.post("/roles", { name });
       }
-      setNewRole('');
+      setNewRole("");
       setEditId(null);
       setShowModal(false);
       fetchRoles();
     } catch (err) {
-      console.error('Save role error:', err);
-      alert(err?.response?.data?.error || 'Error saving role');
+      console.error("Save role error:", err);
+      alert(err?.response?.data?.error || "Error saving role");
     }
   };
 
@@ -46,33 +62,33 @@ const Roles = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this role?')) return;
+    if (!window.confirm("Delete this role?")) return;
     try {
       await api.delete(`/roles/${id}`);
       fetchRoles();
     } catch (err) {
-      console.error('Delete role error:', err);
-      alert(err?.response?.data?.error || 'Error deleting role');
+      console.error("Delete role error:", err);
+      alert(err?.response?.data?.error || "Error deleting role");
     }
   };
-
-  useEffect(() => {
-    fetchRoles();
-  }, []);
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Roles</h2>
         <button
-          onClick={() => { setShowModal(true); setNewRole(''); setEditId(null); }}
-          className="bg-blue-600 text-white px-4 py-1 rounded"
+          onClick={() => {
+            setShowModal(true);
+            setNewRole("");
+            setEditId(null);
+          }}
+          className="bg-blue-600 text-white px-4 py-1.5 rounded"
         >
           + Add Role
         </button>
       </div>
 
-      <div className="bg-white border rounded">
+      <div className="bg-white border rounded overflow-x-auto">
         <table className="min-w-full">
           <thead className="bg-gray-100">
             <tr>
@@ -104,7 +120,7 @@ const Roles = () => {
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded w-full max-w-md shadow-md">
-            <h3 className="text-lg font-bold mb-4">{editId ? 'Edit Role' : 'New Role'}</h3>
+            <h3 className="text-lg font-bold mb-4">{editId ? "Edit Role" : "New Role"}</h3>
             <input
               value={newRole}
               onChange={(e) => setNewRole(e.target.value)}
@@ -112,9 +128,9 @@ const Roles = () => {
               placeholder="Role name (e.g., Admin, Accountant)"
             />
             <div className="flex justify-end space-x-2">
-              <button onClick={() => setShowModal(false)} className="px-4 py-1 rounded border">Cancel</button>
-              <button onClick={handleSubmit} className="bg-blue-600 text-white px-4 py-1 rounded">
-                {editId ? 'Update' : 'Save'}
+              <button onClick={() => setShowModal(false)} className="px-4 py-1.5 rounded border">Cancel</button>
+              <button onClick={handleSubmit} className="bg-blue-600 text-white px-4 py-1.5 rounded">
+                {editId ? "Update" : "Save"}
               </button>
             </div>
           </div>

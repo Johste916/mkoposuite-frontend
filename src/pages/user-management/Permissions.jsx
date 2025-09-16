@@ -2,10 +2,18 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
+/**
+ * Permissions admin:
+ *  GET    /permissions
+ *  POST   /permissions
+ *  DELETE /permissions/:id
+ */
+
 export default function Permissions() {
   const [permissions, setPermissions] = useState([]);
   const [newPermission, setNewPermission] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const loadPermissions = async () => {
     try {
@@ -14,6 +22,7 @@ export default function Permissions() {
       setPermissions(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to load permissions", err);
+      alert(err?.response?.data?.error || "Failed to load permissions");
     } finally {
       setLoading(false);
     }
@@ -22,6 +31,7 @@ export default function Permissions() {
   const addPermission = async () => {
     const name = newPermission.trim();
     if (!name) return;
+    setSaving(true);
     try {
       await api.post("/permissions", { name });
       setNewPermission("");
@@ -29,6 +39,8 @@ export default function Permissions() {
     } catch (err) {
       console.error("Failed to add permission", err);
       alert(err?.response?.data?.error || "Error adding permission");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -45,6 +57,7 @@ export default function Permissions() {
 
   useEffect(() => {
     loadPermissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -61,14 +74,15 @@ export default function Permissions() {
           />
           <button
             onClick={addPermission}
-            className="bg-blue-600 text-white px-4 py-2 rounded"
+            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60"
+            disabled={saving}
           >
-            Add
+            {saving ? "Saving…" : "Add"}
           </button>
         </div>
       </div>
 
-      <div className="bg-white border rounded">
+      <div className="bg-white border rounded overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="bg-gray-100">

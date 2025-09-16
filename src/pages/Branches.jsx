@@ -1,10 +1,10 @@
 // src/pages/Branches.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import api from "../api";
 
 const can = (me, action) => {
   if (!me) return false;
-  if (me.role === "admin" || me.role === "director") return true;
+  if (["admin", "director", "super_admin", "system_admin"].includes((me.role || "").toLowerCase())) return true;
   return Array.isArray(me.permissions) && me.permissions.includes(action);
 };
 
@@ -64,7 +64,8 @@ function Overview() {
     setErr("");
     try {
       const { data } = await api.get("/branches", { params: { q } });
-      setRows(data?.items || []);
+      const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      setRows(items);
     } catch (e) {
       setErr(e?.response?.data?.error || e.message);
     }
@@ -161,8 +162,10 @@ function AssignStaff() {
           api.get("/branches"),
           api.get("/users", { params: { limit: 1000 } }),
         ]);
-        setBranches(b?.items || []);
-        setUsers(u?.items || u || []); // support either {items:[]} or []
+        const bItems = Array.isArray(b?.items) ? b.items : Array.isArray(b) ? b : [];
+        const uItems = Array.isArray(u?.items) ? u.items : Array.isArray(u?.rows) ? u.rows : Array.isArray(u) ? u : [];
+        setBranches(bItems);
+        setUsers(uItems);
       } catch {}
     })();
   }, []);
@@ -216,7 +219,7 @@ function AssignStaff() {
               </td>
               <td className="py-2 px-3">{u.name || `${u.firstName||""} ${u.lastName||""}`.trim()}</td>
               <td className="py-2 px-3">{u.email}</td>
-              <td className="py-2 px-3">{u.role}</td>
+              <td className="py-2 px-3">{u.role || (u.Roles||[]).map(r=>r.name).join(", ") || "—"}</td>
             </tr>
           ))}
           </tbody>
@@ -238,7 +241,8 @@ function BranchReports() {
     (async () => {
       try {
         const { data } = await api.get("/branches");
-        setBranches(data?.items || []);
+        const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+        setBranches(items);
       } catch {}
     })();
   }, []);
@@ -247,7 +251,7 @@ function BranchReports() {
     setErr(""); setKpis(null);
     try {
       const { data } = await api.get(`/branches/${branchId}/report`, { params: { from, to } });
-      setKpis(data?.kpis || null);
+      setKpis(data?.kpis || data || null);
     } catch (e) {
       setErr(e?.response?.data?.error || e.message);
     }
@@ -280,8 +284,8 @@ function BranchReports() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KPI title="Staff" value={kpis.staffCount} tone="indigo" />
           <KPI title="Expenses" value={`TZS ${Number(kpis.expenses||0).toLocaleString()}`} tone="amber" />
-          <KPI title="Loans Out" value={`TZS ${Number(kpis.loansOut||0).toLocaleString()}`} tone="emerald" />
-          <KPI title="Collections" value={`TZS ${Number(kpis.collections||0).toLocaleString()}`} tone="blue" />
+          <KPI title="Loans Out" value={`TZS ${Number(kpis.loansOut||kpis.disbursed||0).toLocaleString()}`} tone="emerald" />
+          <KPI title="Collections" value={`TZS ${Number(kpis.collections||kpis.collected||0).toLocaleString()}`} tone="blue" />
         </div>
       )}
     </div>
