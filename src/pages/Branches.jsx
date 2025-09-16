@@ -1,10 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+// src/pages/Branches.jsx
+import { useEffect, useState } from "react";
 import api from "../api";
 
 const can = (me, action) => {
   if (!me) return false;
   if (["admin", "director", "super_admin", "system_admin"].includes((me.role || "").toLowerCase())) return true;
   return Array.isArray(me.permissions) && me.permissions.includes(action);
+};
+
+/** Helpers */
+const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
+const toIntOrNull = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+const cleanBranchPayload = (form) => {
+  const name = String(form.name || "").trim();
+  const address = String(form.address || "").trim();
+  const phone = String(form.phone || "").trim();
+  // Many backends store branch.code as INT. If yours is TEXT, this still works (we’ll send string if not numeric).
+  const codeNum = toIntOrNull(form.code);
+  const payload = {
+    name,
+    address: address || undefined,
+    phone: phone || undefined,
+  };
+  if (codeNum !== null) payload.code = codeNum; else if (String(form.code || "").trim() !== "") payload.code = String(form.code).trim();
+  return payload;
 };
 
 export default function Branches() {
@@ -15,6 +37,14 @@ export default function Branches() {
     (async () => {
       try {
         const { data } = await api.get("/auth/me");
+        // Guard mis-set headers that can cause 22P02 on the server:
+        const t = data?.tenantId || data?.tenant?.id || localStorage.getItem("tenantId") || (JSON.parse(localStorage.getItem("tenant") || "{}").id);
+        if (t && !isUuid(t)) {
+          // Defensive: don’t keep a bad tenant id around
+          delete api.defaults.headers.common["x-tenant-id"];
+          localStorage.removeItem("tenantId");
+          localStorage.removeItem("tenant");
+        }
         setMe(data);
       } catch {}
     })();
@@ -34,7 +64,7 @@ export default function Branches() {
         </div>
       </header>
 
-      {tab === "overview" && <Overview canManage={can(me, "branches:manage")} />}
+      {tab === "overview" && <Overview />}
       {tab === "add" && can(me, "branches:manage") && <AddBranch />}
       {tab === "assign" && can(me, "branches:assign") && <AssignStaff />}
       {tab === "reports" && <BranchReports />}
@@ -54,74 +84,37 @@ function Tab({ label, id, tab, setTab }) {
   );
 }
 
-/* ------------------------------- Overview --------------------------------- */
-function Overview({ canManage }) {
+function Overview() {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
-  const [drawerId, setDrawerId] = useState(null);
-  const [editRow, setEditRow] = useState(null);
-  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     setErr("");
     try {
-      const { data } = await api.get("/branches", { params: { q } });
+      const { data } = await api.get("/branches", { params: q ? { q } : undefined });
       const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
       setRows(items);
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message);
+      const msg = e?.response?.data?.error || e?.message || "Failed to load branches";
+      const code = e?.response?.data?.code;
+      const reqId = e?.response?.data?.requestId;
+      setErr(code ? `${msg} (code: ${code}${reqId ? `, requestId: ${reqId}` : ""})` : msg);
     }
   };
 
   useEffect(() => { load(); }, []); // initial
-
-  const current = useMemo(() => rows.find(r => String(r.id) === String(drawerId)) || null, [rows, drawerId]);
-
-  const onDelete = async (id) => {
-    if (!canManage) return;
-    if (!window.confirm("Delete this branch?")) return;
-    try {
-      await api.delete(`/branches/${id}`);
-      setRows(prev => prev.filter(x => String(x.id) !== String(id)));
-      if (drawerId === id) setDrawerId(null);
-    } catch (e) {
-      alert(e?.response?.data?.error || e.message || "Delete failed");
-    }
-  };
-
-  const onSaveEdit = async (form) => {
-    if (!editRow) return;
-    setSaving(true);
-    try {
-      const payload = buildBranchPayload(form);
-      await api.put(`/branches/${editRow.id}`, payload);
-      setEditRow(null);
-      load();
-    } catch (e) {
-      alert(e?.response?.data?.error || e.message || "Update failed");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="space-y-3">
       <div className="bg-white border rounded-xl p-3 flex gap-2 items-end">
         <div>
           <label className="block text-xs text-gray-500">Search</label>
-        <input
-            className="border rounded px-2 py-1 text-sm"
-            value={q}
-            onChange={(e)=>setQ(e.target.value)}
-            placeholder="name, code…"
-          />
+          <input className="border rounded px-2 py-1 text-sm" value={q} onChange={(e)=>setQ(e.target.value)} />
         </div>
         <button onClick={load} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">Apply</button>
       </div>
-
       {err && <div className="text-sm text-red-600">{err}</div>}
-
       <div className="bg-white border rounded-xl overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
@@ -131,81 +124,46 @@ function Overview({ canManage }) {
               <th className="py-2 px-3">Manager</th>
               <th className="py-2 px-3">Phone</th>
               <th className="py-2 px-3">Address</th>
-              <th className="py-2 px-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={6} className="p-3 text-gray-500">No branches yet.</td></tr>
+              <tr><td colSpan={5} className="p-3 text-gray-500">No branches yet.</td></tr>
             ) : rows.map(b => (
               <tr key={b.id} className="border-b">
                 <td className="py-2 px-3">{b.name}</td>
-                <td className="py-2 px-3">{b.code || "—"}</td>
+                <td className="py-2 px-3">{b.code ?? "—"}</td>
                 <td className="py-2 px-3">{b.managerName || b.manager_id || "—"}</td>
                 <td className="py-2 px-3">{b.phone || "—"}</td>
                 <td className="py-2 px-3">{b.address || "—"}</td>
-                <td className="py-2 px-3 text-right space-x-2">
-                  <button className="text-blue-600 hover:underline" onClick={()=>setDrawerId(b.id)}>View</button>
-                  {canManage && (
-                    <>
-                      <button className="text-slate-700 hover:underline" onClick={()=>setEditRow(b)}>Edit</button>
-                      <button className="text-rose-600 hover:underline" onClick={()=>onDelete(b.id)}>Delete</button>
-                    </>
-                  )}
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      {drawerId && current && <BranchDrawer branch={current} onClose={()=>setDrawerId(null)} />}
-
-      {editRow && (
-        <EditModal
-          title="Edit Branch"
-          initial={editRow}
-          saving={saving}
-          onCancel={()=>setEditRow(null)}
-          onSave={onSaveEdit}
-        />
-      )}
     </div>
   );
 }
 
-/* ------------------------------- Add branch -------------------------------- */
 function AddBranch() {
   const [form, setForm] = useState({ name: "", code: "", phone: "", address: "" });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
-  const [formErr, setFormErr] = useState({});
-
-  const validate = (f) => {
-    const e = {};
-    if (!String(f.name || "").trim()) e.name = "Name is required";
-    if (String(f.code || "").trim() && !/^\d+$/.test(String(f.code).trim())) {
-      e.code = "Code must be numbers only";
-    }
-    if (String(f.phone || "").trim() && !/^[\d+\s()-]+$/.test(String(f.phone).trim())) {
-      e.phone = "Phone contains invalid characters";
-    }
-    return e;
-  };
 
   const submit = async () => {
     setSaving(true); setErr(""); setMsg("");
-    const ve = validate(form);
-    setFormErr(ve);
-    if (Object.keys(ve).length) { setSaving(false); return; }
     try {
-      const payload = buildBranchPayload(form);
+      const payload = cleanBranchPayload(form);
+      if (!payload.name) throw new Error("Branch name is required");
       await api.post("/branches", payload);
       setMsg("Branch created.");
       setForm({ name: "", code: "", phone: "", address: "" });
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Internal server error");
+      const msg = e?.response?.data?.error || e.message || "Failed to create branch";
+      const code = e?.response?.data?.code;
+      const reqId = e?.response?.data?.requestId;
+      setErr(code ? `${msg} (code: ${code}${reqId ? `, requestId: ${reqId}` : ""})` : msg);
     } finally { setSaving(false); }
   };
 
@@ -215,15 +173,14 @@ function AddBranch() {
         <div key={k}>
           <label className="block text-xs text-gray-500 capitalize">{k}</label>
           <input
-            className={`border rounded px-2 py-1 text-sm w-full ${formErr[k] ? "border-rose-400" : ""}`}
+            className="border rounded px-2 py-1 text-sm w-full"
             value={form[k]}
             onChange={(e)=>setForm(s=>({...s,[k]:e.target.value}))}
-            placeholder={k === "code" ? "e.g., 1 or 101" : ""}
+            placeholder={k === "code" ? "e.g. 1 (numbers preferred)" : ""}
           />
-          {formErr[k] && <div className="text-xs text-rose-600 mt-1">{formErr[k]}</div>}
         </div>
       ))}
-      <button onClick={submit} disabled={saving || !form.name.trim()} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">
+      <button onClick={submit} disabled={saving} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">
         {saving ? "Saving…" : "Create"}
       </button>
       {msg && <div className="text-sm text-emerald-700">{msg}</div>}
@@ -232,7 +189,6 @@ function AddBranch() {
   );
 }
 
-/* ------------------------------ Assign staff -------------------------------- */
 function AssignStaff() {
   const [branches, setBranches] = useState([]);
   const [users, setUsers] = useState([]);
@@ -252,7 +208,9 @@ function AssignStaff() {
         const uItems = Array.isArray(u?.items) ? u.items : Array.isArray(u?.rows) ? u.rows : Array.isArray(u) ? u : [];
         setBranches(bItems);
         setUsers(uItems);
-      } catch {}
+      } catch (e) {
+        // Non-fatal for page boot
+      }
     })();
   }, []);
 
@@ -263,10 +221,16 @@ function AssignStaff() {
   const submit = async () => {
     setMsg(""); setErr("");
     try {
-      await api.post(`/branches/${branchId}/assign-staff`, { userIds: selected });
+      const id = toIntOrNull(branchId);
+      if (id === null) throw new Error("Invalid branch id");
+      const userIds = selected.map(toIntOrNull).filter((n) => n !== null);
+      await api.post(`/branches/${id}/assign-staff`, { userIds });
       setMsg("Assigned successfully.");
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message);
+      const msg = e?.response?.data?.error || e.message || "Failed to assign staff";
+      const code = e?.response?.data?.code;
+      const reqId = e?.response?.data?.requestId;
+      setErr(code ? `${msg} (code: ${code}${reqId ? `, requestId: ${reqId}` : ""})` : msg);
     }
   };
 
@@ -315,7 +279,6 @@ function AssignStaff() {
   );
 }
 
-/* ------------------------------- Reports ----------------------------------- */
 function BranchReports() {
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState("");
@@ -337,10 +300,18 @@ function BranchReports() {
   const run = async () => {
     setErr(""); setKpis(null);
     try {
-      const { data } = await api.get(`/branches/${branchId}/report`, { params: { from, to } });
+      const id = toIntOrNull(branchId);
+      if (id === null) throw new Error("Invalid branch id");
+      const params = {};
+      if (from) params.from = from;
+      if (to) params.to = to;
+      const { data } = await api.get(`/branches/${id}/report`, { params });
       setKpis(data?.kpis || data || null);
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message);
+      const msg = e?.response?.data?.error || e.message || "Failed to run report";
+      const code = e?.response?.data?.code;
+      const reqId = e?.response?.data?.requestId;
+      setErr(code ? `${msg} (code: ${code}${reqId ? `, requestId: ${reqId}` : ""})` : msg);
     }
   };
 
@@ -388,123 +359,6 @@ function KPI({ title, value, tone="indigo" }) {
     <div className="bg-white border rounded-xl p-3 flex items-center gap-3">
       <div className={`px-2 py-1 rounded ${tones}`}>{title}</div>
       <div className="font-semibold">{value ?? "—"}</div>
-    </div>
-  );
-}
-
-/* --------------------------- Helpers & UI bits ----------------------------- */
-function buildBranchPayload(form) {
-  const t = (v) => (typeof v === "string" ? v.trim() : v);
-  const payload = {};
-
-  const name = t(form.name);
-  if (name) payload.name = name;
-
-  const codeRaw = t(form.code);
-  if (codeRaw) {
-    // If it's all digits, send as number to satisfy integer columns
-    if (/^\d+$/.test(codeRaw)) payload.code = Number(codeRaw);
-    else payload.code = codeRaw; // keep as string if you actually use text codes
-  }
-
-  const address = t(form.address);
-  if (address) payload.address = address;
-
-  const phoneRaw = t(form.phone);
-  if (phoneRaw) {
-    const digits = String(phoneRaw).replace(/[^\d+]/g, "");
-    if (digits) payload.phone = digits;
-  }
-
-  // Remove any accidental undefineds
-  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
-  return payload;
-}
-
-function EditModal({ title, initial, saving, onCancel, onSave }) {
-  const [form, setForm] = useState({
-    name: initial?.name || "",
-    code: String(initial?.code ?? ""),
-    phone: initial?.phone || "",
-    address: initial?.address || "",
-  });
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl border w-full max-w-lg p-4">
-        <h3 className="text-lg font-semibold mb-3">{title}</h3>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {["name","code","phone","address"].map(k=>(
-            <div key={k} className={k==="address" ? "sm:col-span-2" : ""}>
-              <label className="block text-xs text-gray-500 capitalize">{k}</label>
-              <input
-                className="border rounded px-2 py-1 text-sm w-full"
-                value={form[k]}
-                onChange={(e)=>setForm(s=>({...s,[k]:e.target.value}))}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button className="px-3 py-2 border rounded" onClick={onCancel} disabled={saving}>Cancel</button>
-          <button
-            className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-            onClick={()=>onSave(form)}
-            disabled={saving || !String(form.name||"").trim()}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BranchDrawer({ branch, onClose }) {
-  const [kpis, setKpis] = useState(null);
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get(`/branches/${branch.id}/report`);
-        setKpis(data?.kpis || data || null);
-      } catch {}
-    })();
-  }, [branch.id]);
-
-  return (
-    <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <aside className="absolute right-0 top-0 h-full w-full max-w-md bg-white border-l shadow-xl p-4 overflow-y-auto">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold">Branch: {branch.name}</h3>
-          <button className="px-2 py-1 border rounded" onClick={onClose}>Close</button>
-        </div>
-
-        <section className="space-y-1 text-sm">
-          <div><span className="text-slate-500">Code:</span> {branch.code || "—"}</div>
-          <div><span className="text-slate-500">Phone:</span> {branch.phone || "—"}</div>
-          <div><span className="text-slate-500">Address:</span> {branch.address || "—"}</div>
-          <div><span className="text-slate-500">Manager:</span> {branch.managerName || branch.manager_id || "—"}</div>
-        </section>
-
-        {kpis && (
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <KPI title="Staff" value={kpis.staffCount} tone="indigo" />
-            <KPI title="Loans Out" value={`TZS ${Number(kpis.loansOut||kpis.disbursed||0).toLocaleString()}`} tone="emerald" />
-            <KPI title="Collections" value={`TZS ${Number(kpis.collections||kpis.collected||0).toLocaleString()}`} tone="blue" />
-            <KPI title="Expenses" value={`TZS ${Number(kpis.expenses||0).toLocaleString()}`} tone="amber" />
-          </div>
-        )}
-
-        <div className="mt-6">
-          <h4 className="text-sm font-semibold mb-2">Quick actions</h4>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <a className="px-3 py-2 border rounded text-center hover:bg-slate-50" href={`/collections?branchId=${branch.id}`}>Collections</a>
-            <a className="px-3 py-2 border rounded text-center hover:bg-slate-50" href={`/expenses?branchId=${branch.id}`}>Expenses</a>
-            <a className="px-3 py-2 border rounded text-center hover:bg-slate-50" href={`/loans?branchId=${branch.id}`}>Loans</a>
-            <a className="px-3 py-2 border rounded text-center hover:bg-slate-50" href={`/reports/borrowers?branchId=${branch.id}`}>Borrowers Report</a>
-          </div>
-        </div>
-      </aside>
     </div>
   );
 }
