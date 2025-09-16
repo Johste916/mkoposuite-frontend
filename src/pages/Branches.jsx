@@ -74,7 +74,7 @@ function Overview({ canManage }) {
     }
   };
 
-  useEffect(() => { load(); /* initial */ }, []); // eslint-disable-line
+  useEffect(() => { load(); }, []); // initial
 
   const current = useMemo(() => rows.find(r => String(r.id) === String(drawerId)) || null, [rows, drawerId]);
 
@@ -110,7 +110,7 @@ function Overview({ canManage }) {
       <div className="bg-white border rounded-xl p-3 flex gap-2 items-end">
         <div>
           <label className="block text-xs text-gray-500">Search</label>
-          <input
+        <input
             className="border rounded px-2 py-1 text-sm"
             value={q}
             onChange={(e)=>setQ(e.target.value)}
@@ -159,12 +159,8 @@ function Overview({ canManage }) {
         </table>
       </div>
 
-      {/* Drawer: Branch quick view */}
-      {drawerId && current && (
-        <BranchDrawer branch={current} onClose={()=>setDrawerId(null)} />
-      )}
+      {drawerId && current && <BranchDrawer branch={current} onClose={()=>setDrawerId(null)} />}
 
-      {/* Modal: Edit branch */}
       {editRow && (
         <EditModal
           title="Edit Branch"
@@ -184,16 +180,31 @@ function AddBranch() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [formErr, setFormErr] = useState({});
+
+  const validate = (f) => {
+    const e = {};
+    if (!String(f.name || "").trim()) e.name = "Name is required";
+    if (String(f.code || "").trim() && !/^\d+$/.test(String(f.code).trim())) {
+      e.code = "Code must be numbers only";
+    }
+    if (String(f.phone || "").trim() && !/^[\d+\s()-]+$/.test(String(f.phone).trim())) {
+      e.phone = "Phone contains invalid characters";
+    }
+    return e;
+  };
 
   const submit = async () => {
     setSaving(true); setErr(""); setMsg("");
+    const ve = validate(form);
+    setFormErr(ve);
+    if (Object.keys(ve).length) { setSaving(false); return; }
     try {
       const payload = buildBranchPayload(form);
       await api.post("/branches", payload);
       setMsg("Branch created.");
       setForm({ name: "", code: "", phone: "", address: "" });
     } catch (e) {
-      // surfaces 22P02 etc. from the server
       setErr(e?.response?.data?.error || e.message || "Internal server error");
     } finally { setSaving(false); }
   };
@@ -204,11 +215,12 @@ function AddBranch() {
         <div key={k}>
           <label className="block text-xs text-gray-500 capitalize">{k}</label>
           <input
-            className="border rounded px-2 py-1 text-sm w-full"
+            className={`border rounded px-2 py-1 text-sm w-full ${formErr[k] ? "border-rose-400" : ""}`}
             value={form[k]}
             onChange={(e)=>setForm(s=>({...s,[k]:e.target.value}))}
-            placeholder={k === "code" ? "e.g., 001" : ""}
+            placeholder={k === "code" ? "e.g., 1 or 101" : ""}
           />
+          {formErr[k] && <div className="text-xs text-rose-600 mt-1">{formErr[k]}</div>}
         </div>
       ))}
       <button onClick={submit} disabled={saving || !form.name.trim()} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm">
@@ -382,23 +394,37 @@ function KPI({ title, value, tone="indigo" }) {
 
 /* --------------------------- Helpers & UI bits ----------------------------- */
 function buildBranchPayload(form) {
-  // avoid sending empty strings – they often cause 22P02 on the backend
   const t = (v) => (typeof v === "string" ? v.trim() : v);
   const payload = {};
-  if (t(form.name)) payload.name = t(form.name);
-  if (t(form.code)) payload.code = t(form.code); // keep as string unless your API requires number
-  if (t(form.address)) payload.address = t(form.address);
-  if (t(form.phone)) {
-    const digits = String(form.phone).replace(/[^\d+]/g, "");
-    payload.phone = digits || undefined;
+
+  const name = t(form.name);
+  if (name) payload.name = name;
+
+  const codeRaw = t(form.code);
+  if (codeRaw) {
+    // If it's all digits, send as number to satisfy integer columns
+    if (/^\d+$/.test(codeRaw)) payload.code = Number(codeRaw);
+    else payload.code = codeRaw; // keep as string if you actually use text codes
   }
+
+  const address = t(form.address);
+  if (address) payload.address = address;
+
+  const phoneRaw = t(form.phone);
+  if (phoneRaw) {
+    const digits = String(phoneRaw).replace(/[^\d+]/g, "");
+    if (digits) payload.phone = digits;
+  }
+
+  // Remove any accidental undefineds
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
   return payload;
 }
 
 function EditModal({ title, initial, saving, onCancel, onSave }) {
   const [form, setForm] = useState({
     name: initial?.name || "",
-    code: initial?.code || "",
+    code: String(initial?.code ?? ""),
     phone: initial?.phone || "",
     address: initial?.address || "",
   });
@@ -423,7 +449,7 @@ function EditModal({ title, initial, saving, onCancel, onSave }) {
           <button
             className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
             onClick={()=>onSave(form)}
-            disabled={saving || !form.name.trim()}
+            disabled={saving || !String(form.name||"").trim()}
           >
             {saving ? "Saving…" : "Save"}
           </button>

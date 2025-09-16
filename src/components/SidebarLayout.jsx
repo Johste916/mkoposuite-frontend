@@ -293,6 +293,8 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
 Section.displayName = "Section";
 
 /* --------------------------------- Layout ---------------------------------- */
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const SidebarLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -370,31 +372,44 @@ const SidebarLayout = () => {
       localStorage.removeItem("user");
     }
 
-    // load tenant from localStorage
+    // load tenant from localStorage (sanitize header)
     try {
       const rawTenant = localStorage.getItem("tenant");
       if (rawTenant) {
         const t = JSON.parse(rawTenant);
         setTenant(t);
-        if (t?.id) api.defaults.headers.common["x-tenant-id"] = t.id;
+        if (t?.id && UUID_V4_RE.test(String(t.id))) {
+          api.defaults.headers.common["x-tenant-id"] = t.id;
+        } else {
+          delete api.defaults.headers.common["x-tenant-id"];
+        }
       } else {
         const tenantId = localStorage.getItem("tenantId");
         const tenantName = localStorage.getItem("tenantName");
         if (tenantId || tenantName) {
           const t = { id: tenantId || null, name: tenantName || "" };
           setTenant(t);
-          if (tenantId) api.defaults.headers.common["x-tenant-id"] = tenantId;
+          if (tenantId && UUID_V4_RE.test(String(tenantId))) {
+            api.defaults.headers.common["x-tenant-id"] = tenantId;
+          } else {
+            delete api.defaults.headers.common["x-tenant-id"];
+          }
         }
       }
     } catch {}
 
     const storedBranch = localStorage.getItem("activeBranchId");
-    if (storedBranch) setActiveBranchId(storedBranch);
+    if (storedBranch && Number.isFinite(Number(storedBranch))) {
+      setActiveBranchId(String(Number(storedBranch)));
+      api.defaults.headers.common["x-branch-id"] = String(Number(storedBranch));
+    } else {
+      delete api.defaults.headers.common["x-branch-id"];
+    }
   }, []);
 
   // sync API headers with tenant & branch changes
   useEffect(() => {
-    if (tenant?.id) {
+    if (tenant?.id && UUID_V4_RE.test(String(tenant.id))) {
       api.defaults.headers.common["x-tenant-id"] = tenant.id;
     } else {
       delete api.defaults.headers.common["x-tenant-id"];
@@ -402,11 +417,13 @@ const SidebarLayout = () => {
   }, [tenant?.id]);
 
   useEffect(() => {
-    if (activeBranchId) {
-      api.defaults.headers.common["x-branch-id"] = activeBranchId;
-      localStorage.setItem("activeBranchId", activeBranchId);
+    if (activeBranchId && Number.isFinite(Number(activeBranchId))) {
+      const val = String(Number(activeBranchId));
+      api.defaults.headers.common["x-branch-id"] = val;
+      localStorage.setItem("activeBranchId", val);
     } else {
       delete api.defaults.headers.common["x-branch-id"];
+      localStorage.removeItem("activeBranchId");
     }
   }, [activeBranchId]);
 
@@ -419,7 +436,7 @@ const SidebarLayout = () => {
   useEffect(() => {
     const onBranch = (e) => {
       const id = String(e?.detail?.id || "");
-      if (id) setActiveBranchId(id);
+      if (id && Number.isFinite(Number(id))) setActiveBranchId(String(Number(id)));
     };
     window.addEventListener("ms:branch-changed", onBranch);
     return () => window.removeEventListener("ms:branch-changed", onBranch);

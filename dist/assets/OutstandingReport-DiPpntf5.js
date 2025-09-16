@@ -1,0 +1,1 @@
+import{j as n}from"./index-CYBEjh8Z.js";import{R as o}from"./ReportShell-BH_2jg_u.js";function r(){return n.jsx(o,{title:"Outstanding Report",endpoint:"/reports/outstanding",mode:"snapshot",columns:[{key:"loanId",label:"Loan"},{key:"outstanding",label:"Outstanding",fmt:t=>`TZS ${Number(t||0).toLocaleString()}`}]})}export{r as default};
