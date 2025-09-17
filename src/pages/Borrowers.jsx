@@ -1,4 +1,3 @@
-// src/pages/Borrowers.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   PlusCircle, Upload, Search, Filter, X, Phone, Building2,
@@ -137,10 +136,17 @@ const Borrowers = () => {
           setDrawerData((d) => ({ ...d, loans: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         } else if (tab === "savings") {
           const res = await api.get(`/borrowers/${borrowerId}/savings`, { signal });
-          setDrawerData((d) => ({ ...d, savings: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
+          const items = Array.isArray(res.data?.transactions)
+            ? res.data.transactions
+            : Array.isArray(res.data) ? res.data
+            : res.data?.items || [];
+          setDrawerData((d) => ({ ...d, savings: items }));
         } else if (tab === "documents") {
-          const res = await api.get(`/borrowers/${borrowerId}/documents`, { signal });
-          setDrawerData((d) => ({ ...d, documents: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
+          const res = await api.get(`/borrowers/${borrowerId}/kyc`, { signal });
+          const docs = Array.isArray(res.data?.items)
+            ? res.data.items
+            : (Array.isArray(res.data) ? res.data : []);
+          setDrawerData((d) => ({ ...d, documents: docs }));
         }
       } catch (e) {
         pushToast("Failed to load borrower details", "error");
@@ -183,7 +189,7 @@ const Borrowers = () => {
     const parts = s.split(/\s+/).filter(Boolean);
     const letters = (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
     return letters.toUpperCase() || s[0].toUpperCase();
-    };
+  };
 
   const statusChip = (s) => {
     const base = "text-[11px] px-2 py-0.5 rounded border";
@@ -363,7 +369,7 @@ const Borrowers = () => {
             </tbody>
           </table>
 
-          {/* Mobile / small screens — cards */}
+          {/* Mobile cards */}
           <div className="md:hidden grid grid-cols-1 gap-3 p-3">
             {loading ? (
               <div className="p-6 text-center text-gray-500">Loading…</div>
@@ -587,17 +593,19 @@ const SavingsTab = ({ items }) => {
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 text-gray-600">
           <tr>
-            <th className="px-3 py-2 text-left">Account #</th>
-            <th className="px-3 py-2 text-left">Balance</th>
-            <th className="px-3 py-2 text-left">Status</th>
+            <th className="px-3 py-2 text-left">Date</th>
+            <th className="px-3 py-2 text-left">Type</th>
+            <th className="px-3 py-2 text-left">Amount</th>
+            <th className="px-3 py-2 text-left">Notes</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((s) => (
-            <tr key={s.id} className="border-t">
-              <td className="px-3 py-2">{s.id}</td>
-              <td className="px-3 py-2">{money(s.balance)}</td>
-              <td className="px-3 py-2">{s.status || "—"}</td>
+          {items.map((s, i) => (
+            <tr key={s.id || i} className="border-t">
+              <td className="px-3 py-2">{s.date ? new Date(s.date).toLocaleDateString() : "—"}</td>
+              <td className="px-3 py-2 capitalize">{s.type || "—"}</td>
+              <td className="px-3 py-2">{money(s.amount)}</td>
+              <td className="px-3 py-2">{s.notes || "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -626,9 +634,9 @@ const DocumentsTab = ({ items }) => {
               <div className="flex items-center gap-3">
                 <IdCard className="w-4 h-4 text-gray-500" />
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{d.fileName || "Document"}</p>
+                  <p className="text-sm font-medium text-gray-800">{d.fileName || d.name || "Document"}</p>
                   <p className="text-xs text-gray-500">
-                    {d.type || "KYC"} • {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
+                    {(d.type || "KYC")} • {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
                   </p>
                 </div>
               </div>

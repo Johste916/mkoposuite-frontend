@@ -1,89 +1,114 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import api from "../../api";
 
-function useDebounced(value, ms = 300) {
-  const [v, setV] = useState(value);
-  useEffect(() => { const t = setTimeout(() => setV(value), ms); return () => clearTimeout(t); }, [value, ms]);
-  return v;
-}
-
 /**
+ * BorrowerAutoComplete
  * Props:
- * - value (borrowerId or null)
- * - onChange(id, borrowerObj)
- * - placeholder
+ *  - value: { id, name, phone } | null
+ *  - onChange: (id, borrowerObj) => void
+ *  - placeholder?: string
+ *  - disabled?: boolean
+ *
+ * Safe defaults; won’t break other usages.
  */
-export default function BorrowerAutoComplete({ value, onChange, placeholder = "Search name, phone or ID…" }) {
+const BorrowerAutoComplete = ({ value, onChange, placeholder = "Search borrower…", disabled = false }) => {
   const [query, setQuery] = useState("");
+  const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const boxRef = useRef(null);
-  const q = useDebounced(query, 250);
 
+  const acRef = useRef(null);
+
+  // Prefill when parent passes full object
   useEffect(() => {
-    function onDoc(e) {
-      if (!boxRef.current) return;
-      if (!boxRef.current.contains(e.target)) setOpen(false);
+    if (value && typeof value === "object") {
+      const label = value.name || [value.firstName, value.lastName].filter(Boolean).join(" ") || value.id;
+      setQuery(`${label}${value.id ? ` (${value.id})` : ""}`);
     }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+  }, [value]);
 
+  // Debounced search
   useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      if (!q || q.length < 1) { setOptions([]); return; }
-      setLoading(true);
+    if (!query.trim()) {
+      setItems([]);
+      return;
+    }
+    setLoading(true);
+    if (acRef.current) acRef.current.abort();
+    acRef.current = new AbortController();
+    const t = setTimeout(async () => {
       try {
-        const res = await api._get(`/borrowers/search?q=${encodeURIComponent(q)}`);
-        if (!cancelled) setOptions(Array.isArray(res.data) ? res.data : []);
+        const res = await api.get("/borrowers/search", {
+          signal: acRef.current.signal,
+          params: { q: query.trim() },
+        });
+        const arr = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.data || [];
+        setItems(arr);
       } catch {
-        if (!cancelled) setOptions([]);
+        setItems([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
-    }
-    run();
-    return () => { cancelled = true; };
-  }, [q]);
-
-  const handlePick = (b) => {
-    setQuery(`${b.name} (${b.id})`);
-    setOpen(false);
-    onChange?.(b.id, b);
-  };
-
-  const suffix = loading ? "Searching…" : (open && options.length === 0 && q ? "No matches" : "");
+    }, 250);
+    return () => {
+      clearTimeout(t);
+      if (acRef.current) acRef.current.abort();
+    };
+  }, [query]);
 
   return (
-    <div ref={boxRef} className="relative w-[320px]">
+    <div className="relative w-full">
       <input
-        value={query}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
+        className="w-full border rounded-lg px-3 py-2"
         placeholder={placeholder}
-        className="border px-3 py-2 rounded w-full dark:bg-slate-700 dark:border-slate-600"
+        disabled={disabled}
+        value={query}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          if (!e.target.value.trim()) onChange?.(null, null);
+        }}
       />
-      {suffix && <div className="absolute right-2 top-2 text-xs text-slate-400">{suffix}</div>}
-
-      {open && options.length > 0 && (
-        <div className="absolute mt-1 z-50 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 rounded shadow max-h-64 overflow-auto">
-          {options.map((b) => (
-            <button
-              key={b.id}
-              className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700"
-              onClick={() => handlePick(b)}
-              type="button"
-            >
-              <div className="text-sm font-medium">{b.name}</div>
-              <div className="text-xs text-slate-500">ID: {b.id} • {b.phone || "—"}</div>
-            </button>
-          ))}
+      {open && (
+        <div
+          className="absolute z-50 mt-1 w-full bg-white border rounded-lg shadow max-h-64 overflow-auto"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {loading ? (
+            <div className="px-3 py-2 text-sm text-gray-500">Searching…</div>
+          ) : items.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-500">No results</div>
+          ) : (
+            items.map((b) => {
+              const name =
+                b.name ||
+                `${b.firstName || ""} ${b.lastName || ""}`.trim() ||
+                b.id ||
+                "Borrower";
+              return (
+                <button
+                  key={b.id || name}
+                  type="button"
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
+                  onClick={() => {
+                    setQuery(`${name}${b.id ? ` (${b.id})` : ""}`);
+                    setOpen(false);
+                    onChange?.(b.id, b);
+                  }}
+                >
+                  <div className="font-medium text-gray-800">{name}</div>
+                  <div className="text-xs text-gray-500">
+                    {b.phone || "—"} {b.branchName ? `• ${b.branchName}` : ""}
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
       )}
-      {/* hidden value mirror: */}
-      {value ? <input type="hidden" value={value} /> : null}
     </div>
   );
-}
+};
+
+export default BorrowerAutoComplete;

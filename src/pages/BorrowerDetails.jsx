@@ -1,4 +1,3 @@
-// src/pages/BorrowerDetails.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import jsPDF from "jspdf";
@@ -53,7 +52,7 @@ const BorrowerDetails = () => {
       const [loanData, repayData, commentData, savingsData] = await Promise.all([
         tryGET([`/loans/borrower/${id}`, `/borrowers/${id}/loans`]).catch(() => []),
         tryGET([`/repayments/borrower/${id}`, `/borrowers/${id}/repayments`]).catch(() => []),
-        tryGET([`/comments/borrower/${id}`, `/borrowers/${id}/comments`]).catch(() => []),
+        tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`, `/borrowers/${id}/comments`]).catch(() => []),
         tryGET([`/savings/borrower/${id}`, `/borrowers/${id}/savings`]).catch(() => ({})),
       ]);
 
@@ -88,7 +87,7 @@ const BorrowerDetails = () => {
     const content = String(textRaw || "").trim();
     if (!content) return;
     try {
-      await api.post(`/comments`, { borrowerId: id, content });
+      await api.post(`/borrowers/${id}/comments`, { content });
       setComments((prev) => [
         ...prev,
         { content, createdAt: new Date().toISOString() },
