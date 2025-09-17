@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../../api";
-import BorrowerAutoComplete from "../../../components/input/BorrowerAutoComplete";
+import BorrowerAutoComplete from "../../../components/inputs/BorrowerAutoComplete";
 
 async function tryGET(paths = [], opts = {}) {
   let lastErr;

@@ -1,0 +1,1 @@
+import{j as o}from"./index-2ZVrRahO.js";import{T as t}from"./TypesEditor-xG5-xus4.js";import"./admin-C_LKmKHi.js";import"./index-t9q4ZT7T.js";function i(){return o.jsx(t,{title:"Manage Collectors",category:"manage-collectors"})}export{i as default};
