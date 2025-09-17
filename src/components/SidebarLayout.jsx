@@ -44,8 +44,13 @@ const NAV = () => [
       { label: "Blacklist", to: "/borrowers/blacklist" },
       { label: "Imports", to: "/borrowers/imports" },
       { label: "Reports", to: "/borrowers/reports" },
+
+      // Borrower Groups
       { label: "View Borrower Groups", to: "/borrowers/groups" },
       { label: "Add Borrower Group", to: "/borrowers/groups/add" },
+      { label: "Group Reports", to: "/borrowers/groups/reports" },   // ← added
+      { label: "Group Imports", to: "/borrowers/groups/imports" },   // ← added
+
       { label: "Send SMS to All", to: "/borrowers/sms" },
       { label: "Send Email to All", to: "/borrowers/email" },
       { label: "Invite Borrowers", to: "/borrowers/invite" },
