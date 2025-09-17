@@ -1,5 +1,19 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api";
+
+/* ---------- tolerant helpers (reuse your style) ---------- */
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
 
 async function tryPOST(paths = [], body = {}, opts = {}) {
   let lastErr;
@@ -14,6 +28,42 @@ async function tryPOST(paths = [], body = {}, opts = {}) {
   throw lastErr || new Error("No endpoint succeeded");
 }
 
+/* ---------- normalizers (work across shapes) ---------- */
+function toBranches(raw) {
+  const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
+  return arr.map(b => ({
+    id: b.id ?? b._id ?? b.branchId ?? b.code ?? String(b.name || "branch"),
+    name: b.name ?? b.title ?? b.label ?? String(b.code || "—"),
+  }));
+}
+
+function toUsers(raw) {
+  const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
+  return arr.map(u => ({
+    id: u.id ?? u._id ?? u.userId ?? String(u.email || u.phone || "user"),
+    name:
+      u.name ||
+      [u.firstName, u.lastName].filter(Boolean).join(" ").trim() ||
+      u.username ||
+      u.email ||
+      u.phone ||
+      "—",
+    roles: (u.roles || u.Roles || []).map(r => (r.name || r.code || "").toString().toLowerCase()),
+    title: (u.title || u.jobTitle || "").toString().toLowerCase(),
+  }));
+}
+
+/** very tolerant filter for "loan officer" */
+function isLoanOfficer(u) {
+  const hay = [...(u.roles || []), u.title || ""].join(" ");
+  return /loan.*officer|credit.*officer|field.*officer/i.test(hay);
+}
+
+/* -------------------------------- Component -------------------------------- */
+const MEETING_DAYS = [
+  "monday","tuesday","wednesday","thursday","friday","saturday","sunday"
+];
+
 const AddGroup = () => {
   const [form, setForm] = useState({
     name: "",
@@ -22,10 +72,90 @@ const AddGroup = () => {
     officerId: "",
     notes: "",
   });
+
+  const [branches, setBranches] = useState([]);
+  const [officers, setOfficers]   = useState([]);
+  const [loadingBranches, setLoadingBranches] = useState(true);
+  const [loadingOfficers, setLoadingOfficers] = useState(true);
+
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  const onChange = (e) =>
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  /* ----------- load branches ----------- */
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      try {
+        setLoadingBranches(true);
+        const data = await tryGET(
+          [
+            "/branches",
+            "/api/branches",
+            "/org/branches",
+            "/api/org/branches",
+          ],
+          { signal: ac.signal }
+        );
+        setBranches(toBranches(data));
+      } catch {
+        setBranches([]); // empty -> dropdown disabled
+      } finally {
+        setLoadingBranches(false);
+      }
+    })();
+    return () => ac.abort();
+  }, []);
+
+  /* ----------- load loan officers ----------- */
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      try {
+        setLoadingOfficers(true);
+        // try role-filtered first; then fall back to all users
+        const raw =
+          (await tryGET(
+            [
+              "/users?role=loan_officer",
+              "/api/users?role=loan_officer",
+              "/admin/staff?role=loan_officer",
+              "/api/admin/staff?role=loan_officer",
+            ],
+            { signal: ac.signal }
+          ).catch(() => null)) ||
+          (await tryGET(
+            [
+              "/users",
+              "/api/users",
+              "/admin/staff",
+              "/api/admin/staff",
+            ],
+            { signal: ac.signal }
+          ));
+        const all = toUsers(raw);
+        // Prefer obviously loan-officer-ish; if none match, allow all users to be selectable.
+        const filtered = all.filter(isLoanOfficer);
+        setOfficers(filtered.length ? filtered : all);
+      } catch {
+        setOfficers([]); // can still pick "None yet"
+      } finally {
+        setLoadingOfficers(false);
+      }
+    })();
+    return () => ac.abort();
+  }, []);
+
+  const branchOptions = useMemo(
+    () => branches.map((b) => ({ value: String(b.id), label: b.name || String(b.id) })),
+    [branches]
+  );
+  const officerOptions = useMemo(
+    () => officers.map((u) => ({ value: String(u.id), label: u.name || String(u.id) })),
+    [officers]
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,12 +163,14 @@ const AddGroup = () => {
     setMsg("");
     try {
       const payload = {
-        name: form.name,
-        branchId: form.branchId || null,
-        meetingDay: form.meetingDay || null,
-        officerId: form.officerId || null,
+        name: form.name.trim(),
+        branchId: form.branchId?.trim() || null,
+        // 👇 plain-text label in UI, lower-case value to match ENUM
+        meetingDay: form.meetingDay ? String(form.meetingDay).toLowerCase() : null,
+        officerId: form.officerId?.trim() || null,
         notes: form.notes || null,
       };
+
       const res = await tryPOST(
         [
           "/borrowers/groups",
@@ -48,14 +180,24 @@ const AddGroup = () => {
         ],
         payload
       );
+
       setMsg("✅ Group created.");
-      if (res?.id) {
-        // Optionally redirect:
-        // window.location.assign(`/borrowers/groups/${res.id}`);
-      }
-      setForm({ name: "", branchId: "", meetingDay: "", officerId: "", notes: "" });
-    } catch {
-      setMsg("❌ Failed to create group (endpoint not implemented).");
+      // optionally redirect:
+      // if (res?.id) window.location.assign(`/borrowers/groups/${encodeURIComponent(res.id)}`);
+
+      setForm({
+        name: "",
+        branchId: "",
+        meetingDay: "",
+        officerId: "",
+        notes: "",
+      });
+    } catch (err) {
+      const apiMsg =
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to create group.";
+      setMsg(`❌ ${apiMsg}`);
     } finally {
       setSaving(false);
     }
@@ -64,7 +206,9 @@ const AddGroup = () => {
   return (
     <div className="p-4 max-w-2xl">
       <h1 className="text-2xl font-semibold mb-4">Add Group</h1>
-      <form onSubmit={handleSubmit} className="space-y-3 bg-white p-4 rounded-xl border shadow">
+
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded-xl border shadow">
+        {/* Name */}
         <div>
           <label className="block text-sm text-gray-700 mb-1">Name</label>
           <input
@@ -76,38 +220,61 @@ const AddGroup = () => {
             placeholder="Group name"
           />
         </div>
+
+        {/* Branch / Officer / Meeting Day */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Branch */}
           <div>
             <label className="block text-sm text-gray-700 mb-1">Branch</label>
-            <input
+            <select
               name="branchId"
               value={form.branchId}
               onChange={onChange}
-              className="w-full border rounded-lg px-3 py-2"
-              placeholder="Branch ID"
-            />
+              className="w-full border rounded-lg px-3 py-2 bg-white"
+              disabled={loadingBranches || !branchOptions.length}
+            >
+              <option value="">{loadingBranches ? "Loading…" : "(Select branch)"}</option>
+              {branchOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
+
+          {/* Loan officer (optional) */}
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Officer</label>
-            <input
+            <label className="block text-sm text-gray-700 mb-1">Loan Officer</label>
+            <select
               name="officerId"
               value={form.officerId}
               onChange={onChange}
-              className="w-full border rounded-lg px-3 py-2"
-              placeholder="Officer ID"
-            />
+              className="w-full border rounded-lg px-3 py-2 bg-white"
+              disabled={loadingOfficers || !officerOptions.length}
+            >
+              <option value="">{loadingOfficers ? "Loading…" : "(None yet)"}</option>
+              {officerOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
+
+          {/* Meeting Day */}
           <div>
             <label className="block text-sm text-gray-700 mb-1">Meeting Day</label>
-            <input
+            <select
               name="meetingDay"
               value={form.meetingDay}
               onChange={onChange}
-              className="w-full border rounded-lg px-3 py-2"
-              placeholder="e.g. Monday"
-            />
+              className="w-full border rounded-lg px-3 py-2 bg-white"
+            >
+              <option value="">(None)</option>
+              {MEETING_DAYS.map(d => (
+                <option key={d} value={d}>{d[0].toUpperCase() + d.slice(1)}</option>
+              ))}
+            </select>
           </div>
         </div>
+
+        {/* Notes */}
         <div>
           <label className="block text-sm text-gray-700 mb-1">Notes</label>
           <textarea
@@ -116,9 +283,11 @@ const AddGroup = () => {
             onChange={onChange}
             className="w-full border rounded-lg px-3 py-2"
             rows={3}
+            placeholder="Optional notes about this group"
           />
         </div>
 
+        {/* Actions */}
         <div className="flex items-center gap-2">
           <button
             type="submit"
