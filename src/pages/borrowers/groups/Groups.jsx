@@ -2,25 +2,12 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api";
 
-/** Try a list of endpoints until one works */
-async function tryGET(paths = [], opts = {}) {
-  let lastErr;
-  for (const p of paths) {
-    try {
-      const res = await api.get(p, opts);
-      return res?.data;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error("No endpoint succeeded");
-}
+const API_BASE = "/api/borrowers";
 
-/** Normalize group list from various backend shapes */
 function toGroupRows(raw) {
   const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
   return arr.map((g) => ({
-    id: g.id ?? g._id ?? g.groupId ?? g.code ?? String(Math.random()),
+    id: String(g.id ?? g._id ?? g.groupId ?? g.code ?? Math.random()),
     name: g.name ?? g.groupName ?? g.title ?? "—",
     membersCount: g.membersCount ?? g.memberCount ?? g.members?.length ?? g.size ?? 0,
     branchName: g.branchName ?? g.branch?.name ?? "—",
@@ -39,15 +26,7 @@ const BorrowerGroups = () => {
     (async () => {
       try {
         setLoading(true);
-        const data = await tryGET(
-          [
-            "/borrowers/groups",      // preferred
-            "/groups",                // fallback 1
-            "/borrower-groups",       // fallback 2
-            "/api/borrowers/groups",  // fallback 3 (some deployments prefix)
-          ],
-          { signal: ac.signal }
-        );
+        const { data } = await api.get(`${API_BASE}/groups`, { signal: ac.signal });
         setRows(toGroupRows(data));
         setError("");
       } catch {
@@ -88,17 +67,11 @@ const BorrowerGroups = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={6} className="p-4 text-gray-500">Loading…</td>
-              </tr>
+              <tr><td colSpan={6} className="p-4 text-gray-500">Loading…</td></tr>
             ) : error ? (
-              <tr>
-                <td colSpan={6} className="p-4 text-red-600">{error}</td>
-              </tr>
+              <tr><td colSpan={6} className="p-4 text-red-600">{error}</td></tr>
             ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-4 text-gray-500">No groups yet.</td>
-              </tr>
+              <tr><td colSpan={6} className="p-4 text-gray-500">No groups yet.</td></tr>
             ) : (
               rows.map((g) => (
                 <tr key={g.id} className="border-t">

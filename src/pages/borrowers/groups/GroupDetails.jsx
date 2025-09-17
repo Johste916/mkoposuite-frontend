@@ -3,59 +3,20 @@ import { useParams } from "react-router-dom";
 import api from "../../../api";
 import BorrowerAutoComplete from "../../../components/inputs/BorrowerAutoComplete";
 
-async function tryGET(paths = [], opts = {}) {
-  let lastErr;
-  for (const p of paths) {
-    try {
-      const res = await api.get(p, opts);
-      return res?.data;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error("No endpoint succeeded");
-}
-
-async function tryPOST(paths = [], body = {}, opts = {}) {
-  let lastErr;
-  for (const p of paths) {
-    try {
-      const res = await api.post(p, body, opts);
-      return res?.data;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error("No endpoint succeeded");
-}
-
-async function tryDELETE(paths = [], opts = {}) {
-  let lastErr;
-  for (const p of paths) {
-    try {
-      const res = await api.delete(p, opts);
-      return res?.data;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error("No endpoint succeeded");
-}
+const API_BASE = "/api/borrowers";
 
 function normalizeGroup(g) {
   if (!g || typeof g !== "object") return null;
-  const members = Array.isArray(g.members)
-    ? g.members
-    : g.groupMembers || g.items || [];
+  const members = Array.isArray(g.members) ? g.members : g.groupMembers || g.items || [];
   return {
-    id: g.id ?? g._id ?? g.groupId ?? g.code,
+    id: String(g.id ?? g._id ?? g.groupId ?? g.code),
     name: g.name ?? g.groupName ?? g.title ?? "—",
     branchName: g.branchName ?? g.branch?.name ?? "—",
     officerName: g.officerName ?? g.officer?.name ?? "—",
     meetingDay: g.meetingDay ?? g.meeting?.day ?? "—",
     members: members.map((m) => ({
-      id: m.id ?? m._id ?? m.borrowerId ?? m.memberId,
-      name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.id,
+      id: String(m.id ?? m._id ?? m.borrowerId ?? m.memberId),
+      name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || String(m.id),
       phone: m.phone,
       role: m.role || m.memberRole,
     })),
@@ -73,15 +34,7 @@ const GroupDetails = () => {
   const load = async (signal) => {
     try {
       setLoading(true);
-      const data = await tryGET(
-        [
-          `/borrowers/groups/${groupId}`,
-          `/groups/${groupId}`,
-          `/borrower-groups/${groupId}`,
-          `/api/borrowers/groups/${groupId}`,
-        ],
-        { signal }
-      );
+      const { data } = await api.get(`${API_BASE}/groups/${encodeURIComponent(groupId)}`, { signal });
       setGroup(normalizeGroup(data));
       setError("");
     } catch {
@@ -102,15 +55,9 @@ const GroupDetails = () => {
     if (!picked?.id) return;
     setAdding(true);
     try {
-      await tryPOST(
-        [
-          `/borrowers/groups/${groupId}/members`,
-          `/groups/${groupId}/members`,
-          `/borrower-groups/${groupId}/members`,
-          `/api/borrowers/groups/${groupId}/members`,
-        ],
-        { borrowerId: picked.id }
-      );
+      await api.post(`${API_BASE}/groups/${encodeURIComponent(groupId)}/members`, {
+        borrowerId: picked.id,
+      });
       setPicked(null);
       await load();
     } catch {
@@ -122,13 +69,8 @@ const GroupDetails = () => {
 
   const removeMember = async (borrowerId) => {
     try {
-      await tryDELETE(
-        [
-          `/borrowers/groups/${groupId}/members/${borrowerId}`,
-          `/groups/${groupId}/members/${borrowerId}`,
-          `/borrower-groups/${groupId}/members/${borrowerId}`,
-          `/api/borrowers/groups/${groupId}/members/${borrowerId}`,
-        ]
+      await api.delete(
+        `${API_BASE}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(borrowerId)}`
       );
       await load();
     } catch {
@@ -183,7 +125,9 @@ const GroupDetails = () => {
                 <li key={m.id} className="py-2 flex items-center justify-between">
                   <div>
                     {m.name} <span className="text-gray-500">• {m.phone || "—"}</span>
-                    {m.role && <span className="ml-2 text-xs uppercase text-gray-400">{m.role}</span>}
+                    {m.role && (
+                      <span className="ml-2 text-xs uppercase text-gray-400">{m.role}</span>
+                    )}
                   </div>
                   <button
                     className="px-2 py-1 border rounded hover:bg-gray-50"
