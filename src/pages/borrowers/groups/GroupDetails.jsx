@@ -3,53 +3,173 @@ import { useParams } from "react-router-dom";
 import api from "../../../api";
 import BorrowerAutoComplete from "../../../components/inputs/BorrowerAutoComplete";
 
-function apiVariants(p) {
-  const clean = p.startsWith("/") ? p : `/${p}`;
-  const noApi = clean.replace(/^\/api\//, "/");
-  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
-  return Array.from(new Set([noApi, withApi]));
-}
+/* ---------------- tolerant helpers ---------------- */
 async function tryGET(paths = [], opts = {}) {
   let lastErr;
   for (const p of paths) {
-    try { const res = await api.get(p, opts); return res?.data; }
-    catch (e) { lastErr = e; }
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
   }
   throw lastErr || new Error("No endpoint succeeded");
 }
 async function tryPOST(paths = [], body = {}, opts = {}) {
   let lastErr;
   for (const p of paths) {
-    try { const res = await api.post(p, body, opts); return res?.data; }
-    catch (e) { lastErr = e; }
+    try {
+      const res = await api.post(p, body, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
   }
   throw lastErr || new Error("No endpoint succeeded");
 }
 async function tryDELETE(paths = [], opts = {}) {
   let lastErr;
   for (const p of paths) {
-    try { const res = await api.delete(p, opts); return res?.data; }
-    catch (e) { lastErr = e; }
+    try {
+      const res = await api.delete(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
   }
   throw lastErr || new Error("No endpoint succeeded");
 }
 
+/* ---------------- normalizers ---------------- */
+function normalizeMember(m) {
+  return {
+    id: m.id ?? m._id ?? m.borrowerId ?? m.memberId,
+    name:
+      m.name ||
+      `${m.firstName || ""} ${m.lastName || ""}`.trim() ||
+      m.fullName ||
+      m.id,
+    phone: m.phone ?? m.msisdn ?? m.mobile,
+    role: m.role || m.memberRole,
+  };
+}
+
 function normalizeGroup(g) {
   if (!g || typeof g !== "object") return null;
-  const members = Array.isArray(g.members) ? g.members : g.groupMembers || g.items || [];
+  const members = Array.isArray(g.members)
+    ? g.members
+    : g.groupMembers || g.items || [];
+
   return {
     id: g.id ?? g._id ?? g.groupId ?? g.code,
     name: g.name ?? g.groupName ?? g.title ?? "—",
     branchName: g.branchName ?? g.branch?.name ?? "—",
     officerName: g.officerName ?? g.officer?.name ?? "—",
     meetingDay: g.meetingDay ?? g.meeting?.day ?? "—",
-    members: members.map((m) => ({
-      id: m.id ?? m._id ?? m.borrowerId ?? m.memberId,
-      name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.id,
-      phone: m.phone,
-      role: m.role || m.memberRole,
-    })),
+    members: members.map(normalizeMember),
   };
+}
+
+/* Best-effort fetcher:
+   1) Try /:id routes
+   2) Try query-string lookups (?id=, ?groupId=, ?code=)
+   3) Fallback: fetch list and find locally
+*/
+async function fetchGroupFlexible(id, signal) {
+  const enc = encodeURIComponent(id);
+
+  // 1) direct id routes (with common prefixes)
+  const direct = await tryGET(
+    [
+      `/borrowers/groups/${enc}`,
+      `/groups/${enc}`,
+      `/borrower-groups/${enc}`,
+      `/api/borrowers/groups/${enc}`,
+      `/api/groups/${enc}`,
+      `/api/borrower-groups/${enc}`,
+    ],
+    { signal }
+  ).catch(() => null);
+  if (direct) return normalizeGroup(direct);
+
+  // 2) query lookups (some APIs only support filtering)
+  const byQuery =
+    (await tryGET(
+      [
+        `/borrowers/groups?id=${enc}&include=members`,
+        `/borrowers/groups?groupId=${enc}&include=members`,
+        `/borrowers/groups?code=${enc}&include=members`,
+        `/groups?id=${enc}&include=members`,
+        `/groups?groupId=${enc}&include=members`,
+        `/groups?code=${enc}&include=members`,
+        `/borrower-groups?id=${enc}&include=members`,
+        `/borrower-groups?groupId=${enc}&include=members`,
+        `/borrower-groups?code=${enc}&include=members`,
+        `/api/borrowers/groups?id=${enc}&include=members`,
+        `/api/borrowers/groups?groupId=${enc}&include=members`,
+        `/api/borrowers/groups?code=${enc}&include=members`,
+        `/api/groups?id=${enc}&include=members`,
+        `/api/groups?groupId=${enc}&include=members`,
+        `/api/groups?code=${enc}&include=members`,
+        `/api/borrower-groups?id=${enc}&include=members`,
+        `/api/borrower-groups?groupId=${enc}&include=members`,
+        `/api/borrower-groups?code=${enc}&include=members`,
+      ],
+      { signal }
+    ).catch(() => null)) || null;
+
+  // Some backends return a list for query endpoints
+  if (byQuery) {
+    const arr = Array.isArray(byQuery)
+      ? byQuery
+      : byQuery.items || byQuery.rows || byQuery.data || [];
+    if (arr.length) {
+      // find best match by any common key
+      const found =
+        arr.find(
+          (g) =>
+            String(g.id) === String(id) ||
+            String(g._id) === String(id) ||
+            String(g.groupId) === String(id) ||
+            String(g.code) === String(id) ||
+            String(g.name) === String(id) ||
+            String(g.groupName) === String(id)
+        ) || arr[0];
+      if (found) return normalizeGroup(found);
+    }
+  }
+
+  // 3) fallback: get all and match locally
+  const list = await tryGET(
+    [
+      `/borrowers/groups?include=members`,
+      `/groups?include=members`,
+      `/borrower-groups?include=members`,
+      `/api/borrowers/groups?include=members`,
+      `/api/groups?include=members`,
+      `/api/borrower-groups?include=members`,
+    ],
+    { signal }
+  ).catch(() => null);
+
+  if (list) {
+    const arr = Array.isArray(list)
+      ? list
+      : list.items || list.rows || list.data || [];
+    const found = arr.find(
+      (g) =>
+        String(g.id) === String(id) ||
+        String(g._id) === String(id) ||
+        String(g.groupId) === String(id) ||
+        String(g.code) === String(id) ||
+        String(g.name) === String(id) ||
+        String(g.groupName) === String(id)
+    );
+    if (found) return normalizeGroup(found);
+  }
+
+  return null;
 }
 
 const GroupDetails = () => {
@@ -63,22 +183,16 @@ const GroupDetails = () => {
   const load = async (signal) => {
     try {
       setLoading(true);
-      const id = encodeURIComponent(String(groupId));
-      const data = await tryGET(
-        [
-          ...apiVariants(`borrowers/groups/${id}`),
-          ...apiVariants(`groups/${id}`),
-          ...apiVariants(`borrower-groups/${id}`),
-        ],
-        { signal }
-      );
-      setGroup(normalizeGroup(data));
       setError("");
+      const data = await fetchGroupFlexible(groupId, signal);
+      if (!data) {
+        setError("Group not found.");
+        setGroup(null);
+      } else {
+        setGroup(data);
+      }
     } catch (e) {
-      const msg = e?.response?.status === 404
-        ? "Failed to load group (endpoint not implemented)."
-        : (e?.response?.data?.error || e?.message || "Failed to load group.");
-      setError(msg);
+      setError("Failed to load group (endpoint not implemented).");
       setGroup(null);
     } finally {
       setLoading(false);
@@ -95,12 +209,14 @@ const GroupDetails = () => {
     if (!picked?.id) return;
     setAdding(true);
     try {
-      const id = encodeURIComponent(String(groupId));
       await tryPOST(
         [
-          ...apiVariants(`borrowers/groups/${id}/members`),
-          ...apiVariants(`groups/${id}/members`),
-          ...apiVariants(`borrower-groups/${id}/members`),
+          `/borrowers/groups/${groupId}/members`,
+          `/groups/${groupId}/members`,
+          `/borrower-groups/${groupId}/members`,
+          `/api/borrowers/groups/${groupId}/members`,
+          `/api/groups/${groupId}/members`,
+          `/api/borrower-groups/${groupId}/members`,
         ],
         { borrowerId: picked.id }
       );
@@ -115,13 +231,14 @@ const GroupDetails = () => {
 
   const removeMember = async (borrowerId) => {
     try {
-      const id = encodeURIComponent(String(groupId));
-      const bId = encodeURIComponent(String(borrowerId));
       await tryDELETE(
         [
-          ...apiVariants(`borrowers/groups/${id}/members/${bId}`),
-          ...apiVariants(`groups/${id}/members/${bId}`),
-          ...apiVariants(`borrower-groups/${id}/members/${bId}`),
+          `/borrowers/groups/${groupId}/members/${borrowerId}`,
+          `/groups/${groupId}/members/${borrowerId}`,
+          `/borrower-groups/${groupId}/members/${borrowerId}`,
+          `/api/borrowers/groups/${groupId}/members/${borrowerId}`,
+          `/api/groups/${groupId}/members/${borrowerId}`,
+          `/api/borrower-groups/${groupId}/members/${borrowerId}`,
         ]
       );
       await load();
@@ -134,7 +251,8 @@ const GroupDetails = () => {
 
   return (
     <div className="p-4 space-y-4">
-      <h1 className="text-2xl font-semibold">Group #{String(groupId)}</h1>
+      <h1 className="text-2xl font-semibold">Group #{groupId}</h1>
+
       {loading && <div>Loading…</div>}
       {error && <div className="text-red-600">{error}</div>}
 

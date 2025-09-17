@@ -2,14 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api";
 
-/** Generate variants with and without `/api` to avoid double-prefix bugs */
-function apiVariants(p) {
-  const clean = p.startsWith("/") ? p : `/${p}`;
-  const noApi = clean.replace(/^\/api\//, "/");
-  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
-  return Array.from(new Set([noApi, withApi]));
-}
-
 /** Try a list of endpoints until one works */
 async function tryGET(paths = [], opts = {}) {
   let lastErr;
@@ -17,7 +9,9 @@ async function tryGET(paths = [], opts = {}) {
     try {
       const res = await api.get(p, opts);
       return res?.data;
-    } catch (e) { lastErr = e; }
+    } catch (e) {
+      lastErr = e;
+    }
   }
   throw lastErr || new Error("No endpoint succeeded");
 }
@@ -25,14 +19,18 @@ async function tryGET(paths = [], opts = {}) {
 /** Normalize group list from various backend shapes */
 function toGroupRows(raw) {
   const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
-  return arr.map((g) => ({
-    id: g.id ?? g._id ?? g.groupId ?? g.code ?? String(Math.random()),
-    name: g.name ?? g.groupName ?? g.title ?? "—",
-    membersCount: g.membersCount ?? g.memberCount ?? g.members?.length ?? g.size ?? 0,
-    branchName: g.branchName ?? g.branch?.name ?? "—",
-    totalLoans: g.totalLoans ?? g.loanCount ?? g.stats?.loans ?? 0,
-    outstanding: g.totalLoanAmount ?? g.outstanding ?? g.stats?.outstanding ?? 0,
-  }));
+  return arr.map((g) => {
+    const id =
+      g.id ?? g._id ?? g.groupId ?? g.code ?? g.slug ?? g.uuid ?? String(Math.random());
+    return {
+      id,
+      name: g.name ?? g.groupName ?? g.title ?? "—",
+      membersCount: g.membersCount ?? g.memberCount ?? g.members?.length ?? g.size ?? 0,
+      branchName: g.branchName ?? g.branch?.name ?? "—",
+      totalLoans: g.totalLoans ?? g.loanCount ?? g.stats?.loans ?? 0,
+      outstanding: g.totalLoanAmount ?? g.outstanding ?? g.stats?.outstanding ?? 0,
+    };
+  });
 }
 
 const BorrowerGroups = () => {
@@ -45,21 +43,20 @@ const BorrowerGroups = () => {
     (async () => {
       try {
         setLoading(true);
+        // Prefer including members if your API supports it (helps GroupDetails fallback).
         const data = await tryGET(
           [
-            ...apiVariants("borrowers/groups"), // canonical
-            ...apiVariants("groups"),
-            ...apiVariants("borrower-groups"),
+            "/borrowers/groups?include=members",
+            "/groups?include=members",
+            "/borrower-groups?include=members",
+            "/api/borrowers/groups?include=members",
           ],
           { signal: ac.signal }
         );
         setRows(toGroupRows(data));
         setError("");
-      } catch (e) {
-        const msg = e?.response?.status === 404
-          ? "Failed to load groups (endpoint not implemented)."
-          : (e?.response?.data?.error || e?.message || "Failed to load groups.");
-        setError(msg);
+      } catch {
+        setError("Failed to load groups (endpoint not implemented).");
         setRows([]);
       } finally {
         setLoading(false);
@@ -96,11 +93,17 @@ const BorrowerGroups = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="p-4 text-gray-500">Loading…</td></tr>
+              <tr>
+                <td colSpan={6} className="p-4 text-gray-500">Loading…</td>
+              </tr>
             ) : error ? (
-              <tr><td colSpan={6} className="p-4 text-red-600">{error}</td></tr>
+              <tr>
+                <td colSpan={6} className="p-4 text-red-600">{error}</td>
+              </tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={6} className="p-4 text-gray-500">No groups yet.</td></tr>
+              <tr>
+                <td colSpan={6} className="p-4 text-gray-500">No groups yet.</td>
+              </tr>
             ) : (
               rows.map((g) => (
                 <tr key={g.id} className="border-t">
@@ -111,7 +114,7 @@ const BorrowerGroups = () => {
                   <td className="px-3 py-2">{fmtMoney(g.outstanding)}</td>
                   <td className="px-3 py-2 text-right">
                     <Link
-                      to={`/borrowers/groups/${encodeURIComponent(String(g.id))}`}
+                      to={`/borrowers/groups/${encodeURIComponent(g.id)}`}
                       className="text-indigo-600 hover:text-indigo-800 hover:underline"
                     >
                       View
