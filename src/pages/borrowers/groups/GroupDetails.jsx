@@ -3,20 +3,49 @@ import { useParams } from "react-router-dom";
 import api from "../../../api";
 import BorrowerAutoComplete from "../../../components/inputs/BorrowerAutoComplete";
 
-const API_BASE = "/api/borrowers";
+function apiVariants(p) {
+  const clean = p.startsWith("/") ? p : `/${p}`;
+  const noApi = clean.replace(/^\/api\//, "/");
+  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
+  return Array.from(new Set([noApi, withApi]));
+}
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try { const res = await api.get(p, opts); return res?.data; }
+    catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+async function tryPOST(paths = [], body = {}, opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try { const res = await api.post(p, body, opts); return res?.data; }
+    catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+async function tryDELETE(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try { const res = await api.delete(p, opts); return res?.data; }
+    catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
 
 function normalizeGroup(g) {
   if (!g || typeof g !== "object") return null;
   const members = Array.isArray(g.members) ? g.members : g.groupMembers || g.items || [];
   return {
-    id: String(g.id ?? g._id ?? g.groupId ?? g.code),
+    id: g.id ?? g._id ?? g.groupId ?? g.code,
     name: g.name ?? g.groupName ?? g.title ?? "—",
     branchName: g.branchName ?? g.branch?.name ?? "—",
     officerName: g.officerName ?? g.officer?.name ?? "—",
     meetingDay: g.meetingDay ?? g.meeting?.day ?? "—",
     members: members.map((m) => ({
-      id: String(m.id ?? m._id ?? m.borrowerId ?? m.memberId),
-      name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || String(m.id),
+      id: m.id ?? m._id ?? m.borrowerId ?? m.memberId,
+      name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.id,
       phone: m.phone,
       role: m.role || m.memberRole,
     })),
@@ -34,11 +63,22 @@ const GroupDetails = () => {
   const load = async (signal) => {
     try {
       setLoading(true);
-      const { data } = await api.get(`${API_BASE}/groups/${encodeURIComponent(groupId)}`, { signal });
+      const id = encodeURIComponent(String(groupId));
+      const data = await tryGET(
+        [
+          ...apiVariants(`borrowers/groups/${id}`),
+          ...apiVariants(`groups/${id}`),
+          ...apiVariants(`borrower-groups/${id}`),
+        ],
+        { signal }
+      );
       setGroup(normalizeGroup(data));
       setError("");
-    } catch {
-      setError("Failed to load group (endpoint not implemented).");
+    } catch (e) {
+      const msg = e?.response?.status === 404
+        ? "Failed to load group (endpoint not implemented)."
+        : (e?.response?.data?.error || e?.message || "Failed to load group.");
+      setError(msg);
       setGroup(null);
     } finally {
       setLoading(false);
@@ -55,9 +95,15 @@ const GroupDetails = () => {
     if (!picked?.id) return;
     setAdding(true);
     try {
-      await api.post(`${API_BASE}/groups/${encodeURIComponent(groupId)}/members`, {
-        borrowerId: picked.id,
-      });
+      const id = encodeURIComponent(String(groupId));
+      await tryPOST(
+        [
+          ...apiVariants(`borrowers/groups/${id}/members`),
+          ...apiVariants(`groups/${id}/members`),
+          ...apiVariants(`borrower-groups/${id}/members`),
+        ],
+        { borrowerId: picked.id }
+      );
       setPicked(null);
       await load();
     } catch {
@@ -69,8 +115,14 @@ const GroupDetails = () => {
 
   const removeMember = async (borrowerId) => {
     try {
-      await api.delete(
-        `${API_BASE}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(borrowerId)}`
+      const id = encodeURIComponent(String(groupId));
+      const bId = encodeURIComponent(String(borrowerId));
+      await tryDELETE(
+        [
+          ...apiVariants(`borrowers/groups/${id}/members/${bId}`),
+          ...apiVariants(`groups/${id}/members/${bId}`),
+          ...apiVariants(`borrower-groups/${id}/members/${bId}`),
+        ]
       );
       await load();
     } catch {
@@ -82,7 +134,7 @@ const GroupDetails = () => {
 
   return (
     <div className="p-4 space-y-4">
-      <h1 className="text-2xl font-semibold">Group #{groupId}</h1>
+      <h1 className="text-2xl font-semibold">Group #{String(groupId)}</h1>
       {loading && <div>Loading…</div>}
       {error && <div className="text-red-600">{error}</div>}
 
@@ -125,9 +177,7 @@ const GroupDetails = () => {
                 <li key={m.id} className="py-2 flex items-center justify-between">
                   <div>
                     {m.name} <span className="text-gray-500">• {m.phone || "—"}</span>
-                    {m.role && (
-                      <span className="ml-2 text-xs uppercase text-gray-400">{m.role}</span>
-                    )}
+                    {m.role && <span className="ml-2 text-xs uppercase text-gray-400">{m.role}</span>}
                   </div>
                   <button
                     className="px-2 py-1 border rounded hover:bg-gray-50"

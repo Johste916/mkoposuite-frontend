@@ -2,12 +2,31 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api";
 
-const API_BASE = "/api/borrowers";
+/** Generate variants with and without `/api` to avoid double-prefix bugs */
+function apiVariants(p) {
+  const clean = p.startsWith("/") ? p : `/${p}`;
+  const noApi = clean.replace(/^\/api\//, "/");
+  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
+  return Array.from(new Set([noApi, withApi]));
+}
 
+/** Try a list of endpoints until one works */
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+
+/** Normalize group list from various backend shapes */
 function toGroupRows(raw) {
   const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
   return arr.map((g) => ({
-    id: String(g.id ?? g._id ?? g.groupId ?? g.code ?? Math.random()),
+    id: g.id ?? g._id ?? g.groupId ?? g.code ?? String(Math.random()),
     name: g.name ?? g.groupName ?? g.title ?? "—",
     membersCount: g.membersCount ?? g.memberCount ?? g.members?.length ?? g.size ?? 0,
     branchName: g.branchName ?? g.branch?.name ?? "—",
@@ -26,11 +45,21 @@ const BorrowerGroups = () => {
     (async () => {
       try {
         setLoading(true);
-        const { data } = await api.get(`${API_BASE}/groups`, { signal: ac.signal });
+        const data = await tryGET(
+          [
+            ...apiVariants("borrowers/groups"), // canonical
+            ...apiVariants("groups"),
+            ...apiVariants("borrower-groups"),
+          ],
+          { signal: ac.signal }
+        );
         setRows(toGroupRows(data));
         setError("");
-      } catch {
-        setError("Failed to load groups (endpoint not implemented).");
+      } catch (e) {
+        const msg = e?.response?.status === 404
+          ? "Failed to load groups (endpoint not implemented)."
+          : (e?.response?.data?.error || e?.message || "Failed to load groups.");
+        setError(msg);
         setRows([]);
       } finally {
         setLoading(false);
@@ -82,7 +111,7 @@ const BorrowerGroups = () => {
                   <td className="px-3 py-2">{fmtMoney(g.outstanding)}</td>
                   <td className="px-3 py-2 text-right">
                     <Link
-                      to={`/borrowers/groups/${encodeURIComponent(g.id)}`}
+                      to={`/borrowers/groups/${encodeURIComponent(String(g.id))}`}
                       className="text-indigo-600 hover:text-indigo-800 hover:underline"
                     >
                       View

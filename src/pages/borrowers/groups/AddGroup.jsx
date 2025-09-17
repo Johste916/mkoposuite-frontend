@@ -1,34 +1,65 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api";
 
-const API_BASE = "/api/borrowers";
-const MEETING_DAYS = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+function apiVariants(p) {
+  const clean = p.startsWith("/") ? p : `/${p}`;
+  const noApi = clean.replace(/^\/api\//, "/");
+  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
+  return Array.from(new Set([noApi, withApi]));
+}
+
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try { const res = await api.get(p, opts); return res?.data; }
+    catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+async function tryPOST(paths = [], body = {}, opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try { const res = await api.post(p, body, opts); return res?.data; }
+    catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
 
 function toBranches(raw) {
   const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
-  return arr.map((b) => ({
-    id: String(b.id ?? b._id ?? b.branchId ?? b.code ?? b.name ?? "branch"),
+  return arr.map(b => ({
+    id: b.id ?? b._id ?? b.branchId ?? b.code ?? String(b.name || "branch"),
     name: b.name ?? b.title ?? b.label ?? String(b.code || "—"),
   }));
 }
 function toUsers(raw) {
   const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
-  return arr.map((u) => ({
-    id: String(u.id ?? u._id ?? u.userId ?? u.email ?? u.phone ?? "user"),
+  return arr.map(u => ({
+    id: u.id ?? u._id ?? u.userId ?? String(u.email || u.phone || "user"),
     name:
       u.name ||
       [u.firstName, u.lastName].filter(Boolean).join(" ").trim() ||
       u.username || u.email || u.phone || "—",
-    roles: (u.roles || u.Roles || []).map((r) => (r.name || r.code || "").toString().toLowerCase()),
+    roles: (u.roles || u.Roles || []).map(r => (r.name || r.code || "").toString().toLowerCase()),
     title: (u.title || u.jobTitle || "").toString().toLowerCase(),
   }));
 }
-const isLoanOfficer = (u) => /loan.*officer|credit.*officer|field.*officer/i.test(
-  [...(u.roles || []), u.title || ""].join(" ")
-);
+function isLoanOfficer(u) {
+  const hay = [...(u.roles || []), u.title || ""].join(" ");
+  return /loan.*officer|credit.*officer|field.*officer/i.test(hay);
+}
+
+const MEETING_DAYS = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
 
 const AddGroup = () => {
-  const [form, setForm] = useState({ name: "", branchId: "", meetingDay: "", officerId: "", notes: "" });
+  const [form, setForm] = useState({
+    name: "",
+    branchId: "",
+    meetingDay: "",
+    officerId: "",
+    notes: "",
+  });
+
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
@@ -38,13 +69,18 @@ const AddGroup = () => {
 
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
-  // branches
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
       try {
         setLoadingBranches(true);
-        const { data } = await api.get("/api/branches", { signal: ac.signal });
+        const data = await tryGET(
+          [
+            ...apiVariants("branches"),
+            ...apiVariants("org/branches"),
+          ],
+          { signal: ac.signal }
+        );
         setBranches(toBranches(data));
       } catch { setBranches([]); }
       finally { setLoadingBranches(false); }
@@ -52,18 +88,20 @@ const AddGroup = () => {
     return () => ac.abort();
   }, []);
 
-  // officers
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
       try {
         setLoadingOfficers(true);
-        let raw;
-        try {
-          raw = (await api.get("/api/users?role=loan-officer", { signal: ac.signal })).data;
-        } catch {
-          raw = (await api.get("/api/users", { signal: ac.signal })).data;
-        }
+        const raw = await tryGET(
+          [
+            ...apiVariants("users?role=loan_officer"),
+            ...apiVariants("admin/staff?role=loan_officer"),
+            ...apiVariants("users"),
+            ...apiVariants("admin/staff"),
+          ],
+          { signal: ac.signal }
+        );
         const all = toUsers(raw);
         const filtered = all.filter(isLoanOfficer);
         setOfficers(filtered.length ? filtered : all);
@@ -73,8 +111,12 @@ const AddGroup = () => {
     return () => ac.abort();
   }, []);
 
-  const branchOptions = useMemo(() => branches.map((b) => ({ value: b.id, label: b.name || b.id })), [branches]);
-  const officerOptions = useMemo(() => officers.map((u) => ({ value: u.id, label: u.name || u.id })), [officers]);
+  const branchOptions = useMemo(
+    () => branches.map((b) => ({ value: String(b.id), label: b.name || String(b.id) })), [branches]
+  );
+  const officerOptions = useMemo(
+    () => officers.map((u) => ({ value: String(u.id), label: u.name || String(u.id) })), [officers]
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -83,12 +125,19 @@ const AddGroup = () => {
     try {
       const payload = {
         name: form.name.trim(),
-        branchId: form.branchId || null,
-        meetingDay: form.meetingDay ? form.meetingDay.toLowerCase() : null, // ENUM-safe
-        officerId: form.officerId || null,
+        branchId: form.branchId?.trim() || null,
+        meetingDay: form.meetingDay ? String(form.meetingDay).toLowerCase() : null,
+        officerId: form.officerId?.trim() || null,
         notes: form.notes || null,
       };
-      await api.post(`${API_BASE}/groups`, payload);
+      await tryPOST(
+        [
+          ...apiVariants("borrowers/groups"),
+          ...apiVariants("groups"),
+          ...apiVariants("borrower-groups"),
+        ],
+        payload
+      );
       setMsg("✅ Group created.");
       setForm({ name: "", branchId: "", meetingDay: "", officerId: "", notes: "" });
     } catch (err) {
@@ -102,7 +151,6 @@ const AddGroup = () => {
   return (
     <div className="p-4 max-w-2xl">
       <h1 className="text-2xl font-semibold mb-4">Add Group</h1>
-
       <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded-xl border shadow">
         <div>
           <label className="block text-sm text-gray-700 mb-1">Name</label>
@@ -154,9 +202,7 @@ const AddGroup = () => {
               className="w-full border rounded-lg px-3 py-2 bg-white"
             >
               <option value="">(None)</option>
-              {MEETING_DAYS.map((d) => (
-                <option key={d} value={d}>{d[0].toUpperCase() + d.slice(1)}</option>
-              ))}
+              {MEETING_DAYS.map((d) => <option key={d} value={d}>{d[0].toUpperCase()+d.slice(1)}</option>)}
             </select>
           </div>
         </div>
