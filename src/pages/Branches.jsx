@@ -2,18 +2,40 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 
+/* ---------------- permission helper (unchanged) ---------------- */
 const can = (me, action) => {
   if (!me) return false;
   if (
     ["admin", "director", "super_admin", "system_admin"].includes(
       (me.role || "").toLowerCase()
     )
-  )
-    return true;
+  ) return true;
   return Array.isArray(me.permissions) && me.permissions.includes(action);
 };
 
-// ------------ small helpers -------------
+/* ---------------- tolerant request helpers (NEW) ---------------- */
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("No GET endpoint succeeded");
+}
+async function tryPOST(paths = [], body = {}, opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.post(p, body, opts);
+      return res?.data;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("No POST endpoint succeeded");
+}
+
+/* ---------------- small helpers (unchanged) -------------------- */
 const onlyDigits = (v) => String(v || "").replace(/\D+/g, "");
 const toNullableNumber = (v) => {
   const t = String(v ?? "").trim();
@@ -26,8 +48,8 @@ const cleanString = (v) => {
   const s = String(v ?? "").trim();
   return s.length ? s : null;
 };
-// ----------------------------------------
 
+/* ============================== PAGE ============================== */
 export default function Branches() {
   const [me, setMe] = useState(null);
   const [tab, setTab] = useState("overview");
@@ -72,6 +94,7 @@ export default function Branches() {
   );
 }
 
+/* ----------------------------- UI Bits ---------------------------- */
 function Tab({ label, id, tab, setTab }) {
   const active = tab === id;
   return (
@@ -86,6 +109,7 @@ function Tab({ label, id, tab, setTab }) {
   );
 }
 
+/* ----------------------------- Overview --------------------------- */
 function Overview() {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
@@ -94,20 +118,24 @@ function Overview() {
   const load = async () => {
     setErr("");
     try {
-      const { data } = await api.get("/branches", { params: { q } });
+      const data = await tryGET(
+        ["/branches", "/api/branches", "/org/branches", "/api/org/branches"],
+        { params: { q } }
+      );
       const items = Array.isArray(data?.items)
         ? data.items
         : Array.isArray(data)
         ? data
-        : [];
+        : data?.rows || data?.data || [];
       setRows(items);
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message);
+      setErr(e?.response?.data?.error || e?.message || "Failed to load branches.");
     }
   };
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // initial
 
   return (
@@ -150,7 +178,7 @@ function Overview() {
               </tr>
             ) : (
               rows.map((b) => (
-                <tr key={b.id} className="border-b">
+                <tr key={b.id ?? b.code ?? Math.random()} className="border-b">
                   <td className="py-2 px-3">{b.name}</td>
                   <td className="py-2 px-3">{b.code ?? "—"}</td>
                   <td className="py-2 px-3">{b.phone ?? "—"}</td>
@@ -168,6 +196,7 @@ function Overview() {
   );
 }
 
+/* ----------------------------- Add Branch ------------------------- */
 function AddBranch() {
   const [form, setForm] = useState({
     name: "",
@@ -186,18 +215,19 @@ function AddBranch() {
     setMsg("");
     setReqId("");
 
-    // ---- payload hardening ----
     const payload = {
       name: cleanString(form.name),
-      // send code as number or null; never empty string
+      // keep your original choice to treat code as numeric (nullable)
       code: toNullableNumber(form.code),
-      // keep phone as string, digits only; or null if nothing present
       phone: cleanString(onlyDigits(form.phone)),
       address: cleanString(form.address),
     };
 
     try {
-      await api.post("/branches", payload);
+      await tryPOST(
+        ["/branches", "/api/branches", "/org/branches", "/api/org/branches"],
+        payload
+      );
       setMsg("Branch created.");
       setForm({ name: "", code: "", phone: "", address: "" });
     } catch (e) {
@@ -206,7 +236,7 @@ function AddBranch() {
       setErr(
         data?.error ||
           data?.message ||
-          e.message ||
+          e?.message ||
           "Failed to create branch"
       );
     } finally {
@@ -256,6 +286,7 @@ function AddBranch() {
   );
 }
 
+/* ----------------------------- Assign Staff ----------------------- */
 function AssignStaff() {
   const [branches, setBranches] = useState([]);
   const [users, setUsers] = useState([]);
@@ -267,22 +298,23 @@ function AssignStaff() {
   useEffect(() => {
     (async () => {
       try {
-        const [{ data: b }, { data: u }] = await Promise.all([
-          api.get("/branches"),
-          api.get("/users", { params: { limit: 1000 } }),
+        const [b, u] = await Promise.all([
+          tryGET(["/branches", "/api/branches", "/org/branches", "/api/org/branches"]),
+          // users path is unchanged; add a simple fallback to /api/users in case your API is namespaced
+          tryGET(["/users?limit=1000", "/api/users?limit=1000"]),
         ]);
         const bItems = Array.isArray(b?.items)
           ? b.items
           : Array.isArray(b)
           ? b
-          : [];
+          : b?.rows || b?.data || [];
         const uItems = Array.isArray(u?.items)
           ? u.items
           : Array.isArray(u?.rows)
           ? u.rows
           : Array.isArray(u)
           ? u
-          : [];
+          : u?.data || [];
         setBranches(bItems);
         setUsers(uItems);
       } catch {}
@@ -297,14 +329,23 @@ function AssignStaff() {
     setMsg("");
     setErr("");
     try {
-      // ensure numeric branchId
       const numericBranchId = toNullableNumber(branchId);
-      await api.post(`/branches/${numericBranchId}/assign-staff`, {
-        userIds: selected,
-      });
+      if (numericBranchId == null) {
+        setErr("Invalid branch selected.");
+        return;
+      }
+      await tryPOST(
+        [
+          `/branches/${numericBranchId}/assign-staff`,
+          `/api/branches/${numericBranchId}/assign-staff`,
+          `/org/branches/${numericBranchId}/assign-staff`,
+          `/api/org/branches/${numericBranchId}/assign-staff`,
+        ],
+        { userIds: selected }
+      );
       setMsg("Assigned successfully.");
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message);
+      setErr(e?.response?.data?.error || e?.message || "Failed to assign staff.");
     }
   };
 
@@ -320,7 +361,7 @@ function AssignStaff() {
           >
             <option value="">Select branch</option>
             {branches.map((b) => (
-              <option key={b.id} value={b.id}>
+              <option key={b.id ?? b.code} value={b.id}>
                 {b.name}
               </option>
             ))}
@@ -382,6 +423,7 @@ function AssignStaff() {
   );
 }
 
+/* ----------------------------- Branch Reports -------------------- */
 function BranchReports() {
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState("");
@@ -393,12 +435,14 @@ function BranchReports() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("/branches");
+        const data = await tryGET(
+          ["/branches", "/api/branches", "/org/branches", "/api/org/branches"]
+        );
         const items = Array.isArray(data?.items)
           ? data.items
           : Array.isArray(data)
           ? data
-          : [];
+          : data?.rows || data?.data || [];
         setBranches(items);
       } catch {}
     })();
@@ -409,12 +453,22 @@ function BranchReports() {
     setKpis(null);
     try {
       const numericBranchId = toNullableNumber(branchId);
-      const { data } = await api.get(`/branches/${numericBranchId}/report`, {
-        params: { from, to },
-      });
+      if (numericBranchId == null) {
+        setErr("Invalid branch selected.");
+        return;
+      }
+      const data = await tryGET(
+        [
+          `/branches/${numericBranchId}/report`,
+          `/api/branches/${numericBranchId}/report`,
+          `/org/branches/${numericBranchId}/report`,
+          `/api/org/branches/${numericBranchId}/report`,
+        ],
+        { params: { from, to } }
+      );
       setKpis(data?.kpis || data || null);
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message);
+      setErr(e?.response?.data?.error || e?.message || "Failed to load report.");
     }
   };
 
@@ -430,7 +484,7 @@ function BranchReports() {
           >
             <option value="">Select</option>
             {branches.map((b) => (
-              <option key={b.id} value={b.id}>
+              <option key={b.id ?? b.code} value={b.id}>
                 {b.name}
               </option>
             ))}
