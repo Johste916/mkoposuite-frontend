@@ -1,5 +1,5 @@
 // src/pages/Branches.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 
 /* ---------------- permission helper (unchanged) ---------------- */
@@ -9,30 +9,39 @@ const can = (me, action) => {
     ["admin", "director", "super_admin", "system_admin"].includes(
       (me.role || "").toLowerCase()
     )
-  ) return true;
+  )
+    return true;
   return Array.isArray(me.permissions) && me.permissions.includes(action);
 };
 
-/* ---------------- tolerant request helpers (NEW) ---------------- */
-async function tryGET(paths = [], opts = {}) {
-  let lastErr;
-  for (const p of paths) {
-    try {
-      const res = await api.get(p, opts);
-      return res?.data;
-    } catch (e) { lastErr = e; }
+/* ---------------- tolerant request helpers --------------------- */
+async function tryOneGET(path, opts = {}) {
+  try {
+    const res = await api.get(path, opts);
+    return { ok: true, data: res?.data };
+  } catch (e) {
+    return { ok: false, error: e };
   }
-  throw lastErr || new Error("No GET endpoint succeeded");
 }
-async function tryPOST(paths = [], body = {}, opts = {}) {
-  let lastErr;
-  for (const p of paths) {
-    try {
-      const res = await api.post(p, body, opts);
-      return res?.data;
-    } catch (e) { lastErr = e; }
+async function tryOnePOST(path, body = {}, opts = {}) {
+  try {
+    const res = await api.post(path, body, opts);
+    return { ok: true, data: res?.data };
+  } catch (e) {
+    return { ok: false, error: e };
   }
-  throw lastErr || new Error("No POST endpoint succeeded");
+}
+
+/** Discover the first working branches base path and return it (e.g. "/branches"). */
+async function discoverBranchesBase(paths) {
+  for (const p of paths) {
+    const r = await tryOneGET(p, { params: { limit: 1 } });
+    if (r.ok) return p;
+    // treat 401/403 as "exists but unauthorized" -> still good base
+    const status = r?.error?.response?.status;
+    if (status === 401 || status === 403) return p;
+  }
+  return null;
 }
 
 /* ---------------- small helpers (unchanged) -------------------- */
@@ -54,6 +63,30 @@ export default function Branches() {
   const [me, setMe] = useState(null);
   const [tab, setTab] = useState("overview");
 
+  // Endpoint discovery (kept small to avoid spamming 404s)
+  const BRANCH_PATH_CANDIDATES = useMemo(
+    () => [
+      "/branches",        // preferred
+      "/org/branches",    // alt
+      // if your API truly lives under /api and api baseURL is root, add "/api/branches" here
+    ],
+    []
+  );
+  const [branchesBase, setBranchesBase] = useState(null);
+  const [apiUnavailable, setApiUnavailable] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const base = await discoverBranchesBase(BRANCH_PATH_CANDIDATES);
+      if (base) {
+        setBranchesBase(base);
+        setApiUnavailable(false);
+      } else {
+        setApiUnavailable(true);
+      }
+    })();
+  }, [BRANCH_PATH_CANDIDATES]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -73,6 +106,11 @@ export default function Branches() {
           <p className="text-xs text-slate-500">
             View branches and perform common operations.
           </p>
+          {apiUnavailable && (
+            <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
+              Branches API not enabled on this backend. Listing/creating and assignments are disabled.
+            </div>
+          )}
         </div>
         <div className="flex gap-1 rounded-lg border bg-white overflow-hidden">
           <Tab label="Overview" id="overview" tab={tab} setTab={setTab} />
@@ -86,10 +124,16 @@ export default function Branches() {
         </div>
       </header>
 
-      {tab === "overview" && <Overview />}
-      {tab === "add" && can(me, "branches:manage") && <AddBranch />}
-      {tab === "assign" && can(me, "branches:assign") && <AssignStaff />}
-      {tab === "reports" && <BranchReports />}
+      {tab === "overview" && <Overview branchesBase={branchesBase} apiUnavailable={apiUnavailable} />}
+      {tab === "add" && can(me, "branches:manage") && (
+        <AddBranch branchesBase={branchesBase} apiUnavailable={apiUnavailable} />
+      )}
+      {tab === "assign" && can(me, "branches:assign") && (
+        <AssignStaff branchesBase={branchesBase} apiUnavailable={apiUnavailable} />
+      )}
+      {tab === "reports" && (
+        <BranchReports branchesBase={branchesBase} apiUnavailable={apiUnavailable} />
+      )}
     </div>
   );
 }
@@ -110,33 +154,37 @@ function Tab({ label, id, tab, setTab }) {
 }
 
 /* ----------------------------- Overview --------------------------- */
-function Overview() {
+function Overview({ branchesBase, apiUnavailable }) {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
 
   const load = async () => {
+    if (!branchesBase) {
+      setRows([]);
+      setErr(apiUnavailable ? "" : "Detecting endpoint…");
+      return;
+    }
     setErr("");
-    try {
-      const data = await tryGET(
-        ["/branches", "/api/branches", "/org/branches", "/api/org/branches"],
-        { params: { q } }
-      );
+    const r = await tryOneGET(branchesBase, { params: { q } });
+    if (r.ok) {
+      const data = r.data;
       const items = Array.isArray(data?.items)
         ? data.items
         : Array.isArray(data)
         ? data
         : data?.rows || data?.data || [];
       setRows(items);
-    } catch (e) {
-      setErr(e?.response?.data?.error || e?.message || "Failed to load branches.");
+    } else {
+      setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load branches.");
+      setRows([]);
     }
   };
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // initial
+  }, [branchesBase]); // initial + when discovery finishes
 
   return (
     <div className="space-y-3">
@@ -152,7 +200,8 @@ function Overview() {
         </div>
         <button
           onClick={load}
-          className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm"
+          disabled={!branchesBase}
+          className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
         >
           Apply
         </button>
@@ -173,7 +222,7 @@ function Overview() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="p-3 text-gray-500">
-                  No branches yet.
+                  {branchesBase ? "No branches yet." : "Waiting for endpoint…"}
                 </td>
               </tr>
             ) : (
@@ -197,7 +246,7 @@ function Overview() {
 }
 
 /* ----------------------------- Add Branch ------------------------- */
-function AddBranch() {
+function AddBranch({ branchesBase, apiUnavailable }) {
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -210,6 +259,11 @@ function AddBranch() {
   const [reqId, setReqId] = useState("");
 
   const submit = async () => {
+    if (!branchesBase) {
+      setErr(apiUnavailable ? "Branches API not available." : "Detecting endpoint…");
+      return;
+    }
+
     setSaving(true);
     setErr("");
     setMsg("");
@@ -217,30 +271,26 @@ function AddBranch() {
 
     const payload = {
       name: cleanString(form.name),
-      // keep your original choice to treat code as numeric (nullable)
       code: toNullableNumber(form.code),
       phone: cleanString(onlyDigits(form.phone)),
       address: cleanString(form.address),
     };
 
-    try {
-      await tryPOST(
-        ["/branches", "/api/branches", "/org/branches", "/api/org/branches"],
-        payload
-      );
+    const r = await tryOnePOST(branchesBase, payload);
+    setSaving(false);
+
+    if (r.ok) {
       setMsg("Branch created.");
       setForm({ name: "", code: "", phone: "", address: "" });
-    } catch (e) {
-      const data = e?.response?.data;
+    } else {
+      const data = r?.error?.response?.data;
       setReqId(data?.requestId || "");
       setErr(
         data?.error ||
           data?.message ||
-          e?.message ||
+          r?.error?.message ||
           "Failed to create branch"
       );
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -263,7 +313,7 @@ function AddBranch() {
       ))}
       <button
         onClick={submit}
-        disabled={saving}
+        disabled={saving || !branchesBase}
         className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
       >
         {saving ? "Saving…" : "Create"}
@@ -287,7 +337,7 @@ function AddBranch() {
 }
 
 /* ----------------------------- Assign Staff ----------------------- */
-function AssignStaff() {
+function AssignStaff({ branchesBase, apiUnavailable }) {
   const [branches, setBranches] = useState([]);
   const [users, setUsers] = useState([]);
   const [branchId, setBranchId] = useState("");
@@ -297,29 +347,33 @@ function AssignStaff() {
 
   useEffect(() => {
     (async () => {
-      try {
-        const [b, u] = await Promise.all([
-          tryGET(["/branches", "/api/branches", "/org/branches", "/api/org/branches"]),
-          // users path is unchanged; add a simple fallback to /api/users in case your API is namespaced
-          tryGET(["/users?limit=1000", "/api/users?limit=1000"]),
-        ]);
-        const bItems = Array.isArray(b?.items)
-          ? b.items
-          : Array.isArray(b)
-          ? b
-          : b?.rows || b?.data || [];
-        const uItems = Array.isArray(u?.items)
-          ? u.items
-          : Array.isArray(u?.rows)
-          ? u.rows
-          : Array.isArray(u)
-          ? u
-          : u?.data || [];
+      if (!branchesBase) return;
+      const [b, u] = await Promise.all([
+        tryOneGET(branchesBase),
+        tryOneGET("/users", { params: { limit: 1000 } }),
+      ]);
+      if (b.ok) {
+        const data = b.data;
+        const bItems = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data)
+          ? data
+          : data?.rows || data?.data || [];
         setBranches(bItems);
+      }
+      if (u.ok) {
+        const data = u.data;
+        const uItems = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.rows)
+          ? data.rows
+          : Array.isArray(data)
+          ? data
+          : data?.data || [];
         setUsers(uItems);
-      } catch {}
+      }
     })();
-  }, []);
+  }, [branchesBase]);
 
   const toggle = (id) => {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -328,24 +382,23 @@ function AssignStaff() {
   const submit = async () => {
     setMsg("");
     setErr("");
-    try {
-      const numericBranchId = toNullableNumber(branchId);
-      if (numericBranchId == null) {
-        setErr("Invalid branch selected.");
-        return;
-      }
-      await tryPOST(
-        [
-          `/branches/${numericBranchId}/assign-staff`,
-          `/api/branches/${numericBranchId}/assign-staff`,
-          `/org/branches/${numericBranchId}/assign-staff`,
-          `/api/org/branches/${numericBranchId}/assign-staff`,
-        ],
-        { userIds: selected }
-      );
+    if (!branchesBase) {
+      setErr(apiUnavailable ? "Branches API not available." : "Detecting endpoint…");
+      return;
+    }
+    const numericBranchId = toNullableNumber(branchId);
+    if (numericBranchId == null) {
+      setErr("Invalid branch selected.");
+      return;
+    }
+    // POST {base}/{id}/assign-staff
+    const r = await tryOnePOST(`${branchesBase}/${numericBranchId}/assign-staff`, {
+      userIds: selected,
+    });
+    if (r.ok) {
       setMsg("Assigned successfully.");
-    } catch (e) {
-      setErr(e?.response?.data?.error || e?.message || "Failed to assign staff.");
+    } else {
+      setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to assign staff.");
     }
   };
 
@@ -358,6 +411,7 @@ function AssignStaff() {
             className="border rounded px-2 py-1 text-sm min-w-[220px]"
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
+            disabled={!branchesBase}
           >
             <option value="">Select branch</option>
             {branches.map((b) => (
@@ -369,8 +423,8 @@ function AssignStaff() {
         </div>
         <button
           onClick={submit}
-          disabled={!branchId || selected.length === 0}
-          className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm"
+          disabled={!branchId || selected.length === 0 || !branchesBase}
+          className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
         >
           Assign {selected.length ? `(${selected.length})` : ""}
         </button>
@@ -392,7 +446,7 @@ function AssignStaff() {
             {users.length === 0 ? (
               <tr>
                 <td colSpan={4} className="p-3 text-gray-500">
-                  No users.
+                  {branchesBase ? "No users." : "Waiting for endpoint…"}
                 </td>
               </tr>
             ) : (
@@ -424,7 +478,7 @@ function AssignStaff() {
 }
 
 /* ----------------------------- Branch Reports -------------------- */
-function BranchReports() {
+function BranchReports({ branchesBase, apiUnavailable }) {
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState("");
   const [from, setFrom] = useState("");
@@ -434,41 +488,39 @@ function BranchReports() {
 
   useEffect(() => {
     (async () => {
-      try {
-        const data = await tryGET(
-          ["/branches", "/api/branches", "/org/branches", "/api/org/branches"]
-        );
+      if (!branchesBase) return;
+      const r = await tryOneGET(branchesBase);
+      if (r.ok) {
+        const data = r.data;
         const items = Array.isArray(data?.items)
           ? data.items
           : Array.isArray(data)
           ? data
           : data?.rows || data?.data || [];
         setBranches(items);
-      } catch {}
+      }
     })();
-  }, []);
+  }, [branchesBase]);
 
   const run = async () => {
     setErr("");
     setKpis(null);
-    try {
-      const numericBranchId = toNullableNumber(branchId);
-      if (numericBranchId == null) {
-        setErr("Invalid branch selected.");
-        return;
-      }
-      const data = await tryGET(
-        [
-          `/branches/${numericBranchId}/report`,
-          `/api/branches/${numericBranchId}/report`,
-          `/org/branches/${numericBranchId}/report`,
-          `/api/org/branches/${numericBranchId}/report`,
-        ],
-        { params: { from, to } }
-      );
-      setKpis(data?.kpis || data || null);
-    } catch (e) {
-      setErr(e?.response?.data?.error || e?.message || "Failed to load report.");
+    if (!branchesBase) {
+      setErr(apiUnavailable ? "Branches API not available." : "Detecting endpoint…");
+      return;
+    }
+    const numericBranchId = toNullableNumber(branchId);
+    if (numericBranchId == null) {
+      setErr("Invalid branch selected.");
+      return;
+    }
+    const r = await tryOneGET(`${branchesBase}/${numericBranchId}/report`, {
+      params: { from, to },
+    });
+    if (r.ok) {
+      setKpis(r.data?.kpis || r.data || null);
+    } else {
+      setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load report.");
     }
   };
 
@@ -481,6 +533,7 @@ function BranchReports() {
             className="border rounded px-2 py-1 text-sm min-w-[220px]"
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
+            disabled={!branchesBase}
           >
             <option value="">Select</option>
             {branches.map((b) => (
@@ -510,8 +563,8 @@ function BranchReports() {
         </div>
         <button
           onClick={run}
-          disabled={!branchId}
-          className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm"
+          disabled={!branchId || !branchesBase}
+          className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
         >
           Run
         </button>
