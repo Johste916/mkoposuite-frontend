@@ -1,6 +1,19 @@
 import React, { useState } from "react";
 import api from "../../../api";
 
+async function tryPOST(paths = [], body = {}, opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.post(p, body, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+
 const AddGroup = () => {
   const [form, setForm] = useState({
     name: "",
@@ -19,21 +32,30 @@ const AddGroup = () => {
     setSaving(true);
     setMsg("");
     try {
-      const res = await api.post("/borrowers/groups", {
+      const payload = {
         name: form.name,
         branchId: form.branchId || null,
         meetingDay: form.meetingDay || null,
         officerId: form.officerId || null,
         notes: form.notes || null,
-      });
+      };
+      const res = await tryPOST(
+        [
+          "/borrowers/groups",
+          "/groups",
+          "/borrower-groups",
+          "/api/borrowers/groups",
+        ],
+        payload
+      );
       setMsg("✅ Group created.");
-      if (res?.data?.id) {
-        // optional redirect after a short delay; keeping it non-breaking
-        // window.location.assign(`/borrowers/groups/${res.data.id}`);
+      if (res?.id) {
+        // Optionally redirect:
+        // window.location.assign(`/borrowers/groups/${res.id}`);
       }
       setForm({ name: "", branchId: "", meetingDay: "", officerId: "", notes: "" });
     } catch {
-      setMsg("❌ Failed to create group");
+      setMsg("❌ Failed to create group (endpoint not implemented).");
     } finally {
       setSaving(false);
     }

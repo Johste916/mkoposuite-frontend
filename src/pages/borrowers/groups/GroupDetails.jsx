@@ -1,126 +1,92 @@
-// src/pages/borrowers/groups/GroupDetails.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../../api";
+import BorrowerAutoComplete from "../../../components/input/BorrowerAutoComplete";
 
-/* -------------------------------------------------------------------------- */
-/* Local, page-scoped BorrowerPicker (Autocomplete)                           */
-/* Keeps build stable without relying on external import paths                */
-/* -------------------------------------------------------------------------- */
-function useDebounced(value, ms = 250) {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
 }
 
-/**
- * Props:
- * - value: borrower object or null
- * - onChange: (id, borrowerObj)
- * - placeholder
- */
-function BorrowerPicker({ value, onChange, placeholder = "Search name, phone or ID…" }) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const boxRef = useRef(null);
-  const q = useDebounced(query, 250);
+async function tryPOST(paths = [], body = {}, opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.post(p, body, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
 
-  useEffect(() => {
-    const onDoc = (e) => {
-      if (!boxRef.current) return;
-      if (!boxRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+async function tryDELETE(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.delete(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!q || q.length < 1) {
-        setOptions([]);
-        return;
-      }
-      setLoading(true);
-      try {
-        // Compatible with your backend: /api/borrowers/search?q=...
-        const res = await api._get?.(`/borrowers/search?q=${encodeURIComponent(q)}`)
-          .catch(() => api.get(`/borrowers/search?q=${encodeURIComponent(q)}`));
-        const data = Array.isArray(res?.data) ? res.data : [];
-        if (!cancelled) setOptions(data);
-      } catch {
-        if (!cancelled) setOptions([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [q]);
-
-  const handlePick = (b) => {
-    setQuery(`${b.name ?? ""} (${b.id})`);
-    setOpen(false);
-    onChange?.(b.id, b);
+function normalizeGroup(g) {
+  if (!g || typeof g !== "object") return null;
+  const members = Array.isArray(g.members)
+    ? g.members
+    : g.groupMembers || g.items || [];
+  return {
+    id: g.id ?? g._id ?? g.groupId ?? g.code,
+    name: g.name ?? g.groupName ?? g.title ?? "—",
+    branchName: g.branchName ?? g.branch?.name ?? "—",
+    officerName: g.officerName ?? g.officer?.name ?? "—",
+    meetingDay: g.meetingDay ?? g.meeting?.day ?? "—",
+    members: members.map((m) => ({
+      id: m.id ?? m._id ?? m.borrowerId ?? m.memberId,
+      name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.id,
+      phone: m.phone,
+      role: m.role || m.memberRole,
+    })),
   };
-
-  const suffix = loading ? "Searching…" : (open && options.length === 0 && q ? "No matches" : "");
-
-  return (
-    <div ref={boxRef} className="relative w-[320px]">
-      <input
-        value={query}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        placeholder={placeholder}
-        className="border px-3 py-2 rounded w-full dark:bg-slate-700 dark:border-slate-600"
-      />
-      {suffix && <div className="absolute right-2 top-2 text-xs text-slate-400">{suffix}</div>}
-      {open && options.length > 0 && (
-        <div className="absolute mt-1 z-50 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 rounded shadow max-h-64 overflow-auto">
-          {options.map((b) => (
-            <button
-              key={b.id}
-              className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700"
-              onClick={() => handlePick(b)}
-              type="button"
-            >
-              <div className="text-sm font-medium">{b.name}</div>
-              <div className="text-xs text-slate-500">ID: {b.id} • {b.phone || "—"}</div>
-            </button>
-          ))}
-        </div>
-      )}
-      {value?.id ? <input type="hidden" value={value.id} /> : null}
-    </div>
-  );
 }
 
-/* -------------------------------------------------------------------------- */
-/* GroupDetails                                                               */
-/* -------------------------------------------------------------------------- */
 const GroupDetails = () => {
   const { groupId } = useParams();
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  // pick/add member
-  const [picked, setPicked] = useState(null); // borrower object
+  const [picked, setPicked] = useState(null);
   const [adding, setAdding] = useState(false);
 
   const load = async (signal) => {
     try {
       setLoading(true);
-      const res = await api.get(`/borrowers/groups/${groupId}`, { signal });
-      setGroup(res.data || null);
+      const data = await tryGET(
+        [
+          `/borrowers/groups/${groupId}`,
+          `/groups/${groupId}`,
+          `/borrower-groups/${groupId}`,
+          `/api/borrowers/groups/${groupId}`,
+        ],
+        { signal }
+      );
+      setGroup(normalizeGroup(data));
       setError("");
     } catch {
-      setError("Failed to load group");
+      setError("Failed to load group (endpoint not implemented).");
+      setGroup(null);
     } finally {
       setLoading(false);
     }
@@ -136,11 +102,19 @@ const GroupDetails = () => {
     if (!picked?.id) return;
     setAdding(true);
     try {
-      await api.post(`/borrowers/groups/${groupId}/members`, { borrowerId: picked.id });
+      await tryPOST(
+        [
+          `/borrowers/groups/${groupId}/members`,
+          `/groups/${groupId}/members`,
+          `/borrower-groups/${groupId}/members`,
+          `/api/borrowers/groups/${groupId}/members`,
+        ],
+        { borrowerId: picked.id }
+      );
       setPicked(null);
       await load();
     } catch {
-      // optionally show a toast
+      alert("Failed to add member.");
     } finally {
       setAdding(false);
     }
@@ -148,12 +122,21 @@ const GroupDetails = () => {
 
   const removeMember = async (borrowerId) => {
     try {
-      await api.delete(`/borrowers/groups/${groupId}/members/${borrowerId}`);
+      await tryDELETE(
+        [
+          `/borrowers/groups/${groupId}/members/${borrowerId}`,
+          `/groups/${groupId}/members/${borrowerId}`,
+          `/borrower-groups/${groupId}/members/${borrowerId}`,
+          `/api/borrowers/groups/${groupId}/members/${borrowerId}`,
+        ]
+      );
       await load();
-    } catch {}
+    } catch {
+      alert("Failed to remove member.");
+    }
   };
 
-  const members = useMemo(() => (Array.isArray(group?.members) ? group.members : []), [group]);
+  const members = Array.isArray(group?.members) ? group.members : [];
 
   return (
     <div className="p-4 space-y-4">
@@ -177,7 +160,7 @@ const GroupDetails = () => {
 
           <div className="flex items-center gap-2 mb-3">
             <div className="flex-1">
-              <BorrowerPicker
+              <BorrowerAutoComplete
                 value={picked}
                 onChange={(_id, b) => setPicked(b)}
                 placeholder="Add borrower…"
@@ -196,36 +179,23 @@ const GroupDetails = () => {
             {members.length === 0 ? (
               <li className="py-2 text-gray-500">No members yet.</li>
             ) : (
-              members.map((m) => {
-                const name = m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.id;
-                return (
-                  <li key={m.id} className="py-2 flex items-center justify-between">
-                    <div>
-                      {name} <span className="text-gray-500">• {m.phone || "—"}</span>
-                      {m.role && <span className="ml-2 text-xs uppercase text-gray-400">{m.role}</span>}
-                    </div>
-                    <button
-                      className="px-2 py-1 border rounded hover:bg-gray-50"
-                      onClick={() => removeMember(m.id)}
-                    >
-                      Remove
-                    </button>
-                  </li>
-                );
-              })
+              members.map((m) => (
+                <li key={m.id} className="py-2 flex items-center justify-between">
+                  <div>
+                    {m.name} <span className="text-gray-500">• {m.phone || "—"}</span>
+                    {m.role && <span className="ml-2 text-xs uppercase text-gray-400">{m.role}</span>}
+                  </div>
+                  <button
+                    className="px-2 py-1 border rounded hover:bg-gray-50"
+                    onClick={() => removeMember(m.id)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))
             )}
           </ul>
         </div>
-      </div>
-
-      <div className="bg-white rounded shadow p-4">
-        <h3 className="font-semibold mb-2">Loans & Repayments</h3>
-        <div className="text-sm text-gray-600">TODO: group loans, outstanding, next repayments, PAR</div>
-      </div>
-
-      <div className="bg-white rounded shadow p-4">
-        <h3 className="font-semibold mb-2">Meetings & Attendance</h3>
-        <div className="text-sm text-gray-600">TODO: schedule, attendance register, minutes</div>
       </div>
     </div>
   );

@@ -8,6 +8,28 @@ import api from "../api";
 
 const PAGE_SIZE = 10;
 
+/* ---------- Helpers for resilient APIs ---------- */
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+
+function toArray(maybe) {
+  if (Array.isArray(maybe)) return maybe;
+  if (Array.isArray(maybe?.items)) return maybe.items;
+  if (Array.isArray(maybe?.rows)) return maybe.rows;
+  if (Array.isArray(maybe?.data)) return maybe.data;
+  return [];
+}
+
 const Borrowers = () => {
   const navigate = useNavigate();
 
@@ -54,18 +76,53 @@ const Borrowers = () => {
     return () => clearTimeout(id);
   }, [q]);
 
-  // Load filter refs
+  // Load filter refs (resilient to missing endpoints/paths)
   useEffect(() => {
     const ac = new AbortController();
-    Promise.all([
-      api.get("/branches", { signal: ac.signal }).catch(() => ({ data: [] })),
-      api.get("/users", { params: { role: "loan_officer" }, signal: ac.signal }).catch(() => ({ data: [] })),
-    ])
-      .then(([b, u]) => {
-        setBranches(Array.isArray(b.data) ? b.data : b.data?.data || []);
-        setOfficers(Array.isArray(u.data) ? u.data : u.data?.data || []);
-      })
-      .catch(() => pushToast("Failed to load filters", "error"));
+    (async () => {
+      try {
+        const [b, u] = await Promise.all([
+          // branches: try a few common mounts
+          tryGET(
+            ["/branches", "/org/branches", "/api/branches"],
+            { signal: ac.signal }
+          ).catch(() => []),
+          // officers: try users/staff on different bases
+          tryGET(
+            [
+              "/users?role=loan_officer",
+              "/staff?role=loan_officer",
+              "/api/users?role=loan_officer"
+            ],
+            { signal: ac.signal }
+          ).catch(() => []),
+        ]);
+
+        const bArr = toArray(b);
+        const uArr = toArray(u);
+
+        // Normalize minimal fields used in UI
+        setBranches(
+          bArr.map((x) => ({
+            id: x.id ?? x._id ?? x.branchId ?? String(x.code ?? ""),
+            name: x.name ?? x.branchName ?? `Branch ${x.id ?? x.code ?? ""}`,
+          }))
+        );
+
+        setOfficers(
+          uArr.map((x) => ({
+            id: x.id ?? x._id ?? x.userId ?? x.email ?? String(Math.random()),
+            name: x.name ?? x.fullName ?? x.email ?? "User",
+            email: x.email,
+          }))
+        );
+      } catch {
+        // If all fail, keep filters empty and non-blocking
+        setBranches([]);
+        setOfficers([]);
+        // Don’t toast as error here to avoid noise on envs without these endpoints
+      }
+    })();
     return () => ac.abort();
   }, []);
 
@@ -136,17 +193,10 @@ const Borrowers = () => {
           setDrawerData((d) => ({ ...d, loans: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         } else if (tab === "savings") {
           const res = await api.get(`/borrowers/${borrowerId}/savings`, { signal });
-          const items = Array.isArray(res.data?.transactions)
-            ? res.data.transactions
-            : Array.isArray(res.data) ? res.data
-            : res.data?.items || [];
-          setDrawerData((d) => ({ ...d, savings: items }));
+          setDrawerData((d) => ({ ...d, savings: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         } else if (tab === "documents") {
-          const res = await api.get(`/borrowers/${borrowerId}/kyc`, { signal });
-          const docs = Array.isArray(res.data?.items)
-            ? res.data.items
-            : (Array.isArray(res.data) ? res.data : []);
-          setDrawerData((d) => ({ ...d, documents: docs }));
+          const res = await api.get(`/borrowers/${borrowerId}/documents`, { signal });
+          setDrawerData((d) => ({ ...d, documents: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         }
       } catch (e) {
         pushToast("Failed to load borrower details", "error");
@@ -369,7 +419,7 @@ const Borrowers = () => {
             </tbody>
           </table>
 
-          {/* Mobile cards */}
+          {/* Mobile / small screens — cards */}
           <div className="md:hidden grid grid-cols-1 gap-3 p-3">
             {loading ? (
               <div className="p-6 text-center text-gray-500">Loading…</div>
@@ -593,19 +643,17 @@ const SavingsTab = ({ items }) => {
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 text-gray-600">
           <tr>
-            <th className="px-3 py-2 text-left">Date</th>
-            <th className="px-3 py-2 text-left">Type</th>
-            <th className="px-3 py-2 text-left">Amount</th>
-            <th className="px-3 py-2 text-left">Notes</th>
+            <th className="px-3 py-2 text-left">Account #</th>
+            <th className="px-3 py-2 text-left">Balance</th>
+            <th className="px-3 py-2 text-left">Status</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((s, i) => (
-            <tr key={s.id || i} className="border-t">
-              <td className="px-3 py-2">{s.date ? new Date(s.date).toLocaleDateString() : "—"}</td>
-              <td className="px-3 py-2 capitalize">{s.type || "—"}</td>
-              <td className="px-3 py-2">{money(s.amount)}</td>
-              <td className="px-3 py-2">{s.notes || "—"}</td>
+          {items.map((s) => (
+            <tr key={s.id} className="border-t">
+              <td className="px-3 py-2">{s.id}</td>
+              <td className="px-3 py-2">{money(s.balance)}</td>
+              <td className="px-3 py-2">{s.status || "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -634,9 +682,9 @@ const DocumentsTab = ({ items }) => {
               <div className="flex items-center gap-3">
                 <IdCard className="w-4 h-4 text-gray-500" />
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{d.fileName || d.name || "Document"}</p>
+                  <p className="text-sm font-medium text-gray-800">{d.fileName || "Document"}</p>
                   <p className="text-xs text-gray-500">
-                    {(d.type || "KYC")} • {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
+                    {d.type || "KYC"} • {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
                   </p>
                 </div>
               </div>

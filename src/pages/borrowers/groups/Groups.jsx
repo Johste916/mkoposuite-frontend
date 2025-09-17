@@ -2,6 +2,33 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api";
 
+/** Try a list of endpoints until one works */
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+
+/** Normalize group list from various backend shapes */
+function toGroupRows(raw) {
+  const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
+  return arr.map((g) => ({
+    id: g.id ?? g._id ?? g.groupId ?? g.code ?? String(Math.random()),
+    name: g.name ?? g.groupName ?? g.title ?? "—",
+    membersCount: g.membersCount ?? g.memberCount ?? g.members?.length ?? g.size ?? 0,
+    branchName: g.branchName ?? g.branch?.name ?? "—",
+    totalLoans: g.totalLoans ?? g.loanCount ?? g.stats?.loans ?? 0,
+    outstanding: g.totalLoanAmount ?? g.outstanding ?? g.stats?.outstanding ?? 0,
+  }));
+}
+
 const BorrowerGroups = () => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,11 +39,20 @@ const BorrowerGroups = () => {
     (async () => {
       try {
         setLoading(true);
-        const res = await api.get("/borrowers/groups", { signal: ac.signal });
-        const list = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.data || [];
-        setRows(list);
+        const data = await tryGET(
+          [
+            "/borrowers/groups",      // preferred
+            "/groups",                // fallback 1
+            "/borrower-groups",       // fallback 2
+            "/api/borrowers/groups",  // fallback 3 (some deployments prefix)
+          ],
+          { signal: ac.signal }
+        );
+        setRows(toGroupRows(data));
+        setError("");
       } catch {
-        setError("Failed to load groups");
+        setError("Failed to load groups (endpoint not implemented).");
+        setRows([]);
       } finally {
         setLoading(false);
       }
@@ -67,10 +103,10 @@ const BorrowerGroups = () => {
               rows.map((g) => (
                 <tr key={g.id} className="border-t">
                   <td className="px-3 py-2">{g.name}</td>
-                  <td className="px-3 py-2">{g.membersCount ?? g.memberCount ?? "—"}</td>
-                  <td className="px-3 py-2">{g.branchName || "—"}</td>
-                  <td className="px-3 py-2">{g.totalLoans ?? g.loanCount ?? "—"}</td>
-                  <td className="px-3 py-2">{fmtMoney(g.totalLoanAmount || g.outstanding)}</td>
+                  <td className="px-3 py-2">{g.membersCount}</td>
+                  <td className="px-3 py-2">{g.branchName}</td>
+                  <td className="px-3 py-2">{g.totalLoans}</td>
+                  <td className="px-3 py-2">{fmtMoney(g.outstanding)}</td>
                   <td className="px-3 py-2 text-right">
                     <Link
                       to={`/borrowers/groups/${encodeURIComponent(g.id)}`}
