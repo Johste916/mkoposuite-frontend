@@ -187,7 +187,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const [editModel, setEditModel] = useState(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
-  thead
+  
   const [confirmTarget, setConfirmTarget] = useState(null);
 
   const [staffOpen, setStaffOpen] = useState(false);
