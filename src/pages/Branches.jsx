@@ -187,6 +187,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const [editModel, setEditModel] = useState(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
+  thead
   const [confirmTarget, setConfirmTarget] = useState(null);
 
   const [staffOpen, setStaffOpen] = useState(false);
@@ -286,19 +287,15 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     setBorrowersOpen(true);
     setBorrowersRows([]);
     setBorrowersErr("");
-    // Best effort: assumes /api/borrowers supports ?branchId=
-    const r = await tryOneGET(`/borrowers`, {
-      params: { branchId: b?.id, limit: 500 },
-    });
+
+    // Prefer new compact endpoint; fallback to legacy query param
+    let r = await tryOneGET(`${branchesBase}/${b?.id}/borrowers`);
+    if (!r.ok) {
+      r = await tryOneGET(`/borrowers`, { params: { branchId: b?.id, limit: 500 } });
+    }
     if (r.ok) {
       const data = r.data;
-      const items = Array.isArray(data?.items)
-        ? data.items
-        : Array.isArray(data?.rows)
-        ? data.rows
-        : Array.isArray(data)
-        ? data
-        : data?.data || [];
+      const items = data?.items || data?.rows || data?.data || data || [];
       setBorrowersRows(items);
     } else {
       setBorrowersErr(
@@ -316,7 +313,6 @@ function Overview({ me, branchesBase, apiUnavailable }) {
       code: editModel.code == null ? null : String(editModel.code).trim(),
       phone: cleanString(onlyDigits(editModel.phone)),
       address: cleanString(editModel.address),
-      // managerId optional; only send if not empty string
       ...(editModel.managerId !== "" ? { managerId: editModel.managerId } : {}),
     };
     const r = await tryOnePUT(`${branchesBase}/${editModel.id}`, payload);
@@ -506,9 +502,9 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Modal>
       )}
 
-      {/* Staff Drawer */}
+      {/* Staff Drawer (wide) */}
       {staffOpen && (
-        <Drawer title={`Staff • ${staffFor?.name || ""}`} onClose={() => setStaffOpen(false)}>
+        <Drawer title={`Staff • ${staffFor?.name || ""}`} onClose={() => setStaffOpen(false)} wide>
           {staffErr && <div className="text-sm text-red-600 mb-2">{staffErr}</div>}
           <div className="border rounded-xl overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -551,11 +547,12 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Drawer>
       )}
 
-      {/* Borrowers Drawer (best-effort) */}
+      {/* Borrowers Drawer (wide, best-effort) */}
       {borrowersOpen && (
         <Drawer
           title={`Borrowers • ${borrowersFor?.name || ""}`}
           onClose={() => setBorrowersOpen(false)}
+          wide
         >
           {borrowersErr && (
             <div className="text-sm text-amber-700 mb-2">{borrowersErr}</div>
@@ -982,11 +979,15 @@ function Modal({ title, children, onClose }) {
   );
 }
 
-function Drawer({ title, children, onClose }) {
+function Drawer({ title, children, onClose, wide = false }) {
   return (
     <div className="fixed inset-0 z-40">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="absolute right-0 top-0 h-full w-full max-w-3xl bg-white border-l shadow-xl p-4">
+      <div
+        className={`absolute right-0 top-0 h-full w-full ${
+          wide ? "max-w-5xl" : "max-w-3xl"
+        } bg-white border-l shadow-xl p-4`}
+      >
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold">{title}</h3>
           <button onClick={onClose} className="text-sm px-2 py-1 border rounded">
