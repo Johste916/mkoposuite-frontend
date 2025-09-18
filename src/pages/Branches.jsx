@@ -54,7 +54,6 @@ async function discoverBranchesBase(paths) {
   for (const p of paths) {
     const r = await tryOneGET(p, { params: { limit: 1 } });
     if (r.ok) return p;
-    // treat 401/403 as "exists but unauthorized" -> still good base
     const status = r?.error?.response?.status;
     if (status === 401 || status === 403) return p;
   }
@@ -80,12 +79,11 @@ export default function Branches() {
   const [me, setMe] = useState(null);
   const [tab, setTab] = useState("overview");
 
-  // Endpoint discovery (kept small to avoid spamming 404s)
   const BRANCH_PATH_CANDIDATES = useMemo(
     () => [
-      "/branches", // preferred (proxy to /api/branches via vite proxy if used)
-      "/org/branches", // alt
-      // add "/api/branches" here only if your axios baseURL is origin root
+      "/branches",
+      "/org/branches",
+      // add "/api/branches" only if your axios baseURL is the origin root
     ],
     []
   );
@@ -187,8 +185,11 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const [editOpen, setEditOpen] = useState(false);
   const [editModel, setEditModel] = useState(null);
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false); // soft delete
   const [confirmTarget, setConfirmTarget] = useState(null);
+
+  const [hardOpen, setHardOpen] = useState(false); // hard delete
+  const [hardTarget, setHardTarget] = useState(null);
 
   const [staffOpen, setStaffOpen] = useState(false);
   const [staffFor, setStaffFor] = useState(null);
@@ -251,9 +252,14 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     setEditOpen(true);
   };
 
-  const onDelete = (b) => {
+  const onDisable = (b) => {
     setConfirmTarget(b);
     setConfirmOpen(true);
+  };
+
+  const onHardDelete = (b) => {
+    setHardTarget(b);
+    setHardOpen(true);
   };
 
   const onViewStaff = async (b) => {
@@ -290,8 +296,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     setBorrowersFor(b);
     setBorrowersOpen(true);
     setBorrowersRows([]);
-    setBorrowersErr("");
-    // Prefer tenant-scoped/branch route if present; fallback to legacy
+       setBorrowersErr("");
+    // Prefer branch route; fallback to legacy
     let r = await tryOneGET(`${branchesBase}/${b?.id}/borrowers`);
     if (!r.ok) {
       r = await tryOneGET(`/borrowers`, {
@@ -336,7 +342,6 @@ function Overview({ me, branchesBase, apiUnavailable }) {
       code: editModel.code == null ? null : String(editModel.code).trim(),
       phone: cleanString(onlyDigits(editModel.phone)),
       address: cleanString(editModel.address),
-      // managerId optional; only send if not empty string
       ...(editModel.managerId !== "" ? { managerId: editModel.managerId } : {}),
     };
     const r = await tryOnePUT(`${branchesBase}/${editModel.id}`, payload);
@@ -353,9 +358,29 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     }
   };
 
-  const confirmDelete = async () => {
+  const confirmDisable = async () => {
     if (!branchesBase || !confirmTarget?.id) return;
     const r = await tryOneDELETE(`${branchesBase}/${confirmTarget.id}`);
+    if (!r.ok) {
+      alert(
+        r?.error?.response?.data?.error ||
+          r?.error?.message ||
+          "Failed to disable branch."
+      );
+    }
+    setConfirmOpen(false);
+    setConfirmTarget(null);
+    load();
+  };
+
+  const confirmHardDelete = async () => {
+    if (!branchesBase || !hardTarget?.id) return;
+    // try to hint backend for hard-delete; safe if ignored
+    const r = await tryOneDELETE(`${branchesBase}/${hardTarget.id}`, {
+      params: { force: 1, hard: 1 },
+      headers: { "X-Force-Delete": "1" },
+      data: { force: true }, // some servers read delete body
+    });
     if (!r.ok) {
       alert(
         r?.error?.response?.data?.error ||
@@ -363,8 +388,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
           "Failed to delete branch."
       );
     }
-    setConfirmOpen(false);
-    setConfirmTarget(null);
+    setHardOpen(false);
+    setHardTarget(null);
     load();
   };
 
@@ -373,7 +398,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
       <div className="bg-white border rounded-xl p-3 flex gap-2 items-end">
         <div>
           <label className="block text-xs text-gray-500">Search</label>
-        <input
+          <input
             className="border rounded px-2 py-1 text-sm"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -450,12 +475,20 @@ function Overview({ me, branchesBase, apiUnavailable }) {
                         Edit
                       </button>
                       <button
-                        onClick={() => onDelete(b)}
+                        onClick={() => onDisable(b)}
                         className="px-2 py-1 border rounded hover:bg-red-50 text-red-700"
                         disabled={!can({ ...me }, "branches:manage")}
                         title="Disable (soft delete)"
                       >
                         Disable
+                      </button>
+                      <button
+                        onClick={() => onHardDelete(b)}
+                        className="px-2 py-1 border rounded hover:bg-red-100 text-red-800"
+                        disabled={!can({ ...me }, "branches:manage")}
+                        title="Delete permanently"
+                      >
+                        Delete
                       </button>
                     </div>
                   </td>
@@ -509,7 +542,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Modal>
       )}
 
-      {/* Confirm Delete */}
+      {/* Confirm Disable (soft) */}
       {confirmOpen && (
         <Modal onClose={() => setConfirmOpen(false)} title="Disable Branch">
           <p className="text-sm">
@@ -524,10 +557,34 @@ function Overview({ me, branchesBase, apiUnavailable }) {
               Cancel
             </button>
             <button
-              onClick={confirmDelete}
+              onClick={confirmDisable}
               className="px-3 py-2 border rounded bg-red-600 text-white text-sm"
             >
               Disable
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirm Hard Delete */}
+      {hardOpen && (
+        <Modal onClose={() => setHardOpen(false)} title="Delete Branch">
+          <p className="text-sm">
+            This will <b>permanently delete</b> the branch and may not be reversible.
+            Continue?
+          </p>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              onClick={() => setHardOpen(false)}
+              className="px-3 py-2 border rounded bg-white hover:bg-gray-50 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmHardDelete}
+              className="px-3 py-2 border rounded bg-red-700 text-white text-sm"
+            >
+              Delete
             </button>
           </div>
         </Modal>
@@ -582,7 +639,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Drawer>
       )}
 
-      {/* Borrowers Drawer (best-effort) */}
+      {/* Borrowers Drawer */}
       {borrowersOpen && (
         <Drawer
           title={`Borrowers • ${borrowersFor?.name || ""}`}
@@ -627,7 +684,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Drawer>
       )}
 
-      {/* Overview Drawer (wide) */}
+      {/* Overview Drawer */}
       {overviewOpen && (
         <Drawer
           title={`Overview • ${overviewFor?.name || ""}`}
@@ -643,16 +700,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KPI title="Staff" value={overview.kpis?.staffCount ?? "—"} tone="indigo" />
-                <KPI
-                  title="Borrowers"
-                  value={overview.kpis?.borrowers ?? "—"}
-                  tone="blue"
-                />
-                <KPI
-                  title="Loans"
-                  value={overview.kpis?.loans?.total ?? "—"}
-                  tone="emerald"
-                />
+                <KPI title="Borrowers" value={overview.kpis?.borrowers ?? "—"} tone="blue" />
+                <KPI title="Loans" value={overview.kpis?.loans?.total ?? "—"} tone="emerald" />
                 <KPI
                   title="Outstanding"
                   value={
@@ -861,7 +910,6 @@ function AssignStaff({ branchesBase, apiUnavailable }) {
       setErr("Invalid branch selected.");
       return;
     }
-    // POST {base}/{id}/assign-staff
     const r = await tryOnePOST(`${branchesBase}/${numericBranchId}/assign-staff`, {
       userIds: selected,
     });
@@ -1089,7 +1137,19 @@ function Portal({ children }) {
   return createPortal(children, document.body);
 }
 
+function useLockBodyScroll() {
+  useEffect(() => {
+    const { body } = document;
+    const prev = body.style.overflow;
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.overflow = prev || "";
+    };
+  }, []);
+}
+
 function Modal({ title, children, onClose }) {
+  useLockBodyScroll();
   return (
     <Portal>
       <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -1108,6 +1168,7 @@ function Modal({ title, children, onClose }) {
 }
 
 function Drawer({ title, children, onClose, wide = false }) {
+  useLockBodyScroll();
   return (
     <Portal>
       <div className="fixed inset-0 z-50">
