@@ -1,9 +1,9 @@
 // src/pages/Branches.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import api from "../api";
 
-/* ---------------- permission helper (unchanged) ---------------- */
+/* ---------------- permission helper ---------------- */
 const can = (me, action) => {
   if (!me) return false;
   if (
@@ -32,7 +32,7 @@ async function discoverBranchesBase(paths) {
   return null;
 }
 
-/* ---------------- small helpers (unchanged) -------------------- */
+/* ---------------- small helpers -------------------- */
 const onlyDigits = (v) => String(v || "").replace(/\D+/g, "");
 const toNullableNumber = (v) => {
   const t = String(v ?? "").trim();
@@ -113,23 +113,71 @@ function Tab({ label, id, tab, setTab }) {
   );
 }
 
-/* ======== tiny menu (for a compact Actions cell) ======== */
-function useOnClickOutside(ref, handler) {
-  useEffect(() => {
-    const fn = (e) => { if (!ref.current || ref.current.contains(e.target)) return; handler(); };
-    document.addEventListener("mousedown", fn);
-    document.addEventListener("touchstart", fn, { passive: true });
-    return () => { document.removeEventListener("mousedown", fn); document.removeEventListener("touchstart", fn); };
-  }, [ref, handler]);
+/* ======== Portal + anchored Actions menu (prevents clipping) ======== */
+function PortalRoot({ children }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
 }
-
+function useOnClickAway(targets, handler) {
+  useEffect(() => {
+    const fn = (e) => {
+      const inside = targets.some((r) => r.current && r.current.contains(e.target));
+      if (!inside) handler();
+    };
+    document.addEventListener("mousedown", fn, true);
+    document.addEventListener("touchstart", fn, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener("mousedown", fn, true);
+      document.removeEventListener("touchstart", fn, true);
+    };
+  }, [targets, handler]);
+}
 function ActionMenu({ actions = [] }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useOnClickOutside(ref, () => setOpen(false));
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const place = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const menuW = 200;
+    const gap = 6;
+    let left = Math.min(Math.max(8, r.right - menuW), window.innerWidth - menuW - 8);
+    let top = r.bottom + gap;
+    const approxH = 8 + actions.length * 36;
+    if (top + approxH > window.innerHeight - 8) {
+      top = Math.max(8, r.top - gap - approxH);
+    }
+    setPos({ top, left });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    const onScroll = () => place();
+    const onResize = () => place();
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, actions.length]);
+
+  useOnClickAway([btnRef, menuRef], () => setOpen(false));
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={btnRef}
         className="px-2 py-1 border rounded hover:bg-gray-50"
         onClick={() => setOpen((v) => !v)}
         aria-label="Actions"
@@ -137,21 +185,36 @@ function ActionMenu({ actions = [] }) {
       >
         ⋮
       </button>
+
       {open && (
-        <div className="absolute right-0 mt-1 min-w-[160px] bg-white border shadow rounded-md z-10">
-          {actions.map((a, i) => (
-            <button
-              key={i}
-              onClick={() => { setOpen(false); a.onClick?.(); }}
-              disabled={a.disabled}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${a.danger ? "text-red-700" : ""} disabled:opacity-50`}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
+        <PortalRoot>
+          <div className="fixed inset-0 z-50" style={{ background: "transparent" }} onClick={() => setOpen(false)} />
+          <div
+            ref={menuRef}
+            className="fixed z-[60] min-w-[200px] bg-white border shadow-lg rounded-md"
+            style={{ top: pos.top, left: pos.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {actions.map((a, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  if (a.disabled) return;
+                  setOpen(false);
+                  a.onClick?.();
+                }}
+                disabled={a.disabled}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
+                  a.danger ? "text-red-700" : ""
+                } disabled:opacity-50`}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </PortalRoot>
       )}
-    </div>
+    </>
   );
 }
 
@@ -193,9 +256,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const [assignFor, setAssignFor] = useState(null);
 
   const load = async () => {
-    if (!branchesBase) {
-      setRows([]); setErr(apiUnavailable ? "" : "Detecting endpoint…"); return;
-    }
+    if (!branchesBase) { setRows([]); setErr(apiUnavailable ? "" : "Detecting endpoint…"); return; }
     setLoading(true); setErr("");
     const r = await tryOneGET(branchesBase, { params: { q } });
     setLoading(false);
@@ -226,7 +287,6 @@ function Overview({ me, branchesBase, apiUnavailable }) {
 
   const onDisable = (b) => { setConfirmTarget(b); setConfirmOpen(true); };
   const onHardDelete = (b) => { setHardTarget(b); setHardOpen(true); };
-
   const onAssign = (b) => { setAssignFor(b); setAssignOpen(true); };
 
   const onViewStaff = async (b) => {
@@ -239,7 +299,6 @@ function Overview({ me, branchesBase, apiUnavailable }) {
 
   const onViewBorrowers = async (b) => {
     setBorrowersFor(b); setBorrowersOpen(true); setBorrowersRows([]); setBorrowersErr(""); setBoSel(new Set());
-    // prefer branch-scoped; fallback: /borrowers?branchId=
     let r = await tryOneGET(`${branchesBase}/${b?.id}/borrowers`);
     if (!r.ok) r = await tryOneGET(`/borrowers`, { params: { branchId: b?.id, limit: 1000 } });
     if (r.ok) {
@@ -306,10 +365,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   // bulk unassign borrowers
   const unassignSelectedBorrowers = async () => {
     const ids = [...boSel];
-    // try batch endpoint
     let r = await tryOnePOST(`${branchesBase}/${borrowersFor.id}/unassign-borrowers`, { borrowerIds: ids });
     if (!r.ok) {
-      // fallback: PUT borrower one-by-one -> branchId: null
       for (const id of ids) await tryOnePUT(`/borrowers/${id}`, { branchId: null });
     }
     onViewBorrowers(borrowersFor);
@@ -420,19 +477,9 @@ function Overview({ me, branchesBase, apiUnavailable }) {
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm text-gray-600">{staffRows.length} staff</div>
             <div className="flex gap-2">
-              <button className="px-2 py-1 border rounded text-sm"
-                onClick={() => setStaffSel(new Set(staffRows.map((u) => u.id)))}>
-                Select all
-              </button>
-              <button className="px-2 py-1 border rounded text-sm"
-                onClick={() => setStaffSel(new Set())}>
-                Clear
-              </button>
-              <button className="px-2 py-1 border rounded text-sm disabled:opacity-50"
-                disabled={staffSel.size === 0 || !can({ ...me }, "branches:assign")}
-                onClick={unassignSelectedStaff}>
-                Unassign selected
-              </button>
+              <button className="px-2 py-1 border rounded text-sm" onClick={() => setStaffSel(new Set(staffRows.map((u) => u.id)))}>Select all</button>
+              <button className="px-2 py-1 border rounded text-sm" onClick={() => setStaffSel(new Set())}>Clear</button>
+              <button className="px-2 py-1 border rounded text-sm disabled:opacity-50" disabled={staffSel.size === 0 || !can({ ...me }, "branches:assign")} onClick={unassignSelectedStaff}>Unassign selected</button>
             </div>
           </div>
 
@@ -453,9 +500,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
                 ) : (
                   staffRows.map((u) => (
                     <tr key={u.id} className="border-b">
-                      <td className="py-2 px-3">
-                        <input type="checkbox" checked={staffSel.has(u.id)} onChange={() => toggleSet(staffSel, u.id, setStaffSel)} />
-                      </td>
+                      <td className="py-2 px-3"><input type="checkbox" checked={staffSel.has(u.id)} onChange={() => toggleSet(staffSel, u.id, setStaffSel)} /></td>
                       <td className="py-2 px-3">{u.name || "—"}</td>
                       <td className="py-2 px-3">{u.email || "—"}</td>
                       <td className="py-2 px-3">{u.role || "—"}</td>
@@ -485,19 +530,9 @@ function Overview({ me, branchesBase, apiUnavailable }) {
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm text-gray-600">{borrowersRows.length} borrowers</div>
             <div className="flex gap-2">
-              <button className="px-2 py-1 border rounded text-sm"
-                onClick={() => setBoSel(new Set(borrowersRows.map((b) => b.id)))}>
-                Select all
-              </button>
-              <button className="px-2 py-1 border rounded text-sm"
-                onClick={() => setBoSel(new Set())}>
-                Clear
-              </button>
-              <button className="px-2 py-1 border rounded text-sm disabled:opacity-50"
-                disabled={boSel.size === 0 || !can({ ...me }, "branches:assign")}
-                onClick={unassignSelectedBorrowers}>
-                Unassign selected
-              </button>
+              <button className="px-2 py-1 border rounded text-sm" onClick={() => setBoSel(new Set(borrowersRows.map((b) => b.id)))}>Select all</button>
+              <button className="px-2 py-1 border rounded text-sm" onClick={() => setBoSel(new Set())}>Clear</button>
+              <button className="px-2 py-1 border rounded text-sm disabled:opacity-50" disabled={boSel.size === 0 || !can({ ...me }, "branches:assign")} onClick={unassignSelectedBorrowers}>Unassign selected</button>
             </div>
           </div>
 
@@ -522,9 +557,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
                 ) : (
                   borrowersRows.map((bo) => (
                     <tr key={bo.id} className="border-b">
-                      <td className="py-2 px-3">
-                        <input type="checkbox" checked={boSel.has(bo.id)} onChange={() => toggleSet(boSel, bo.id, setBoSel)} />
-                      </td>
+                      <td className="py-2 px-3"><input type="checkbox" checked={boSel.has(bo.id)} onChange={() => toggleSet(boSel, bo.id, setBoSel)} /></td>
                       <td className="py-2 px-3">{bo.name || bo.fullName || "—"}</td>
                       <td className="py-2 px-3">{bo.phone || "—"}</td>
                       <td className="py-2 px-3">{bo.nationalId || "—"}</td>
@@ -583,7 +616,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Drawer>
       )}
 
-      {/* Assign Drawer (per branch) – bulk assign staff + borrowers */}
+      {/* Assign Drawer (per branch) */}
       {assignOpen && (
         <AssignDrawer
           me={me}
@@ -591,6 +624,64 @@ function Overview({ me, branchesBase, apiUnavailable }) {
           branch={assignFor}
           onClose={() => setAssignOpen(false)}
         />
+      )}
+    </div>
+  );
+}
+
+/* ----------------------------- Add Branch ------------------------- */
+function AddBranch({ branchesBase, apiUnavailable }) {
+  const [form, setForm] = useState({ name: "", code: "", phone: "", address: "" });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const [reqId, setReqId] = useState("");
+
+  const submit = async () => {
+    if (!branchesBase) { setErr(apiUnavailable ? "Branches API not available." : "Detecting endpoint…"); return; }
+    setSaving(true); setErr(""); setMsg(""); setReqId("");
+
+    const payload = {
+      name: cleanString(form.name),
+      code: form.code == null ? null : String(form.code).trim(),
+      phone: cleanString(onlyDigits(form.phone)),
+      address: cleanString(form.address),
+    };
+
+    const r = await tryOnePOST(branchesBase, payload);
+    setSaving(false);
+
+    if (r.ok) {
+      setMsg("Branch created.");
+      setForm({ name: "", code: "", phone: "", address: "" });
+    } else {
+      const data = r?.error?.response?.data;
+      setReqId(data?.requestId || "");
+      setErr(data?.error || data?.message || r?.error?.message || "Failed to create branch");
+    }
+  };
+
+  return (
+    <div className="bg-white border rounded-xl p-3 grid gap-2 md:grid-cols-4 items-end">
+      {["name", "code", "phone", "address"].map((k) => (
+        <div key={k}>
+          <label className="block text-xs text-gray-500 capitalize">{k}</label>
+          <input
+            className="border rounded px-2 py-1 text-sm w-full"
+            value={form[k]}
+            onChange={(e) => setForm((s) => ({ ...s, [k]: e.target.value }))}
+            placeholder={k === "code" ? "e.g. 1" : k === "phone" ? "digits only" : ""}
+          />
+        </div>
+      ))}
+      <button onClick={submit} disabled={saving || !branchesBase} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60">
+        {saving ? "Saving…" : "Create"}
+      </button>
+      {msg && <div className="text-sm text-emerald-700">{msg}</div>}
+      {(err || reqId) && (
+        <div className="text-sm text-red-600 col-span-full">
+          {err} {reqId ? <span className="text-xs opacity-80">(requestId: {reqId})</span> : null}
+        </div>
       )}
     </div>
   );
@@ -632,11 +723,8 @@ function AssignDrawer({ me, branchesBase, branch, onClose }) {
   const postAssignBorrowers = async () => {
     if (!branchesBase || !branch?.id) return;
     const ids = [...bSel];
-
-    // try batch endpoint first
     let r = await tryOnePOST(`${branchesBase}/${branch.id}/assign-borrowers`, { borrowerIds: ids });
     if (!r.ok) {
-      // fallback: update borrowers one by one
       for (const id of ids) await tryOnePUT(`/borrowers/${id}`, { branchId: branch.id });
       r = { ok: true };
     }
@@ -728,7 +816,6 @@ function AssignDrawer({ me, branchesBase, branch, onClose }) {
 
 /* ----------------------------- Assign Center (global tab) -------- */
 function AssignCenter({ branchesBase, apiUnavailable }) {
-  // kept from your previous "AssignStaff" but renamed; unchanged behavior
   const [branches, setBranches] = useState([]);
   const [users, setUsers] = useState([]);
   const [branchId, setBranchId] = useState("");
@@ -883,14 +970,19 @@ function KPI({ title, value, tone = "indigo" }) {
   );
 }
 
-/* ----------------------------- Tiny Modal/Drawer (via Portal) ---- */
-function Portal({ children }) { if (typeof document === "undefined") return null; return createPortal(children, document.body); }
-function useLockBodyScroll() { useEffect(() => { const { body } = document; const prev = body.style.overflow; body.style.overflow = "hidden"; return () => { body.style.overflow = prev || ""; }; }, []); }
-
+/* ----------------------------- Modal/Drawer (via Portal) ---- */
+function useLockBodyScroll() {
+  useEffect(() => {
+    const { body } = document;
+    const prev = body.style.overflow;
+    body.style.overflow = "hidden";
+    return () => { body.style.overflow = prev || ""; };
+  }, []);
+}
 function Modal({ title, children, onClose }) {
   useLockBodyScroll();
   return (
-    <Portal>
+    <PortalRoot>
       <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl border shadow p-4 w-full max-w-lg">
           <div className="flex items-center justify-between mb-3">
@@ -900,14 +992,13 @@ function Modal({ title, children, onClose }) {
           {children}
         </div>
       </div>
-    </Portal>
+    </PortalRoot>
   );
 }
-
 function Drawer({ title, children, onClose, wide = false }) {
   useLockBodyScroll();
   return (
-    <Portal>
+    <PortalRoot>
       <div className="fixed inset-0 z-50">
         <div className="absolute inset-0 bg-black/30" onClick={onClose} />
         <div className={`absolute right-0 top-0 h-full w-full ${wide ? "max-w-5xl" : "max-w-3xl"} bg-white border-l shadow-xl p-4`}>
@@ -918,6 +1009,6 @@ function Drawer({ title, children, onClose, wide = false }) {
           {children}
         </div>
       </div>
-    </Portal>
+    </PortalRoot>
   );
 }
