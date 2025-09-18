@@ -46,6 +46,53 @@ const cleanString = (v) => {
   return s.length ? s : null;
 };
 
+/* ---------- normalizers: make drawers robust to many API shapes ---------- */
+function pickArrayish(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  return (
+    data.items ||
+    data.rows ||
+    data.data ||
+    data.users ||
+    data.staff ||
+    data.borrowers ||
+    []
+  );
+}
+function normalizeUserRow(row) {
+  // Accept {id, name...} OR {userId, User:{...}} OR {user:{...}}
+  const u = row?.User || row?.user || row;
+  const id = u?.id ?? row?.userId ?? row?.id;
+  const role =
+    u?.role ||
+    (Array.isArray(u?.Roles) ? u.Roles.map((r) => r?.name).filter(Boolean).join(", ") : undefined) ||
+    row?.role ||
+    row?.Role?.name;
+  const name =
+    u?.name ||
+    [u?.firstName, u?.lastName].filter(Boolean).join(" ").trim() ||
+    row?.name;
+  return {
+    id,
+    name: name || "—",
+    email: u?.email || row?.email || "—",
+    role: role || "—",
+  };
+}
+function normalizeBorrowerRow(row) {
+  // Accept {id,...} OR {borrowerId, Borrower:{...}}
+  const b = row?.Borrower || row?.borrower || row;
+  const id = b?.id ?? row?.borrowerId ?? row?.id;
+  return {
+    id,
+    name: b?.name || b?.fullName || row?.name || "—",
+    phone: b?.phone || row?.phone || "—",
+    nationalId: b?.nationalId || row?.nationalId || "—",
+    status: b?.status || row?.status || "—",
+  };
+}
+
 /* ============================== PAGE ============================== */
 export default function Branches() {
   const [me, setMe] = useState(null);
@@ -292,9 +339,21 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const onViewStaff = async (b) => {
     setStaffFor(b); setStaffOpen(true); setStaffRows([]); setStaffErr(""); setStaffSel(new Set());
     if (!branchesBase || !b?.id) return;
-    const r = await tryOneGET(`${branchesBase}/${b.id}/staff`);
-    if (r.ok) setStaffRows(r.data?.items || r.data || []);
-    else setStaffErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load staff.");
+    // Primary endpoint
+    let r = await tryOneGET(`${branchesBase}/${b.id}/staff`);
+    if (r.ok) {
+      const raw = pickArrayish(r.data);
+      setStaffRows(raw.map(normalizeUserRow).filter((u) => u.id != null));
+      return;
+    }
+    // Fallback: try "/users?branchId="
+    r = await tryOneGET(`/users`, { params: { branchId: b?.id, limit: 1000 } });
+    if (r.ok) {
+      const raw = pickArrayish(r.data);
+      setStaffRows(raw.map(normalizeUserRow).filter((u) => u.id != null));
+    } else {
+      setStaffErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load staff.");
+    }
   };
 
   const onViewBorrowers = async (b) => {
@@ -302,8 +361,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     let r = await tryOneGET(`${branchesBase}/${b?.id}/borrowers`);
     if (!r.ok) r = await tryOneGET(`/borrowers`, { params: { branchId: b?.id, limit: 1000 } });
     if (r.ok) {
-      const data = r.data; const items = data?.items || data?.rows || data?.data || data || [];
-      setBorrowersRows(items);
+      const raw = pickArrayish(r.data);
+      setBorrowersRows(raw.map(normalizeBorrowerRow).filter((x) => x.id != null));
     } else {
       setBorrowersErr(r?.error?.response?.data?.error || r?.error?.message || "Borrowers endpoint not available.");
     }
@@ -353,11 +412,21 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     else setOverviewErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load overview.");
   };
 
-  // bulk unassign staff
+  // bulk unassign staff (tolerant batch + per-item fallback)
   const unassignSelectedStaff = async () => {
     const ids = [...staffSel];
-    for (const id of ids) {
-      await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff/${id}`);
+    if (!ids.length || !branchesBase || !staffFor?.id) return;
+
+    // 1) Try batch endpoint if available
+    let r = await tryOnePOST(`${branchesBase}/${staffFor.id}/unassign-staff`, { userIds: ids });
+    if (!r.ok) {
+      // 2) Try DELETE /branches/:id/staff?userId=...
+      for (const id of ids) {
+        let one = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff/${id}`);
+        if (!one.ok) {
+          one = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff`, { params: { userId: id } });
+        }
+      }
     }
     onViewStaff(staffFor);
   };
@@ -365,8 +434,11 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   // bulk unassign borrowers
   const unassignSelectedBorrowers = async () => {
     const ids = [...boSel];
+    if (!ids.length || !branchesBase || !borrowersFor?.id) return;
+
     let r = await tryOnePOST(`${branchesBase}/${borrowersFor.id}/unassign-borrowers`, { borrowerIds: ids });
     if (!r.ok) {
+      // Fallback: set borrower.branchId = null
       for (const id of ids) await tryOnePUT(`/borrowers/${id}`, { branchId: null });
     }
     onViewBorrowers(borrowersFor);
@@ -506,7 +578,15 @@ function Overview({ me, branchesBase, apiUnavailable }) {
                       <td className="py-2 px-3">{u.role || "—"}</td>
                       <td className="py-2 px-3">
                         <button
-                          onClick={async () => { await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff/${u.id}`); onViewStaff(staffFor); }}
+                          onClick={async () => {
+                            // first try DELETE /branches/:branchId/staff/:userId
+                            let d = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff/${u.id}`);
+                            if (!d.ok) {
+                              // then try DELETE /branches/:branchId/staff?userId=...
+                              d = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff`, { params: { userId: u.id } });
+                            }
+                            onViewStaff(staffFor);
+                          }}
                           className="px-2 py-1 border rounded hover:bg-gray-50"
                           disabled={!can({ ...me }, "branches:assign")}
                         >
@@ -558,7 +638,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
                   borrowersRows.map((bo) => (
                     <tr key={bo.id} className="border-b">
                       <td className="py-2 px-3"><input type="checkbox" checked={boSel.has(bo.id)} onChange={() => toggleSet(boSel, bo.id, setBoSel)} /></td>
-                      <td className="py-2 px-3">{bo.name || bo.fullName || "—"}</td>
+                      <td className="py-2 px-3">{bo.name || "—"}</td>
                       <td className="py-2 px-3">{bo.phone || "—"}</td>
                       <td className="py-2 px-3">{bo.nationalId || "—"}</td>
                       <td className="py-2 px-3">{bo.status || "—"}</td>
