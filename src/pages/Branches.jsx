@@ -31,6 +31,22 @@ async function tryOnePOST(path, body = {}, opts = {}) {
     return { ok: false, error: e };
   }
 }
+async function tryOnePUT(path, body = {}, opts = {}) {
+  try {
+    const res = await api.put(path, body, opts);
+    return { ok: true, data: res?.data };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+}
+async function tryOneDELETE(path, opts = {}) {
+  try {
+    const res = await api.delete(path, opts);
+    return { ok: true, data: res?.data };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+}
 
 /** Discover the first working branches base path and return it (e.g. "/branches"). */
 async function discoverBranchesBase(paths) {
@@ -66,9 +82,9 @@ export default function Branches() {
   // Endpoint discovery (kept small to avoid spamming 404s)
   const BRANCH_PATH_CANDIDATES = useMemo(
     () => [
-      "/branches",        // preferred (works because axios baseURL ends with /api)
+      "/branches",        // preferred (proxy to /api/branches via vite proxy if used)
       "/org/branches",    // alt
-      "/api/branches",    // safe absolute fallback
+      // if your API truly lives under /api and api baseURL is root, add "/api/branches" here
     ],
     []
   );
@@ -124,7 +140,13 @@ export default function Branches() {
         </div>
       </header>
 
-      {tab === "overview" && <Overview branchesBase={branchesBase} apiUnavailable={apiUnavailable} />}
+      {tab === "overview" && (
+        <Overview
+          me={me}
+          branchesBase={branchesBase}
+          apiUnavailable={apiUnavailable}
+        />
+      )}
       {tab === "add" && can(me, "branches:manage") && (
         <AddBranch branchesBase={branchesBase} apiUnavailable={apiUnavailable} />
       )}
@@ -154,10 +176,28 @@ function Tab({ label, id, tab, setTab }) {
 }
 
 /* ----------------------------- Overview --------------------------- */
-function Overview({ branchesBase, apiUnavailable }) {
+function Overview({ me, branchesBase, apiUnavailable }) {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // UI state: modals/drawers
+  const [editOpen, setEditOpen] = useState(false);
+  const [editModel, setEditModel] = useState(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null);
+
+  const [staffOpen, setStaffOpen] = useState(false);
+  const [staffFor, setStaffFor] = useState(null);
+  const [staffRows, setStaffRows] = useState([]);
+  const [staffErr, setStaffErr] = useState("");
+
+  const [borrowersOpen, setBorrowersOpen] = useState(false);
+  const [borrowersFor, setBorrowersFor] = useState(null);
+  const [borrowersRows, setBorrowersRows] = useState([]);
+  const [borrowersErr, setBorrowersErr] = useState("");
 
   const load = async () => {
     if (!branchesBase) {
@@ -165,8 +205,10 @@ function Overview({ branchesBase, apiUnavailable }) {
       setErr(apiUnavailable ? "" : "Detecting endpoint…");
       return;
     }
+    setLoading(true);
     setErr("");
     const r = await tryOneGET(branchesBase, { params: { q } });
+    setLoading(false);
     if (r.ok) {
       const data = r.data;
       const items = Array.isArray(data?.items)
@@ -176,7 +218,11 @@ function Overview({ branchesBase, apiUnavailable }) {
         : data?.rows || data?.data || [];
       setRows(items);
     } else {
-      setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load branches.");
+      setErr(
+        r?.error?.response?.data?.error ||
+          r?.error?.message ||
+          "Failed to load branches."
+      );
       setRows([]);
     }
   };
@@ -185,6 +231,122 @@ function Overview({ branchesBase, apiUnavailable }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchesBase]); // initial + when discovery finishes
+
+  // ----- Actions -----
+  const onEdit = (b) => {
+    setEditModel({
+      id: b.id,
+      name: b.name || "",
+      code: b.code ?? "",
+      phone: b.phone ?? "",
+      address: b.address ?? "",
+      managerId: b.managerId ?? b.manager ?? "",
+    });
+    setEditOpen(true);
+  };
+
+  const onDelete = (b) => {
+    setConfirmTarget(b);
+    setConfirmOpen(true);
+  };
+
+  const onViewStaff = async (b) => {
+    setStaffFor(b);
+    setStaffOpen(true);
+    setStaffRows([]);
+    setStaffErr("");
+    if (!branchesBase || !b?.id) return;
+    const r = await tryOneGET(`${branchesBase}/${b.id}/staff`);
+    if (r.ok) {
+      setStaffRows(r.data?.items || r.data || []);
+    } else {
+      setStaffErr(
+        r?.error?.response?.data?.error || r?.error?.message || "Failed to load staff."
+      );
+    }
+  };
+
+  const unassignStaff = async (userId) => {
+    if (!branchesBase || !staffFor?.id || !userId) return;
+    const r = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff/${userId}`);
+    if (!r.ok) {
+      const msg =
+        r?.error?.response?.data?.error ||
+        r?.error?.message ||
+        "Failed to unassign.";
+      setStaffErr(msg);
+      return;
+    }
+    // Refresh list
+    onViewStaff(staffFor);
+  };
+
+  const onViewBorrowers = async (b) => {
+    setBorrowersFor(b);
+    setBorrowersOpen(true);
+    setBorrowersRows([]);
+    setBorrowersErr("");
+    // Best effort: assumes /api/borrowers supports ?branchId=
+    const r = await tryOneGET(`/borrowers`, {
+      params: { branchId: b?.id, limit: 500 },
+    });
+    if (r.ok) {
+      const data = r.data;
+      const items = Array.isArray(data?.items)
+        ? data.items
+        : Array.isArray(data?.rows)
+        ? data.rows
+        : Array.isArray(data)
+        ? data
+        : data?.data || [];
+      setBorrowersRows(items);
+    } else {
+      setBorrowersErr(
+        r?.error?.response?.data?.error ||
+          r?.error?.message ||
+          "Borrowers endpoint not available."
+      );
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!branchesBase || !editModel?.id) return;
+    const payload = {
+      name: cleanString(editModel.name),
+      code: editModel.code == null ? null : String(editModel.code).trim(),
+      phone: cleanString(onlyDigits(editModel.phone)),
+      address: cleanString(editModel.address),
+      // managerId optional; only send if not empty string
+      ...(editModel.managerId !== "" ? { managerId: editModel.managerId } : {}),
+    };
+    const r = await tryOnePUT(`${branchesBase}/${editModel.id}`, payload);
+    if (r.ok) {
+      setEditOpen(false);
+      setEditModel(null);
+      load();
+    } else {
+      alert(
+        r?.error?.response?.data?.error ||
+          r?.error?.message ||
+          "Failed to update branch."
+      );
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!branchesBase || !confirmTarget?.id) return;
+    const r = await tryOneDELETE(`${branchesBase}/${confirmTarget.id}`);
+    if (!r.ok) {
+      alert(
+        r?.error?.response?.data?.error ||
+          r?.error?.message ||
+          "Failed to delete branch."
+      );
+    }
+    setConfirmOpen(false);
+    setConfirmTarget(null);
+    load();
+  };
 
   return (
     <div className="space-y-3">
@@ -203,7 +365,7 @@ function Overview({ branchesBase, apiUnavailable }) {
           disabled={!branchesBase}
           className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
         >
-          Apply
+          {loading ? "Loading…" : "Apply"}
         </button>
       </div>
       {err && <div className="text-sm text-red-600">{err}</div>}
@@ -216,12 +378,13 @@ function Overview({ branchesBase, apiUnavailable }) {
               <th className="py-2 px-3">Phone</th>
               <th className="py-2 px-3">Address</th>
               <th className="py-2 px-3">Manager</th>
+              <th className="py-2 px-3 w-1">Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-3 text-gray-500">
+                <td colSpan={6} className="p-3 text-gray-500">
                   {branchesBase ? "No branches yet." : "Waiting for endpoint…"}
                 </td>
               </tr>
@@ -233,7 +396,41 @@ function Overview({ branchesBase, apiUnavailable }) {
                   <td className="py-2 px-3">{b.phone ?? "—"}</td>
                   <td className="py-2 px-3">{b.address ?? "—"}</td>
                   <td className="py-2 px-3">
-                    {b.managerName || b.manager_id || "—"}
+                    {b.managerName || b.manager_id || b.managerId || "—"}
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex flex-wrap gap-1">
+                      <button
+                        onClick={() => onViewStaff(b)}
+                        className="px-2 py-1 border rounded hover:bg-gray-50"
+                        title="View Staff"
+                      >
+                        Staff
+                      </button>
+                      <button
+                        onClick={() => onViewBorrowers(b)}
+                        className="px-2 py-1 border rounded hover:bg-gray-50"
+                        title="View Borrowers"
+                      >
+                        Borrowers
+                      </button>
+                      <button
+                        onClick={() => onEdit(b)}
+                        className="px-2 py-1 border rounded hover:bg-gray-50"
+                        disabled={!can({ ...me }, "branches:manage")}
+                        title="Edit"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => onDelete(b)}
+                        className="px-2 py-1 border rounded hover:bg-red-50 text-red-700"
+                        disabled={!can({ ...me }, "branches:manage")}
+                        title="Disable (soft delete)"
+                      >
+                        Disable
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -241,6 +438,162 @@ function Overview({ branchesBase, apiUnavailable }) {
           </tbody>
         </table>
       </div>
+
+      {/* Edit Modal */}
+      {editOpen && (
+        <Modal onClose={() => setEditOpen(false)} title="Edit Branch">
+          <div className="grid gap-2">
+            {["name", "code", "phone", "address", "managerId"].map((k) => (
+              <div key={k}>
+                <label className="block text-xs text-gray-500 capitalize">
+                  {k === "managerId" ? "Manager ID" : k}
+                </label>
+                <input
+                  className="border rounded px-2 py-1 text-sm w-full"
+                  value={editModel?.[k] ?? ""}
+                  onChange={(e) =>
+                    setEditModel((s) => ({ ...s, [k]: e.target.value }))
+                  }
+                  placeholder={
+                    k === "code"
+                      ? "e.g. 1"
+                      : k === "phone"
+                      ? "digits only"
+                      : ""
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              onClick={() => setEditOpen(false)}
+              className="px-3 py-2 border rounded bg-white hover:bg-gray-50 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveEdit}
+              className="px-3 py-2 border rounded bg-slate-900 text-white text-sm"
+            >
+              Save
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirm Delete */}
+      {confirmOpen && (
+        <Modal onClose={() => setConfirmOpen(false)} title="Disable Branch">
+          <p className="text-sm">
+            This will <b>soft-delete</b> the branch (disable) so it won’t appear
+            in normal lists. Continue?
+          </p>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              onClick={() => setConfirmOpen(false)}
+              className="px-3 py-2 border rounded bg-white hover:bg-gray-50 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="px-3 py-2 border rounded bg-red-600 text-white text-sm"
+            >
+              Disable
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Staff Drawer */}
+      {staffOpen && (
+        <Drawer title={`Staff • ${staffFor?.name || ""}`} onClose={() => setStaffOpen(false)}>
+          {staffErr && <div className="text-sm text-red-600 mb-2">{staffErr}</div>}
+          <div className="border rounded-xl overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-600 border-b">
+                  <th className="py-2 px-3">Name</th>
+                  <th className="py-2 px-3">Email</th>
+                  <th className="py-2 px-3">Role</th>
+                  <th className="py-2 px-3 w-1">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(staffRows || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-3 text-gray-500">
+                      No staff assigned.
+                    </td>
+                  </tr>
+                ) : (
+                  staffRows.map((u) => (
+                    <tr key={u.id} className="border-b">
+                      <td className="py-2 px-3">{u.name || "—"}</td>
+                      <td className="py-2 px-3">{u.email || "—"}</td>
+                      <td className="py-2 px-3">{u.role || "—"}</td>
+                      <td className="py-2 px-3">
+                        <button
+                          onClick={() => unassignStaff(u.id)}
+                          className="px-2 py-1 border rounded hover:bg-gray-50"
+                          disabled={!can({ ...me }, "branches:assign")}
+                        >
+                          Unassign
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Drawer>
+      )}
+
+      {/* Borrowers Drawer (best-effort) */}
+      {borrowersOpen && (
+        <Drawer
+          title={`Borrowers • ${borrowersFor?.name || ""}`}
+          onClose={() => setBorrowersOpen(false)}
+        >
+          {borrowersErr && (
+            <div className="text-sm text-amber-700 mb-2">{borrowersErr}</div>
+          )}
+          <div className="border rounded-xl overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-600 border-b">
+                  <th className="py-2 px-3">Name</th>
+                  <th className="py-2 px-3">Phone</th>
+                  <th className="py-2 px-3">National ID</th>
+                  <th className="py-2 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(borrowersRows || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-3 text-gray-500">
+                      {borrowersErr
+                        ? "Endpoint not available."
+                        : "No borrowers found."}
+                    </td>
+                  </tr>
+                ) : (
+                  borrowersRows.map((bo) => (
+                    <tr key={bo.id} className="border-b">
+                      <td className="py-2 px-3">{bo.name || bo.fullName || "—"}</td>
+                      <td className="py-2 px-3">{bo.phone || "—"}</td>
+                      <td className="py-2 px-3">{bo.nationalId || "—"}</td>
+                      <td className="py-2 px-3">{bo.status || "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Drawer>
+      )}
     </div>
   );
 }
@@ -271,8 +624,7 @@ function AddBranch({ branchesBase, apiUnavailable }) {
 
     const payload = {
       name: cleanString(form.name),
-      // 🔁 code is a STRING in DB; keep as string (don’t coerce to number)
-      code: cleanString(form.code),
+      code: form.code == null ? null : String(form.code).trim(),
       phone: cleanString(onlyDigits(form.phone)),
       address: cleanString(form.address),
     };
@@ -283,8 +635,6 @@ function AddBranch({ branchesBase, apiUnavailable }) {
     if (r.ok) {
       setMsg("Branch created.");
       setForm({ name: "", code: "", phone: "", address: "" });
-      // soft refresh Overview if the tab is open in the same mount
-      // (no-op here; Overview has its own loader)
     } else {
       const data = r?.error?.response?.data;
       setReqId(data?.requestId || "");
@@ -309,7 +659,7 @@ function AddBranch({ branchesBase, apiUnavailable }) {
               setForm((s) => ({ ...s, [k]: e.target.value }))
             }
             placeholder={
-              k === "code" ? "e.g. 001" : k === "phone" ? "digits only" : ""
+              k === "code" ? "e.g. 1" : k === "phone" ? "digits only" : ""
             }
           />
         </div>
@@ -400,7 +750,6 @@ function AssignStaff({ branchesBase, apiUnavailable }) {
     });
     if (r.ok) {
       setMsg("Assigned successfully.");
-      // optional: re-pull staff list if you later render it on this page
     } else {
       setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to assign staff.");
     }
@@ -612,6 +961,40 @@ function KPI({ title, value, tone = "indigo" }) {
     <div className="bg-white border rounded-xl p-3 flex items-center gap-3">
       <div className={`px-2 py-1 rounded ${tones}`}>{title}</div>
       <div className="font-semibold">{value ?? "—"}</div>
+    </div>
+  );
+}
+
+/* ----------------------------- Tiny Modal/Drawer ------------------ */
+function Modal({ title, children, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl border shadow p-4 w-full max-w-lg">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold">{title}</h3>
+          <button onClick={onClose} className="text-sm px-2 py-1 border rounded">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Drawer({ title, children, onClose }) {
+  return (
+    <div className="fixed inset-0 z-40">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute right-0 top-0 h-full w-full max-w-3xl bg-white border-l shadow-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold">{title}</h3>
+          <button onClick={onClose} className="text-sm px-2 py-1 border rounded">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
