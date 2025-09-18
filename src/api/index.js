@@ -5,19 +5,25 @@ import axios from "axios";
 
 // Resolve base URL (env or /api fallback)
 const baseURL =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL?.replace(/\/+$/, "")) ||
-  (typeof process !== "undefined" && process.env?.REACT_APP_API_BASE_URL?.replace(/\/+$/, "")) ||
+  (typeof import.meta !== "undefined" &&
+    import.meta.env?.VITE_API_BASE_URL?.replace(/\/+$/, "")) ||
+  (typeof process !== "undefined" &&
+    process.env?.REACT_APP_API_BASE_URL?.replace(/\/+$/, "")) ||
   `${(typeof window !== "undefined" && window.location?.origin) || ""}/api`;
 
 const api = axios.create({
   baseURL,
   timeout: 30000,
-  withCredentials: false,
+  withCredentials: false, // unchanged
+  headers: {
+    Accept: "application/json",
+  },
 });
 
 // Helpers to pull tokens/tenant/branch from storage
 const TOKEN_KEYS = ["token", "jwt", "authToken", "accessToken", "access_token"];
 const TENANT_KEYS = ["tenant", "tenantId", "x-tenant-id", "tenantID"];
+
 const getToken = () => {
   for (const k of TOKEN_KEYS) {
     const v = localStorage.getItem(k) || sessionStorage.getItem(k);
@@ -25,10 +31,12 @@ const getToken = () => {
   }
   return null;
 };
+
 const getTenantId = () => {
   // Prefer full tenant object if present
   try {
-    const raw = localStorage.getItem("tenant") || sessionStorage.getItem("tenant");
+    const raw =
+      localStorage.getItem("tenant") || sessionStorage.getItem("tenant");
     if (raw) {
       const t = JSON.parse(raw);
       if (t?.id) return t.id;
@@ -40,12 +48,21 @@ const getTenantId = () => {
   }
   // env default (optional)
   const envDefault =
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_DEFAULT_TENANT_ID) ||
-    (typeof process !== "undefined" && process.env?.REACT_APP_DEFAULT_TENANT_ID);
+    (typeof import.meta !== "undefined" &&
+      import.meta.env?.VITE_DEFAULT_TENANT_ID) ||
+    (typeof process !== "undefined" &&
+      process.env?.REACT_APP_DEFAULT_TENANT_ID);
   return envDefault || null;
 };
-const getBranchId = () => localStorage.getItem("activeBranchId") || sessionStorage.getItem("activeBranchId") || null;
-const randomId = () => (crypto?.randomUUID?.() || `req_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+
+const getBranchId = () =>
+  localStorage.getItem("activeBranchId") ||
+  sessionStorage.getItem("activeBranchId") ||
+  null;
+
+const randomId = () =>
+  (crypto?.randomUUID?.() ||
+    `req_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
 // Attach headers before each request
 api.interceptors.request.use((config) => {
@@ -58,7 +75,24 @@ api.interceptors.request.use((config) => {
   const branchId = getBranchId();
   if (branchId) config.headers["x-branch-id"] = branchId;
 
+  // 🆕 helpful, non-breaking context headers
+  try {
+    const tz =
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    if (!config.headers["x-timezone"]) config.headers["x-timezone"] = tz;
+  } catch {}
+  if (!config.headers["x-tz-offset"]) {
+    try {
+      const offsetMin = new Date().getTimezoneOffset(); // minutes
+      config.headers["x-tz-offset"] = String(offsetMin);
+    } catch {}
+  }
+
+  // Ensure request id
   config.headers["x-request-id"] ||= randomId();
+  // Always send JSON unless caller overrides
+  config.headers["Content-Type"] ||= "application/json";
+
   return config;
 });
 
@@ -67,16 +101,27 @@ const signOut = () => {
   try {
     [
       ...TOKEN_KEYS,
-      "user", "tenant", "tenantId", "tenantName", "activeBranchId",
+      "user",
+      "tenant",
+      "tenantId",
+      "tenantName",
+      "activeBranchId",
     ].forEach((k) => {
-      try { localStorage.removeItem(k); } catch {}
-      try { sessionStorage.removeItem(k); } catch {}
+      try {
+        localStorage.removeItem(k);
+      } catch {}
+      try {
+        sessionStorage.removeItem(k);
+      } catch {}
     });
     delete api.defaults.headers.common.Authorization;
     delete api.defaults.headers.common["x-tenant-id"];
     delete api.defaults.headers.common["x-branch-id"];
   } catch {}
-  if (typeof window !== "undefined" && window.location?.pathname !== "/login") {
+  if (
+    typeof window !== "undefined" &&
+    !/^\/(login|auth)/.test(window.location?.pathname || "")
+  ) {
     window.location.replace("/login");
   }
 };
@@ -93,12 +138,26 @@ api.interceptors.response.use(
     const status = err?.response?.status;
     const code = err?.code;
 
+    // Attach server request id to error if present (helps support/debug)
+    try {
+      const rid =
+        err?.response?.headers?.["x-request-id"] ||
+        err?.response?.data?.requestId;
+      if (rid) err.requestId = rid;
+    } catch {}
+
     // Normalized message for UI
     err.normalizedMessage =
-      code === "ECONNABORTED" ? "Request timeout. Please try again." :
-      status === 401        ? "Unauthorized. Please sign in again." :
-      status >= 500         ? "Server error. Please try again." :
-      (err?.response?.data?.message || err?.response?.data?.error || err?.message || "Request failed");
+      code === "ECONNABORTED"
+        ? "Request timeout. Please try again."
+        : status === 401
+        ? "Unauthorized. Please sign in again."
+        : status >= 500
+        ? "Server error. Please try again."
+        : err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          err?.message ||
+          "Request failed";
 
     // Hard 401: purge and redirect
     if (status === 401) {
@@ -108,7 +167,8 @@ api.interceptors.response.use(
 
     // Light retries for ECONNABORTED / 5xx
     const cfg = err.config || {};
-    const shouldRetry = code === "ECONNABORTED" || (status >= 500 && status < 600);
+    const shouldRetry =
+      code === "ECONNABORTED" || (status >= 500 && status < 600);
     if (shouldRetry && (cfg._retry || 0) < 2) {
       cfg._retry = (cfg._retry || 0) + 1;
       const delay = 300 * Math.pow(2, cfg._retry - 1); // 300ms, 600ms
@@ -118,7 +178,11 @@ api.interceptors.response.use(
 
     // Bubble up
     if (process.env.NODE_ENV !== "production") {
-      console.error("API error:", err.normalizedMessage, err?.response || err);
+      console.error(
+        "API error:",
+        err.normalizedMessage,
+        err?.response || err
+      );
     }
     return Promise.reject(err);
   }

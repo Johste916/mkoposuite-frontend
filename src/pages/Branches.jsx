@@ -66,9 +66,9 @@ export default function Branches() {
   // Endpoint discovery (kept small to avoid spamming 404s)
   const BRANCH_PATH_CANDIDATES = useMemo(
     () => [
-      "/branches",        // preferred
+      "/branches",        // preferred (works because axios baseURL ends with /api)
       "/org/branches",    // alt
-      // if your API truly lives under /api and api baseURL is root, add "/api/branches" here
+      "/api/branches",    // safe absolute fallback
     ],
     []
   );
@@ -271,7 +271,8 @@ function AddBranch({ branchesBase, apiUnavailable }) {
 
     const payload = {
       name: cleanString(form.name),
-      code: toNullableNumber(form.code),
+      // 🔁 code is a STRING in DB; keep as string (don’t coerce to number)
+      code: cleanString(form.code),
       phone: cleanString(onlyDigits(form.phone)),
       address: cleanString(form.address),
     };
@@ -282,6 +283,8 @@ function AddBranch({ branchesBase, apiUnavailable }) {
     if (r.ok) {
       setMsg("Branch created.");
       setForm({ name: "", code: "", phone: "", address: "" });
+      // soft refresh Overview if the tab is open in the same mount
+      // (no-op here; Overview has its own loader)
     } else {
       const data = r?.error?.response?.data;
       setReqId(data?.requestId || "");
@@ -306,7 +309,7 @@ function AddBranch({ branchesBase, apiUnavailable }) {
               setForm((s) => ({ ...s, [k]: e.target.value }))
             }
             placeholder={
-              k === "code" ? "e.g. 1" : k === "phone" ? "digits only" : ""
+              k === "code" ? "e.g. 001" : k === "phone" ? "digits only" : ""
             }
           />
         </div>
@@ -397,6 +400,7 @@ function AssignStaff({ branchesBase, apiUnavailable }) {
     });
     if (r.ok) {
       setMsg("Assigned successfully.");
+      // optional: re-pull staff list if you later render it on this page
     } else {
       setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to assign staff.");
     }
