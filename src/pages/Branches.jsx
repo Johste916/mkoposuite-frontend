@@ -53,7 +53,6 @@ async function discoverBranchesBase(paths) {
   for (const p of paths) {
     const r = await tryOneGET(p, { params: { limit: 1 } });
     if (r.ok) return p;
-    // treat 401/403 as "exists but unauthorized" -> still good base
     const status = r?.error?.response?.status;
     if (status === 401 || status === 403) return p;
   }
@@ -79,12 +78,10 @@ export default function Branches() {
   const [me, setMe] = useState(null);
   const [tab, setTab] = useState("overview");
 
-  // Endpoint discovery (kept small to avoid spamming 404s)
   const BRANCH_PATH_CANDIDATES = useMemo(
     () => [
-      "/branches",        // preferred (proxy to /api/branches via vite proxy if used)
-      "/org/branches",    // alt
-      // if your API truly lives under /api and api baseURL is root, add "/api/branches" here
+      "/branches",
+      "/org/branches",
     ],
     []
   );
@@ -187,7 +184,6 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const [editModel, setEditModel] = useState(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
-  
   const [confirmTarget, setConfirmTarget] = useState(null);
 
   const [staffOpen, setStaffOpen] = useState(false);
@@ -230,8 +226,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchesBase]); // initial + when discovery finishes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchesBase]);
 
   // ----- Actions -----
   const onEdit = (b) => {
@@ -278,7 +274,6 @@ function Overview({ me, branchesBase, apiUnavailable }) {
       setStaffErr(msg);
       return;
     }
-    // Refresh list
     onViewStaff(staffFor);
   };
 
@@ -741,7 +736,6 @@ function AssignStaff({ branchesBase, apiUnavailable }) {
       setErr("Invalid branch selected.");
       return;
     }
-    // POST {base}/{id}/assign-staff
     const r = await tryOnePOST(`${branchesBase}/${numericBranchId}/assign-staff`, {
       userIds: selected,
     });
