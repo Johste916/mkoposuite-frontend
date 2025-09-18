@@ -1,5 +1,6 @@
 // src/pages/Branches.jsx
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import api from "../api";
 
 /* ---------------- permission helper (unchanged) ---------------- */
@@ -53,6 +54,7 @@ async function discoverBranchesBase(paths) {
   for (const p of paths) {
     const r = await tryOneGET(p, { params: { limit: 1 } });
     if (r.ok) return p;
+    // treat 401/403 as "exists but unauthorized" -> still good base
     const status = r?.error?.response?.status;
     if (status === 401 || status === 403) return p;
   }
@@ -78,10 +80,12 @@ export default function Branches() {
   const [me, setMe] = useState(null);
   const [tab, setTab] = useState("overview");
 
+  // Endpoint discovery (kept small to avoid spamming 404s)
   const BRANCH_PATH_CANDIDATES = useMemo(
     () => [
-      "/branches",
-      "/org/branches",
+      "/branches", // preferred (proxy to /api/branches via vite proxy if used)
+      "/org/branches", // alt
+      // add "/api/branches" here only if your axios baseURL is origin root
     ],
     []
   );
@@ -196,6 +200,11 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const [borrowersRows, setBorrowersRows] = useState([]);
   const [borrowersErr, setBorrowersErr] = useState("");
 
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [overviewFor, setOverviewFor] = useState(null);
+  const [overview, setOverview] = useState(null);
+  const [overviewErr, setOverviewErr] = useState("");
+
   const load = async () => {
     if (!branchesBase) {
       setRows([]);
@@ -226,7 +235,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
 
   useEffect(() => {
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchesBase]);
 
   // ----- Actions -----
@@ -282,11 +291,12 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     setBorrowersOpen(true);
     setBorrowersRows([]);
     setBorrowersErr("");
-
-    // Prefer new compact endpoint; fallback to legacy query param
+    // Prefer tenant-scoped/branch route if present; fallback to legacy
     let r = await tryOneGET(`${branchesBase}/${b?.id}/borrowers`);
     if (!r.ok) {
-      r = await tryOneGET(`/borrowers`, { params: { branchId: b?.id, limit: 500 } });
+      r = await tryOneGET(`/borrowers`, {
+        params: { branchId: b?.id, limit: 500 },
+      });
     }
     if (r.ok) {
       const data = r.data;
@@ -301,6 +311,24 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     }
   };
 
+  const onViewOverview = async (b) => {
+    setOverviewFor(b);
+    setOverviewOpen(true);
+    setOverview(null);
+    setOverviewErr("");
+    if (!branchesBase || !b?.id) return;
+    const r = await tryOneGET(`${branchesBase}/${b.id}/overview`);
+    if (r.ok) {
+      setOverview(r.data);
+    } else {
+      setOverviewErr(
+        r?.error?.response?.data?.error ||
+          r?.error?.message ||
+          "Failed to load overview."
+      );
+    }
+  };
+
   const saveEdit = async () => {
     if (!branchesBase || !editModel?.id) return;
     const payload = {
@@ -308,6 +336,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
       code: editModel.code == null ? null : String(editModel.code).trim(),
       phone: cleanString(onlyDigits(editModel.phone)),
       address: cleanString(editModel.address),
+      // managerId optional; only send if not empty string
       ...(editModel.managerId !== "" ? { managerId: editModel.managerId } : {}),
     };
     const r = await tryOnePUT(`${branchesBase}/${editModel.id}`, payload);
@@ -344,7 +373,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
       <div className="bg-white border rounded-xl p-3 flex gap-2 items-end">
         <div>
           <label className="block text-xs text-gray-500">Search</label>
-          <input
+        <input
             className="border rounded px-2 py-1 text-sm"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -391,6 +420,13 @@ function Overview({ me, branchesBase, apiUnavailable }) {
                   </td>
                   <td className="py-2 px-3">
                     <div className="flex flex-wrap gap-1">
+                      <button
+                        onClick={() => onViewOverview(b)}
+                        className="px-2 py-1 border rounded hover:bg-gray-50"
+                        title="Overview"
+                      >
+                        View
+                      </button>
                       <button
                         onClick={() => onViewStaff(b)}
                         className="px-2 py-1 border rounded hover:bg-gray-50"
@@ -497,9 +533,13 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Modal>
       )}
 
-      {/* Staff Drawer (wide) */}
+      {/* Staff Drawer */}
       {staffOpen && (
-        <Drawer title={`Staff • ${staffFor?.name || ""}`} onClose={() => setStaffOpen(false)} wide>
+        <Drawer
+          title={`Staff • ${staffFor?.name || ""}`}
+          onClose={() => setStaffOpen(false)}
+          wide
+        >
           {staffErr && <div className="text-sm text-red-600 mb-2">{staffErr}</div>}
           <div className="border rounded-xl overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -542,7 +582,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Drawer>
       )}
 
-      {/* Borrowers Drawer (wide, best-effort) */}
+      {/* Borrowers Drawer (best-effort) */}
       {borrowersOpen && (
         <Drawer
           title={`Borrowers • ${borrowersFor?.name || ""}`}
@@ -584,6 +624,91 @@ function Overview({ me, branchesBase, apiUnavailable }) {
               </tbody>
             </table>
           </div>
+        </Drawer>
+      )}
+
+      {/* Overview Drawer (wide) */}
+      {overviewOpen && (
+        <Drawer
+          title={`Overview • ${overviewFor?.name || ""}`}
+          onClose={() => setOverviewOpen(false)}
+          wide
+        >
+          {overviewErr && (
+            <div className="text-sm text-red-600 mb-2">{overviewErr}</div>
+          )}
+          {!overview ? (
+            <div className="text-sm text-gray-500">Loading…</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <KPI title="Staff" value={overview.kpis?.staffCount ?? "—"} tone="indigo" />
+                <KPI
+                  title="Borrowers"
+                  value={overview.kpis?.borrowers ?? "—"}
+                  tone="blue"
+                />
+                <KPI
+                  title="Loans"
+                  value={overview.kpis?.loans?.total ?? "—"}
+                  tone="emerald"
+                />
+                <KPI
+                  title="Outstanding"
+                  value={
+                    overview.kpis?.loans?.outstanding != null
+                      ? `TZS ${Number(overview.kpis.loans.outstanding).toLocaleString()}`
+                      : "—"
+                  }
+                  tone="amber"
+                />
+                <KPI
+                  title="Collections (30d)"
+                  value={
+                    overview.kpis?.collections?.last30Days != null
+                      ? `TZS ${Number(overview.kpis.collections.last30Days).toLocaleString()}`
+                      : "—"
+                  }
+                  tone="indigo"
+                />
+                <KPI
+                  title="Expenses (this month)"
+                  value={
+                    overview.kpis?.expenses?.thisMonth != null
+                      ? `TZS ${Number(overview.kpis.expenses.thisMonth).toLocaleString()}`
+                      : "—"
+                  }
+                  tone="rose"
+                />
+                {overview.kpis?.savings && (
+                  <>
+                    <KPI
+                      title="Savings deposits (month)"
+                      value={`TZS ${Number(overview.kpis.savings.depositsThisMonth || 0).toLocaleString()}`}
+                      tone="emerald"
+                    />
+                    <KPI
+                      title="Savings withdrawals (month)"
+                      value={`TZS ${Number(overview.kpis.savings.withdrawalsThisMonth || 0).toLocaleString()}`}
+                      tone="amber"
+                    />
+                  </>
+                )}
+              </div>
+
+              <div className="bg-white border rounded-xl p-3">
+                <div className="text-xs text-gray-500 mb-2">Branch</div>
+                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+                  <div><b>Name:</b> {overview.branch?.name || "—"}</div>
+                  <div><b>Code:</b> {overview.branch?.code ?? "—"}</div>
+                  <div><b>Phone:</b> {overview.branch?.phone || "—"}</div>
+                  <div><b>Address:</b> {overview.branch?.address || "—"}</div>
+                  <div><b>Created:</b> {overview.branch?.createdAt?.slice(0,10) || "—"}</div>
+                  <div><b>Tenant ID:</b> {overview.branch?.tenantId || "—"}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </Drawer>
       )}
     </div>
@@ -736,6 +861,7 @@ function AssignStaff({ branchesBase, apiUnavailable }) {
       setErr("Invalid branch selected.");
       return;
     }
+    // POST {base}/{id}/assign-staff
     const r = await tryOnePOST(`${branchesBase}/${numericBranchId}/assign-staff`, {
       userIds: selected,
     });
@@ -947,6 +1073,7 @@ function KPI({ title, value, tone = "indigo" }) {
       amber: "text-amber-600 bg-amber-50",
       emerald: "text-emerald-600 bg-emerald-50",
       blue: "text-blue-600 bg-blue-50",
+      rose: "text-rose-600 bg-rose-50",
     }[tone] || "text-slate-600 bg-slate-50";
   return (
     <div className="bg-white border rounded-xl p-3 flex items-center gap-3">
@@ -956,40 +1083,49 @@ function KPI({ title, value, tone = "indigo" }) {
   );
 }
 
-/* ----------------------------- Tiny Modal/Drawer ------------------ */
+/* ----------------------------- Tiny Modal/Drawer (via Portal) ---- */
+function Portal({ children }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+}
+
 function Modal({ title, children, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl border shadow p-4 w-full max-w-lg">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-sm px-2 py-1 border rounded">
-            ✕
-          </button>
+    <Portal>
+      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl border shadow p-4 w-full max-w-lg">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">{title}</h3>
+            <button onClick={onClose} className="text-sm px-2 py-1 border rounded">
+              ✕
+            </button>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
-    </div>
+    </Portal>
   );
 }
 
 function Drawer({ title, children, onClose, wide = false }) {
   return (
-    <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div
-        className={`absolute right-0 top-0 h-full w-full ${
-          wide ? "max-w-5xl" : "max-w-3xl"
-        } bg-white border-l shadow-xl p-4`}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-sm px-2 py-1 border rounded">
-            ✕
-          </button>
+    <Portal>
+      <div className="fixed inset-0 z-50">
+        <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+        <div
+          className={`absolute right-0 top-0 h-full w-full ${
+            wide ? "max-w-5xl" : "max-w-3xl"
+          } bg-white border-l shadow-xl p-4`}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">{title}</h3>
+            <button onClick={onClose} className="text-sm px-2 py-1 border rounded">
+              ✕
+            </button>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
-    </div>
+    </Portal>
   );
 }
