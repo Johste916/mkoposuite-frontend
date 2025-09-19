@@ -61,7 +61,6 @@ function pickArrayish(data) {
   );
 }
 function normalizeUserRow(row) {
-  // Accept {id, name...} OR {userId, User:{...}} OR {user:{...}}
   const u = row?.User || row?.user || row;
   const id = u?.id ?? row?.userId ?? row?.id;
   const role =
@@ -81,7 +80,6 @@ function normalizeUserRow(row) {
   };
 }
 function normalizeBorrowerRow(row) {
-  // Accept {id,...} OR {borrowerId, Borrower:{...}}
   const b = row?.Borrower || row?.borrower || row;
   const id = b?.id ?? row?.borrowerId ?? row?.id;
   return {
@@ -210,7 +208,6 @@ function ActionMenu({ actions = [] }) {
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, actions.length]);
 
   useOnClickAway([btnRef, menuRef], () => setOpen(false));
@@ -339,14 +336,12 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const onViewStaff = async (b) => {
     setStaffFor(b); setStaffOpen(true); setStaffRows([]); setStaffErr(""); setStaffSel(new Set());
     if (!branchesBase || !b?.id) return;
-    // Primary endpoint
     let r = await tryOneGET(`${branchesBase}/${b.id}/staff`);
     if (r.ok) {
       const raw = pickArrayish(r.data);
       setStaffRows(raw.map(normalizeUserRow).filter((u) => u.id != null));
       return;
     }
-    // Fallback: try "/users?branchId="
     r = await tryOneGET(`/users`, { params: { branchId: b?.id, limit: 1000 } });
     if (r.ok) {
       const raw = pickArrayish(r.data);
@@ -412,20 +407,15 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     else setOverviewErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load overview.");
   };
 
-  // bulk unassign staff (tolerant batch + per-item fallback)
+  // bulk unassign staff
   const unassignSelectedStaff = async () => {
     const ids = [...staffSel];
     if (!ids.length || !branchesBase || !staffFor?.id) return;
-
-    // 1) Try batch endpoint if available
     let r = await tryOnePOST(`${branchesBase}/${staffFor.id}/unassign-staff`, { userIds: ids });
     if (!r.ok) {
-      // 2) Try DELETE /branches/:id/staff?userId=...
       for (const id of ids) {
         let one = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff/${id}`);
-        if (!one.ok) {
-          one = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff`, { params: { userId: id } });
-        }
+        if (!one.ok) one = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff`, { params: { userId: id } });
       }
     }
     onViewStaff(staffFor);
@@ -435,10 +425,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const unassignSelectedBorrowers = async () => {
     const ids = [...boSel];
     if (!ids.length || !branchesBase || !borrowersFor?.id) return;
-
     let r = await tryOnePOST(`${branchesBase}/${borrowersFor.id}/unassign-borrowers`, { borrowerIds: ids });
     if (!r.ok) {
-      // Fallback: set borrower.branchId = null
       for (const id of ids) await tryOnePUT(`/borrowers/${id}`, { branchId: null });
     }
     onViewBorrowers(borrowersFor);
@@ -449,7 +437,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
       <div className="bg-white border rounded-xl p-3 flex gap-2 items-end">
         <div>
           <label className="block text-xs text-gray-500">Search</label>
-          <input className="border rounded px-2 py-1 text-sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="name, code, phone…" />
+        <input className="border rounded px-2 py-1 text-sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="name, code, phone…" />
         </div>
         <button onClick={load} disabled={!branchesBase} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60">
           {loading ? "Loading…" : "Apply"}
@@ -541,9 +529,9 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Modal>
       )}
 
-      {/* Staff Drawer with bulk unassign */}
+      {/* Staff Drawer — now full-screen */}
       {staffOpen && (
-        <Drawer title={`Staff • ${staffFor?.name || ""}`} onClose={() => setStaffOpen(false)} wide>
+        <Drawer title={`Staff • ${staffFor?.name || ""}`} onClose={() => setStaffOpen(false)} full>
           {staffErr && <div className="text-sm text-red-600 mb-2">{staffErr}</div>}
 
           <div className="flex items-center justify-between mb-2">
@@ -579,12 +567,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
                       <td className="py-2 px-3">
                         <button
                           onClick={async () => {
-                            // first try DELETE /branches/:branchId/staff/:userId
                             let d = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff/${u.id}`);
-                            if (!d.ok) {
-                              // then try DELETE /branches/:branchId/staff?userId=...
-                              d = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff`, { params: { userId: u.id } });
-                            }
+                            if (!d.ok) d = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff`, { params: { userId: u.id } });
                             onViewStaff(staffFor);
                           }}
                           className="px-2 py-1 border rounded hover:bg-gray-50"
@@ -602,9 +586,9 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Drawer>
       )}
 
-      {/* Borrowers Drawer with bulk unassign */}
+      {/* Borrowers Drawer — now full-screen */}
       {borrowersOpen && (
-        <Drawer title={`Borrowers • ${borrowersFor?.name || ""}`} onClose={() => setBorrowersOpen(false)} wide>
+        <Drawer title={`Borrowers • ${borrowersFor?.name || ""}`} onClose={() => setBorrowersOpen(false)} full>
           {borrowersErr && <div className="text-sm text-amber-700 mb-2">{borrowersErr}</div>}
 
           <div className="flex items-center justify-between mb-2">
@@ -894,84 +878,6 @@ function AssignDrawer({ me, branchesBase, branch, onClose }) {
   );
 }
 
-/* ----------------------------- Assign Center (global tab) -------- */
-function AssignCenter({ branchesBase, apiUnavailable }) {
-  const [branches, setBranches] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [branchId, setBranchId] = useState("");
-  const [selected, setSelected] = useState([]);
-  const [msg, setMsg] = useState("");
-  const [err, setErr] = useState("");
-
-  useEffect(() => {
-    (async () => {
-      if (!branchesBase) return;
-      const [b, u] = await Promise.all([tryOneGET(branchesBase), tryOneGET("/users", { params: { limit: 1000 } })]);
-      if (b.ok) {
-        const data = b.data; const bItems = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : data?.rows || data?.data || [];
-        setBranches(bItems);
-      }
-      if (u.ok) {
-        const data = u.data; const uItems = data?.items || data?.rows || data?.data || data || [];
-        setUsers(uItems);
-      }
-    })();
-  }, [branchesBase]);
-
-  const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-
-  const submit = async () => {
-    setMsg(""); setErr("");
-    if (!branchesBase) { setErr(apiUnavailable ? "Branches API not available." : "Detecting endpoint…"); return; }
-    const numericBranchId = toNullableNumber(branchId); if (numericBranchId == null) { setErr("Invalid branch selected."); return; }
-    const r = await tryOnePOST(`${branchesBase}/${numericBranchId}/assign-staff`, { userIds: selected });
-    if (r.ok) setMsg("Assigned successfully."); else setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to assign staff.");
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="bg-white border rounded-xl p-3 flex flex-wrap gap-2 items-end">
-        <div>
-          <label className="block text-xs text-gray-500">Branch</label>
-          <select className="border rounded px-2 py-1 text-sm min-w-[220px]" value={branchId} onChange={(e) => setBranchId(e.target.value)} disabled={!branchesBase}>
-            <option value="">Select branch</option>
-            {branches.map((b) => (<option key={b.id ?? b.code} value={b.id}>{b.name}</option>))}
-          </select>
-        </div>
-        <button onClick={submit} disabled={!branchId || selected.length === 0 || !branchesBase} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60">
-          Assign {selected.length ? `(${selected.length})` : ""}
-        </button>
-        {msg && <div className="text-sm text-emerald-700">{msg}</div>}
-        {err && <div className="text-sm text-red-600">{err}</div>}
-      </div>
-
-      <div className="bg-white border rounded-xl overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-600 border-b">
-              <th className="py-2 px-3">Assign</th><th className="py-2 px-3">Name</th><th className="py-2 px-3">Email</th><th className="py-2 px-3">Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.length === 0 ? (
-              <tr><td colSpan={4} className="p-3 text-gray-500">{branchesBase ? "No users." : "Waiting for endpoint…"}</td></tr>
-            ) : (
-              users.map((u) => (
-                <tr key={u.id} className="border-b">
-                  <td className="py-2 px-3"><input type="checkbox" checked={selected.includes(u.id)} onChange={() => toggle(u.id)} /></td>
-                  <td className="py-2 px-3">{u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim()}</td>
-                  <td className="py-2 px-3">{u.email}</td>
-                  <td className="py-2 px-3">{u.role || (u.Roles || []).map((r) => r.name).join(", ") || "—"}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 /* ----------------------------- Branch Reports -------------------- */
 function BranchReports({ branchesBase, apiUnavailable }) {
   const [branches, setBranches] = useState([]);
@@ -1075,13 +981,26 @@ function Modal({ title, children, onClose }) {
     </PortalRoot>
   );
 }
-function Drawer({ title, children, onClose, wide = false }) {
+
+/**
+ * Drawer
+ * - Default: right sheet with 3xl/5xl max width
+ * - wide: wider sheet
+ * - full: takes the entire viewport (your request for Staff & Borrowers)
+ */
+function Drawer({ title, children, onClose, wide = false, full = false }) {
   useLockBodyScroll();
   return (
     <PortalRoot>
       <div className="fixed inset-0 z-50">
         <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-        <div className={`absolute right-0 top-0 h-full w-full ${wide ? "max-w-5xl" : "max-w-3xl"} bg-white border-l shadow-xl p-4`}>
+        <div
+          className={
+            full
+              ? "absolute inset-0 w-full h-full bg-white p-4 overflow-auto"
+              : `absolute right-0 top-0 h-full w-full ${wide ? "max-w-5xl" : "max-w-3xl"} bg-white border-l shadow-xl p-4`
+          }
+        >
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">{title}</h3>
             <button onClick={onClose} className="text-sm px-2 py-1 border rounded">✕</button>
