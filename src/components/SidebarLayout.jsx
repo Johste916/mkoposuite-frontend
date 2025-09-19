@@ -1,4 +1,3 @@
-// src/components/SidebarLayout.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -175,6 +174,7 @@ const NAV = () => [
   },
   {
     label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
+      { label: "Staff", to: "/user-management" },                 // ✅ all-in-one page
       { label: "Users", to: "/user-management/users" },
       { label: "Roles", to: "/user-management/roles" },
       { label: "Permissions", to: "/user-management/permissions" },
