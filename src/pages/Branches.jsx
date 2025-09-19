@@ -6,12 +6,7 @@ import api from "../api";
 /* ---------------- permission helper ---------------- */
 const can = (me, action) => {
   if (!me) return false;
-  if (
-    ["admin", "director", "super_admin", "system_admin"].includes(
-      (me.role || "").toLowerCase()
-    )
-  )
-    return true;
+  if (["admin", "director", "super_admin", "system_admin"].includes((me.role || "").toLowerCase())) return true;
   return Array.isArray(me.permissions) && me.permissions.includes(action);
 };
 
@@ -61,6 +56,7 @@ function pickArrayish(data) {
   );
 }
 function normalizeUserRow(row) {
+  // Accept {id, name...} OR {userId, User:{...}} OR {user:{...}}
   const u = row?.User || row?.user || row;
   const id = u?.id ?? row?.userId ?? row?.id;
   const role =
@@ -80,6 +76,7 @@ function normalizeUserRow(row) {
   };
 }
 function normalizeBorrowerRow(row) {
+  // Accept {id,...} OR {borrowerId, Borrower:{...}}
   const b = row?.Borrower || row?.borrower || row;
   const id = b?.id ?? row?.borrowerId ?? row?.id;
   return {
@@ -100,10 +97,12 @@ export default function Branches() {
   const [branchesBase, setBranchesBase] = useState(null);
   const [apiUnavailable, setApiUnavailable] = useState(false);
 
-  useEffect(() => { (async () => {
-    const base = await discoverBranchesBase(BRANCH_PATH_CANDIDATES);
-    if (base) { setBranchesBase(base); setApiUnavailable(false); } else { setApiUnavailable(true); }
-  })(); }, [BRANCH_PATH_CANDIDATES]);
+  useEffect(() => {
+    (async () => {
+      const base = await discoverBranchesBase(BRANCH_PATH_CANDIDATES);
+      if (base) { setBranchesBase(base); setApiUnavailable(false); } else { setApiUnavailable(true); }
+    })();
+  }, [BRANCH_PATH_CANDIDATES]);
 
   useEffect(() => { (async () => { try { const { data } = await api.get("/auth/me"); setMe(data); } catch {} })(); }, []);
 
@@ -121,7 +120,9 @@ export default function Branches() {
             </div>
           )}
         </div>
-        <div className="flex gap-1 rounded-lg border bg-white overflow-hidden">
+
+        {/* Tabs */}
+        <div className="flex gap-2 rounded-lg border border-slate-200 bg-white p-1">
           <Tab label="Overview" id="overview" tab={tab} setTab={setTab} />
           {can(me, "branches:manage") && <Tab label="Add" id="add" tab={tab} setTab={setTab} />}
           {can(me, "branches:assign") && <Tab label="Assign" id="assign" tab={tab} setTab={setTab} />}
@@ -145,13 +146,69 @@ export default function Branches() {
   );
 }
 
+/* ----------------------------- Buttons ---------------------------- */
+function PrimaryButton({ className = "", children, ...props }) {
+  return (
+    <button
+      {...props}
+      className={[
+        "px-3 py-2 rounded-lg text-sm font-medium",
+        "bg-indigo-600 text-white border border-indigo-600",
+        "hover:bg-indigo-700",
+        "disabled:opacity-60 disabled:hover:bg-indigo-600",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1",
+        className
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+function SecondaryButton({ className = "", children, ...props }) {
+  return (
+    <button
+      {...props}
+      className={[
+        "px-3 py-2 rounded-lg text-sm font-medium",
+        "bg-white text-slate-800 border border-slate-300 hover:bg-slate-50",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-1",
+        "disabled:opacity-60",
+        className
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+function DangerButton({ className = "", children, ...props }) {
+  return (
+    <button
+      {...props}
+      className={[
+        "px-3 py-2 rounded-lg text-sm font-medium",
+        "bg-red-600 text-white border border-red-600 hover:bg-red-700",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-1",
+        "disabled:opacity-60",
+        className
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
 /* ----------------------------- UI Bits ---------------------------- */
 function Tab({ label, id, tab, setTab }) {
   const active = tab === id;
   return (
     <button
       onClick={() => setTab(id)}
-      className={`px-3 py-1.5 text-sm ${active ? "bg-slate-100" : "bg-white hover:bg-slate-50"}`}
+      aria-current={active ? "page" : undefined}
+      className={[
+        "px-3 py-1.5 text-sm rounded-md transition-colors",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-1",
+        active ? "bg-indigo-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-100"
+      ].join(" ")}
     >
       {label}
     </button>
@@ -248,9 +305,7 @@ function ActionMenu({ actions = [] }) {
                   a.onClick?.();
                 }}
                 disabled={a.disabled}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                  a.danger ? "text-red-700" : ""
-                } disabled:opacity-50`}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${a.danger ? "text-red-700" : ""} disabled:opacity-50`}
               >
                 {a.label}
               </button>
@@ -314,7 +369,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [branchesBase]);
+  useEffect(() => { load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [branchesBase]);
 
   // ====== Actions ======
   const onEdit = (b) => {
@@ -336,12 +391,14 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const onViewStaff = async (b) => {
     setStaffFor(b); setStaffOpen(true); setStaffRows([]); setStaffErr(""); setStaffSel(new Set());
     if (!branchesBase || !b?.id) return;
+    // Primary endpoint
     let r = await tryOneGET(`${branchesBase}/${b.id}/staff`);
     if (r.ok) {
       const raw = pickArrayish(r.data);
       setStaffRows(raw.map(normalizeUserRow).filter((u) => u.id != null));
       return;
     }
+    // Fallback: try "/users?branchId="
     r = await tryOneGET(`/users`, { params: { branchId: b?.id, limit: 1000 } });
     if (r.ok) {
       const raw = pickArrayish(r.data);
@@ -407,7 +464,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
     else setOverviewErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load overview.");
   };
 
-  // bulk unassign staff
+  // bulk unassign staff (tolerant)
   const unassignSelectedStaff = async () => {
     const ids = [...staffSel];
     if (!ids.length || !branchesBase || !staffFor?.id) return;
@@ -434,18 +491,32 @@ function Overview({ me, branchesBase, apiUnavailable }) {
 
   return (
     <div className="space-y-3">
-      <div className="bg-white border rounded-xl p-3 flex gap-2 items-end">
-        <div>
-          <label className="block text-xs text-gray-500">Search</label>
-        <input className="border rounded px-2 py-1 text-sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="name, code, phone…" />
+      {/* Search row */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3 flex gap-3 items-end">
+        <div className="relative">
+          <label className="block text-xs text-gray-500 mb-0.5">Search</label>
+          <span className="pointer-events-none absolute left-2 top-[30px]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M21 21l-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </span>
+          <input
+            className="border border-slate-300 rounded-lg pl-8 pr-3 py-2 text-sm placeholder:text-slate-400
+                       focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="name, code, phone…"
+          />
         </div>
-        <button onClick={load} disabled={!branchesBase} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60">
+        <PrimaryButton onClick={load} disabled={!branchesBase || loading}>
           {loading ? "Loading…" : "Apply"}
-        </button>
+        </PrimaryButton>
       </div>
 
       {err && <div className="text-sm text-red-600">{err}</div>}
 
+      {/* Table */}
       <div className="bg-white border rounded-xl overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
@@ -496,13 +567,18 @@ function Overview({ me, branchesBase, apiUnavailable }) {
             {["name", "code", "phone", "address", "managerId"].map((k) => (
               <div key={k}>
                 <label className="block text-xs text-gray-500 capitalize">{k === "managerId" ? "Manager ID" : k}</label>
-                <input className="border rounded px-2 py-1 text-sm w-full" value={editModel?.[k] ?? ""} onChange={(e) => setEditModel((s) => ({ ...s, [k]: e.target.value }))} placeholder={k === "code" ? "e.g. 1" : k === "phone" ? "digits only" : ""} />
+                <input
+                  className="border rounded px-2 py-1 text-sm w-full"
+                  value={editModel?.[k] ?? ""}
+                  onChange={(e) => setEditModel((s) => ({ ...s, [k]: e.target.value }))}
+                  placeholder={k === "code" ? "e.g. 1" : k === "phone" ? "digits only" : ""}
+                />
               </div>
             ))}
           </div>
           <div className="mt-3 flex justify-end gap-2">
-            <button onClick={() => setEditOpen(false)} className="px-3 py-2 border rounded bg-white hover:bg-gray-50 text-sm">Cancel</button>
-            <button onClick={saveEdit} className="px-3 py-2 border rounded bg-slate-900 text-white text-sm">Save</button>
+            <SecondaryButton onClick={() => setEditOpen(false)}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={saveEdit}>Save</PrimaryButton>
           </div>
         </Modal>
       )}
@@ -512,8 +588,8 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         <Modal onClose={() => setConfirmOpen(false)} title="Disable Branch">
           <p className="text-sm">This will <b>soft-delete</b> the branch (disable). Continue?</p>
           <div className="mt-3 flex justify-end gap-2">
-            <button onClick={() => setConfirmOpen(false)} className="px-3 py-2 border rounded bg-white hover:bg-gray-50 text-sm">Cancel</button>
-            <button onClick={confirmDisable} className="px-3 py-2 border rounded bg-red-600 text-white text-sm">Disable</button>
+            <SecondaryButton onClick={() => setConfirmOpen(false)}>Cancel</SecondaryButton>
+            <DangerButton onClick={confirmDisable}>Disable</DangerButton>
           </div>
         </Modal>
       )}
@@ -523,13 +599,13 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         <Modal onClose={() => setHardOpen(false)} title="Delete Branch">
           <p className="text-sm">This will <b>permanently delete</b> the branch. Continue?</p>
           <div className="mt-3 flex justify-end gap-2">
-            <button onClick={() => setHardOpen(false)} className="px-3 py-2 border rounded bg-white hover:bg-gray-50 text-sm">Cancel</button>
-            <button onClick={confirmHardDelete} className="px-3 py-2 border rounded bg-red-700 text-white text-sm">Delete</button>
+            <SecondaryButton onClick={() => setHardOpen(false)}>Cancel</SecondaryButton>
+            <DangerButton onClick={confirmHardDelete}>Delete</DangerButton>
           </div>
         </Modal>
       )}
 
-      {/* Staff Drawer — now full-screen */}
+      {/* Staff Drawer — full-screen */}
       {staffOpen && (
         <Drawer title={`Staff • ${staffFor?.name || ""}`} onClose={() => setStaffOpen(false)} full>
           {staffErr && <div className="text-sm text-red-600 mb-2">{staffErr}</div>}
@@ -537,9 +613,15 @@ function Overview({ me, branchesBase, apiUnavailable }) {
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm text-gray-600">{staffRows.length} staff</div>
             <div className="flex gap-2">
-              <button className="px-2 py-1 border rounded text-sm" onClick={() => setStaffSel(new Set(staffRows.map((u) => u.id)))}>Select all</button>
-              <button className="px-2 py-1 border rounded text-sm" onClick={() => setStaffSel(new Set())}>Clear</button>
-              <button className="px-2 py-1 border rounded text-sm disabled:opacity-50" disabled={staffSel.size === 0 || !can({ ...me }, "branches:assign")} onClick={unassignSelectedStaff}>Unassign selected</button>
+              <SecondaryButton className="px-2 py-1" onClick={() => setStaffSel(new Set(staffRows.map((u) => u.id)))}>Select all</SecondaryButton>
+              <SecondaryButton className="px-2 py-1" onClick={() => setStaffSel(new Set())}>Clear</SecondaryButton>
+              <SecondaryButton
+                className="px-2 py-1 disabled:opacity-50"
+                disabled={staffSel.size === 0 || !can({ ...me }, "branches:assign")}
+                onClick={unassignSelectedStaff}
+              >
+                Unassign selected
+              </SecondaryButton>
             </div>
           </div>
 
@@ -565,17 +647,17 @@ function Overview({ me, branchesBase, apiUnavailable }) {
                       <td className="py-2 px-3">{u.email || "—"}</td>
                       <td className="py-2 px-3">{u.role || "—"}</td>
                       <td className="py-2 px-3">
-                        <button
+                        <SecondaryButton
+                          className="px-2 py-1"
                           onClick={async () => {
                             let d = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff/${u.id}`);
                             if (!d.ok) d = await tryOneDELETE(`${branchesBase}/${staffFor.id}/staff`, { params: { userId: u.id } });
                             onViewStaff(staffFor);
                           }}
-                          className="px-2 py-1 border rounded hover:bg-gray-50"
                           disabled={!can({ ...me }, "branches:assign")}
                         >
                           Unassign
-                        </button>
+                        </SecondaryButton>
                       </td>
                     </tr>
                   ))
@@ -586,7 +668,7 @@ function Overview({ me, branchesBase, apiUnavailable }) {
         </Drawer>
       )}
 
-      {/* Borrowers Drawer — now full-screen */}
+      {/* Borrowers Drawer — full-screen */}
       {borrowersOpen && (
         <Drawer title={`Borrowers • ${borrowersFor?.name || ""}`} onClose={() => setBorrowersOpen(false)} full>
           {borrowersErr && <div className="text-sm text-amber-700 mb-2">{borrowersErr}</div>}
@@ -594,9 +676,15 @@ function Overview({ me, branchesBase, apiUnavailable }) {
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm text-gray-600">{borrowersRows.length} borrowers</div>
             <div className="flex gap-2">
-              <button className="px-2 py-1 border rounded text-sm" onClick={() => setBoSel(new Set(borrowersRows.map((b) => b.id)))}>Select all</button>
-              <button className="px-2 py-1 border rounded text-sm" onClick={() => setBoSel(new Set())}>Clear</button>
-              <button className="px-2 py-1 border rounded text-sm disabled:opacity-50" disabled={boSel.size === 0 || !can({ ...me }, "branches:assign")} onClick={unassignSelectedBorrowers}>Unassign selected</button>
+              <SecondaryButton className="px-2 py-1" onClick={() => setBoSel(new Set(borrowersRows.map((b) => b.id)))}>Select all</SecondaryButton>
+              <SecondaryButton className="px-2 py-1" onClick={() => setBoSel(new Set())}>Clear</SecondaryButton>
+              <SecondaryButton
+                className="px-2 py-1 disabled:opacity-50"
+                disabled={boSel.size === 0 || !can({ ...me }, "branches:assign")}
+                onClick={unassignSelectedBorrowers}
+              >
+                Unassign selected
+              </SecondaryButton>
             </div>
           </div>
 
@@ -738,9 +826,9 @@ function AddBranch({ branchesBase, apiUnavailable }) {
           />
         </div>
       ))}
-      <button onClick={submit} disabled={saving || !branchesBase} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60">
+      <PrimaryButton onClick={submit} disabled={saving || !branchesBase}>
         {saving ? "Saving…" : "Create"}
-      </button>
+      </PrimaryButton>
       {msg && <div className="text-sm text-emerald-700">{msg}</div>}
       {(err || reqId) && (
         <div className="text-sm text-red-600 col-span-full">
@@ -809,11 +897,11 @@ function AssignDrawer({ me, branchesBase, branch, onClose }) {
           <div className="flex items-center justify-between mb-2">
             <h4 className="font-medium">Staff</h4>
             <div className="flex gap-2">
-              <button className="px-2 py-1 border rounded text-sm" onClick={() => setUSel(new Set(users.map(u => u.id)))}>Select all</button>
-              <button className="px-2 py-1 border rounded text-sm" onClick={() => setUSel(new Set())}>Clear</button>
-              <button className="px-2 py-1 border rounded text-sm" disabled={!can({ ...me }, "branches:assign") || uSel.size === 0} onClick={postAssignStaff}>
+              <SecondaryButton className="px-2 py-1" onClick={() => setUSel(new Set(users.map(u => u.id)))}>Select all</SecondaryButton>
+              <SecondaryButton className="px-2 py-1" onClick={() => setUSel(new Set())}>Clear</SecondaryButton>
+              <PrimaryButton className="px-2 py-1" disabled={!can({ ...me }, "branches:assign") || uSel.size === 0} onClick={postAssignStaff}>
                 Assign selected
-              </button>
+              </PrimaryButton>
             </div>
           </div>
           <div className="border rounded-xl overflow-x-auto max-h-[45vh]">
@@ -842,11 +930,11 @@ function AssignDrawer({ me, branchesBase, branch, onClose }) {
           <div className="flex items-center justify-between mb-2">
             <h4 className="font-medium">Borrowers</h4>
             <div className="flex gap-2">
-              <button className="px-2 py-1 border rounded text-sm" onClick={() => setBSel(new Set(borrowers.map(b => b.id)))}>Select all</button>
-              <button className="px-2 py-1 border rounded text-sm" onClick={() => setBSel(new Set())}>Clear</button>
-              <button className="px-2 py-1 border rounded text-sm" disabled={!can({ ...me }, "branches:assign") || bSel.size === 0} onClick={postAssignBorrowers}>
+              <SecondaryButton className="px-2 py-1" onClick={() => setBSel(new Set(borrowers.map(b => b.id)))}>Select all</SecondaryButton>
+              <SecondaryButton className="px-2 py-1" onClick={() => setBSel(new Set())}>Clear</SecondaryButton>
+              <PrimaryButton className="px-2 py-1" disabled={!can({ ...me }, "branches:assign") || bSel.size === 0} onClick={postAssignBorrowers}>
                 Assign selected
-              </button>
+              </PrimaryButton>
             </div>
           </div>
           <div className="border rounded-xl overflow-x-auto max-h-[45vh]">
@@ -875,6 +963,84 @@ function AssignDrawer({ me, branchesBase, branch, onClose }) {
         <div className={`mt-3 text-sm ${err ? "text-red-600" : "text-emerald-700"}`}>{err || msg}</div>
       )}
     </Drawer>
+  );
+}
+
+/* ----------------------------- Assign Center (global tab) -------- */
+function AssignCenter({ branchesBase, apiUnavailable }) {
+  const [branches, setBranches] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [branchId, setBranchId] = useState("");
+  const [selected, setSelected] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      if (!branchesBase) return;
+      const [b, u] = await Promise.all([tryOneGET(branchesBase), tryOneGET("/users", { params: { limit: 1000 } })]);
+      if (b.ok) {
+        const data = b.data; const bItems = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : data?.rows || data?.data || [];
+        setBranches(bItems);
+      }
+      if (u.ok) {
+        const data = u.data; const uItems = data?.items || data?.rows || data?.data || data || [];
+        setUsers(uItems);
+      }
+    })();
+  }, [branchesBase]);
+
+  const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const submit = async () => {
+    setMsg(""); setErr("");
+    if (!branchesBase) { setErr(apiUnavailable ? "Branches API not available." : "Detecting endpoint…"); return; }
+    const numericBranchId = toNullableNumber(branchId); if (numericBranchId == null) { setErr("Invalid branch selected."); return; }
+    const r = await tryOnePOST(`${branchesBase}/${numericBranchId}/assign-staff`, { userIds: selected });
+    if (r.ok) setMsg("Assigned successfully."); else setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to assign staff.");
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-white border rounded-xl p-3 flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs text-gray-500">Branch</label>
+          <select className="border rounded px-2 py-1 text-sm min-w-[220px]" value={branchId} onChange={(e) => setBranchId(e.target.value)} disabled={!branchesBase}>
+            <option value="">Select branch</option>
+            {branches.map((b) => (<option key={b.id ?? b.code} value={b.id}>{b.name}</option>))}
+          </select>
+        </div>
+        <PrimaryButton onClick={submit} disabled={!branchId || selected.length === 0 || !branchesBase}>
+          Assign {selected.length ? `(${selected.length})` : ""}
+        </PrimaryButton>
+        {msg && <div className="text-sm text-emerald-700">{msg}</div>}
+        {err && <div className="text-sm text-red-600">{err}</div>}
+      </div>
+
+      <div className="bg-white border rounded-xl overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-600 border-b">
+              <th className="py-2 px-3">Assign</th><th className="py-2 px-3">Name</th><th className="py-2 px-3">Email</th><th className="py-2 px-3">Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <tr><td colSpan={4} className="p-3 text-gray-500">{branchesBase ? "No users." : "Waiting for endpoint…"}</td></tr>
+            ) : (
+              users.map((u) => (
+                <tr key={u.id} className="border-b">
+                  <td className="py-2 px-3"><input type="checkbox" checked={selected.includes(u.id)} onChange={() => toggle(u.id)} /></td>
+                  <td className="py-2 px-3">{u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim()}</td>
+                  <td className="py-2 px-3">{u.email}</td>
+                  <td className="py-2 px-3">{u.role || (u.Roles || []).map((r) => r.name).join(", ") || "—"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -923,7 +1089,7 @@ function BranchReports({ branchesBase, apiUnavailable }) {
           <label className="block text-xs text-gray-500">To</label>
           <input type="date" className="border rounded px-2 py-1 text-sm" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
-        <button onClick={run} disabled={!branchId || !branchesBase} className="px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 text-sm disabled:opacity-60">Run</button>
+        <PrimaryButton onClick={run} disabled={!branchId || !branchesBase}>Run</PrimaryButton>
       </div>
 
       {err && <div className="text-sm text-red-600">{err}</div>}
@@ -986,7 +1152,7 @@ function Modal({ title, children, onClose }) {
  * Drawer
  * - Default: right sheet with 3xl/5xl max width
  * - wide: wider sheet
- * - full: takes the entire viewport (your request for Staff & Borrowers)
+ * - full: takes the entire viewport (for Staff & Borrowers)
  */
 function Drawer({ title, children, onClose, wide = false, full = false }) {
   useLockBodyScroll();
