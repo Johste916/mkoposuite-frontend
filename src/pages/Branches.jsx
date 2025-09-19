@@ -1065,7 +1065,8 @@ function BranchReports({ branchesBase, apiUnavailable }) {
   const run = async () => {
     setErr(""); setKpis(null);
     if (!branchesBase) { setErr(apiUnavailable ? "Branches API not available." : "Detecting endpoint…"); return; }
-    const numericBranchId = toNullableNumber(branchId); if (numericBranchId == null) { setErr("Invalid branch selected."); return; }
+    const numericBranchId = toNullableNumber(branchId);
+    if (numericBranchId == null) { setErr("Please select a branch to run the report."); return; }
     const r = await tryOneGET(`${branchesBase}/${numericBranchId}/report`, { params: { from, to } });
     if (r.ok) setKpis(r.data?.kpis || r.data || null);
     else setErr(r?.error?.response?.data?.error || r?.error?.message || "Failed to load report.");
@@ -1089,7 +1090,8 @@ function BranchReports({ branchesBase, apiUnavailable }) {
           <label className="block text-xs text-gray-500">To</label>
           <input type="date" className="border rounded px-2 py-1 text-sm" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
-        <PrimaryButton onClick={run} disabled={!branchId || !branchesBase}>Run</PrimaryButton>
+        {/* Make Run always clickable when API is available */}
+        <PrimaryButton onClick={run} disabled={!branchesBase}>Run</PrimaryButton>
       </div>
 
       {err && <div className="text-sm text-red-600">{err}</div>}
