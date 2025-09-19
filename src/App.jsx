@@ -81,7 +81,7 @@ const CashTransactionForm = lazy(() => import("./pages/banks/CashTransactionForm
 const CashAccountsList = lazy(() => import("./pages/banks/CashAccountsList"));
 const CashAccountForm = lazy(() => import("./pages/banks/CashAccountForm"));
 
-// User management
+// User management (new section)
 const Users = lazy(() => import("./pages/user-management/Users"));
 const Roles = lazy(() => import("./pages/user-management/Roles"));
 const Permissions = lazy(() => import("./pages/user-management/Permissions"));
@@ -286,8 +286,14 @@ function App() {
               <Route path="borrowers/reports" element={<BorrowerReports />} />
               <Route path="borrowers/:id" element={<BorrowerDetails />} />
               <Route path="borrowers/sms" element={<Sms />} />
-              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>} />
-              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>} />
+              <Route
+                path="borrowers/email"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>}
+              />
+              <Route
+                path="borrowers/invite"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>}
+              />
 
               {/* Groups */}
               <Route path="borrowers/groups" element={<BorrowerGroups />} />
@@ -396,7 +402,10 @@ function App() {
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
               <Route path="collections/sms" element={<Sms />} />
-              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>} />
+              <Route
+                path="collections/email"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>}
+              />
 
               {/* Savings */}
               <Route path="savings" element={<Savings />} />
@@ -511,12 +520,21 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
-              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
+              <Route
+                path="other-income/add"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>}
+              />
+              <Route
+                path="other-income/csv"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>}
+              />
 
               {/* Assets */}
               <Route path="assets" element={<Assets />} />
-              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
+              <Route
+                path="assets/add"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>}
+              />
 
               {/* Accounting */}
               <Route
@@ -587,7 +605,7 @@ function App() {
                 }
               />
 
-              {/* ✅ NEW: User Management routes (ADDED) */}
+              {/* ✅ NEW: User Management routes */}
               <Route
                 path="user-management"
                 element={
@@ -601,6 +619,11 @@ function App() {
                 <Route path="roles" element={<Roles />} />
                 <Route path="permissions" element={<Permissions />} />
               </Route>
+
+              {/* ⛳ Legacy top-level aliases to avoid breaking old links */}
+              <Route path="users" element={<Navigate to="/user-management/users" replace />} />
+              <Route path="roles" element={<Navigate to="/user-management/roles" replace />} />
+              <Route path="permissions" element={<Navigate to="/user-management/permissions" replace />} />
 
               {/* Branches */}
               <Route path="branches" element={<Branches />} />
