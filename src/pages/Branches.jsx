@@ -56,7 +56,6 @@ function pickArrayish(data) {
   );
 }
 function normalizeUserRow(row) {
-  // Accept {id, name...} OR {userId, User:{...}} OR {user:{...}}
   const u = row?.User || row?.user || row;
   const id = u?.id ?? row?.userId ?? row?.id;
   const role =
@@ -68,15 +67,9 @@ function normalizeUserRow(row) {
     u?.name ||
     [u?.firstName, u?.lastName].filter(Boolean).join(" ").trim() ||
     row?.name;
-  return {
-    id,
-    name: name || "—",
-    email: u?.email || row?.email || "—",
-    role: role || "—",
-  };
+  return { id, name: name || "—", email: u?.email || row?.email || "—", role: role || "—" };
 }
 function normalizeBorrowerRow(row) {
-  // Accept {id,...} OR {borrowerId, Borrower:{...}}
   const b = row?.Borrower || row?.borrower || row;
   const id = b?.id ?? row?.borrowerId ?? row?.id;
   return {
@@ -96,6 +89,9 @@ export default function Branches() {
   const BRANCH_PATH_CANDIDATES = useMemo(() => ["/branches", "/org/branches"], []);
   const [branchesBase, setBranchesBase] = useState(null);
   const [apiUnavailable, setApiUnavailable] = useState(false);
+
+  // allows Overview to deep-link into Reports
+  const [reportInit, setReportInit] = useState({ branchId: "", focus: "" });
 
   useEffect(() => {
     (async () => {
@@ -131,7 +127,13 @@ export default function Branches() {
       </header>
 
       {tab === "overview" && (
-        <Overview me={me} branchesBase={branchesBase} apiUnavailable={apiUnavailable} />
+        <Overview
+          me={me}
+          branchesBase={branchesBase}
+          apiUnavailable={apiUnavailable}
+          setTab={setTab}
+          setReportInit={setReportInit}
+        />
       )}
       {tab === "add" && can(me, "branches:manage") && (
         <AddBranch branchesBase={branchesBase} apiUnavailable={apiUnavailable} />
@@ -140,7 +142,12 @@ export default function Branches() {
         <AssignCenter branchesBase={branchesBase} apiUnavailable={apiUnavailable} />
       )}
       {tab === "reports" && (
-        <BranchReports branchesBase={branchesBase} apiUnavailable={apiUnavailable} />
+        <BranchReports
+          branchesBase={branchesBase}
+          apiUnavailable={apiUnavailable}
+          initialBranchId={reportInit.branchId}
+          initialFocus={reportInit.focus}
+        />
       )}
     </div>
   );
@@ -318,7 +325,7 @@ function ActionMenu({ actions = [] }) {
 }
 
 /* ----------------------------- Overview --------------------------- */
-function Overview({ me, branchesBase, apiUnavailable }) {
+function Overview({ me, branchesBase, apiUnavailable, setTab, setReportInit }) {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
@@ -391,14 +398,12 @@ function Overview({ me, branchesBase, apiUnavailable }) {
   const onViewStaff = async (b) => {
     setStaffFor(b); setStaffOpen(true); setStaffRows([]); setStaffErr(""); setStaffSel(new Set());
     if (!branchesBase || !b?.id) return;
-    // Primary endpoint
     let r = await tryOneGET(`${branchesBase}/${b.id}/staff`);
     if (r.ok) {
       const raw = pickArrayish(r.data);
       setStaffRows(raw.map(normalizeUserRow).filter((u) => u.id != null));
       return;
     }
-    // Fallback: try "/users?branchId="
     r = await tryOneGET(`/users`, { params: { branchId: b?.id, limit: 1000 } });
     if (r.ok) {
       const raw = pickArrayish(r.data);
@@ -732,24 +737,24 @@ function Overview({ me, branchesBase, apiUnavailable }) {
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KPI title="Staff" value={overview.kpis?.staffCount ?? "—"} tone="indigo" />
-                <KPI title="Borrowers" value={overview.kpis?.borrowers ?? "—"} tone="blue" />
-                <KPI title="Loans" value={overview.kpis?.loans?.total ?? "—"} tone="emerald" />
-                <KPI
-                  title="Outstanding"
-                  value={overview.kpis?.loans?.outstanding != null ? `TZS ${Number(overview.kpis.loans.outstanding).toLocaleString()}` : "—"}
-                  tone="amber"
-                />
-                <KPI
-                  title="Collections (30d)"
-                  value={overview.kpis?.collections?.last30Days != null ? `TZS ${Number(overview.kpis.collections.last30Days).toLocaleString()}` : "—"}
-                  tone="indigo"
-                />
-                <KPI
-                  title="Expenses (this month)"
-                  value={overview.kpis?.expenses?.thisMonth != null ? `TZS ${Number(overview.kpis.expenses.thisMonth).toLocaleString()}` : "—"}
-                  tone="rose"
-                />
+                <KPI title="Staff" value={overview.kpis?.staffCount ?? "—"} tone="indigo"
+                     onClick={() => { setOverviewOpen(false); onViewStaff(overviewFor); }} />
+                <KPI title="Borrowers" value={overview.kpis?.borrowers ?? "—"} tone="blue"
+                     onClick={() => { setOverviewOpen(false); onViewBorrowers(overviewFor); }} />
+                <KPI title="Loans Out" value={overview.kpis?.loans?.total != null ? `TZS ${Number(overview.kpis.loans.total).toLocaleString()}` : "—"} tone="emerald"
+                     onClick={() => { setReportInit({ branchId: overviewFor?.id, focus: "loans" }); setOverviewOpen(false); setTab("reports"); }} />
+                <KPI title="Outstanding"
+                     value={overview.kpis?.loans?.outstanding != null ? `TZS ${Number(overview.kpis.loans.outstanding).toLocaleString()}` : "—"}
+                     tone="amber"
+                     onClick={() => { setReportInit({ branchId: overviewFor?.id, focus: "outstanding" }); setOverviewOpen(false); setTab("reports"); }} />
+                <KPI title="Collections (30d)"
+                     value={overview.kpis?.collections?.last30Days != null ? `TZS ${Number(overview.kpis.collections.last30Days).toLocaleString()}` : "—"}
+                     tone="indigo"
+                     onClick={() => { setReportInit({ branchId: overviewFor?.id, focus: "collections" }); setOverviewOpen(false); setTab("reports"); }} />
+                <KPI title="Expenses (this month)"
+                     value={overview.kpis?.expenses?.thisMonth != null ? `TZS ${Number(overview.kpis.expenses.thisMonth).toLocaleString()}` : "—"}
+                     tone="rose"
+                     onClick={() => { setReportInit({ branchId: overviewFor?.id, focus: "expenses" }); setOverviewOpen(false); setTab("reports"); }} />
               </div>
 
               <div className="bg-white border rounded-xl p-3">
@@ -1045,13 +1050,16 @@ function AssignCenter({ branchesBase, apiUnavailable }) {
 }
 
 /* ----------------------------- Branch Reports -------------------- */
-function BranchReports({ branchesBase, apiUnavailable }) {
+function BranchReports({ branchesBase, apiUnavailable, initialBranchId = "", /* initialFocus */ }) {
   const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState("");
+  const [branchId, setBranchId] = useState(initialBranchId || "");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [kpis, setKpis] = useState(null);
   const [err, setErr] = useState("");
+
+  // Update selected branch when coming from Overview
+  useEffect(() => { if (initialBranchId) setBranchId(String(initialBranchId)); }, [initialBranchId]);
 
   useEffect(() => { (async () => {
     if (!branchesBase) return;
@@ -1090,7 +1098,6 @@ function BranchReports({ branchesBase, apiUnavailable }) {
           <label className="block text-xs text-gray-500">To</label>
           <input type="date" className="border rounded px-2 py-1 text-sm" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
-        {/* Make Run always clickable when API is available */}
         <PrimaryButton onClick={run} disabled={!branchesBase}>Run</PrimaryButton>
       </div>
 
@@ -1108,7 +1115,7 @@ function BranchReports({ branchesBase, apiUnavailable }) {
   );
 }
 
-function KPI({ title, value, tone = "indigo" }) {
+function KPI({ title, value, tone = "indigo", onClick }) {
   const tones = {
     indigo: "text-indigo-600 bg-indigo-50",
     amber: "text-amber-600 bg-amber-50",
@@ -1116,11 +1123,24 @@ function KPI({ title, value, tone = "indigo" }) {
     blue: "text-blue-600 bg-blue-50",
     rose: "text-rose-600 bg-rose-50",
   }[tone] || "text-slate-600 bg-slate-50";
+
+  const clickable = typeof onClick === "function";
+
   return (
-    <div className="bg-white border rounded-xl p-3 flex items-center gap-3">
-      <div className={`px-2 py-1 rounded ${tones}`}>{title}</div>
-      <div className="font-semibold">{value ?? "—"}</div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!clickable}
+      className={[
+        "bg-white border rounded-xl p-3 flex items-center gap-3 text-left w-full",
+        clickable ? "hover:shadow-sm hover:border-indigo-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400" : "",
+        clickable ? "transition" : "cursor-default"
+      ].join(" ")}
+      aria-label={clickable ? `Open ${title}` : undefined}
+    >
+      <span className={`px-2 py-1 rounded ${tones}`}>{title}</span>
+      <span className="font-semibold">{value ?? "—"}</span>
+    </button>
   );
 }
 
