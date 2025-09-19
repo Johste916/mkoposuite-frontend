@@ -1,5 +1,6 @@
 // src/pages/UserManagement.jsx
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import api from "../api";
 
 /* ---------------- tolerant request helpers --------------------- */
@@ -72,12 +73,12 @@ function ActionMenu({ actions = [] }) {
 
   return (
     <>
-      <button ref={btnRef} className="px-2 py-1 border rounded hover:bg-gray-50" onClick={() => setOpen(v => !v)}>⋮</button>
+      <button ref={btnRef} className="px-2 py-1 border rounded hover:bg-gray-50" onClick={() => setOpen(v => !v)} aria-haspopup="menu" aria-expanded={open}>⋮</button>
       {open && (
         <PortalRoot>
           <div className="fixed inset-0 z-50" style={{ background: "transparent" }} onClick={() => setOpen(false)} />
           <div ref={menuRef} className="fixed z-[60] min-w-[220px] bg-white border shadow-lg rounded-md"
-               style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()}>
+               style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()} role="menu">
             {actions.map((a, i) => (
               <button key={i} onClick={() => { if (a.disabled) return; setOpen(false); a.onClick?.(); }}
                       disabled={a.disabled}
@@ -93,7 +94,6 @@ function ActionMenu({ actions = [] }) {
 }
 
 /* ---------------- Modal ---------------- */
-import { createPortal } from "react-dom";
 function useLockBodyScroll() {
   useEffect(() => {
     const { body } = document;
@@ -104,13 +104,18 @@ function useLockBodyScroll() {
 }
 function Modal({ title, children, onClose }) {
   useLockBodyScroll();
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <PortalRoot>
       <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
         <div className="bg-white rounded-xl border shadow p-4 w-full max-w-lg">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">{title}</h3>
-            <button onClick={onClose} className="text-sm px-2 py-1 border rounded">✕</button>
+            <button onClick={onClose} className="text-sm px-2 py-1 border rounded" aria-label="Close">✕</button>
           </div>
           {children}
         </div>
@@ -208,6 +213,13 @@ const UserManagement = () => {
 
   useEffect(() => { load(); }, []); // initial
 
+  // Debounce search to keep behavior smooth
+  useEffect(() => {
+    const id = setTimeout(() => { if (!loading) load(); }, 400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
   const setDraftFor = (userId, patch) => {
     setDraft(prev => ({ ...prev, [userId]: { ...(prev[userId] || {}), ...patch } }));
   };
@@ -245,7 +257,10 @@ const UserManagement = () => {
   };
 
   /* ---------- Staff management actions ---------- */
-  const onCreate = () => { setModel({ name: "", email: "", phone: "", password: "" }); setCreateOpen(true); };
+  const onCreate = () => {
+    setModel({ name: "", email: "", phone: "", password: "", roleId: "", branchId: "" });
+    setCreateOpen(true);
+  };
   const onEdit = (u) => {
     setModel({
       id: u.id,
@@ -288,6 +303,8 @@ const UserManagement = () => {
       email: cleanString(model.email),
       phone: cleanString(onlyDigits(model.phone)),
       ...(model.password ? { password: model.password } : {}),
+      ...(model.roleId ? { roleId: Number(model.roleId) } : {}),
+      ...(model.branchId ? { branchId: Number(model.branchId) } : {}),
     };
     const r = await tryOnePOST("/users", payload);
     if (!r.ok) alert(r?.error?.response?.data?.error || r?.error?.message || "Failed to create user.");
@@ -337,6 +354,7 @@ const UserManagement = () => {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="border rounded px-3 py-1.5 text-sm"
+              aria-label="Search users"
             />
           </div>
           <SecondaryButton onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</SecondaryButton>
@@ -433,6 +451,30 @@ const UserManagement = () => {
                 />
               </div>
             ))}
+
+            {/* Optional inline assignment on create */}
+            <div>
+              <label className="block text-xs text-gray-500">Role (optional)</label>
+              <select
+                className="border rounded px-2 py-1 text-sm w-full"
+                value={model?.roleId ?? ""}
+                onChange={(e) => setModel((s) => ({ ...s, roleId: e.target.value }))}
+              >
+                <option value="">— Select Role —</option>
+                {roles.map(r => <option key={r.id} value={r.id}>{r.name || r.title}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500">Branch (optional)</label>
+              <select
+                className="border rounded px-2 py-1 text-sm w-full"
+                value={model?.branchId ?? ""}
+                onChange={(e) => setModel((s) => ({ ...s, branchId: e.target.value }))}
+              >
+                <option value="">— Select Branch —</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
           </div>
           <div className="mt-3 flex justify-end gap-2">
             <SecondaryButton onClick={() => setCreateOpen(false)}>Cancel</SecondaryButton>
