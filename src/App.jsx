@@ -86,7 +86,7 @@ const Users = lazy(() => import("./pages/user-management/Users"));
 const Roles = lazy(() => import("./pages/user-management/Roles"));
 const Permissions = lazy(() => import("./pages/user-management/Permissions"));
 
-// ✅ NEW: all-in-one Staff/User management page
+// ✅ NEW: all-in-one Staff/User management page (enriched)
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 
 const Branches = lazy(() => import("./pages/Branches"));
@@ -590,7 +590,7 @@ function App() {
                 }
               />
 
-              {/* ✅ NEW: User Management routes (wired + index shows all-in-one page) */}
+              {/* ✅ NEW: User Management routes (index shows all-in-one page) */}
               <Route
                 path="user-management"
                 element={
@@ -599,7 +599,6 @@ function App() {
                   </RoleProtectedRoute>
                 }
               >
-                {/* Index now shows your all-in-one Staff/User management page */}
                 <Route index element={<UserManagement />} />
                 <Route path="users" element={<Users />} />
                 <Route path="roles" element={<Roles />} />

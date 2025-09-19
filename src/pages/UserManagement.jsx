@@ -124,6 +124,30 @@ function Modal({ title, children, onClose }) {
   );
 }
 
+/* ---------------- Drawer (side panel) ---------------- */
+function Drawer({ title, children, onClose, wide = false }) {
+  useLockBodyScroll();
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <PortalRoot>
+      <div className="fixed inset-0 z-50">
+        <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+        <div className={`absolute right-0 top-0 h-full w-full ${wide ? "max-w-5xl" : "max-w-3xl"} bg-white border-l shadow-xl p-4`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">{title}</h3>
+            <button onClick={onClose} className="text-sm px-2 py-1 border rounded">✕</button>
+          </div>
+          {children}
+        </div>
+      </div>
+    </PortalRoot>
+  );
+}
+
 /* ---------------- Buttons ---------------- */
 function PrimaryButton({ className = "", children, ...props }) {
   return (
@@ -162,9 +186,24 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
 
   const [q, setQ] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
+
   const [saving, setSaving] = useState({});
   const [draft, setDraft] = useState({});
   const [error, setError] = useState("");
+
+  // selections for bulk actions
+  const [selected, setSelected] = useState(new Set());
+  const allSelected = users.length > 0 && users.every(u => selected.has(u.id));
+
+  // profile drawer
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerUser, setDrawerUser] = useState(null);
+  const [drawerTab, setDrawerTab] = useState("profile");
+  const [drawerData, setDrawerData] = useState({ hr: null, attendance: null, leave: null, payroll: null });
+  const [drawerErr, setDrawerErr] = useState({ hr: "", attendance: "", leave: "", payroll: "" });
+  const [drawerLoading, setDrawerLoading] = useState(false);
 
   // modals
   const [createOpen, setCreateOpen] = useState(false);
@@ -195,8 +234,12 @@ const UserManagement = () => {
     setLoading(true);
     setError("");
     try {
+      const params = { limit: 1000, q };
+      if (roleFilter) params.roleId = roleFilter;
+      if (branchFilter) params.branchId = branchFilter;
+
       const [usersRes, rolesRes, branchesRes] = await Promise.all([
-        tryOneGET("/users", { params: { limit: 1000, q } }),
+        tryOneGET("/users", { params }),
         tryOneGET("/roles", { params: { limit: 1000 } }),
         tryOneGET("/branches", { params: { limit: 1000 } }),
       ]);
@@ -213,12 +256,12 @@ const UserManagement = () => {
 
   useEffect(() => { load(); }, []); // initial
 
-  // Debounce search to keep behavior smooth
+  // Debounce search & filters
   useEffect(() => {
     const id = setTimeout(() => { if (!loading) load(); }, 400);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, roleFilter, branchFilter]);
 
   const setDraftFor = (userId, patch) => {
     setDraft(prev => ({ ...prev, [userId]: { ...(prev[userId] || {}), ...patch } }));
@@ -256,6 +299,75 @@ const UserManagement = () => {
     }
   };
 
+  /* ---------- Bulk actions (non-breaking additions) ---------- */
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(users.map(u => u.id)));
+  };
+
+  const bulkAssignRole = async (roleId) => {
+    if (!roleId || selected.size === 0) return;
+    const ids = [...selected];
+    // tolerant: try batch endpoint; fallback to per-user
+    let r = await tryOnePOST(`/users/assign-role`, { userIds: ids, roleId: Number(roleId) });
+    if (!r.ok) {
+      for (const id of ids) {
+        await tryOnePOST(`/users/${id}/assign`, { roleId: Number(roleId) });
+      }
+    }
+    // update local draft to reflect change (non-breaking)
+    setDraft(prev => {
+      const next = { ...prev };
+      ids.forEach(id => { next[id] = { ...(next[id] || {}), roleId: Number(roleId) }; });
+      return next;
+    });
+    alert(`Assigned role to ${ids.length} user(s).`);
+  };
+
+  const bulkAssignBranch = async (branchId) => {
+    if (!branchId || selected.size === 0) return;
+    const ids = [...selected];
+    let r = await tryOnePOST(`/users/assign-branch`, { userIds: ids, branchId: Number(branchId) });
+    if (!r.ok) {
+      for (const id of ids) {
+        await tryOnePOST(`/users/${id}/assign`, { branchId: Number(branchId) });
+      }
+    }
+    setDraft(prev => {
+      const next = { ...prev };
+      ids.forEach(id => { next[id] = { ...(next[id] || {}), branchId: Number(branchId) }; });
+      return next;
+    });
+    alert(`Assigned branch to ${ids.length} user(s).`);
+  };
+
+  const exportCSV = () => {
+    const header = ["id","name","email","phone","roleId","branchId"];
+    const rows = users.map(u => {
+      const d = draft[u.id] || {};
+      const roleId = d.roleId ?? (u.roleId ?? u.role?.id ?? "");
+      const branchId = d.branchId ?? (u.branchId ?? "");
+      const name = (u.name || `${u.firstName||""} ${u.lastName||""}`.trim() || "").replace(/"/g, '""');
+      const email = (u.email || "").replace(/"/g, '""');
+      const phone = (u.phone || "").replace(/"/g, '""');
+      return [u.id, `"${name}"`, `"${email}"`, `"${phone}"`, roleId, branchId].join(",");
+    });
+    const blob = new Blob([[header.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "staff.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   /* ---------- Staff management actions ---------- */
   const onCreate = () => {
     setModel({ name: "", email: "", phone: "", password: "", roleId: "", branchId: "" });
@@ -273,10 +385,8 @@ const UserManagement = () => {
   const onPassword = (u) => { setModel({ id: u.id, password: "" }); setPwdOpen(true); };
   const onRoles = async (u) => {
     setModel(u);
-    // current roles
     const selected = new Set((u.roles || u.Roles || []).map(r => r?.id ?? r?.roleId ?? r?.RoleId).filter(x => x != null));
     setRoleSel(selected);
-    // ensure roles list is available
     if (roles.length === 0) {
       const r = await tryOneGET("/roles", { params: { limit: 1000 } });
       if (r.ok) setRoles(pickArrayish(r.data));
@@ -342,6 +452,55 @@ const UserManagement = () => {
     setRoleSel(next);
   };
 
+  /* ---------- Profile Drawer behavior (non-breaking) ---------- */
+  const openDrawer = (u) => {
+    setDrawerUser(u);
+    setDrawerTab("profile");
+    setDrawerData({ hr: null, attendance: null, leave: null, payroll: null });
+    setDrawerErr({ hr: "", attendance: "", leave: "", payroll: "" });
+    setDrawerOpen(true);
+  };
+
+  const loadTabData = async (tab, u) => {
+    setDrawerLoading(true);
+    try {
+      if (tab === "hr") {
+        // contracts / employee info (tolerant)
+        let r = await tryOneGET(`/hr/contracts`, { params: { userId: u.id, limit: 50 } });
+        if (!r.ok) r = await tryOneGET(`/hr/employees/${u.id}`);
+        if (r.ok) setDrawerData(s => ({ ...s, hr: pickArrayish(r.data) }));
+        else setDrawerErr(s => ({ ...s, hr: r?.error?.response?.data?.error || r?.error?.message || "HR endpoint not enabled." }));
+      }
+      if (tab === "attendance") {
+        const r = await tryOneGET(`/hr/attendance`, { params: { userId: u.id, limit: 100 } });
+        if (r.ok) setDrawerData(s => ({ ...s, attendance: pickArrayish(r.data) }));
+        else setDrawerErr(s => ({ ...s, attendance: r?.error?.response?.data?.error || r?.error?.message || "Attendance endpoint not enabled." }));
+      }
+      if (tab === "leave") {
+        const r = await tryOneGET(`/hr/leave`, { params: { userId: u.id, limit: 100 } });
+        if (r.ok) setDrawerData(s => ({ ...s, leave: pickArrayish(r.data) }));
+        else setDrawerErr(s => ({ ...s, leave: r?.error?.response?.data?.error || r?.error?.message || "Leave endpoint not enabled." }));
+      }
+      if (tab === "payroll") {
+        // payroll entries for user
+        let r = await tryOneGET(`/payroll`, { params: { userId: u.id, limit: 50 } });
+        if (!r.ok) r = await tryOneGET(`/payroll/entries`, { params: { userId: u.id, limit: 50 } });
+        if (r.ok) setDrawerData(s => ({ ...s, payroll: pickArrayish(r.data) }));
+        else setDrawerErr(s => ({ ...s, payroll: r?.error?.response?.data?.error || r?.error?.message || "Payroll endpoint not enabled." }));
+      }
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!drawerOpen || !drawerUser) return;
+    if (drawerTab !== "profile" && !drawerData[drawerTab]) {
+      loadTabData(drawerTab, drawerUser);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerTab, drawerOpen, drawerUser]);
+
   /* ---------- Render ---------- */
   return (
     <div className="p-6 space-y-4">
@@ -357,9 +516,53 @@ const UserManagement = () => {
               aria-label="Search users"
             />
           </div>
+          {/* New: role & branch filters (non-breaking) */}
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            aria-label="Filter by role"
+          >
+            <option value="">All roles</option>
+            {roles.map(r => <option key={r.id} value={r.id}>{r.name || r.title}</option>)}
+          </select>
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            aria-label="Filter by branch"
+          >
+            <option value="">All branches</option>
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+
           <SecondaryButton onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</SecondaryButton>
           <PrimaryButton onClick={onCreate}>Add Staff</PrimaryButton>
         </div>
+      </div>
+
+      {/* Bulk action toolbar */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="opacity-70">Selected: {selected.size}</span>
+        <select
+          className="border rounded px-2 py-1"
+          onChange={(e) => { const v = e.target.value; if (v) { bulkAssignRole(v); e.target.value=""; } }}
+          aria-label="Bulk assign role"
+          defaultValue=""
+        >
+          <option value="">Bulk: set role…</option>
+          {roles.map(r => <option key={r.id} value={r.id}>{r.name || r.title}</option>)}
+        </select>
+        <select
+          className="border rounded px-2 py-1"
+          onChange={(e) => { const v = e.target.value; if (v) { bulkAssignBranch(v); e.target.value=""; } }}
+          aria-label="Bulk assign branch"
+          defaultValue=""
+        >
+          <option value="">Bulk: set branch…</option>
+          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+        <SecondaryButton onClick={exportCSV}>Export CSV</SecondaryButton>
       </div>
 
       {error && <div className="text-sm text-red-600">{error}</div>}
@@ -371,6 +574,9 @@ const UserManagement = () => {
           <table className="min-w-full">
             <thead className="bg-gray-100 text-sm">
               <tr>
+                <th className="px-4 py-2 text-left">
+                  <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
+                </th>
                 <th className="px-4 py-2 text-left">Name</th>
                 <th className="px-4 py-2 text-left">Email</th>
                 <th className="px-4 py-2 text-left">Phone</th>
@@ -382,7 +588,23 @@ const UserManagement = () => {
             <tbody className="text-sm">
               {users.map((u) => (
                 <tr key={u.id} className="border-t">
-                  <td className="px-4 py-2">{u.name || `${u.firstName||''} ${u.lastName||''}`.trim() || "—"}</td>
+                  <td className="px-4 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(u.id)}
+                      onChange={() => toggleSelect(u.id)}
+                      aria-label={`Select ${u.name || u.email || u.id}`}
+                    />
+                  </td>
+                  <td className="px-4 py-2">
+                    <button
+                      className="text-blue-600 hover:underline"
+                      onClick={() => openDrawer(u)}
+                      title="Open staff profile"
+                    >
+                      {u.name || `${u.firstName||''} ${u.lastName||''}`.trim() || "—"}
+                    </button>
+                  </td>
                   <td className="px-4 py-2">{u.email || "—"}</td>
                   <td className="px-4 py-2">{u.phone || "—"}</td>
                   <td className="px-4 py-2">
@@ -428,7 +650,7 @@ const UserManagement = () => {
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={6}>No users found.</td></tr>
+                <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={7}>No users found.</td></tr>
               )}
             </tbody>
           </table>
@@ -545,6 +767,165 @@ const UserManagement = () => {
             <PrimaryButton onClick={submitRoles}>Save Roles</PrimaryButton>
           </div>
         </Modal>
+      )}
+
+      {/* -------- Profile Drawer (tabs) -------- */}
+      {drawerOpen && drawerUser && (
+        <Drawer title={`Staff • ${drawerUser.name || drawerUser.email || ""}`} onClose={() => setDrawerOpen(false)} wide>
+          <div className="border-b mb-3">
+            <div className="flex gap-2">
+              {["profile","hr","attendance","leave","payroll"].map(t => (
+                <button
+                  key={t}
+                  className={`px-3 py-1.5 text-sm rounded-t ${drawerTab===t ? "bg-blue-600 text-white" : "bg-slate-100 hover:bg-slate-200"}`}
+                  onClick={() => setDrawerTab(t)}
+                >
+                  {t[0].toUpperCase()+t.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {drawerTab === "profile" && (
+            <div className="grid md:grid-cols-2 gap-3">
+              <div className="bg-white border rounded p-3">
+                <div className="text-xs text-gray-500 mb-1">Basics</div>
+                <div className="text-sm"><b>Name:</b> {drawerUser.name || `${drawerUser.firstName||""} ${drawerUser.lastName||""}`.trim() || "—"}</div>
+                <div className="text-sm"><b>Email:</b> {drawerUser.email || "—"}</div>
+                <div className="text-sm"><b>Phone:</b> {drawerUser.phone || "—"}</div>
+                <div className="text-sm"><b>Role:</b> {drawerUser.role?.name || drawerUser.role || "—"}</div>
+                <div className="text-sm"><b>Branch:</b> {branches.find(b => String(b.id)===String(drawerUser.branchId))?.name || "—"}</div>
+                <div className="text-sm"><b>User ID:</b> {drawerUser.id}</div>
+              </div>
+              <div className="bg-white border rounded p-3">
+                <div className="text-xs text-gray-500 mb-1">Quick Actions</div>
+                <div className="flex gap-2">
+                  <SecondaryButton onClick={() => onEdit(drawerUser)}>Edit</SecondaryButton>
+                  <SecondaryButton onClick={() => onRoles(drawerUser)}>Roles</SecondaryButton>
+                  <SecondaryButton onClick={() => onPassword(drawerUser)}>Password</SecondaryButton>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {drawerTab !== "profile" && drawerLoading && <div className="text-sm text-gray-500">Loading…</div>}
+
+          {drawerTab === "hr" && !drawerLoading && (
+            <div>
+              {drawerErr.hr ? (
+                <div className="text-sm text-amber-700">{drawerErr.hr}</div>
+              ) : (
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs text-gray-500 mb-2">HR • Contracts/Employee Info</div>
+                  {(!drawerData.hr || drawerData.hr.length === 0) ? (
+                    <div className="text-sm text-gray-500">No HR records.</div>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead><tr className="text-left border-b"><th className="py-1 px-2">Title</th><th className="py-1 px-2">Start</th><th className="py-1 px-2">End</th><th className="py-1 px-2">Status</th></tr></thead>
+                      <tbody>
+                        {drawerData.hr.map((x, i) => (
+                          <tr key={i} className="border-b">
+                            <td className="py-1 px-2">{x.title || x.position || "—"}</td>
+                            <td className="py-1 px-2">{(x.startDate || x.start)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{(x.endDate || x.end)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{x.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {drawerTab === "attendance" && !drawerLoading && (
+            <div>
+              {drawerErr.attendance ? (
+                <div className="text-sm text-amber-700">{drawerErr.attendance}</div>
+              ) : (
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs text-gray-500 mb-2">Attendance (latest 100)</div>
+                  {(!drawerData.attendance || drawerData.attendance.length === 0) ? (
+                    <div className="text-sm text-gray-500">No attendance records.</div>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead><tr className="text-left border-b"><th className="py-1 px-2">Date</th><th className="py-1 px-2">In</th><th className="py-1 px-2">Out</th><th className="py-1 px-2">Status</th></tr></thead>
+                      <tbody>
+                        {drawerData.attendance.map((x, i) => (
+                          <tr key={i} className="border-b">
+                            <td className="py-1 px-2">{(x.date || x.day || x.createdAt)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{x.clockIn || x.in || "—"}</td>
+                            <td className="py-1 px-2">{x.clockOut || x.out || "—"}</td>
+                            <td className="py-1 px-2">{x.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {drawerTab === "leave" && !drawerLoading && (
+            <div>
+              {drawerErr.leave ? (
+                <div className="text-sm text-amber-700">{drawerErr.leave}</div>
+              ) : (
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs text-gray-500 mb-2">Leave Requests</div>
+                  {(!drawerData.leave || drawerData.leave.length === 0) ? (
+                    <div className="text-sm text-gray-500">No leave records.</div>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead><tr className="text-left border-b"><th className="py-1 px-2">Type</th><th className="py-1 px-2">From</th><th className="py-1 px-2">To</th><th className="py-1 px-2">Status</th></tr></thead>
+                      <tbody>
+                        {drawerData.leave.map((x, i) => (
+                          <tr key={i} className="border-b">
+                            <td className="py-1 px-2">{x.type || "—"}</td>
+                            <td className="py-1 px-2">{(x.from || x.startDate)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{(x.to || x.endDate)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{x.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {drawerTab === "payroll" && !drawerLoading && (
+            <div>
+              {drawerErr.payroll ? (
+                <div className="text-sm text-amber-700">{drawerErr.payroll}</div>
+              ) : (
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs text-gray-500 mb-2">Payroll Entries</div>
+                  {(!drawerData.payroll || drawerData.payroll.length === 0) ? (
+                    <div className="text-sm text-gray-500">No payroll entries.</div>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead><tr className="text-left border-b"><th className="py-1 px-2">Period</th><th className="py-1 px-2">Gross</th><th className="py-1 px-2">Net</th><th className="py-1 px-2">Status</th></tr></thead>
+                      <tbody>
+                        {drawerData.payroll.map((x, i) => (
+                          <tr key={i} className="border-b">
+                            <td className="py-1 px-2">{x.period || `${(x.month||"").toString().padStart?.(2,"0")}/${x.year||""}`}</td>
+                            <td className="py-1 px-2">{x.gross != null ? Number(x.gross).toLocaleString() : "—"}</td>
+                            <td className="py-1 px-2">{x.net != null ? Number(x.net).toLocaleString() : "—"}</td>
+                            <td className="py-1 px-2">{x.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </Drawer>
       )}
     </div>
   );

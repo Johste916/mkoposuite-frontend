@@ -174,7 +174,7 @@ const NAV = () => [
   },
   {
     label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
-      { label: "Staff", to: "/user-management" },                 // ✅ all-in-one page
+      { label: "Staff", to: "/user-management" },                 // ✅ all-in-one page (index)
       { label: "Users", to: "/user-management/users" },
       { label: "Roles", to: "/user-management/roles" },
       { label: "Permissions", to: "/user-management/permissions" },
