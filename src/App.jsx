@@ -169,7 +169,7 @@ const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 /* ---------- NEW PAGES wired to src/pages/*.jsx ---------- */
 const Subscription = lazy(() => import("./pages/Subscription"));
 const SupportTickets = lazy(() => import("./pages/SupportTickets"));
-const SMSConsole = lazy(() => import("./pages/SMSConsole"));
+const SMSConsole = lazy(() => import("./pages/SMSConsole")); // legacy/simple console replacement
 const BillingByPhone = lazy(() => import("./pages/BillingByPhone"));
 const ImpersonateTenant = lazy(() => import("./pages/ImpersonateTenant"));
 const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
@@ -247,7 +247,7 @@ function App() {
               <Route path="account/security/change-password" element={<ChangePassword />} />
               <Route path="account/security/2fa" element={<TwoFactor />} />
 
-              {/* (Legacy) Tenants entry inside Account hub – platform-only */}
+              {/* (Legacy) Tenants entry shown inside Account hub – keep guarded as platform-only */}
               <Route
                 path="account/tenants"
                 element={
@@ -286,8 +286,14 @@ function App() {
               <Route path="borrowers/reports" element={<BorrowerReports />} />
               <Route path="borrowers/:id" element={<BorrowerDetails />} />
               <Route path="borrowers/sms" element={<Sms />} />
-              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>} />
-              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>} />
+              <Route
+                path="borrowers/email"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>}
+              />
+              <Route
+                path="borrowers/invite"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>}
+              />
 
               {/* Groups */}
               <Route path="borrowers/groups" element={<BorrowerGroups />} />
@@ -396,7 +402,10 @@ function App() {
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
               <Route path="collections/sms" element={<Sms />} />
-              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>} />
+              <Route
+                path="collections/email"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>}
+              />
 
               {/* Savings */}
               <Route path="savings" element={<Savings />} />
@@ -511,8 +520,14 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
-              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
+              <Route
+                path="other-income/add"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>}
+              />
+              <Route
+                path="other-income/csv"
+                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>}
+              />
 
               {/* Assets */}
               <Route path="assets" element={<Assets />} />
@@ -592,8 +607,7 @@ function App() {
                 path="user-management"
                 element={
                   <RoleProtectedRoute
-                    // Deliberately excludes system_admin/super_admin/developer so platform users
-                    // cannot manage tenant staff unless impersonating (handled in UI).
+                    // Platform users manage seats from system tools; keep them OUT of tenant staff mgmt
                     allow={["owner", "admin", "director", "hr_manager", "branch_manager"]}
                   >
                     <Outlet />

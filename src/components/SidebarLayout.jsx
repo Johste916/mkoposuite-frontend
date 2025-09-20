@@ -30,6 +30,48 @@ import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigC
 const isUuid = (v) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
 const isNumericId = (v) => /^\d+$/.test(String(v || ""));
+const lower = (s) => String(s || "").toLowerCase();
+
+/* Build a normalized role list from common shapes */
+const normalizeRoles = (user) => {
+  const primary = lower(user?.role);
+  const list =
+    Array.isArray(user?.roles)
+      ? user.roles.map(lower)
+      : Array.isArray(user?.Roles)
+      ? user.Roles.map((r) => lower(r?.name || r))
+      : [];
+  return Array.from(new Set([primary, ...list].filter(Boolean)));
+};
+
+/* Robust platform admin detection (covers many backends) */
+const isPlatformAdmin = (user) => {
+  const roles = normalizeRoles(user);
+  const roleHit = ["system_admin", "super_admin", "platform_admin", "developer"].some((r) =>
+    roles.includes(r)
+  );
+  const flagHit =
+    !!user?.isSystemAdmin ||
+    !!user?.isPlatformAdmin ||
+    !!user?.platformAdmin ||
+    localStorage.getItem("platformAdmin") === "true";
+
+  const scopesHit = Array.isArray(user?.scopes) && user.scopes.some((s) => lower(s).startsWith("platform"));
+  const permsHit =
+    Array.isArray(user?.permissions) &&
+    user.permissions.some((p) => {
+      const v = lower(p?.name || p);
+      return v.startsWith("platform:") || v === "impersonate" || v === "tenants:read";
+    });
+
+  return roleHit || flagHit || scopesHit || permsHit;
+};
+
+/* Tenant managers who should see User Management */
+const isTenantStaffManager = (user) => {
+  const roles = normalizeRoles(user);
+  return ["owner", "admin", "director", "hr_manager", "branch_manager"].some((r) => roles.includes(r));
+};
 
 /* ------------------------------- NAV CONFIG --------------------------------
    NOTE: “Account” items live in the avatar dropdown to avoid duplication. */
@@ -213,7 +255,7 @@ const NAV = () => [
     icon: <FiUserCheck />,
     to: "/user-management",
     children: [
-      { label: "Staff", to: "/user-management" }, // all-in-one page (index)
+      { label: "Staff", to: "/user-management" }, // all-in-one index
       { label: "Users", to: "/user-management/users" },
       { label: "Roles", to: "/user-management/roles" },
       { label: "Permissions", to: "/user-management/permissions" },
@@ -373,9 +415,18 @@ const SidebarLayout = () => {
   const logoutAndGo = useCallback(() => {
     try {
       delete api.defaults.headers.common.Authorization;
-      ["token", "jwt", "authToken", "accessToken", "access_token", "user", "tenant", "tenantId", "tenantName", "activeBranchId"].forEach(
-        (k) => localStorage.removeItem(k)
-      );
+      [
+        "token",
+        "jwt",
+        "authToken",
+        "accessToken",
+        "access_token",
+        "user",
+        "tenant",
+        "tenantId",
+        "tenantName",
+        "activeBranchId",
+      ].forEach((k) => localStorage.removeItem(k));
       if (typeof sessionStorage !== "undefined") {
         try {
           sessionStorage.clear();
@@ -386,17 +437,6 @@ const SidebarLayout = () => {
     } catch {}
     navigate("/login", { replace: true });
   }, [navigate]);
-
-  const lower = (s) => String(s || "").toLowerCase();
-  const hasAnyRole = (...allowed) => {
-    const primary = lower(user?.role);
-    const list = Array.isArray(user?.roles)
-      ? user.roles.map(lower)
-      : Array.isArray(user?.Roles)
-      ? user.Roles.map((r) => lower(r?.name || r))
-      : [];
-    return allowed.some((r) => r === primary || list.includes(r));
-  };
 
   /* theme + user + tenant load */
   useEffect(() => {
@@ -494,7 +534,12 @@ const SidebarLayout = () => {
     (async () => {
       try {
         const res = await api.get("/branches");
-        const list = Array.isArray(res.data) ? res.data : Array.isArray(res.data?.items) ? res.data.items : res.data?.data || [];
+        const list =
+          Array.isArray(res.data)
+            ? res.data
+            : Array.isArray(res.data?.items)
+            ? res.data.items
+            : res.data?.data || [];
         setBranches(list);
         if (list.length && !activeBranchId) {
           const firstId = String(list[0]?.id ?? "");
@@ -506,22 +551,17 @@ const SidebarLayout = () => {
     })();
   }, [activeBranchId, logoutAndGo]);
 
-  const userRole = (user?.role || "").toLowerCase();
+  const platformAdmin = isPlatformAdmin(user);
+  const tenantStaffMgr = isTenantStaffManager(user);
 
-  // Role flags
-  const isPlatformAdmin = hasAnyRole("system_admin", "super_admin", "developer");
-  const isTenantAdminish = hasAnyRole("owner", "admin", "director", "hr_manager", "branch_manager");
-  const isImpersonating = !!sessionStorage.getItem("support_original_token");
-
-  // Build full NAV, then apply feature filters + hide tenant staff menu for platform admins (unless impersonating)
+  // Build NAV -> remove User Management for platform admins -> apply feature filters
   const computedNav = useMemo(() => {
     const base = NAV();
-    let filtered = filterNavByFeatures(base, features, userRole, featureCtx);
-    if (isPlatformAdmin && !isImpersonating) {
-      filtered = filtered.filter((item) => item.to !== "/user-management");
-    }
-    return filtered;
-  }, [features, userRole, featureCtx, isPlatformAdmin, isImpersonating]);
+    const withoutUserMgmt = base.filter(
+      (item) => !(platformAdmin && (item.to === "/user-management" || item.label === "User Management"))
+    );
+    return filterNavByFeatures(withoutUserMgmt, features, lower(user?.role || ""), featureCtx);
+  }, [features, user, featureCtx, platformAdmin]);
 
   /* close mobile + avatar when route changes */
   useEffect(() => {
@@ -656,8 +696,21 @@ const SidebarLayout = () => {
                       </span>
                     </NavLink>
 
-                    {/* Tenant-facing items (shown to tenant admins, or to platform admins when impersonating) */}
-                    {(isTenantAdminish || isImpersonating) && (
+                    {/* Tenant org settings for tenant admins/managers */}
+                    {tenantStaffMgr && (
+                      <NavLink
+                        to="/account/organization"
+                        className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                        onClick={() => setAvatarOpen(false)}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <FiSettings /> Organization
+                        </span>
+                      </NavLink>
+                    )}
+
+                    {/* Platform-only tools — robust detection */}
+                    {platformAdmin && (
                       <>
                         <NavLink
                           to="/subscription"
@@ -678,21 +731,6 @@ const SidebarLayout = () => {
                           </span>
                         </NavLink>
                         <NavLink
-                          to="/account/organization"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            <FiSettings /> Organization
-                          </span>
-                        </NavLink>
-                      </>
-                    )}
-
-                    {/* Platform-only tools (hidden when impersonating to avoid confusion) */}
-                    {isPlatformAdmin && !isImpersonating && (
-                      <>
-                        <NavLink
                           to="/impersonate-tenant"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
@@ -710,20 +748,17 @@ const SidebarLayout = () => {
                             <FiUsers /> Tenants (System)
                           </span>
                         </NavLink>
+                        {/* Legacy entry to admin hub */}
+                        <NavLink
+                          to="/admin"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <FiSettings /> Admin
+                          </span>
+                        </NavLink>
                       </>
-                    )}
-
-                    {/* Admin hub (kept visible to admins & platform) */}
-                    {(isTenantAdminish || isPlatformAdmin) && (
-                      <NavLink
-                        to="/admin"
-                        className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                        onClick={() => setAvatarOpen(false)}
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <FiSettings /> Admin
-                        </span>
-                      </NavLink>
                     )}
 
                     <button
@@ -747,13 +782,20 @@ const SidebarLayout = () => {
         {/* Sidebar */}
         <aside className="hidden lg:block border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <div className="h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
-            <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">Navigation</div>
+            <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Navigation
+            </div>
             <nav className="space-y-1" aria-label="Primary">
               {featuresLoading ? (
                 <div className="px-3 py-2 text-xs text-slate-500">Loading menu…</div>
               ) : (
                 computedNav.map((item) => (
-                  <Section key={item.label + item.to} item={item} currentPath={location.pathname} onNavigate={() => {}} />
+                  <Section
+                    key={item.label + item.to}
+                    item={item}
+                    currentPath={location.pathname}
+                    onNavigate={() => {}}
+                  />
                 ))
               )}
             </nav>
