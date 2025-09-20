@@ -169,7 +169,7 @@ const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 /* ---------- NEW PAGES wired to src/pages/*.jsx ---------- */
 const Subscription = lazy(() => import("./pages/Subscription"));
 const SupportTickets = lazy(() => import("./pages/SupportTickets"));
-const SMSConsole = lazy(() => import("./pages/SMSConsole")); // legacy/simple console replacement
+const SMSConsole = lazy(() => import("./pages/SMSConsole"));
 const BillingByPhone = lazy(() => import("./pages/BillingByPhone"));
 const ImpersonateTenant = lazy(() => import("./pages/ImpersonateTenant"));
 const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
@@ -177,16 +177,12 @@ const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
 // NEW: Modern SMS Center page
 const SmsCenter = lazy(() => import("./pages/SmsCenter"));
 
-const Fallback = () => (
-  <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
-);
+const Fallback = () => <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>;
 
 const Forbidden = () => (
   <div className="p-6">
     <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">403 — Forbidden</h1>
-    <p className="mt-2 text-slate-700 dark:text-slate-300">
-      You don’t have permission to access this area.
-    </p>
+    <p className="mt-2 text-slate-700 dark:text-slate-300">You don’t have permission to access this area.</p>
   </div>
 );
 
@@ -251,7 +247,7 @@ function App() {
               <Route path="account/security/change-password" element={<ChangePassword />} />
               <Route path="account/security/2fa" element={<TwoFactor />} />
 
-              {/* (Legacy) Tenants entry shown inside Account hub – keep guarded as platform-only */}
+              {/* (Legacy) Tenants entry inside Account hub – platform-only */}
               <Route
                 path="account/tenants"
                 element={
@@ -596,8 +592,8 @@ function App() {
                 path="user-management"
                 element={
                   <RoleProtectedRoute
-                    // NOTE: deliberately excludes system_admin/super_admin so platform users
-                    // cannot manage tenant staff. Tenants manage their own seats.
+                    // Deliberately excludes system_admin/super_admin/developer so platform users
+                    // cannot manage tenant staff unless impersonating (handled in UI).
                     allow={["owner", "admin", "director", "hr_manager", "branch_manager"]}
                   >
                     <Outlet />
