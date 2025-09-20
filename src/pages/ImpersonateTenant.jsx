@@ -61,7 +61,7 @@ export default function ImpersonateTenant() {
     setImpersonating(true);
     setErr("");
     try {
-      // returns {token, user} or {ok:true, token:...}
+      // Try multiple shapes: returns {token, user} or {ok:true, token:...}
       const resp = await api.postFirst(
         [
           `/admin/tenants/${t.id}/impersonate`,
@@ -80,9 +80,11 @@ export default function ImpersonateTenant() {
         if (tid) localStorage.setItem("activeTenantId", tid);
         api.setTenantId(tid);
       } else {
+        // no user returned – at least scope requests by tenant
         localStorage.setItem("activeTenantId", t.id);
         api.setTenantId(t.id);
       }
+      // Navigate to app root or dashboard
       window.location.href = "/";
     } catch (e) {
       setErr(e.normalizedMessage || "Impersonation failed.");
@@ -102,7 +104,7 @@ export default function ImpersonateTenant() {
     } finally {
       restoreOriginal();
       api.clearTenantId();
-      window.location.href = "/";
+      window.location.href = "/"; // back to your context
     }
   }
 
