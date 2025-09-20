@@ -86,7 +86,7 @@ const Users = lazy(() => import("./pages/user-management/Users"));
 const Roles = lazy(() => import("./pages/user-management/Roles"));
 const Permissions = lazy(() => import("./pages/user-management/Permissions"));
 
-// ✅ NEW: all-in-one Staff/User management page (enriched)
+// ✅ NEW: all-in-one Staff/User management page (tenant-scoped)
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 
 const Branches = lazy(() => import("./pages/Branches"));
@@ -212,7 +212,7 @@ function App() {
               {/* Dashboard */}
               <Route index element={<Dashboard />} />
 
-              {/* Admin hub */}
+              {/* Admin hub (shared admin pages) */}
               <Route
                 path="admin"
                 element={
@@ -222,10 +222,11 @@ function App() {
                 }
               >
                 <Route index element={<Admin />} />
+                {/* System-wide tenant registry (Platform scope) */}
                 <Route
                   path="tenants"
                   element={
-                    <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
+                    <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "developer"]}>
                       <AdminTenants />
                     </RoleProtectedRoute>
                   }
@@ -233,13 +234,13 @@ function App() {
                 <Route path=":slug" element={<AdminRouter />} />
               </Route>
 
-              {/* Account hub */}
+              {/* Account hub (tenant-scoped) */}
               <Route path="account/settings" element={<AccountSettings />} />
               <Route path="account/profile" element={<Profile />} />
               <Route
                 path="account/organization"
                 element={
-                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin", "developer"]}>
+                  <RoleProtectedRoute allow={["admin", "director", "owner", "developer"]}>
                     <Organization />
                   </RoleProtectedRoute>
                 }
@@ -250,11 +251,11 @@ function App() {
               <Route path="account/security/change-password" element={<ChangePassword />} />
               <Route path="account/security/2fa" element={<TwoFactor />} />
 
-              {/* Tenants entry inside Account hub */}
+              {/* (Legacy) Tenants entry shown inside Account hub – keep guarded as platform-only */}
               <Route
                 path="account/tenants"
                 element={
-                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
+                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "developer"]}>
                     <AdminTenants />
                   </RoleProtectedRoute>
                 }
@@ -572,11 +573,11 @@ function App() {
               <Route path="sms-center" element={<SmsCenter />} />
               <Route path="billing-by-phone" element={<BillingByPhone />} />
 
-              {/* Admin tools */}
+              {/* Admin tools (Platform scope only) */}
               <Route
                 path="impersonate-tenant"
                 element={
-                  <RoleProtectedRoute allow={["system_admin", "super_admin", "admin", "director", "developer"]}>
+                  <RoleProtectedRoute allow={["system_admin", "super_admin", "developer"]}>
                     <ImpersonateTenant />
                   </RoleProtectedRoute>
                 }
@@ -584,17 +585,21 @@ function App() {
               <Route
                 path="tenants-admin"
                 element={
-                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
+                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "developer"]}>
                     <TenantsAdminNew />
                   </RoleProtectedRoute>
                 }
               />
 
-              {/* ✅ NEW: User Management routes (index shows all-in-one page) */}
+              {/* ✅ NEW: User Management routes (TENANT scope only) */}
               <Route
                 path="user-management"
                 element={
-                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin"]}>
+                  <RoleProtectedRoute
+                    // NOTE: deliberately excludes system_admin/super_admin so platform users
+                    // cannot manage tenant staff. Tenants manage their own seats.
+                    allow={["owner", "admin", "director", "hr_manager", "branch_manager"]}
+                  >
                     <Outlet />
                   </RoleProtectedRoute>
                 }

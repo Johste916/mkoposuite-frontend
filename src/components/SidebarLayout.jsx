@@ -625,20 +625,28 @@ const SidebarLayout = () => {
                         >
                           <span className="inline-flex items-center gap-2"><FiSettings /> Support Tickets</span>
                         </NavLink>
-                        <NavLink
-                          to="/impersonate-tenant"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2"><FiUsers /> Impersonate</span>
-                        </NavLink>
-                        <NavLink
-                          to="/tenants-admin"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (New)</span>
-                        </NavLink>
+
+                        {/* Platform-only tools */}
+                        {hasAnyRole("system_admin","super_admin","developer") && (
+                          <>
+                            <NavLink
+                              to="/impersonate-tenant"
+                              className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                              onClick={() => setAvatarOpen(false)}
+                            >
+                              <span className="inline-flex items-center gap-2"><FiUsers /> Impersonate</span>
+                            </NavLink>
+                            <NavLink
+                              to="/tenants-admin"
+                              className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                              onClick={() => setAvatarOpen(false)}
+                            >
+                              <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (System)</span>
+                            </NavLink>
+                          </>
+                        )}
+
+                        {/* Tenant org settings (kept for tenant admins) */}
                         <NavLink
                           to="/account/organization"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
@@ -646,22 +654,17 @@ const SidebarLayout = () => {
                         >
                           <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
                         </NavLink>
+
+                        {/* Legacy entry to admin hub */}
                         <NavLink
-                          to="/admin/tenants"
+                          to="/admin"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (SysAdmin)</span>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
                         </NavLink>
                       </>
                     )}
-                    <NavLink
-                      to="/admin"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setAvatarOpen(false)}
-                    >
-                      <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
-                    </NavLink>
                     <button
                       onClick={logoutAndGo}
                       className="w-full text-left px-3 py-2 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-sm text-rose-600 dark:text-rose-300"
