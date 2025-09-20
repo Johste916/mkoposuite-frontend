@@ -174,11 +174,6 @@ export default function TenantsAdmin() {
   return (
     <div style={{ padding: 16 }}>
       <h1>Tenants (Admin)</h1>
-      <p style={{ margin: "6px 0 14px", color: "#64748b", fontSize: 12 }}>
-        Platform charges per active <b>Staff seat</b>. Tenant Admins invite/disable their staff.
-        This view lets you review plan, seats and invoices — not tenant staff.
-      </p>
-
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         <input
           placeholder="Search by name or ID…"
@@ -209,23 +204,14 @@ export default function TenantsAdmin() {
         <tbody>
           {filtered.map((t) => {
             const st = stats[t.id] || {};
-            const staffCount = st.staffCount ?? "—";
-            const seats = t.seats ?? st.seats ?? "—";
-            const over =
-              typeof staffCount === "number" &&
-              typeof seats === "number" &&
-              staffCount > seats;
             return (
               <tr key={t.id}>
                 <td>{t.id}</td>
                 <td>{t.name}</td>
                 <td>{t.planCode || "—"}</td>
                 <td>{t.status || "—"}</td>
-                <td>
-                  {seats}
-                  {over ? ` (over by ${staffCount - seats})` : ""}
-                </td>
-                <td>{staffCount}</td>
+                <td>{t.seats ?? st.seats ?? "—"}</td>
+                <td>{st.staffCount ?? "—"}</td>
                 <td>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <a href={`/subscription?id=${encodeURIComponent(t.id)}`}>Subscription</a>

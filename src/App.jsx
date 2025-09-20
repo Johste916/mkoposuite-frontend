@@ -86,7 +86,7 @@ const Users = lazy(() => import("./pages/user-management/Users"));
 const Roles = lazy(() => import("./pages/user-management/Roles"));
 const Permissions = lazy(() => import("./pages/user-management/Permissions"));
 
-// ✅ NEW: all-in-one Staff/User management page (tenant-scoped)
+// ✅ NEW: all-in-one Staff/User management page (enriched)
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 
 const Branches = lazy(() => import("./pages/Branches"));
@@ -177,12 +177,16 @@ const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
 // NEW: Modern SMS Center page
 const SmsCenter = lazy(() => import("./pages/SmsCenter"));
 
-const Fallback = () => <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>;
+const Fallback = () => (
+  <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
+);
 
 const Forbidden = () => (
   <div className="p-6">
     <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">403 — Forbidden</h1>
-    <p className="mt-2 text-slate-700 dark:text-slate-300">You don’t have permission to access this area.</p>
+    <p className="mt-2 text-slate-700 dark:text-slate-300">
+      You don’t have permission to access this area.
+    </p>
   </div>
 );
 
@@ -208,7 +212,7 @@ function App() {
               {/* Dashboard */}
               <Route index element={<Dashboard />} />
 
-              {/* Admin hub (shared admin pages) */}
+              {/* Admin hub */}
               <Route
                 path="admin"
                 element={
@@ -218,11 +222,10 @@ function App() {
                 }
               >
                 <Route index element={<Admin />} />
-                {/* System-wide tenant registry (Platform scope) */}
                 <Route
                   path="tenants"
                   element={
-                    <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "developer"]}>
+                    <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
                       <AdminTenants />
                     </RoleProtectedRoute>
                   }
@@ -230,13 +233,13 @@ function App() {
                 <Route path=":slug" element={<AdminRouter />} />
               </Route>
 
-              {/* Account hub (tenant-scoped) */}
+              {/* Account hub */}
               <Route path="account/settings" element={<AccountSettings />} />
               <Route path="account/profile" element={<Profile />} />
               <Route
                 path="account/organization"
                 element={
-                  <RoleProtectedRoute allow={["admin", "director", "owner", "developer"]}>
+                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin", "developer"]}>
                     <Organization />
                   </RoleProtectedRoute>
                 }
@@ -247,11 +250,11 @@ function App() {
               <Route path="account/security/change-password" element={<ChangePassword />} />
               <Route path="account/security/2fa" element={<TwoFactor />} />
 
-              {/* (Legacy) Tenants entry shown inside Account hub – keep guarded as platform-only */}
+              {/* Tenants entry inside Account hub */}
               <Route
                 path="account/tenants"
                 element={
-                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "developer"]}>
+                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
                     <AdminTenants />
                   </RoleProtectedRoute>
                 }
@@ -286,14 +289,8 @@ function App() {
               <Route path="borrowers/reports" element={<BorrowerReports />} />
               <Route path="borrowers/:id" element={<BorrowerDetails />} />
               <Route path="borrowers/sms" element={<Sms />} />
-              <Route
-                path="borrowers/email"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>}
-              />
-              <Route
-                path="borrowers/invite"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>}
-              />
+              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>} />
+              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>} />
 
               {/* Groups */}
               <Route path="borrowers/groups" element={<BorrowerGroups />} />
@@ -402,10 +399,7 @@ function App() {
               <Route path="collections/missed" element={<CollectionSheets />} />
               <Route path="collections/past-maturity" element={<CollectionSheets />} />
               <Route path="collections/sms" element={<Sms />} />
-              <Route
-                path="collections/email"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>}
-              />
+              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>} />
 
               {/* Savings */}
               <Route path="savings" element={<Savings />} />
@@ -520,14 +514,8 @@ function App() {
 
               {/* Other Income */}
               <Route path="other-income" element={<OtherIncome />} />
-              <Route
-                path="other-income/add"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>}
-              />
-              <Route
-                path="other-income/csv"
-                element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>}
-              />
+              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
+              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
 
               {/* Assets */}
               <Route path="assets" element={<Assets />} />
@@ -584,11 +572,11 @@ function App() {
               <Route path="sms-center" element={<SmsCenter />} />
               <Route path="billing-by-phone" element={<BillingByPhone />} />
 
-              {/* Admin tools (Platform scope only) */}
+              {/* Admin tools */}
               <Route
                 path="impersonate-tenant"
                 element={
-                  <RoleProtectedRoute allow={["system_admin", "super_admin", "developer"]}>
+                  <RoleProtectedRoute allow={["system_admin", "super_admin", "admin", "director", "developer"]}>
                     <ImpersonateTenant />
                   </RoleProtectedRoute>
                 }
@@ -596,20 +584,17 @@ function App() {
               <Route
                 path="tenants-admin"
                 element={
-                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "developer"]}>
+                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
                     <TenantsAdminNew />
                   </RoleProtectedRoute>
                 }
               />
 
-              {/* ✅ NEW: User Management routes (TENANT scope only) */}
+              {/* ✅ NEW: User Management routes (index shows all-in-one page) */}
               <Route
                 path="user-management"
                 element={
-                  <RoleProtectedRoute
-                    // Platform users manage seats from system tools; keep them OUT of tenant staff mgmt
-                    allow={["owner", "admin", "director", "hr_manager", "branch_manager"]}
-                  >
+                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin"]}>
                     <Outlet />
                   </RoleProtectedRoute>
                 }

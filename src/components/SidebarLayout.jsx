@@ -30,58 +30,13 @@ import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigC
 const isUuid = (v) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
 const isNumericId = (v) => /^\d+$/.test(String(v || ""));
-const lower = (s) => String(s || "").toLowerCase();
-
-/* Build a normalized role list from common shapes */
-const normalizeRoles = (user) => {
-  const primary = lower(user?.role);
-  const list =
-    Array.isArray(user?.roles)
-      ? user.roles.map(lower)
-      : Array.isArray(user?.Roles)
-      ? user.Roles.map((r) => lower(r?.name || r))
-      : [];
-  return Array.from(new Set([primary, ...list].filter(Boolean)));
-};
-
-/* Robust platform admin detection (covers many backends) */
-const isPlatformAdmin = (user) => {
-  const roles = normalizeRoles(user);
-  const roleHit = ["system_admin", "super_admin", "platform_admin", "developer"].some((r) =>
-    roles.includes(r)
-  );
-  const flagHit =
-    !!user?.isSystemAdmin ||
-    !!user?.isPlatformAdmin ||
-    !!user?.platformAdmin ||
-    localStorage.getItem("platformAdmin") === "true";
-
-  const scopesHit = Array.isArray(user?.scopes) && user.scopes.some((s) => lower(s).startsWith("platform"));
-  const permsHit =
-    Array.isArray(user?.permissions) &&
-    user.permissions.some((p) => {
-      const v = lower(p?.name || p);
-      return v.startsWith("platform:") || v === "impersonate" || v === "tenants:read";
-    });
-
-  return roleHit || flagHit || scopesHit || permsHit;
-};
-
-/* Tenant managers who should see User Management */
-const isTenantStaffManager = (user) => {
-  const roles = normalizeRoles(user);
-  return ["owner", "admin", "director", "hr_manager", "branch_manager"].some((r) => roles.includes(r));
-};
 
 /* ------------------------------- NAV CONFIG --------------------------------
    NOTE: “Account” items live in the avatar dropdown to avoid duplication. */
 const NAV = () => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
   {
-    label: "Borrowers",
-    icon: <FiUsers />,
-    to: "/borrowers",
-    children: [
+    label: "Borrowers", icon: <FiUsers />, to: "/borrowers", children: [
       { label: "View Borrowers", to: "/borrowers" },
       { label: "Add Borrower", to: "/borrowers/add" },
       { label: "KYC Queue", to: "/borrowers/kyc" },
@@ -98,13 +53,10 @@ const NAV = () => [
       { label: "Send SMS to All", to: "/borrowers/sms" },
       { label: "Send Email to All", to: "/borrowers/email" },
       { label: "Invite Borrowers", to: "/borrowers/invite" },
-    ],
+    ]
   },
   {
-    label: "Loans",
-    icon: <FiCreditCard />,
-    to: "/loans",
-    children: [
+    label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
       { label: "View All Loans", to: "/loans" },
       { label: "Add Loan", to: "/loans/applications" },
       { label: "Review Queue", to: "/loans/review-queue" },
@@ -118,13 +70,10 @@ const NAV = () => [
       { label: "Principal Outstanding", to: "/loans/status/principal-outstanding" },
       { label: "1 Month Late", to: "/loans/status/1-month-late" },
       { label: "3 Months Late", to: "/loans/status/3-months-late" },
-    ],
+    ]
   },
   {
-    label: "Repayments",
-    icon: <FiDollarSign />,
-    to: "/repayments",
-    children: [
+    label: "Repayments", icon: <FiDollarSign />, to: "/repayments", children: [
       { label: "View Repayments", to: "/repayments" },
       { label: "Record Repayment", to: "/repayments/new" },
       { label: "Receipts", to: "/repayments/receipts" },
@@ -132,39 +81,30 @@ const NAV = () => [
       { label: "Add via CSV", to: "/repayments/csv" },
       { label: "Repayment Charts", to: "/repayments/charts" },
       { label: "Approve Repayments", to: "/repayments/approve" },
-    ],
+    ]
   },
   { label: "Collateral Register", icon: <FiBriefcase />, to: "/collateral" },
   {
-    label: "Collection Sheets",
-    icon: <FiCreditCard />,
-    to: "/collections",
-    children: [
+    label: "Collection Sheets", icon: <FiCreditCard />, to: "/collections", children: [
       { label: "Daily Collection Sheet", to: "/collections/daily" },
       { label: "Missed Repayment Sheet", to: "/collections/missed" },
       { label: "Past Maturity Loans", to: "/collections/past-maturity" },
       { label: "Send SMS", to: "/collections/sms" },
       { label: "Send Email", to: "/collections/email" },
-    ],
+    ]
   },
   {
-    label: "Savings",
-    icon: <BsBank />,
-    to: "/savings",
-    children: [
+    label: "Savings", icon: <BsBank />, to: "/savings", children: [
       { label: "View Savings", to: "/savings" },
       { label: "Transactions", to: "/savings/transactions" },
       { label: "Upload CSV", to: "/savings/transactions/csv" },
       { label: "Approve Transactions", to: "/savings/transactions/approve" },
       { label: "Savings Report", to: "/savings/report" },
-    ],
+    ]
   },
   /* ✅ Banking section (now includes Cash Accounts management) */
   {
-    label: "Banking",
-    icon: <BsBank />,
-    to: "/banks",
-    children: [
+    label: "Banking", icon: <BsBank />, to: "/banks", children: [
       // Banks
       { label: "View Banks", to: "/banks" },
       { label: "Add Bank", to: "/banks/add" },
@@ -185,22 +125,16 @@ const NAV = () => [
       { label: "Add Cash Transaction", to: "/cash/transactions/add" },
       { label: "Cash Reconciliation", to: "/cash/reconciliation" },
       { label: "Cash Statement", to: "/cash/statements" },
-    ],
+    ]
   },
   {
-    label: "Investors",
-    icon: <FiUsers />,
-    to: "/investors",
-    children: [
+    label: "Investors", icon: <FiUsers />, to: "/investors", children: [
       { label: "View Investors", to: "/investors" },
       { label: "Add Investor", to: "/investors/add" },
-    ],
+    ]
   },
   {
-    label: "HR & Payroll",
-    icon: <FiUserCheck />,
-    to: "/payroll",
-    children: [
+    label: "HR & Payroll", icon: <FiUserCheck />, to: "/payroll", children: [
       { label: "View Payroll", to: "/payroll" },
       { label: "Add Payroll", to: "/payroll/add" },
       { label: "Payroll Report", to: "/payroll/report" },
@@ -208,65 +142,47 @@ const NAV = () => [
       { label: "Attendance", to: "/hr/attendance" },
       { label: "Leave Management", to: "/hr/leave" },
       { label: "Contracts", to: "/hr/contracts" },
-    ],
+    ]
   },
   {
-    label: "Expenses",
-    icon: <FiCreditCard />,
-    to: "/expenses",
-    children: [
+    label: "Expenses", icon: <FiCreditCard />, to: "/expenses", children: [
       { label: "View Expenses", to: "/expenses" },
       { label: "Add Expense", to: "/expenses/add" },
       { label: "Upload CSV", to: "/expenses/csv" },
-    ],
+    ]
   },
   {
-    label: "Other Income",
-    icon: <FiDollarSign />,
-    to: "/other-income",
-    children: [
+    label: "Other Income", icon: <FiDollarSign />, to: "/other-income", children: [
       { label: "View Other Income", to: "/other-income" },
       { label: "Add Other Income", to: "/other-income/add" },
       { label: "Upload CSV", to: "/other-income/csv" },
-    ],
+    ]
   },
   {
-    label: "Asset Management",
-    icon: <FiBriefcase />,
-    to: "/assets",
-    children: [
+    label: "Asset Management", icon: <FiBriefcase />, to: "/assets", children: [
       { label: "View Assets", to: "/assets" },
       { label: "Add Asset", to: "/assets/add" },
-    ],
+    ]
   },
   {
-    label: "Accounting",
-    icon: <FiDatabase />,
-    to: "/accounting",
-    children: [
+    label: "Accounting", icon: <FiDatabase />, to: "/accounting", children: [
       { label: "Chart of Accounts", to: "/accounting/chart-of-accounts" },
       { label: "Trial Balance", to: "/accounting/trial-balance" },
       { label: "Profit & Loss", to: "/accounting/profit-loss" },
       { label: "Cashflow", to: "/accounting/cashflow" },
-    ],
+    ]
   },
   {
-    label: "User Management",
-    icon: <FiUserCheck />,
-    to: "/user-management",
-    children: [
-      { label: "Staff", to: "/user-management" }, // all-in-one index
+    label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
+      { label: "Staff", to: "/user-management" },                 // ✅ all-in-one page (index)
       { label: "Users", to: "/user-management/users" },
       { label: "Roles", to: "/user-management/roles" },
       { label: "Permissions", to: "/user-management/permissions" },
-    ],
+    ]
   },
   { label: "Branches", icon: <FiDatabase />, to: "/branches" },
   {
-    label: "Reports",
-    icon: <FiBarChart2 />,
-    to: "/reports",
-    children: [
+    label: "Reports", icon: <FiBarChart2 />, to: "/reports", children: [
       { label: "Borrowers Report", to: "/reports/borrowers" },
       { label: "Loan Report", to: "/reports/loans" },
       { label: "Loan Arrears Aging", to: "/reports/arrears-aging" },
@@ -285,11 +201,12 @@ const NAV = () => [
       { label: "Portfolio At Risk (PAR)", to: "/reports/par" },
       { label: "At a Glance", to: "/reports/at-a-glance" },
       { label: "All Entries", to: "/reports/all" },
-    ],
+    ]
   },
 ];
 
-const pathIsIn = (pathname, base) => pathname === base || pathname.startsWith(base + "/");
+const pathIsIn = (pathname, base) =>
+  pathname === base || pathname.startsWith(base + "/");
 
 /* ------------------------------- Section item ------------------------------ */
 const Section = memo(({ item, currentPath, onNavigate }) => {
@@ -301,7 +218,8 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
     if (isActiveSection) setOpen(true);
   }, [isActiveSection]);
 
-  const baseItem = "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
+  const baseItem =
+    "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
 
   if (!hasChildren) {
     return (
@@ -356,7 +274,11 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
         {open ? <FiChevronUp /> : <FiChevronDown />}
       </button>
 
-      <div id={panelId} hidden={!open} className="mt-1 ml-2 border-l border-slate-200 dark:border-slate-700">
+      <div
+        id={panelId}
+        hidden={!open}
+        className="mt-1 ml-2 border-l border-slate-200 dark:border-slate-700"
+      >
         <div className="pl-3 py-1 space-y-1">
           {item.children.map((c) => (
             <NavLink
@@ -416,27 +338,29 @@ const SidebarLayout = () => {
     try {
       delete api.defaults.headers.common.Authorization;
       [
-        "token",
-        "jwt",
-        "authToken",
-        "accessToken",
-        "access_token",
-        "user",
-        "tenant",
-        "tenantId",
-        "tenantName",
-        "activeBranchId",
+        "token","jwt","authToken","accessToken","access_token",
+        "user","tenant","tenantId","tenantName","activeBranchId",
       ].forEach((k) => localStorage.removeItem(k));
       if (typeof sessionStorage !== "undefined") {
-        try {
-          sessionStorage.clear();
-        } catch {}
+        try { sessionStorage.clear(); } catch {}
       }
       delete api.defaults.headers.common["x-tenant-id"];
       delete api.defaults.headers.common["x-branch-id"];
     } catch {}
     navigate("/login", { replace: true });
   }, [navigate]);
+
+  const lower = (s) => String(s || "").toLowerCase();
+  const hasAnyRole = (...allowed) => {
+    const primary = lower(user?.role);
+    const list =
+      Array.isArray(user?.roles)
+        ? user.roles.map(lower)
+        : Array.isArray(user?.Roles)
+        ? user.Roles.map((r) => lower(r?.name || r))
+        : [];
+    return allowed.some((r) => r === primary || list.includes(r));
+  };
 
   /* theme + user + tenant load */
   useEffect(() => {
@@ -535,11 +459,9 @@ const SidebarLayout = () => {
       try {
         const res = await api.get("/branches");
         const list =
-          Array.isArray(res.data)
-            ? res.data
-            : Array.isArray(res.data?.items)
-            ? res.data.items
-            : res.data?.data || [];
+          Array.isArray(res.data) ? res.data :
+          Array.isArray(res.data?.items) ? res.data.items :
+          res.data?.data || [];
         setBranches(list);
         if (list.length && !activeBranchId) {
           const firstId = String(list[0]?.id ?? "");
@@ -551,17 +473,13 @@ const SidebarLayout = () => {
     })();
   }, [activeBranchId, logoutAndGo]);
 
-  const platformAdmin = isPlatformAdmin(user);
-  const tenantStaffMgr = isTenantStaffManager(user);
+  const userRole = (user?.role || "").toLowerCase();
 
-  // Build NAV -> remove User Management for platform admins -> apply feature filters
+  // Build full NAV, then apply feature filters
   const computedNav = useMemo(() => {
     const base = NAV();
-    const withoutUserMgmt = base.filter(
-      (item) => !(platformAdmin && (item.to === "/user-management" || item.label === "User Management"))
-    );
-    return filterNavByFeatures(withoutUserMgmt, features, lower(user?.role || ""), featureCtx);
-  }, [features, user, featureCtx, platformAdmin]);
+    return filterNavByFeatures(base, features, userRole, featureCtx);
+  }, [features, userRole, featureCtx]);
 
   /* close mobile + avatar when route changes */
   useEffect(() => {
@@ -569,7 +487,8 @@ const SidebarLayout = () => {
     setAvatarOpen(false);
   }, [location.pathname]);
 
-  const initial = (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
+  const initial =
+    (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
 
   const toggleDark = useCallback(() => setDarkMode((v) => !v), []);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
@@ -622,13 +541,15 @@ const SidebarLayout = () => {
               >
                 <option value="">Branch</option>
                 {branches.map((b) => (
-                  <option key={b.id} value={String(b.id)}>
-                    {b.name}
-                  </option>
+                  <option key={b.id} value={String(b.id)}>{b.name}</option>
                 ))}
               </select>
 
-              <button onClick={toggleDark} className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Toggle dark mode">
+              <button
+                onClick={toggleDark}
+                className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label="Toggle dark mode"
+              >
                 {darkMode ? <FiSun /> : <FiMoon />}
               </button>
 
@@ -657,117 +578,95 @@ const SidebarLayout = () => {
                       </div>
                     </div>
                     <hr className="my-2 border-slate-200 dark:border-slate-700" />
-
                     {/* Always available */}
                     <NavLink
                       to="/account/settings"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2">
-                        <FiSettings /> Profile &amp; Settings
-                      </span>
+                      <span className="inline-flex items-center gap-2"><FiSettings /> Profile &amp; Settings</span>
                     </NavLink>
                     <NavLink
                       to="/billing"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2">
-                        <FiCreditCard /> Billing
-                      </span>
+                      <span className="inline-flex items-center gap-2"><FiCreditCard /> Billing</span>
                     </NavLink>
                     <NavLink
                       to="/sms-console"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2">
-                        <FiMessageSquare /> SMS Console
-                      </span>
+                      <span className="inline-flex items-center gap-2"><FiMessageSquare /> SMS Console</span>
                     </NavLink>
                     <NavLink
                       to="/billing-by-phone"
                       className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2">
-                        <FiPhone /> Billing by Phone
-                      </span>
+                      <span className="inline-flex items-center gap-2"><FiPhone /> Billing by Phone</span>
                     </NavLink>
 
-                    {/* Tenant org settings for tenant admins/managers */}
-                    {tenantStaffMgr && (
-                      <NavLink
-                        to="/account/organization"
-                        className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                        onClick={() => setAvatarOpen(false)}
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <FiSettings /> Organization
-                        </span>
-                      </NavLink>
-                    )}
-
-                    {/* Platform-only tools — robust detection */}
-                    {platformAdmin && (
+                    {/* Admin/gated items */}
+                    {hasAnyRole("system_admin","super_admin","admin","director","developer") && (
                       <>
                         <NavLink
                           to="/subscription"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2">
-                            <FiSettings /> Subscription
-                          </span>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Subscription</span>
                         </NavLink>
                         <NavLink
                           to="/support-tickets"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2">
-                            <FiSettings /> Support Tickets
-                          </span>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Support Tickets</span>
                         </NavLink>
                         <NavLink
                           to="/impersonate-tenant"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2">
-                            <FiUsers /> Impersonate
-                          </span>
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Impersonate</span>
                         </NavLink>
                         <NavLink
                           to="/tenants-admin"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2">
-                            <FiUsers /> Tenants (System)
-                          </span>
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (New)</span>
                         </NavLink>
-                        {/* Legacy entry to admin hub */}
                         <NavLink
-                          to="/admin"
+                          to="/account/organization"
                           className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
                           onClick={() => setAvatarOpen(false)}
                         >
-                          <span className="inline-flex items-center gap-2">
-                            <FiSettings /> Admin
-                          </span>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
+                        </NavLink>
+                        <NavLink
+                          to="/admin/tenants"
+                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (SysAdmin)</span>
                         </NavLink>
                       </>
                     )}
-
+                    <NavLink
+                      to="/admin"
+                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      onClick={() => setAvatarOpen(false)}
+                    >
+                      <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
+                    </NavLink>
                     <button
                       onClick={logoutAndGo}
                       className="w-full text-left px-3 py-2 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-sm text-rose-600 dark:text-rose-300"
                     >
-                      <span className="inline-flex items-center gap-2">
-                        <FiLogOut /> Logout
-                      </span>
+                      <span className="inline-flex items-center gap-2"><FiLogOut /> Logout</span>
                     </button>
                   </div>
                 )}
@@ -815,7 +714,11 @@ const SidebarLayout = () => {
           <div className="w-72 max-w-[80vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
             <div className="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800">
               <span className="font-semibold">Menu</span>
-              <button className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" onClick={closeMobile} aria-label="Close">
+              <button
+                className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={closeMobile}
+                aria-label="Close"
+              >
                 <FiX />
               </button>
             </div>
@@ -825,13 +728,22 @@ const SidebarLayout = () => {
               ) : (
                 <nav className="space-y-1" aria-label="Mobile primary">
                   {computedNav.map((item) => (
-                    <Section key={item.label + item.to} item={item} currentPath={location.pathname} onNavigate={closeMobile} />
+                    <Section
+                      key={item.label + item.to}
+                      item={item}
+                      currentPath={location.pathname}
+                      onNavigate={closeMobile}
+                    />
                   ))}
                 </nav>
               )}
             </div>
           </div>
-          <button className="flex-1 bg-black/40" aria-label="Close overlay" onClick={closeMobile} />
+          <button
+            className="flex-1 bg-black/40"
+            aria-label="Close overlay"
+            onClick={closeMobile}
+          />
         </div>
       )}
     </div>
