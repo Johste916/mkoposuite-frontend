@@ -4,9 +4,9 @@ import { FiRefreshCw, FiCloudLightning, FiShield, FiAlertTriangle } from "react-
 
 /**
  * Robust Subscription page
- * - Never blocks on “Missing tenant id”.
- * - Resolves tenant id from multiple sources and proceeds even if /tenants/me fails.
- * - Persists the chosen tenant id to api + localStorage.
+ * - Resolves tenant id from multiple sources and continues gracefully.
+ * - Persists chosen tenant id to api + localStorage.
+ * - Clarifies billing by active staff seats (Tenant Admin manages staff).
  */
 
 const DEFAULT_SENTINEL_TENANT =
@@ -215,6 +215,10 @@ export default function Subscription() {
     </span>
   );
 
+  // derive seat & usage for clarity
+  const staffLimit = limits?.limits?.staff ?? limits?.limits?.users ?? limits?.plan?.seats ?? billing?.seats;
+  const staffUsed = limits?.usage?.staff ?? limits?.usage?.users ?? limits?.usage?.active_users;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -237,7 +241,15 @@ export default function Subscription() {
         </div>
       </div>
 
-      {/* Soft notice if we only have sentinel/local id (no name yet) */}
+      {/* Billing policy copy for tenants */}
+      <div className="text-xs text-slate-600 dark:text-slate-400">
+        <b>Billing model:</b> You’re charged per active <b>Staff seat</b>.
+        As a Tenant Admin, you control who can access the system (loan officers,
+        customer service, HR, accountant, managers, etc.). Adding or re-enabling a staff
+        member consumes a seat. You can upgrade your seat limit anytime.
+      </div>
+
+      {/* Soft notice if we only have sentinel/local id */}
       {!tenant?.id && (
         <div className="p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200 flex items-center gap-2">
           <FiAlertTriangle className="shrink-0" />
@@ -284,10 +296,10 @@ export default function Subscription() {
             </div>
 
             <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Stat label="Staff Seats (limit)" value={staffLimit ?? "—"} />
+              <Stat label="Active Staff" value={staffUsed ?? "—"} muted />
               <Stat label="Borrowers Limit" value={limits?.limits?.borrowers ?? "—"} />
               <Stat label="Loans Limit" value={limits?.limits?.loans ?? "—"} />
-              <Stat label="Borrowers Used" value={limits?.usage?.borrowers ?? "—"} muted />
-              <Stat label="Loans Used" value={limits?.usage?.loans ?? "—"} muted />
             </div>
           </div>
 

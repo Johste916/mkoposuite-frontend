@@ -532,7 +532,14 @@ export default function TenantsAdmin() {
   return (
     <div className="p-4">
       <Toasts />
-      <h1 className="text-xl font-semibold mb-3">Admin · Tenants</h1>
+      <h1 className="text-xl font-semibold mb-1">Admin · Tenants</h1>
+      <p className="mb-3 text-xs text-slate-500">
+        Billing is based on{" "}
+        <b>active Staff seats</b> per tenant. Tenant Admins manage their staff
+        (loan officers, CS, HR, accountant, manager, etc.). System Admins
+        configure plans & seat limits and can review invoices; they do not manage
+        tenant staff directly.
+      </p>
 
       {/* Controls */}
       <div className="flex items-center justify-between gap-2 mb-3">
@@ -593,45 +600,55 @@ export default function TenantsAdmin() {
               </tr>
             </thead>
             <tbody className="text-slate-800 dark:text-slate-200">
-              {list.map((t) => (
-                <tr
-                  key={t.id || t.name}
-                  className="border-t border-slate-200 dark:border-slate-800"
-                >
-                  <td className="py-2 px-3">{t.name}</td>
-                  <td className="py-2 px-3">{t.planLabel}</td>
-                  <td className="py-2 px-3 capitalize">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded ${
-                        t.status === "active"
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                          : t.status === "trialing" || t.status === "trial"
-                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                          : t.status === "past_due"
-                          ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
-                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                      }`}
-                    >
-                      {t.status}
-                    </span>
-                  </td>
-                  <td className="py-2 px-3">
-                    {t.trialEndsAt ? String(t.trialEndsAt).slice(0, 10) : "—"}
-                  </td>
-                  <td className="py-2 px-3">{t.staffCount ?? "—"}</td>
-                  <td className="py-2 px-3">{t.seats ?? "—"}</td>
-                  <td className="py-2 px-3">{t.billingEmail || "—"}</td>
-                  <td className="py-2 px-3">
-                    <button
-                      onClick={() => openDrawer(t)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700"
-                      title="Manage"
-                    >
-                      <FiEdit2 /> Manage
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {list.map((t) => {
+                const over = Number(t.staffCount || 0) > Number(t.seats || 0);
+                return (
+                  <tr
+                    key={t.id || t.name}
+                    className="border-t border-slate-200 dark:border-slate-800"
+                  >
+                    <td className="py-2 px-3">{t.name}</td>
+                    <td className="py-2 px-3">{t.planLabel}</td>
+                    <td className="py-2 px-3 capitalize">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded ${
+                          t.status === "active"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : t.status === "trialing" || t.status === "trial"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                            : t.status === "past_due"
+                            ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
+                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        }`}
+                      >
+                        {t.status}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      {t.trialEndsAt ? String(t.trialEndsAt).slice(0, 10) : "—"}
+                    </td>
+                    <td className="py-2 px-3">
+                      {t.staffCount ?? "—"}{" "}
+                      {over && (
+                        <span className="ml-2 text-[10px] px-1.5 py-[1px] rounded bg-rose-100 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">
+                          over by {Number(t.staffCount) - Number(t.seats)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3">{t.seats ?? "—"}</td>
+                    <td className="py-2 px-3">{t.billingEmail || "—"}</td>
+                    <td className="py-2 px-3">
+                      <button
+                        onClick={() => openDrawer(t)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700"
+                        title="Manage"
+                      >
+                        <FiEdit2 /> Manage
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               {!list.length && (
                 <tr>
                   <td colSpan={8} className="py-6 text-center text-slate-500">
@@ -680,6 +697,11 @@ export default function TenantsAdmin() {
                     <div className="font-semibold">{drawer.t.name}</div>
                     <div className="text-slate-500 text-xs mt-0.5">
                       {drawer.t.id ? `ID: ${drawer.t.id}` : null}
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      <b>Billing policy:</b> charges are per active staff seat.
+                      Tenant Admins can invite/disable staff. If active staff
+                      exceeds seats, usage may be prorated or blocked depending on plan.
                     </div>
                   </div>
                 </section>
