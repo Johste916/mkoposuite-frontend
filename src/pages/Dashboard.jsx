@@ -61,7 +61,11 @@ const baseInput =
 
 const SelectField = ({ className = '', children, ...props }) => (
   <div className={`relative ${className}`}>
-    <select {...props} className={`${baseInput} pr-9 appearance-none`}>
+    <select
+      {...props}
+      className={`${baseInput} pr-9 appearance-none bg-none ms-select`}
+      style={{ backgroundImage: 'none' }}
+    >
       {children}
     </select>
     <ChevronDown
@@ -73,7 +77,12 @@ const SelectField = ({ className = '', children, ...props }) => (
 
 const DateField = ({ className = '', ...props }) => (
   <div className={`relative ${className}`}>
-    <input type="date" {...props} className={`${baseInput} pr-9`} />
+    <input
+      type="date"
+      {...props}
+      className={`${baseInput} pr-9 appearance-none bg-none ms-date`}
+      style={{ backgroundImage: 'none' }}
+    />
     <Calendar
       className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
       aria-hidden="true"
@@ -462,6 +471,30 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Scoped CSS to remove native dropdown/calendar icons (prevents double arrows) */}
+      <style>{`
+        /* Select: remove native arrow across browsers */
+        select.ms-select {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          background-image: none !important;
+        }
+        /* Legacy Edge/IE */
+        select.ms-select::-ms-expand { display: none; }
+
+        /* Date input: hide native calendar button so our icon is the only one */
+        input.ms-date[type="date"] {
+          -webkit-appearance: none;
+          appearance: none;
+          background-image: none !important;
+        }
+        input.ms-date[type="date"]::-webkit-calendar-picker-indicator {
+          opacity: 0;
+          display: none;
+        }
+      `}</style>
+
       {/* Top bar */}
       <div className="rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm border border-slate-200 dark:border-slate-800 p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -1111,7 +1144,7 @@ const SummaryCard = ({
     ({
       indigo: {
         bg: 'from-indigo-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-indigo-100 dark:ring-indigo-900/40',
+      ring: 'ring-indigo-100 dark:ring-indigo-900/40',
         ink: 'text-indigo-700 dark:text-indigo-300',
         badge: 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-300',
         spot: 'bg-indigo-400/20'
