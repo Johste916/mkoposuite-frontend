@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
   ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle,
-  Calendar
+  ChevronDown, Calendar
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -59,23 +59,16 @@ const baseInput =
   'focus:ring-2 focus:ring-indigo-500/50 ' +
   'dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700';
 
-/**
- * Plain-text <select> with NO arrows (native or custom).
- * Keeps the same look; just removes carets across browsers.
- */
 const SelectField = ({ className = '', children, ...props }) => (
-  <select
-    {...props}
-    className={`${baseInput} ${className} appearance-none pr-3 !bg-none`}
-    style={{
-      WebkitAppearance: 'none',
-      MozAppearance: 'none',
-      appearance: 'none',
-      backgroundImage: 'none'
-    }}
-  >
-    {children}
-  </select>
+  <div className={`relative ${className}`}>
+    <select {...props} className={`${baseInput} pr-9 appearance-none`}>
+      {children}
+    </select>
+    <ChevronDown
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
+      aria-hidden="true"
+    />
+  </div>
 );
 
 const DateField = ({ className = '', ...props }) => (
@@ -395,8 +388,7 @@ const Dashboard = () => {
         dueDate: draft.dueDate || null,
         note: draft.note || '',
       });
-      // Reset the correct item (fix)
-      setAssignDraft((d) => ({ ...d, [activityId]: { assigneeId: '', dueDate: '', note: '' } }));
+      setAssignDraft((d) => ({ ...d, [a.id]: { assigneeId: '', dueDate: '', note: '' } }));
       await fetchActivity();
       pushToast('Task assigned', 'success');
     } catch (err) {
