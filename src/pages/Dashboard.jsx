@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
   ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle,
-  ChevronDown, Calendar
+  Calendar
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -59,16 +59,24 @@ const baseInput =
   'focus:ring-2 focus:ring-indigo-500/50 ' +
   'dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700';
 
+/** 
+ * Plain-text Select (no caret arrows).
+ * - Removes native dropdown arrows across browsers.
+ * - No custom chevron icon (prevents “double arrow” issue).
+ */
 const SelectField = ({ className = '', children, ...props }) => (
-  <div className={`relative ${className}`}>
-    <select {...props} className={`${baseInput} pr-9 appearance-none`}>
-      {children}
-    </select>
-    <ChevronDown
-      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
-      aria-hidden="true"
-    />
-  </div>
+  <select
+    {...props}
+    className={`${baseInput} ${className} appearance-none pr-3 !bg-none`}
+    style={{
+      WebkitAppearance: 'none',
+      MozAppearance: 'none',
+      appearance: 'none',
+      backgroundImage: 'none'
+    }}
+  >
+    {children}
+  </select>
 );
 
 const DateField = ({ className = '', ...props }) => (
@@ -388,7 +396,8 @@ const Dashboard = () => {
         dueDate: draft.dueDate || null,
         note: draft.note || '',
       });
-      setAssignDraft((d) => ({ ...d, [a.id]: { assigneeId: '', dueDate: '', note: '' } }));
+      // FIXED: reset the correct key (was using `a.id`)
+      setAssignDraft((d) => ({ ...d, [activityId]: { assigneeId: '', dueDate: '', note: '' } }));
       await fetchActivity();
       pushToast('Task assigned', 'success');
     } catch (err) {
@@ -1095,31 +1104,32 @@ const Dashboard = () => {
   );
 };
 
-/** Fancy KPI card with optional link (`to`) to make the entire card clickable */
+/** Fancy KPI card with tasteful tone background */
 const SummaryCard = ({
   title,
   value,
   icon,
   tone = 'indigo',
-  to = null,        // <-- NEW: pass a route to make it clickable
+  to = null,        // when provided, whole card is clickable
   delta = null,
   deltaLabel = '',
   spark = null
 }) => {
+  // Professional, subtle tone tints per theme
   const tones = ({
-    indigo:  { border: 'from-indigo-300/70 to-indigo-500/40', icon: 'bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-300', glow: 'from-indigo-50/90 to-transparent dark:from-indigo-900/35 dark:to-transparent' },
-    sky:     { border: 'from-sky-300/70 to-sky-500/40',       icon: 'bg-sky-500/10 dark:bg-sky-400/10 text-sky-600 dark:text-sky-300',       glow: 'from-sky-50/90 to-transparent dark:from-sky-900/35 dark:to-transparent' },
-    blue:    { border: 'from-blue-300/70 to-blue-500/40',     icon: 'bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-300',     glow: 'from-blue-50/90 to-transparent dark:from-blue-900/35 dark:to-transparent' },
-    emerald: { border: 'from-emerald-300/70 to-emerald-500/40',icon:'bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-300',glow:'from-emerald-50/90 to-transparent dark:from-emerald-900/35 dark:to-transparent' },
-    cyan:    { border: 'from-cyan-300/70 to-cyan-500/40',     icon: 'bg-cyan-500/10 dark:bg-cyan-400/10 text-cyan-600 dark:text-cyan-300',     glow: 'from-cyan-50/90 to-transparent dark:from-cyan-900/35 dark:to-transparent' },
-    amber:   { border: 'from-amber-300/70 to-amber-500/40',   icon: 'bg-amber-500/10 dark:bg-amber-400/10 text-amber-600 dark:text-amber-300',   glow: 'from-amber-50/90 to-transparent dark:from-amber-900/35 dark:to-transparent' },
-    violet:  { border: 'from-violet-300/70 to-violet-500/40', icon: 'bg-violet-500/10 dark:bg-violet-400/10 text-violet-600 dark:text-violet-300', glow: 'from-violet-50/90 to-transparent dark:from-violet-900/35 dark:to-transparent' },
-    rose:    { border: 'from-rose-300/70 to-rose-500/40',     icon: 'bg-rose-500/10 dark:bg-rose-400/10 text-rose-600 dark:text-rose-300',     glow: 'from-rose-50/90 to-transparent dark:from-rose-900/35 dark:to-transparent' },
-    slate:   { border: 'from-slate-300/70 to-slate-500/40',   icon: 'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',   glow: 'from-slate-50/90 to-transparent dark:from-slate-900/35 dark:to-transparent' },
+    indigo:  { border: 'from-indigo-300/70 to-indigo-500/40', icon: 'bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-300', bg: 'bg-gradient-to-br from-indigo-50 to-white dark:from-slate-900 dark:to-slate-900' },
+    sky:     { border: 'from-sky-300/70 to-sky-500/40',       icon: 'bg-sky-500/10 dark:bg-sky-400/10 text-sky-600 dark:text-sky-300',             bg: 'bg-gradient-to-br from-sky-50 to-white dark:from-slate-900 dark:to-slate-900' },
+    blue:    { border: 'from-blue-300/70 to-blue-500/40',     icon: 'bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-300',         bg: 'bg-gradient-to-br from-blue-50 to-white dark:from-slate-900 dark:to-slate-900' },
+    emerald: { border: 'from-emerald-300/70 to-emerald-500/40',icon:'bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-300', bg:'bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-900' },
+    cyan:    { border: 'from-cyan-300/70 to-cyan-500/40',     icon: 'bg-cyan-500/10 dark:bg-cyan-400/10 text-cyan-600 dark:text-cyan-300',         bg: 'bg-gradient-to-br from-cyan-50 to-white dark:from-slate-900 dark:to-slate-900' },
+    amber:   { border: 'from-amber-300/70 to-amber-500/40',   icon: 'bg-amber-500/10 dark:bg-amber-400/10 text-amber-600 dark:text-amber-300',     bg: 'bg-gradient-to-br from-amber-50 to-white dark:from-slate-900 dark:to-slate-900' },
+    violet:  { border: 'from-violet-300/70 to-violet-500/40', icon: 'bg-violet-500/10 dark:bg-violet-400/10 text-violet-600 dark:text-violet-300',  bg: 'bg-gradient-to-br from-violet-50 to-white dark:from-slate-900 dark:to-slate-900' },
+    rose:    { border: 'from-rose-300/70 to-rose-500/40',     icon: 'bg-rose-500/10 dark:bg-rose-400/10 text-rose-600 dark:text-rose-300',         bg: 'bg-gradient-to-br from-rose-50 to-white dark:from-slate-900 dark:to-slate-900' },
+    slate:   { border: 'from-slate-300/70 to-slate-500/40',   icon: 'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',     bg: 'bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-900' },
   }[tone]) || {
     border: 'from-slate-300/70 to-slate-500/40',
     icon: 'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',
-    glow: 'from-slate-50/90 to-transparent dark:from-slate-900/35 dark:to-transparent'
+    bg: 'bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-900'
   };
 
   // Tiny sparkline (dependency-free)
@@ -1160,12 +1170,8 @@ const SummaryCard = ({
 
       {/* gradient border */}
       <div className={`p-[1px] rounded-2xl bg-gradient-to-br ${tones.border} ${to ? 'cursor-pointer' : ''}`}>
-        {/* glass card */}
-        <div className="relative rounded-2xl bg-white/95 dark:bg-slate-900/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm
-                        border border-white/60 dark:border-slate-800 shadow-sm p-5 min-h-[11rem]">
-          {/* colored glow background */}
-          <div className={`pointer-events-none absolute inset-0 rounded-2xl opacity-80 bg-gradient-to-br ${tones.glow}`} />
-
+        {/* toned card background (clean + professional) */}
+        <div className={`relative rounded-2xl ${tones.bg} border border-white/60 dark:border-slate-800 shadow-sm p-5 min-h-[11rem]`}>
           <div className="relative flex items-start justify-between gap-3">
             <div className={`p-3 rounded-full ${tones.icon}`}>{icon}</div>
 
