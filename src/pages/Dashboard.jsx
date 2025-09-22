@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
   ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle,
-  Calendar
+  ChevronDown, Calendar
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -59,31 +59,16 @@ const baseInput =
   'focus:ring-2 focus:ring-indigo-500/50 ' +
   'dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700';
 
-/**
- * Plain-text <select> (no dropdown arrow).
- * Keeps the same visual design; just hides native carets across browsers.
- */
 const SelectField = ({ className = '', children, ...props }) => (
-  <>
-    {/* Scoped CSS to hide native select arrows consistently */}
-    <style>{`
-      .ms-plain-select {
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        appearance: none;
-        background-image: none !important;
-        background: transparent; /* in case a UA injects an image */
-      }
-      /* Edge/IE */
-      .ms-plain-select::-ms-expand { display: none; }
-    `}</style>
-    <select
-      {...props}
-      className={`${baseInput} ms-plain-select ${className} pr-3`}
-    >
+  <div className={`relative ${className}`}>
+    <select {...props} className={`${baseInput} pr-9 appearance-none`}>
       {children}
     </select>
-  </>
+    <ChevronDown
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
+      aria-hidden="true"
+    />
+  </div>
 );
 
 const DateField = ({ className = '', ...props }) => (
@@ -403,8 +388,7 @@ const Dashboard = () => {
         dueDate: draft.dueDate || null,
         note: draft.note || '',
       });
-      // Reset the correct item (fix)
-      setAssignDraft((d) => ({ ...d, [activityId]: { assigneeId: '', dueDate: '', note: '' } }));
+      setAssignDraft((d) => ({ ...d, [a.id]: { assigneeId: '', dueDate: '', note: '' } }));
       await fetchActivity();
       pushToast('Task assigned', 'success');
     } catch (err) {
@@ -493,7 +477,7 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* Filters (same layout/design, arrows hidden) */}
+          {/* Filters (wrap as needed) */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <SelectField
               aria-label="Filter by branch"
