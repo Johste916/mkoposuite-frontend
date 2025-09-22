@@ -1095,46 +1095,107 @@ const Dashboard = () => {
   );
 };
 
-/** Fancy KPI card with optional link (`to`) to make the entire card clickable */
+/** Professional KPI card with subtle tinted background */
 const SummaryCard = ({
   title,
   value,
   icon,
   tone = 'indigo',
-  to = null,        // <-- NEW: pass a route to make it clickable
+  to = null,
   delta = null,
   deltaLabel = '',
   spark = null
 }) => {
-  const tones = ({
-    indigo:  { border: 'from-indigo-300/70 to-indigo-500/40', icon: 'bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-300', glow: 'from-indigo-50/90 to-transparent dark:from-indigo-900/35 dark:to-transparent' },
-    sky:     { border: 'from-sky-300/70 to-sky-500/40',       icon: 'bg-sky-500/10 dark:bg-sky-400/10 text-sky-600 dark:text-sky-300',       glow: 'from-sky-50/90 to-transparent dark:from-sky-900/35 dark:to-transparent' },
-    blue:    { border: 'from-blue-300/70 to-blue-500/40',     icon: 'bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-300',     glow: 'from-blue-50/90 to-transparent dark:from-blue-900/35 dark:to-transparent' },
-    emerald: { border: 'from-emerald-300/70 to-emerald-500/40',icon:'bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-300',glow:'from-emerald-50/90 to-transparent dark:from-emerald-900/35 dark:to-transparent' },
-    cyan:    { border: 'from-cyan-300/70 to-cyan-500/40',     icon: 'bg-cyan-500/10 dark:bg-cyan-400/10 text-cyan-600 dark:text-cyan-300',     glow: 'from-cyan-50/90 to-transparent dark:from-cyan-900/35 dark:to-transparent' },
-    amber:   { border: 'from-amber-300/70 to-amber-500/40',   icon: 'bg-amber-500/10 dark:bg-amber-400/10 text-amber-600 dark:text-amber-300',   glow: 'from-amber-50/90 to-transparent dark:from-amber-900/35 dark:to-transparent' },
-    violet:  { border: 'from-violet-300/70 to-violet-500/40', icon: 'bg-violet-500/10 dark:bg-violet-400/10 text-violet-600 dark:text-violet-300', glow: 'from-violet-50/90 to-transparent dark:from-violet-900/35 dark:to-transparent' },
-    rose:    { border: 'from-rose-300/70 to-rose-500/40',     icon: 'bg-rose-500/10 dark:bg-rose-400/10 text-rose-600 dark:text-rose-300',     glow: 'from-rose-50/90 to-transparent dark:from-rose-900/35 dark:to-transparent' },
-    slate:   { border: 'from-slate-300/70 to-slate-500/40',   icon: 'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',   glow: 'from-slate-50/90 to-transparent dark:from-slate-900/35 dark:to-transparent' },
-  }[tone]) || {
-    border: 'from-slate-300/70 to-slate-500/40',
-    icon: 'bg-slate-500/10 dark:bg-slate-400/10 text-slate-600 dark:text-slate-300',
-    glow: 'from-slate-50/90 to-transparent dark:from-slate-900/35 dark:to-transparent'
-  };
+  // deliberately muted/tinted palettes for professional feel
+  const tones =
+    ({
+      indigo: {
+        bg: 'from-indigo-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-indigo-100 dark:ring-indigo-900/40',
+        ink: 'text-indigo-700 dark:text-indigo-300',
+        badge: 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-300',
+        spot: 'bg-indigo-400/20'
+      },
+      sky: {
+        bg: 'from-sky-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-sky-100 dark:ring-sky-900/40',
+        ink: 'text-sky-700 dark:text-sky-300',
+        badge: 'bg-sky-600/10 text-sky-600 dark:text-sky-300',
+        spot: 'bg-sky-400/20'
+      },
+      blue: {
+        bg: 'from-blue-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-blue-100 dark:ring-blue-900/40',
+        ink: 'text-blue-700 dark:text-blue-300',
+        badge: 'bg-blue-600/10 text-blue-600 dark:text-blue-300',
+        spot: 'bg-blue-400/20'
+      },
+      emerald: {
+        bg: 'from-emerald-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-emerald-100 dark:ring-emerald-900/40',
+        ink: 'text-emerald-700 dark:text-emerald-300',
+        badge: 'bg-emerald-600/10 text-emerald-600 dark:text-emerald-300',
+        spot: 'bg-emerald-400/20'
+      },
+      cyan: {
+        bg: 'from-cyan-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-cyan-100 dark:ring-cyan-900/40',
+        ink: 'text-cyan-700 dark:text-cyan-300',
+        badge: 'bg-cyan-600/10 text-cyan-600 dark:text-cyan-300',
+        spot: 'bg-cyan-400/20'
+      },
+      amber: {
+        bg: 'from-amber-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-amber-100 dark:ring-amber-900/40',
+        ink: 'text-amber-700 dark:text-amber-300',
+        badge: 'bg-amber-600/10 text-amber-600 dark:text-amber-300',
+        spot: 'bg-amber-400/20'
+      },
+      violet: {
+        bg: 'from-violet-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-violet-100 dark:ring-violet-900/40',
+        ink: 'text-violet-700 dark:text-violet-300',
+        badge: 'bg-violet-600/10 text-violet-600 dark:text-violet-300',
+        spot: 'bg-violet-400/20'
+      },
+      rose: {
+        bg: 'from-rose-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-rose-100 dark:ring-rose-900/40',
+        ink: 'text-rose-700 dark:text-rose-300',
+        badge: 'bg-rose-600/10 text-rose-600 dark:text-rose-300',
+        spot: 'bg-rose-400/20'
+      },
+      slate: {
+        bg: 'from-slate-50 to-white dark:from-slate-900 dark:to-slate-900',
+        ring: 'ring-slate-100 dark:ring-slate-800/60',
+        ink: 'text-slate-700 dark:text-slate-300',
+        badge: 'bg-slate-600/10 text-slate-600 dark:text-slate-300',
+        spot: 'bg-slate-400/20'
+      }
+    }[tone]) || {
+      bg: 'from-slate-50 to-white dark:from-slate-900 dark:to-slate-900',
+      ring: 'ring-slate-100 dark:ring-slate-800/60',
+      ink: 'text-slate-700 dark:text-slate-300',
+      badge: 'bg-slate-600/10 text-slate-600 dark:text-slate-300',
+      spot: 'bg-slate-400/20'
+    };
 
-  // Tiny sparkline (dependency-free)
+  // tiny sparkline (optional)
   const Spark = () => {
     if (!Array.isArray(spark) || spark.length < 2) return null;
     const w = 96, h = 28, pad = 2;
     const min = Math.min(...spark), max = Math.max(...spark);
-    const range = Math.max(max - min, 1e-6);
+    const r = Math.max(max - min, 1e-6);
     const stepX = (w - pad * 2) / (spark.length - 1);
-    const pts = spark.map((v, i) => {
-      const x = pad + i * stepX;
-      const y = h - pad - ((v - min) / range) * (h - pad * 2);
-      return [x, y];
-    });
-    const d = 'M ' + pts.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L ');
+    const d =
+      'M ' +
+      spark
+        .map((v, i) => {
+          const x = (pad + i * stepX).toFixed(1);
+          const y = (h - pad - ((v - min) / r) * (h - pad * 2)).toFixed(1);
+          return `${x} ${y}`;
+        })
+        .join(' L ');
     return (
       <svg width={w} height={h} className="mt-2 opacity-70">
         <path d={d} fill="none" stroke="currentColor" strokeWidth="2" />
@@ -1143,51 +1204,60 @@ const SummaryCard = ({
   };
 
   const deltaColor =
-    delta == null ? '' : delta >= 0 ? 'text-emerald-600 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-900/30'
-                                   : 'text-rose-600 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-900/30';
+    delta == null
+      ? ''
+      : delta >= 0
+      ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-600/10'
+      : 'text-rose-700 dark:text-rose-300 bg-rose-600/10';
 
   return (
-    <div className="group relative rounded-2xl transition-transform hover:-translate-y-0.5">
-      {/* Make whole card clickable when `to` provided */}
+    <div className="group relative">
       {to && (
         <Link
           to={to}
-          className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+          className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           aria-label={`View ${title} details`}
           title={`View ${title} details`}
         />
       )}
 
-      {/* gradient border */}
-      <div className={`p-[1px] rounded-2xl bg-gradient-to-br ${tones.border} ${to ? 'cursor-pointer' : ''}`}>
-        {/* glass card */}
-        <div className="relative rounded-2xl bg-white/95 dark:bg-slate-900/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm
-                        border border-white/60 dark:border-slate-800 shadow-sm p-5 min-h-[11rem]">
-          {/* colored glow background */}
-          <div className={`pointer-events-none absolute inset-0 rounded-2xl opacity-80 bg-gradient-to-br ${tones.glow}`} />
+      {/* Card */}
+      <div
+        className={[
+          'relative rounded-xl p-5 min-h-[10.5rem] shadow-sm transition-all',
+          'bg-gradient-to-br',
+          tones.bg,
+          'ring-1',
+          tones.ring,
+          to ? 'hover:shadow-md hover:-translate-y-0.5' : ''
+        ].join(' ')}
+      >
+        {/* decorative soft color spot in the corner */}
+        <div className={`pointer-events-none absolute -top-6 -right-6 h-24 w-24 rounded-full blur-2xl ${tones.spot}`} />
 
-          <div className="relative flex items-start justify-between gap-3">
-            <div className={`p-3 rounded-full ${tones.icon}`}>{icon}</div>
+        <div className="relative flex items-start justify-between gap-3">
+          {/* icon badge */}
+          <div className={`p-3 rounded-full ${tones.badge}`}>{icon}</div>
 
-            {delta != null && (
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${deltaColor}`}>
-                {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toLocaleString()}%
-                {deltaLabel && <span className="opacity-70">&nbsp;{deltaLabel}</span>}
-              </span>
-            )}
-          </div>
+          {delta != null && (
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${deltaColor}`}
+            >
+              {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toLocaleString()}%
+              {deltaLabel && <span className="opacity-70">&nbsp;{deltaLabel}</span>}
+            </span>
+          )}
+        </div>
 
-          <div className="relative mt-3 min-w-0">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{title}</h3>
-            <p className="text-[28px] md:text-[32px] leading-tight font-semibold text-slate-900 dark:text-white
-                          font-mono tabular-nums break-words">
-              {value ?? '—'}
-            </p>
-          </div>
+        <div className="relative mt-3 min-w-0">
+          <h3 className={`text-sm font-medium ${tones.ink} truncate`}>{title}</h3>
+          <p className="text-[28px] md:text-[32px] leading-tight font-semibold text-slate-900 dark:text-white font-mono tabular-nums break-words">
+            {value ?? '—'}
+          </p>
+        </div>
 
-          <div className="relative text-slate-400 dark:text-slate-500">
-            <Spark />
-          </div>
+        <div className="relative text-slate-400 dark:text-slate-500">
+          <Spark />
         </div>
       </div>
     </div>
