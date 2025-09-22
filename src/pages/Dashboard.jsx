@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
   ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle,
-  ChevronDown, Calendar
+  Calendar
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -59,16 +59,20 @@ const baseInput =
   'focus:ring-2 focus:ring-indigo-500/50 ' +
   'dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700';
 
+/** Plain-text <select> with NO arrows, sized like pills (not full width) */
 const SelectField = ({ className = '', children, ...props }) => (
-  <div className={`relative ${className}`}>
-    <select {...props} className={`${baseInput} pr-9 appearance-none`}>
-      {children}
-    </select>
-    <ChevronDown
-      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
-      aria-hidden="true"
-    />
-  </div>
+  <select
+    {...props}
+    className={`${baseInput} w-auto inline-flex shrink-0 pr-3 ${className}`}
+    style={{
+      WebkitAppearance: 'none',
+      MozAppearance: 'none',
+      appearance: 'none',
+      backgroundImage: 'none',
+    }}
+  >
+    {children}
+  </select>
 );
 
 const DateField = ({ className = '', ...props }) => (
@@ -388,7 +392,8 @@ const Dashboard = () => {
         dueDate: draft.dueDate || null,
         note: draft.note || '',
       });
-      setAssignDraft((d) => ({ ...d, [a.id]: { assigneeId: '', dueDate: '', note: '' } }));
+      // Reset the correct item (fix)
+      setAssignDraft((d) => ({ ...d, [activityId]: { assigneeId: '', dueDate: '', note: '' } }));
       await fetchActivity();
       pushToast('Task assigned', 'success');
     } catch (err) {
@@ -477,8 +482,8 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* Filters (wrap as needed) */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Filters — single row, scroll if needed */}
+          <div className="flex items-center gap-2 sm:gap-3 whitespace-nowrap overflow-x-auto pb-1">
             <SelectField
               aria-label="Filter by branch"
               value={branchId}
