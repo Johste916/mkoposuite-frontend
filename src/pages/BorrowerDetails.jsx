@@ -9,7 +9,7 @@ import RepaymentModal from "../components/RepaymentModal";
 import api from "../api";
 
 /* ---------------- Utilities ---------------- */
-const safeNum = (v, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
+const safeNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const money = (v) => `TZS ${safeNum(v).toLocaleString()}`;
 
 const displayName = (b) =>
@@ -24,11 +24,11 @@ const displayOfficer = (b) => b?.officerName || b?.officer?.name || b?.loanOffic
 const initials = (nameLike) => {
   const s = (nameLike || "").trim();
   if (!s) return "U";
-  const parts = s.split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || s[0].toUpperCase();
+  const p = s.split(/\s+/).filter(Boolean);
+  return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || s[0].toUpperCase();
 };
 
-const getStatusBadgeCls = (status) => {
+const statusChipCls = (status) => {
   const base = "px-2 py-1 text-xs font-semibold rounded";
   switch (String(status || "").toLowerCase()) {
     case "pending":
@@ -44,6 +44,17 @@ const getStatusBadgeCls = (status) => {
     default:
       return `${base} bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300`;
   }
+};
+
+/* resilient GET across possible mounts */
+const tryGET = async (paths = [], opts = {}) => {
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch {}
+  }
+  throw new Error(`All endpoints failed: ${paths.join(", ")}`);
 };
 
 const BorrowerDetails = () => {
@@ -70,16 +81,6 @@ const BorrowerDetails = () => {
   const [savingsBalance, setSavingsBalance] = useState(0);
   const [filterType, setFilterType] = useState("all");
 
-  const tryGET = async (paths = [], opts = {}) => {
-    for (const p of paths) {
-      try {
-        const res = await api.get(p, opts);
-        return res?.data;
-      } catch {}
-    }
-    throw new Error(`All endpoints failed: ${paths.join(", ")}`);
-  };
-
   const fetchBorrowerBundle = async () => {
     try {
       const borrowerData = await tryGET([`/borrowers/${id}`]);
@@ -88,7 +89,11 @@ const BorrowerDetails = () => {
       const [loanData, repayData, commentData, savingsData] = await Promise.all([
         tryGET([`/loans/borrower/${id}`, `/borrowers/${id}/loans`]).catch(() => []),
         tryGET([`/repayments/borrower/${id}`, `/borrowers/${id}/repayments`]).catch(() => []),
-        tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`, `/borrowers/${id}/comments`]).catch(() => []),
+        tryGET([
+          `/borrowers/${id}/comments`,
+          `/comments/borrower/${id}`,
+          `/borrowers/${id}/comments`,
+        ]).catch(() => []),
         tryGET([`/savings/borrower/${id}`, `/borrowers/${id}/savings`]).catch(() => ({})),
       ]);
 
@@ -102,7 +107,7 @@ const BorrowerDetails = () => {
         ? savingsData
         : [];
       setSavings(txs);
-      setSavingsBalance(Number(savingsData?.balance || 0));
+      setSavingsBalance(safeNum(savingsData?.balance, 0));
       setFilteredSavings(txs);
     } catch (err) {
       console.error("Fetch borrower bundle failed:", err?.message || err);
@@ -144,21 +149,24 @@ const BorrowerDetails = () => {
 
   const handleRepaymentSaved = async () => {
     try {
-      const repay = await tryGET([`/repayments/borrower/${id}`, `/borrowers/${id}/repayments`]);
+      const repay = await tryGET([
+        `/repayments/borrower/${id}`,
+        `/borrowers/${id}/repayments`,
+      ]);
       setRepayments(Array.isArray(repay) ? repay : repay?.items || []);
     } catch {}
   };
 
   const summarizeSavings = (type) =>
-    savings.reduce((sum, tx) => (tx.type === type ? sum + Number(tx.amount || 0) : sum), 0);
+    savings.reduce((sum, tx) => (tx.type === type ? sum + safeNum(tx.amount) : sum), 0);
 
-  // Best-effort missed repayments tally
+  // best-effort missed repayments tally
   const missedRepayments = useMemo(() => {
     const today = new Date();
     return repayments.filter((r) => {
       const due = r.dueDate ? new Date(r.dueDate) : null;
       const status = String(r.status || "").toLowerCase();
-      const paid = Number(r.amountPaid ?? r.paidAmount ?? 0) > 0;
+      const paid = safeNum(r.amountPaid ?? r.paidAmount) > 0;
       return due && due < today && !paid && (status === "overdue" || status === "due" || status === "");
     }).length;
   }, [repayments]);
@@ -265,7 +273,7 @@ const BorrowerDetails = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={getStatusBadgeCls(borrower.status)}>{borrower.status || "—"}</span>
+            <span className={statusChipCls(borrower.status)}>{borrower.status || "—"}</span>
             <Link
               to={`/borrowers/${encodeURIComponent(borrower.id)}/edit`}
               className="px-3 py-1.5 text-sm rounded border dark:border-slate-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800"
@@ -363,7 +371,7 @@ const BorrowerDetails = () => {
                     </td>
                     <td className="px-3 py-2 dark:text-slate-100">{l.reference || `L-${l.id}`}</td>
                     <td className="px-3 py-2">
-                      <span className={getStatusBadgeCls(l.status)}>{String(l.status || "—")}</span>
+                      <span className={statusChipCls(l.status)}>{String(l.status || "—")}</span>
                     </td>
                     <td className="px-3 py-2 dark:text-slate-100">{money(l.amount)}</td>
                     <td className="px-3 py-2 flex gap-2">
@@ -419,7 +427,11 @@ const BorrowerDetails = () => {
                 {repayments.slice(0, 10).map((r, i) => (
                   <tr key={`${r.id || i}`} className="border-b last:border-0 dark:border-slate-800">
                     <td className="px-3 py-2 dark:text-slate-100">
-                      {r.date ? new Date(r.date).toLocaleDateString() : r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "—"}
+                      {r.date
+                        ? new Date(r.date).toLocaleDateString()
+                        : r.createdAt
+                        ? new Date(r.createdAt).toLocaleDateString()
+                        : "—"}
                     </td>
                     <td className="px-3 py-2 dark:text-slate-100">{money(r.amount)}</td>
                     <td className="px-3 py-2">
@@ -435,7 +447,7 @@ const BorrowerDetails = () => {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <span className={getStatusBadgeCls(r.status)}>{r.status || "—"}</span>
+                      <span className={statusChipCls(r.status)}>{r.status || "—"}</span>
                     </td>
                   </tr>
                 ))}
