@@ -82,18 +82,9 @@ const Borrowers = () => {
     (async () => {
       try {
         const [b, u] = await Promise.all([
-          // branches: try a few common mounts
+          tryGET(["/branches", "/org/branches", "/api/branches"], { signal: ac.signal }).catch(() => []),
           tryGET(
-            ["/branches", "/org/branches", "/api/branches"],
-            { signal: ac.signal }
-          ).catch(() => []),
-          // officers: try users/staff on different bases
-          tryGET(
-            [
-              "/users?role=loan_officer",
-              "/staff?role=loan_officer",
-              "/api/users?role=loan_officer"
-            ],
+            ["/users?role=loan_officer", "/staff?role=loan_officer", "/api/users?role=loan_officer"],
             { signal: ac.signal }
           ).catch(() => []),
         ]);
@@ -117,10 +108,8 @@ const Borrowers = () => {
           }))
         );
       } catch {
-        // If all fail, keep filters empty and non-blocking
         setBranches([]);
         setOfficers([]);
-        // Don’t toast as error here to avoid noise on envs without these endpoints
       }
     })();
     return () => ac.abort();
@@ -245,18 +234,18 @@ const Borrowers = () => {
     const base = "text-[11px] px-2 py-0.5 rounded border";
     switch (s) {
       case "active":
-        return `${base} bg-emerald-50 border-emerald-300 text-emerald-700`;
+        return `${base} bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-600 dark:text-emerald-300`;
       case "pending_kyc":
-        return `${base} bg-yellow-50 border-yellow-300 text-yellow-700`;
+        return `${base} bg-yellow-50 border-yellow-300 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-600 dark:text-yellow-300`;
       case "blacklisted":
-        return `${base} bg-red-50 border-red-300 text-red-700`;
+        return `${base} bg-red-50 border-red-300 text-red-700 dark:bg-red-900/20 dark:border-red-600 dark:text-red-300`;
       default:
-        return `${base} bg-gray-50 border-gray-300 text-gray-700`;
+        return `${base} bg-gray-50 border-gray-300 text-gray-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300`;
     }
   };
 
   return (
-    <div className="p-6">
+    <div className="p-6 min-h-screen bg-[var(--bg)] text-[var(--text)]">
       {/* Toasts */}
       <div className="fixed right-4 top-4 z-50 space-y-2">
         {toasts.map((t) => (
@@ -272,7 +261,7 @@ const Borrowers = () => {
       </div>
 
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">👥 Borrowers</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-gray-100">👥 Borrowers</h1>
         <div className="flex gap-2">
           <button
             onClick={() => navigate("/borrowers/add")}
@@ -282,7 +271,7 @@ const Borrowers = () => {
           </button>
           <button
             onClick={() => pushToast("CSV import coming soon", "info")}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 shadow-sm"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 shadow-sm dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
           >
             <Upload className="w-4 h-4" /> Import CSV
           </button>
@@ -290,7 +279,7 @@ const Borrowers = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow p-3 md:p-4 mb-4 border">
+      <div className="card p-3 md:p-4 mb-4">
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -301,7 +290,7 @@ const Borrowers = () => {
                 setPage(1);
               }}
               placeholder="Search by name, phone, national ID…"
-              className="w-full border rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              className="w-full input focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-400"
             />
           </div>
 
@@ -312,7 +301,7 @@ const Borrowers = () => {
                 setBranchId(e.target.value);
                 setPage(1);
               }}
-              className="border rounded-lg px-3 py-2"
+              className="input"
             >
               <option value="">All Branches</option>
               {branches.map((b) => (
@@ -327,7 +316,7 @@ const Borrowers = () => {
                 setOfficerId(e.target.value);
                 setPage(1);
               }}
-              className="border rounded-lg px-3 py-2"
+              className="input"
             >
               <option value="">All Officers</option>
               {officers.map((o) => (
@@ -342,7 +331,7 @@ const Borrowers = () => {
                 setStatus(e.target.value);
                 setPage(1);
               }}
-              className="border rounded-lg px-3 py-2"
+              className="input"
             >
               <option value="">All Statuses</option>
               <option value="active">Active</option>
@@ -350,7 +339,7 @@ const Borrowers = () => {
               <option value="pending_kyc">Pending KYC</option>
               <option value="blacklisted">Blacklisted</option>
             </select>
-            <div className="hidden md:flex items-center text-gray-500 text-sm px-2">
+            <div className="hidden md:flex items-center text-gray-500 text-sm px-2 dark:text-slate-400">
               <Filter className="w-4 h-4 mr-1" /> Filters
             </div>
           </div>
@@ -358,11 +347,11 @@ const Borrowers = () => {
       </div>
 
       {/* Table / Cards */}
-      <div className="bg-white rounded-xl shadow border">
+      <div className="card">
         <div className="overflow-x-auto">
           {/* Desktop table */}
           <table className="min-w-full text-sm hidden md:table">
-            <thead className="bg-gray-50 text-gray-600">
+            <thead className="bg-gray-50 text-gray-600 dark:bg-slate-800 dark:text-slate-300">
               <tr>
                 <Th label="Name" sortKey="name" sort={sort} dir={dir} onSort={onSort} />
                 <Th label="Phone" sortKey="phone" sort={sort} dir={dir} onSort={onSort} />
@@ -370,25 +359,21 @@ const Borrowers = () => {
                 <Th label="Officer" sortKey="officerName" sort={sort} dir={dir} onSort={onSort} />
                 <Th label="Outstanding" sortKey="outstanding" sort={sort} dir={dir} onSort={onSort} />
                 <Th label="Status" sortKey="status" sort={sort} dir={dir} onSort={onSort} />
-                <th className="px-3 py-2 text-right pr-4">Actions</th>
+                <th className="px-3 py-2 text-right pr-4 dark:text-slate-200">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
-                    Loading…
-                  </td>
+                  <td colSpan={7} className="px-4 py-10 text-center muted">Loading…</td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
-                    No borrowers.
-                  </td>
+                  <td colSpan={7} className="px-4 py-10 text-center muted">No borrowers.</td>
                 </tr>
               ) : (
                 rows.map((b) => (
-                  <tr key={b.id} className="border-t hover:bg-gray-50">
+                  <tr key={b.id} className="border-t hover:bg-gray-50 dark:hover:bg-slate-800 border-[var(--border)]">
                     <td className="px-4 py-2">{displayName(b)}</td>
                     <td className="px-4 py-2">{b.phone || "—"}</td>
                     <td className="px-4 py-2">{displayBranch(b)}</td>
@@ -399,15 +384,16 @@ const Borrowers = () => {
                     </td>
                     <td className="px-4 py-2 text-right">
                       <div className="flex gap-3 justify-end">
-                        <button
-                          onClick={() => openDrawer(b.id)}
-                          className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                        {/* Go to full page details */}
+                        <Link
+                          to={`/borrowers/${encodeURIComponent(b.id)}`}
+                          className="text-indigo-600 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                         >
                           View
-                        </button>
+                        </Link>
                         <Link
                           to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
-                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                          className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
                         >
                           New Loan
                         </Link>
@@ -422,16 +408,16 @@ const Borrowers = () => {
           {/* Mobile / small screens — cards */}
           <div className="md:hidden grid grid-cols-1 gap-3 p-3">
             {loading ? (
-              <div className="p-6 text-center text-gray-500">Loading…</div>
+              <div className="p-6 text-center muted">Loading…</div>
             ) : rows.length === 0 ? (
-              <div className="p-6 text-center text-gray-500">No borrowers.</div>
+              <div className="p-6 text-center muted">No borrowers.</div>
             ) : (
               rows.map((b) => {
                 const name = displayName(b);
                 return (
                   <div
                     key={b.id}
-                    className="bg-white border rounded-2xl shadow-sm p-4 hover:shadow-md transition-shadow"
+                    className="card p-4 hover:shadow-md transition-shadow"
                   >
                     {/* Header */}
                     <div className="flex items-start justify-between">
@@ -440,8 +426,8 @@ const Borrowers = () => {
                           {getInitials(name)}
                         </div>
                         <div>
-                          <div className="text-base font-semibold text-gray-900">{name}</div>
-                          <div className="text-xs text-gray-500">ID: {b.id}</div>
+                          <div className="text-base font-semibold">{name}</div>
+                          <div className="text-xs muted">ID: {b.id}</div>
                         </div>
                       </div>
                       <span className={statusChip(b.status)}>{b.status || "—"}</span>
@@ -449,28 +435,28 @@ const Borrowers = () => {
 
                     {/* Body */}
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <Phone className="w-4 h-4 text-gray-400" />
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 muted" />
                         <span>{b.phone || "—"}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <Building2 className="w-4 h-4 text-gray-400" />
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 muted" />
                         <span className="truncate">{displayBranch(b)}</span>
                       </div>
-                      <div className="col-span-2 text-gray-700">
-                        <span className="text-xs text-gray-500">Outstanding</span>
+                      <div className="col-span-2">
+                        <span className="text-xs muted">Outstanding</span>
                         <div className="text-sm font-medium">{fmtMoney(b.outstanding)}</div>
                       </div>
                     </div>
 
                     {/* Actions */}
                     <div className="mt-4 flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => openDrawer(b.id)}
-                        className="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50"
+                      <Link
+                        to={`/borrowers/${encodeURIComponent(b.id)}`}
+                        className="px-3 py-2 text-sm rounded-lg border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
                       >
                         View
-                      </button>
+                      </Link>
                       <Link
                         to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
                         className="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
@@ -486,15 +472,15 @@ const Borrowers = () => {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-3 py-2 border-t text-sm bg-gray-50 rounded-b-xl">
-          <div className="text-gray-600">
+        <div className="flex items-center justify-between px-3 py-2 border-t text-sm rounded-b-xl bg-gray-50 dark:bg-slate-800 border-[var(--border)]">
+          <div className="muted">
             {pageFrom}–{pageTo} of {total}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-1.5 border rounded-lg disabled:opacity-50 bg-white"
+              className="p-1.5 border rounded-lg disabled:opacity-50 bg-white dark:bg-slate-900 border-[var(--border)]"
               aria-label="Previous page"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -502,7 +488,7 @@ const Borrowers = () => {
             <button
               onClick={() => setPage((p) => (p * PAGE_SIZE < total ? p + 1 : p))}
               disabled={page * PAGE_SIZE >= total}
-              className="p-1.5 border rounded-lg disabled:opacity-50 bg-white"
+              className="p-1.5 border rounded-lg disabled:opacity-50 bg-white dark:bg-slate-900 border-[var(--border)]"
               aria-label="Next page"
             >
               <ChevronRight className="w-4 h-4" />
@@ -511,17 +497,19 @@ const Borrowers = () => {
         </div>
       </div>
 
-      {/* Drawer: Borrower Details */}
+      {/* Drawer: Borrower Details (kept for compatibility) */}
       {drawerOpen && (
         <Drawer onClose={() => setDrawerOpen(false)} title="Borrower Details">
           {/* Tabs */}
-          <div className="flex gap-2 border-b mb-3">
+          <div className="flex gap-2 border-b mb-3 border-[var(--border)]">
             {["overview", "loans", "savings", "documents"].map((t) => (
               <button
                 key={t}
                 onClick={() => setDrawerTab(t)}
                 className={`px-3 py-2 text-sm border-b-2 -mb-px ${
-                  drawerTab === t ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-600"
+                  drawerTab === t
+                    ? "border-indigo-600 text-indigo-700 dark:text-indigo-300"
+                    : "border-transparent muted"
                 }`}
               >
                 {t[0].toUpperCase() + t.slice(1)}
@@ -532,7 +520,7 @@ const Borrowers = () => {
           {/* Tab content */}
           <div>
             {drawerLoading ? (
-              <div className="text-gray-500 text-sm">Loading…</div>
+              <div className="muted text-sm">Loading…</div>
             ) : drawerTab === "overview" ? (
               <OverviewTab data={drawerData.overview} />
             ) : drawerTab === "loans" ? (
@@ -554,8 +542,12 @@ const Borrowers = () => {
 const Th = ({ label, sortKey, sort, dir, onSort }) => {
   const active = sort === sortKey;
   return (
-    <th className="px-3 py-2 cursor-pointer select-none" onClick={() => onSort(sortKey)} title="Sort">
-      <span className={`inline-flex items-center gap-1 ${active ? "text-indigo-700" : ""}`}>
+    <th
+      className="px-3 py-2 cursor-pointer select-none dark:text-slate-200"
+      onClick={() => onSort(sortKey)}
+      title="Sort"
+    >
+      <span className={`inline-flex items-center gap-1 ${active ? "text-indigo-700 dark:text-indigo-300" : ""}`}>
         {label}
         {active ? (dir === "asc" ? "▲" : "▼") : ""}
       </span>
@@ -566,10 +558,14 @@ const Th = ({ label, sortKey, sort, dir, onSort }) => {
 const Drawer = ({ title, onClose, children }) => (
   <div className="fixed inset-0 z-[60]">
     <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-    <div className="absolute right-0 top-0 h-full w-full sm:w-[620px] bg-white shadow-2xl p-4 overflow-y-auto rounded-l-2xl">
+    <div className="absolute right-0 top-0 h-full w-full sm:w-[620px] bg-white dark:bg-slate-900 shadow-2xl p-4 overflow-y-auto rounded-l-2xl border-l border-[var(--border)]">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-        <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label="Close drawer">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{title}</h3>
+        <button
+          onClick={onClose}
+          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
+          aria-label="Close drawer"
+        >
           <X className="w-5 h-5" />
         </button>
       </div>
@@ -579,7 +575,7 @@ const Drawer = ({ title, onClose, children }) => (
 );
 
 const OverviewTab = ({ data }) => {
-  if (!data) return <p className="text-gray-500 text-sm">No overview data.</p>;
+  if (!data) return <p className="muted text-sm">No overview data.</p>;
   const name = data.name || `${data.firstName || ""} ${data.lastName || ""}`.trim() || "—";
   const branch = data.branchName || data.Branch?.name || data.branch?.name || "—";
   const officer = data.officerName || data.officer?.name || data.loanOfficer?.name || "—";
@@ -604,12 +600,12 @@ const OverviewTab = ({ data }) => {
 
 const LoansTab = ({ items }) => {
   if (!Array.isArray(items) || items.length === 0) {
-    return <p className="text-gray-500 text-sm">No loans.</p>;
+    return <p className="muted text-sm">No loans.</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-gray-600">
+        <thead className="bg-gray-50 text-gray-600 dark:bg-slate-800 dark:text-slate-300">
           <tr>
             <th className="px-3 py-2 text-left">Loan #</th>
             <th className="px-3 py-2 text-left">Product</th>
@@ -620,7 +616,7 @@ const LoansTab = ({ items }) => {
         </thead>
         <tbody>
           {items.map((l) => (
-            <tr key={l.id} className="border-t">
+            <tr key={l.id} className="border-t border-[var(--border)]">
               <td className="px-3 py-2">{l.id}</td>
               <td className="px-3 py-2">{l.product || "—"}</td>
               <td className="px-3 py-2">{money(l.disbursed)}</td>
@@ -636,12 +632,12 @@ const LoansTab = ({ items }) => {
 
 const SavingsTab = ({ items }) => {
   if (!Array.isArray(items) || items.length === 0) {
-    return <p className="text-gray-500 text-sm">No savings accounts.</p>;
+    return <p className="muted text-sm">No savings accounts.</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-gray-600">
+        <thead className="bg-gray-50 text-gray-600 dark:bg-slate-800 dark:text-slate-300">
           <tr>
             <th className="px-3 py-2 text-left">Account #</th>
             <th className="px-3 py-2 text-left">Balance</th>
@@ -650,7 +646,7 @@ const SavingsTab = ({ items }) => {
         </thead>
         <tbody>
           {items.map((s) => (
-            <tr key={s.id} className="border-t">
+            <tr key={s.id} className="border-t border-[var(--border)]">
               <td className="px-3 py-2">{s.id}</td>
               <td className="px-3 py-2">{money(s.balance)}</td>
               <td className="px-3 py-2">{s.status || "—"}</td>
@@ -668,29 +664,29 @@ const DocumentsTab = ({ items }) => {
       <div className="mb-3">
         <button
           onClick={() => alert("KYC upload coming soon")}
-          className="inline-flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50"
+          className="inline-flex items-center gap-2 px-3 py-2 border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 border-[var(--border)]"
         >
           <FileUp className="w-4 h-4" /> Upload Document
         </button>
       </div>
       {!Array.isArray(items) || items.length === 0 ? (
-        <p className="text-gray-500 text-sm">No documents.</p>
+        <p className="muted text-sm">No documents.</p>
       ) : (
         <ul className="space-y-2">
           {items.map((d) => (
-            <li key={d.id} className="border rounded-lg p-3 flex items-center justify-between">
+            <li key={d.id} className="card p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <IdCard className="w-4 h-4 text-gray-500" />
+                <IdCard className="w-4 h-4 muted" />
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{d.fileName || "Document"}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm font-medium">{d.fileName || "Document"}</p>
+                  <p className="text-xs muted">
                     {d.type || "KYC"} • {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
                   </p>
                 </div>
               </div>
               {d.url && (
                 <a
-                  className="text-indigo-600 hover:text-indigo-800 underline text-sm"
+                  className="text-indigo-600 hover:text-indigo-800 underline text-sm dark:text-indigo-400 dark:hover:text-indigo-300"
                   href={d.url}
                   target="_blank"
                   rel="noreferrer"
@@ -708,15 +704,15 @@ const DocumentsTab = ({ items }) => {
 
 /* Small UI helpers */
 const InfoCard = ({ label, value }) => (
-  <div className="border rounded-xl p-4 bg-white shadow-sm">
-    <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>
-    <p className="text-base font-semibold text-gray-900 mt-1">{value}</p>
+  <div className="card p-4 shadow-sm">
+    <p className="text-[11px] uppercase tracking-wide muted">{label}</p>
+    <p className="text-base font-semibold mt-1">{value}</p>
   </div>
 );
 const Stat = ({ label, value }) => (
-  <div className="rounded-2xl p-4 border bg-gray-50">
-    <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>
-    <p className="text-xl font-semibold text-gray-900 mt-1">{value}</p>
+  <div className="rounded-2xl p-4 border bg-gray-50 dark:bg-slate-800 border-[var(--border)]">
+    <p className="text-[11px] uppercase tracking-wide muted">{label}</p>
+    <p className="text-xl font-semibold mt-1">{value}</p>
   </div>
 );
 

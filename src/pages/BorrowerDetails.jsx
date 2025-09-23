@@ -44,11 +44,9 @@ const BorrowerDetails = () => {
 
   const fetchBorrowerBundle = async () => {
     try {
-      // borrower
       const borrowerData = await tryGET([`/borrowers/${id}`]);
       setBorrower(borrowerData);
 
-      // loans / repayments / comments / savings
       const [loanData, repayData, commentData, savingsData] = await Promise.all([
         tryGET([`/loans/borrower/${id}`, `/borrowers/${id}/loans`]).catch(() => []),
         tryGET([`/repayments/borrower/${id}`, `/borrowers/${id}/repayments`]).catch(() => []),
@@ -119,6 +117,17 @@ const BorrowerDetails = () => {
   const summarizeSavings = (type) =>
     savings.reduce((sum, tx) => (tx.type === type ? sum + Number(tx.amount || 0) : sum), 0);
 
+  // Very defensive "missed repayments" tally:
+  const missedRepayments = useMemo(() => {
+    const today = new Date();
+    return repayments.filter((r) => {
+      const due = r.dueDate ? new Date(r.dueDate) : null;
+      const status = String(r.status || "").toLowerCase();
+      const paid = Number(r.amountPaid ?? r.paidAmount ?? 0) > 0;
+      return due && due < today && !paid && (status === "overdue" || status === "due" || status === "");
+    }).length;
+  }, [repayments]);
+
   const buildTimeline = () => {
     const items = [];
     loans.forEach((l) =>
@@ -156,17 +165,17 @@ const BorrowerDetails = () => {
     const base = "px-2 py-1 text-xs font-semibold rounded";
     switch (status) {
       case "pending":
-        return `${base} bg-yellow-100 text-yellow-700`;
+        return `${base} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200`;
       case "approved":
-        return `${base} bg-green-100 text-green-700`;
+        return `${base} bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-200`;
       case "rejected":
-        return `${base} bg-red-100 text-red-700`;
+        return `${base} bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-200`;
       case "active":
-        return `${base} bg-blue-100 text-blue-700`;
+        return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200`;
       case "closed":
-        return `${base} bg-gray-200 text-gray-700`;
+        return `${base} bg-gray-200 text-gray-700 dark:bg-slate-800 dark:text-slate-200`;
       default:
-        return `${base} bg-gray-100 text-gray-600`;
+        return `${base} bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300`;
     }
   };
 
@@ -180,12 +189,12 @@ const BorrowerDetails = () => {
     return role === "admin";
   }, [userRole]);
 
-  if (!borrower) return <div className="p-4">Loading...</div>;
+  if (!borrower) return <div className="p-4 dark:bg-slate-950 min-h-screen">Loading...</div>;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 dark:bg-slate-950 min-h-screen">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Borrower Details</h2>
+        <h2 className="text-2xl font-bold dark:text-gray-100">Borrower Details</h2>
         <div className="flex gap-2">
           <CSVLink
             data={[borrower]}
@@ -212,14 +221,38 @@ const BorrowerDetails = () => {
         </div>
       </div>
 
+      {/* Top summary cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="bg-white dark:bg-slate-900 dark:border-slate-800 border rounded p-4">
+          <p className="text-xs text-gray-500 dark:text-slate-400">Status</p>
+          <p className="mt-1">{<span className={getStatusBadge(borrower.status)}>{borrower.status || "—"}</span>}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 dark:border-slate-800 border rounded p-4">
+          <p className="text-xs text-gray-500 dark:text-slate-400">PAR %</p>
+          <p className="mt-1 text-lg font-semibold dark:text-slate-100">
+            {Number.isFinite(Number(borrower.parPercent)) ? `${Number(borrower.parPercent).toFixed(2)}%` : "0%"}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 dark:border-slate-800 border rounded p-4">
+          <p className="text-xs text-gray-500 dark:text-slate-400">Overdue Amount</p>
+          <p className="mt-1 text-lg font-semibold dark:text-slate-100">
+            TZS {Number(borrower.overdueAmount || 0).toLocaleString()}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 dark:border-slate-800 border rounded p-4">
+          <p className="text-xs text-gray-500 dark:text-slate-400">Missed Repayments</p>
+          <p className="mt-1 text-lg font-semibold dark:text-slate-100">{missedRepayments}</p>
+        </div>
+      </div>
+
       {/* Risk snippet */}
-      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
-        <h4 className="font-semibold text-yellow-700 mb-1">⚠️ Risk Summary</h4>
-        <p>
+      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded dark:bg-yellow-900/20 dark:border-yellow-700">
+        <h4 className="font-semibold text-yellow-700 dark:text-yellow-200 mb-1">⚠️ Risk Summary</h4>
+        <p className="dark:text-slate-100">
           <strong>Overdue Amount:</strong>{" "}
           TZS {Number(borrower.overdueAmount || 0).toLocaleString()}
         </p>
-        <p>
+        <p className="dark:text-slate-100">
           <strong>PAR:</strong>{" "}
           {Number.isFinite(Number(borrower.parPercent))
             ? `${Number(borrower.parPercent).toFixed(2)}%`
@@ -227,8 +260,9 @@ const BorrowerDetails = () => {
         </p>
       </div>
 
+      {/* Activity + quick action */}
       <div className="flex items-center justify-between">
-        <h4 className="font-semibold mb-2">📜 Activity Timeline</h4>
+        <h4 className="font-semibold mb-2 dark:text-gray-100">📜 Activity Timeline</h4>
         {canAddRepayment && loans.length > 0 && (
           <button
             onClick={() => {
@@ -238,15 +272,15 @@ const BorrowerDetails = () => {
             }}
             className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
           >
-            Add Repayment
+            Record Repayment
           </button>
         )}
       </div>
 
       <ul className="space-y-2 text-sm">
         {buildTimeline().map((item, i) => (
-          <li key={i} className="border-l-4 pl-2 border-gray-300">
-            <span className="text-gray-500">
+          <li key={i} className="border-l-4 pl-2 border-gray-300 dark:border-slate-700 dark:text-slate-200">
+            <span className="text-gray-500 dark:text-slate-400">
               {item.date ? new Date(item.date).toLocaleDateString() : "—"}
             </span>{" "}
             – {item.text}
@@ -256,14 +290,14 @@ const BorrowerDetails = () => {
 
       {/* Loans quick list */}
       {!!loans.length && (
-        <div className="bg-white rounded shadow p-4">
+        <div className="bg-white rounded shadow p-4 dark:bg-slate-900 dark:border dark:border-slate-800">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold">Loans</h3>
+            <h3 className="font-semibold dark:text-slate-100">Loans</h3>
           </div>
           <div className="overflow-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left border-b">
+                <tr className="text-left border-b dark:border-slate-800 dark:text-slate-300">
                   <th className="px-3 py-2">ID</th>
                   <th className="px-3 py-2">Reference</th>
                   <th className="px-3 py-2">Status</th>
@@ -273,27 +307,27 @@ const BorrowerDetails = () => {
               </thead>
               <tbody>
                 {loans.map((l) => (
-                  <tr key={l.id} className="border-b last:border-0">
-                    <td className="px-3 py-2">{l.id}</td>
-                    <td className="px-3 py-2">{l.reference || `L-${l.id}`}</td>
+                  <tr key={l.id} className="border-b last:border-0 dark:border-slate-800">
+                    <td className="px-3 py-2 dark:text-slate-100">{l.id}</td>
+                    <td className="px-3 py-2 dark:text-slate-100">{l.reference || `L-${l.id}`}</td>
                     <td className="px-3 py-2">
                       <span className={getStatusBadge(l.status)}>
                         {String(l.status || "—")}
                       </span>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 dark:text-slate-100">
                       TZS {Number(l.amount || 0).toLocaleString()}
                     </td>
                     <td className="px-3 py-2 flex gap-2">
                       <button
-                        className="px-2 py-1 border rounded hover:bg-gray-50"
+                        className="px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                         onClick={() => handleViewSchedule(l.id)}
                       >
                         Schedule
                       </button>
                       {canAddRepayment && (
                         <button
-                          className="px-2 py-1 border rounded hover:bg-gray-50"
+                          className="px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                           onClick={() => {
                             setSelectedLoanForRepayment(l);
                             setShowRepaymentModal(true);
@@ -312,14 +346,14 @@ const BorrowerDetails = () => {
       )}
 
       {/* Comments */}
-      <div className="bg-white rounded shadow p-4">
-        <h3 className="font-semibold mb-2">Comments</h3>
+      <div className="bg-white rounded shadow p-4 dark:bg-slate-900 dark:border dark:border-slate-800">
+        <h3 className="font-semibold mb-2 dark:text-slate-100">Comments</h3>
         <CommentInput onAdd={handleAddComment} />
         <ul className="space-y-2 text-sm">
           {comments.map((c, i) => (
-            <li key={`${i}-${c.createdAt}`} className="border rounded p-2">
-              <div>{c.content}</div>
-              <div className="text-xs text-gray-500">
+            <li key={`${i}-${c.createdAt}`} className="border rounded p-2 dark:border-slate-700">
+              <div className="dark:text-slate-100">{c.content}</div>
+              <div className="text-xs text-gray-500 dark:text-slate-400">
                 {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
               </div>
             </li>
@@ -328,10 +362,10 @@ const BorrowerDetails = () => {
       </div>
 
       {/* Savings summary */}
-      <div className="bg-white rounded shadow p-4">
+      <div className="bg-white rounded shadow p-4 dark:bg-slate-900 dark:border dark:border-slate-800">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Savings</h3>
-          <div className="text-sm">
+          <h3 className="font-semibold dark:text-slate-100">Savings</h3>
+          <div className="text-sm dark:text-slate-200">
             Balance:&nbsp;
             <strong>
               TZS {Number(savingsBalance || 0).toLocaleString()}
@@ -340,27 +374,27 @@ const BorrowerDetails = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
-          <div className="p-2 rounded bg-emerald-50">
+          <div className="p-2 rounded bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-200">
             Deposits: <strong>TZS {Number(deposits).toLocaleString()}</strong>
           </div>
-          <div className="p-2 rounded bg-amber-50">
+          <div className="p-2 rounded bg-amber-50 dark:bg-amber-900/20 dark:text-amber-200">
             Withdrawals:{" "}
             <strong>TZS {Number(withdrawals).toLocaleString()}</strong>
           </div>
-          <div className="p-2 rounded bg-sky-50">
+          <div className="p-2 rounded bg-sky-50 dark:bg-sky-900/20 dark:text-sky-200">
             Interest: <strong>TZS {Number(interest).toLocaleString()}</strong>
           </div>
-          <div className="p-2 rounded bg-rose-50">
+          <div className="p-2 rounded bg-rose-50 dark:bg-rose-900/20 dark:text-rose-200">
             Charges: <strong>TZS {Number(charges).toLocaleString()}</strong>
           </div>
         </div>
 
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm">Filter:</span>
+          <span className="text-sm dark:text-slate-200">Filter:</span>
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
+            className="border rounded px-2 py-1 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-100"
           >
             <option value="all">All</option>
             <option value="deposit">Deposits</option>
@@ -373,7 +407,7 @@ const BorrowerDetails = () => {
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left border-b">
+              <tr className="text-left border-b dark:border-slate-800 dark:text-slate-300">
                 <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">Amount</th>
@@ -382,15 +416,15 @@ const BorrowerDetails = () => {
             </thead>
             <tbody>
               {filteredSavings.map((tx, i) => (
-                <tr key={`${tx.id || i}`} className="border-b last:border-0">
-                  <td className="px-3 py-2">
+                <tr key={`${tx.id || i}`} className="border-b last:border-0 dark:border-slate-800">
+                  <td className="px-3 py-2 dark:text-slate-100">
                     {tx.date ? new Date(tx.date).toLocaleDateString() : "—"}
                   </td>
-                  <td className="px-3 py-2 capitalize">{tx.type}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 capitalize dark:text-slate-100">{tx.type}</td>
+                  <td className="px-3 py-2 dark:text-slate-100">
                     TZS {Number(tx.amount || 0).toLocaleString()}
                   </td>
-                  <td className="px-3 py-2">{tx.notes || "—"}</td>
+                  <td className="px-3 py-2 dark:text-slate-100">{tx.notes || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -428,14 +462,14 @@ const CommentInput = ({ onAdd }) => {
         value={val}
         onChange={(e) => setVal(e.target.value)}
         placeholder="Add a note…"
-        className="flex-1 border rounded px-3 py-2"
+        className="flex-1 border rounded px-3 py-2 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-100"
       />
       <button
         onClick={() => {
           onAdd(val);
           setVal("");
         }}
-        className="px-3 py-2 rounded bg-slate-800 text-white"
+        className="px-3 py-2 rounded bg-slate-800 text-white dark:bg-slate-700"
       >
         Add
       </button>
