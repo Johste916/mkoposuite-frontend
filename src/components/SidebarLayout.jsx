@@ -208,6 +208,189 @@ const NAV = () => [
 const pathIsIn = (pathname, base) =>
   pathname === base || pathname.startsWith(base + "/");
 
+/* --------------------------- Header Global Search -------------------------- */
+const HeaderGlobalSearch = ({ branchId }) => {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [hits, setHits] = useState([]);
+  const [sel, setSel] = useState(0);
+  const debounceRef = useRef(null);
+
+  // Map backend "type" to destination + URL builder
+  const ENTITY_ROUTES = useMemo(() => ({
+    borrower: (h) => ({ to: `/borrowers/${h.id}` }),
+    borrowers: (h) => ({ to: `/borrowers/${h.id}` }),
+    loan: (h) => ({ to: `/loans/${h.id}` }),
+    loans: (h) => ({ to: `/loans/${h.id}` }),
+    repayment: (h) => ({ to: `/repayments/${h.id}` }),
+    repayments: (h) => ({ to: `/repayments?q=${encodeURIComponent(h.meta?.receiptNo || h.id)}` }),
+    deposit: (h) => ({ to: `/deposits?q=${encodeURIComponent(h.id)}` }),
+    withdrawal: (h) => ({ to: `/withdrawals?q=${encodeURIComponent(h.id)}` }),
+    saving: (h) => ({ to: `/savings?q=${encodeURIComponent(h.meta?.accountNo || h.id)}` }),
+    user: (h) => ({ to: `/users/${h.id}` }),
+    branch: (h) => ({ to: `/branches/${h.id}` }),
+    default: (h) => ({ to: `/?q=${encodeURIComponent(h.title || q)}` }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [q]);
+
+  const fetchHits = useCallback(async (query) => {
+    if (!query || query.trim().length < 2) {
+      setHits([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.get("/search", {
+        params: {
+          q: query.trim(),
+          branchId: branchId || undefined,
+          limit: 12,
+        },
+      });
+      const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.items) ? res.data.items : []);
+      const norm = arr.map((h) => ({
+        id: h.id ?? h._id ?? h.uuid,
+        type: (h.type || h.entity || h.module || "default").toString().toLowerCase(),
+        title: h.title || h.name || h.fullName || h.borrowerName || h.loanNo || h.receiptNo || h.accountNo || String(h.id ?? ""),
+        subtitle: h.subtitle || h.email || h.phone || h.meta?.loanNo || h.meta?.receiptNo || h.meta?.branchName || "",
+        amount: h.amount ?? h.total ?? h.balance ?? h.value,
+        meta: h.meta || h,
+        routeHint: h.routeHint,
+      })).filter(x => x.id);
+      setHits(norm);
+      setSel(0);
+    } catch {
+      setHits([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [branchId]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchHits(q), 220);
+    return () => debounceRef.current && clearTimeout(debounceRef.current);
+  }, [q, fetchHits]);
+
+  const go = (hit) => {
+    const build = ENTITY_ROUTES[hit.type] || ENTITY_ROUTES.default;
+    const dest = hit.routeHint ? { to: hit.routeHint } : build(hit);
+    setOpen(false);
+    setQ("");
+    setHits([]);
+    navigate(dest.to);
+  };
+
+  const onKeyDown = (e) => {
+    if (!open && (e.key === "ArrowDown" || e.key === "Enter")) setOpen(true);
+    if (!hits.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSel((s) => (s + 1) % hits.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSel((s) => (s - 1 + hits.length) % hits.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      go(hits[sel] || hits[0]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  // Group hits by type for headers
+  const grouped = useMemo(() => {
+    const g = {};
+    hits.forEach((h) => {
+      const k = (h.type || "other").toString();
+      (g[k] ||= []).push(h);
+    });
+    return g;
+  }, [hits]);
+
+  return (
+    <div className="relative w-full">
+      <div className="relative">
+        <FiSearch className="absolute left-3 top-3 text-slate-400" />
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={onKeyDown}
+          placeholder="Search borrowers, loans, receipts…"
+          className="w-full pl-9 pr-8 py-2 text-sm rounded-md border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+          aria-label="Global search"
+        />
+        {q && (
+          <button
+            onClick={() => { setQ(""); setHits([]); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+            aria-label="Clear search"
+          >
+            <FiX />
+          </button>
+        )}
+      </div>
+
+      {open && (q?.length >= 2) && (
+        <div
+          className="absolute z-[60] mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {loading ? (
+            <div className="p-3 text-sm text-slate-600 dark:text-slate-300">Searching…</div>
+          ) : hits.length === 0 ? (
+            <div className="p-3 text-sm text-slate-600 dark:text-slate-300">No results.</div>
+          ) : (
+            <div className="max-h-80 overflow-auto">
+              {Object.entries(grouped).map(([type, list]) => (
+                <div key={type}>
+                  <div className="px-3 py-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60">
+                    {type}
+                  </div>
+                  {list.map((h, idx) => {
+                    const flatIndex = hits.indexOf(h);
+                    const active = flatIndex === sel;
+                    return (
+                      <button
+                        key={`${type}-${h.id}-${idx}`}
+                        onMouseEnter={() => setSel(flatIndex)}
+                        onClick={() => go(h)}
+                        className={`w-full text-left px-3 py-2 text-sm border-b border-slate-100 dark:border-slate-800 ${active ? "bg-blue-50 dark:bg-slate-800/70" : "bg-transparent"}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                              {h.title}
+                            </div>
+                            {h.subtitle && (
+                              <div className="text-xs text-slate-600 dark:text-slate-300 truncate">
+                                {h.subtitle}
+                              </div>
+                            )}
+                          </div>
+                          {Number.isFinite(h.amount) && (
+                            <div className="text-xs text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                              TZS {new Intl.NumberFormat().format(h.amount)}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ------------------------------- Section item ------------------------------ */
 const Section = memo(({ item, currentPath, onNavigate }) => {
   const hasChildren = !!item.children?.length;
@@ -521,15 +704,8 @@ const SidebarLayout = () => {
             </div>
 
             <div className="hidden md:flex items-center gap-2 min-w-[280px] max-w-[640px] w-full">
-              <div className="relative w-full">
-                <FiSearch className="absolute left-3 top-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search borrowers, loans, receipts…"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
-                  aria-label="Global search"
-                />
-              </div>
+              {/* ✅ Functional global search (uses active branch) */}
+              <HeaderGlobalSearch branchId={activeBranchId} />
             </div>
 
             <div className="flex items-center gap-2">
@@ -680,7 +856,7 @@ const SidebarLayout = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
         {/* Sidebar */}
         <aside className="hidden lg:block border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
+          <div className="h-[calc(100vh-56px)] sticky top[56px] lg:top-[56px] overflow-y-auto px-2 py-3">
             <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Navigation
             </div>
@@ -703,14 +879,14 @@ const SidebarLayout = () => {
         </aside>
 
         {/* Main content */}
-        <main className="min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
+        <main className="min-h[calc(100vh-56px)] lg:min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
           <Outlet />
         </main>
       </div>
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-[70] flex">
+        <div className="lg:hidden fixed inset-0 z[70] lg:z-[70] flex">
           <div className="w-72 max-w-[80vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
             <div className="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800">
               <span className="font-semibold">Menu</span>

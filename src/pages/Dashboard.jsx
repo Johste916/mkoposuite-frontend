@@ -1,10 +1,10 @@
 // src/pages/Dashboard.jsx
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
   ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle,
-  ChevronDown, Calendar, Search, X
+  ChevronDown, Calendar
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -93,207 +93,6 @@ const DateField = ({ className = '', ...props }) => (
 const TextField = ({ className = '', ...props }) => (
   <input {...props} className={`${baseInput} ${className}`} />
 );
-
-/** ---------------------------------------------------------------
- * GLOBAL SEARCH (adapts to modules & respects dashboard filters)
- * Calls /search?q=&branchId=&officerId=&timeRange=
- * Expects array of hits like:
- * [{ id, type: 'borrower'|'loan'|'repayment'|'deposit'|'withdrawal'|'saving'|'user'|..., title, subtitle, amount, meta, routeHint }]
- * Only 'id' and 'type' are required—titles are generated if missing.
- * --------------------------------------------------------------- */
-const GlobalSearch = ({
-  branchId, officerId, timeRange,
-}) => {
-  const navigate = useNavigate();
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [hits, setHits] = useState([]);
-  const [sel, setSel] = useState(0);
-  const [debounceId, setDebounceId] = useState(null);
-
-  // Map backend "type" to destination + URL builder
-  const ENTITY_ROUTES = useMemo(() => ({
-    borrower: (h) => ({ to: `${ROUTE_PATHS.borrowers}/${h.id}` }),
-    borrowers: (h) => ({ to: `${ROUTE_PATHS.borrowers}/${h.id}` }),
-    loan: (h) => ({ to: `${ROUTE_PATHS.loans}/${h.id}` }),
-    loans: (h) => ({ to: `${ROUTE_PATHS.loans}/${h.id}` }),
-    repayment: (h) => ({ to: `${ROUTE_PATHS.repayments}/${h.id}` }),
-    repayments: (h) => ({ to: `${ROUTE_PATHS.repayments}?q=${encodeURIComponent(h.meta?.receiptNo || h.id)}` }),
-    deposit: (h) => ({ to: `${ROUTE_PATHS.deposits}?q=${encodeURIComponent(h.id)}` }),
-    withdrawal: (h) => ({ to: `${ROUTE_PATHS.withdrawals}?q=${encodeURIComponent(h.id)}` }),
-    saving: (h) => ({ to: `${ROUTE_PATHS.savings}?q=${encodeURIComponent(h.meta?.accountNo || h.id)}` }),
-    user: (h) => ({ to: `/users/${h.id}` }),
-    branch: (h) => ({ to: `/branches/${h.id}` }),
-    // Fallback: generic search landing
-    default: (h) => ({ to: `/?q=${encodeURIComponent(h.title || q)}` }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [q]);
-
-  const fetchHits = useCallback(async (query) => {
-    if (!query || query.trim().length < 2) {
-      setHits([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await api.get('/search', {
-        params: {
-          q: query.trim(),
-          branchId: branchId || undefined,
-          officerId: officerId || undefined,
-          timeRange: timeRange || undefined,
-          limit: 12,
-        },
-      });
-      const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.items) ? res.data.items : []);
-      // Normalize some common fields
-      const norm = arr.map((h) => ({
-        id: h.id ?? h._id ?? h.uuid,
-        type: (h.type || h.entity || h.module || 'default').toString().toLowerCase(),
-        title: h.title || h.name || h.fullName || h.borrowerName || h.loanNo || h.receiptNo || h.accountNo || String(h.id ?? ''),
-        subtitle: h.subtitle || h.email || h.phone || h.meta?.loanNo || h.meta?.receiptNo || h.meta?.branchName || '',
-        amount: h.amount ?? h.total ?? h.balance ?? h.value,
-        meta: h.meta || h,
-        routeHint: h.routeHint,
-      })).filter(x => x.id);
-      setHits(norm);
-      setSel(0);
-    } catch (e) {
-      // Silently ignore but surface no results
-      setHits([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [branchId, officerId, timeRange]);
-
-  // Debounced q
-  useEffect(() => {
-    if (debounceId) clearTimeout(debounceId);
-    const id = setTimeout(() => fetchHits(q), 220);
-    setDebounceId(id);
-    return () => clearTimeout(id);
-  }, [q, fetchHits]);
-
-  // Keyboard nav
-  const onKeyDown = (e) => {
-    if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) setOpen(true);
-    if (!hits.length) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSel((s) => (s + 1) % hits.length);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSel((s) => (s - 1 + hits.length) % hits.length);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      go(hits[sel] || hits[0]);
-    } else if (e.key === 'Escape') {
-      setOpen(false);
-    }
-  };
-
-  const go = (hit) => {
-    const build = ENTITY_ROUTES[hit.type] || ENTITY_ROUTES.default;
-    const dest = hit.routeHint ? { to: hit.routeHint } : build(hit);
-    setOpen(false);
-    setQ('');
-    setHits([]);
-    navigate(dest.to);
-  };
-
-  // Group hits by type for headers
-  const grouped = useMemo(() => {
-    const g = {};
-    hits.forEach((h) => {
-      const k = (h.type || 'other').toString();
-      (g[k] ||= []).push(h);
-    });
-    return g;
-  }, [hits]);
-
-  return (
-    <div className="relative w-full max-w-4xl">
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-        <input
-          value={q}
-          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={onKeyDown}
-          placeholder="Search borrowers, loans, receipts..."
-          className={`${baseInput} pl-9 pr-8 w-full`}
-          aria-label="Global search"
-        />
-        {q && (
-          <button
-            onClick={() => { setQ(''); setHits([]); }}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
-            aria-label="Clear search"
-            title="Clear"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
-      {/* Results popover */}
-      {open && (q?.length >= 2) && (
-        <div
-          className="absolute z-20 mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden"
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          {loading ? (
-            <div className="p-3 text-sm text-slate-600 dark:text-slate-300">Searching…</div>
-          ) : hits.length === 0 ? (
-            <div className="p-3 text-sm text-slate-600 dark:text-slate-300">No results.</div>
-          ) : (
-            <div className="max-h-80 overflow-auto">
-              {Object.entries(grouped).map(([type, list]) => (
-                <div key={type}>
-                  <div className="px-3 py-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60">
-                    {type}
-                  </div>
-                  {list.map((h, idx) => {
-                    const flatIndex = hits.indexOf(h);
-                    const active = flatIndex === sel;
-                    return (
-                      <button
-                        key={`${type}-${h.id}-${idx}`}
-                        onMouseEnter={() => setSel(flatIndex)}
-                        onClick={() => go(h)}
-                        className={`w-full text-left px-3 py-2 text-sm border-b border-slate-100 dark:border-slate-800
-                          ${active ? 'bg-indigo-50 dark:bg-slate-800/70' : 'bg-transparent'}`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                              {h.title}
-                            </div>
-                            {h.subtitle && (
-                              <div className="text-xs text-slate-600 dark:text-slate-300 truncate">
-                                {h.subtitle}
-                              </div>
-                            )}
-                          </div>
-                          {Number.isFinite(h.amount) && (
-                            <div className="text-xs text-slate-700 dark:text-slate-200 whitespace-nowrap">
-                              TZS {new Intl.NumberFormat().format(h.amount)}
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
 
 const Dashboard = () => {
   const isDark = useIsDarkMode();
@@ -440,6 +239,7 @@ const Dashboard = () => {
         if (res?.data && Array.isArray(res.data)) {
           setComms(res.data);
         } else {
+          // Fallback to summary-provided comms (if backend merges there)
           setComms(Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : []);
         }
       } finally {
@@ -698,7 +498,7 @@ const Dashboard = () => {
       {/* Top bar */}
       <div className="rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm border border-slate-200 dark:border-slate-800 p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-          <div className="w-full">
+          <div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Dashboard
             </h1>
@@ -708,15 +508,6 @@ const Dashboard = () => {
             <p className="text-xs text-slate-600 dark:text-slate-300/90 mt-1">
               {lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleString()}` : 'Loading…'}
             </p>
-
-            {/* Global Search */}
-            <div className="mt-3">
-              <GlobalSearch
-                branchId={branchId}
-                officerId={officerId}
-                timeRange={timeRange}
-              />
-            </div>
           </div>
 
           {/* Filters (wrap as needed) */}
@@ -1282,7 +1073,8 @@ const Dashboard = () => {
                         <TextField
                           value={assignDraft[a.id]?.note || ''}
                           onChange={(e) =>
-                            setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), note: e.target.value } }))}
+                            setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), note: e.target.value } }))
+                          }
                           placeholder="Note…"
                           className="col-span-4 h-9 text-xs"
                         />
@@ -1352,7 +1144,7 @@ const SummaryCard = ({
     ({
       indigo: {
         bg: 'from-indigo-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-indigo-100 dark:ring-indigo-900/40',
+      ring: 'ring-indigo-100 dark:ring-indigo-900/40',
         ink: 'text-indigo-700 dark:text-indigo-300',
         badge: 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-300',
         spot: 'bg-indigo-400/20'
