@@ -64,6 +64,11 @@ let overrideTenantId = null;
 const SEND_TZ_HEADERS =
   (import.meta.env?.VITE_SEND_TZ_HEADERS ?? "1").toString() !== "0";
 
+/** Detect FormData without importing DOM types in SSR builds */
+function isFormData(v) {
+  return typeof FormData !== "undefined" && v instanceof FormData;
+}
+
 /* ----------------------------- Request interceptor ---------------------------- */
 api.interceptors.request.use((config) => {
   // Normalize relative URL
@@ -110,9 +115,17 @@ api.interceptors.request.use((config) => {
     config.headers["x-tz-offset"] = String(new Date().getTimezoneOffset());
   }
 
-  // X-Request-Id
-  if (!config.headers["x-request-id"]) {
-    config.headers["x-request-id"] = makeReqId();
+  // If sending FormData, let the browser set the boundary automatically
+  if (isFormData(config.data)) {
+    // Remove any pre-set content-type to avoid breaking multipart requests
+    if (config.headers && "Content-Type" in config.headers) {
+      delete config.headers["Content-Type"];
+    }
+  } else {
+    // X-Request-Id only for non-FormData (fine to add for both, but keeping light)
+    if (!config.headers["x-request-id"]) {
+      config.headers["x-request-id"] = makeReqId();
+    }
   }
 
   return config;
@@ -189,6 +202,14 @@ api.patchJSON = async (url, data, config) =>
 api.deleteJSON = async (url, config) =>
   (await api.delete(normalizePath(url), config)).data;
 
+/** Form helpers (for photo/KYC uploads, etc.) */
+api.postForm = async (url, formData, config = {}) =>
+  (await api.post(normalizePath(url), formData, config)).data;
+api.putForm = async (url, formData, config = {}) =>
+  (await api.put(normalizePath(url), formData, config)).data;
+api.patchForm = async (url, formData, config = {}) =>
+  (await api.patch(normalizePath(url), formData, config)).data;
+
 /**
  * Try a list of endpoints (first that works).
  * Example: await api.getFirst(['/api/support/tickets','/api/admin/tickets'])
@@ -211,16 +232,11 @@ async function firstOk(method, paths, payload, config) {
   throw lastErr;
 }
 
-api.getFirst = (paths, config) =>
-  firstOk("get", paths, undefined, config);
-api.postFirst = (paths, data, config) =>
-  firstOk("post", paths, data, config);
-api.patchFirst = (paths, data, config) =>
-  firstOk("patch", paths, data, config);
-api.putFirst = (paths, data, config) =>
-  firstOk("put", paths, data, config);
-api.deleteFirst = (paths, config) =>
-  firstOk("delete", paths, undefined, config);
+api.getFirst = (paths, config) => firstOk("get", paths, undefined, config);
+api.postFirst = (paths, data, config) => firstOk("post", paths, data, config);
+api.patchFirst = (paths, data, config) => firstOk("patch", paths, data, config);
+api.putFirst = (paths, data, config) => firstOk("put", paths, data, config);
+api.deleteFirst = (paths, config) => firstOk("delete", paths, undefined, config);
 
 /** Path utility + sugar methods mirroring axios verbs with normalization */
 api.path = normalizePath;
@@ -252,6 +268,12 @@ api.getTenantId = () =>
       return null;
     }
   })();
+
+/** Optional: create an AbortController for cancellations */
+api.withAbort = () => {
+  const ac = new AbortController();
+  return { signal: ac.signal, cancel: () => ac.abort() };
+};
 
 export default api;
 export { api };
