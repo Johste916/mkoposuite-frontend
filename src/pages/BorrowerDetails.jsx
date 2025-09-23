@@ -46,7 +46,7 @@ const chip = (status) => {
   }
 };
 
-/* Resilient GET — NOW tries the likely-working endpoints FIRST */
+/* Resilient GET — tries the endpoints your server is most likely to support FIRST */
 const tryGET = async (paths = [], opts = {}) => {
   let lastErr;
   for (const p of paths) {
@@ -89,9 +89,8 @@ const BorrowerDetails = () => {
   const [activeTab, setActiveTab] = useState("loans"); // default tab
   const [errors, setErrors] = useState({ loans: null, savings: null });
 
-  // counts
-  const loansCount = loans?.length || 0;
-  const repaymentsCount = repayments?.length || 0;
+  /* compact comments */
+  const [showAllComments, setShowAllComments] = useState(false);
 
   const fetchBorrowerBundle = async () => {
     setErrors({ loans: null, savings: null });
@@ -99,17 +98,17 @@ const BorrowerDetails = () => {
       const borrowerData = await tryGET([`/borrowers/${id}`]);
       setBorrower(borrowerData);
 
-      // IMPORTANT: prefer /borrowers/:id/* FIRST to stop 404s & 500s you saw
+      // Prefer ?borrowerId= first (matches your server from the logs)
       const [loanData, repayData, commentData, savingsData] = await Promise.all([
-        tryGET([`/borrowers/${id}/loans`, `/loans?borrowerId=${id}`, `/loans/borrower/${id}`]).catch((e) => {
+        tryGET([`/loans?borrowerId=${id}`, `/borrowers/${id}/loans`, `/loans/borrower/${id}`]).catch(() => {
           setErrors((x) => ({ ...x, loans: "Couldn’t load loans." }));
           return [];
         }),
-        tryGET([`/borrowers/${id}/repayments`, `/repayments?borrowerId=${id}`, `/repayments/borrower/${id}`]).catch(
+        tryGET([`/repayments?borrowerId=${id}`, `/borrowers/${id}/repayments`, `/repayments/borrower/${id}`]).catch(
           () => []
         ),
         tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
-        tryGET([`/borrowers/${id}/savings`, `/savings?borrowerId=${id}`, `/savings/borrower/${id}`]).catch((e) => {
+        tryGET([`/savings?borrowerId=${id}`, `/borrowers/${id}/savings`, `/savings/borrower/${id}`]).catch(() => {
           setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
           return {};
         }),
@@ -167,7 +166,7 @@ const BorrowerDetails = () => {
 
   const handleRepaymentSaved = async () => {
     try {
-      const repay = await tryGET([`/borrowers/${id}/repayments`, `/repayments?borrowerId=${id}`]);
+      const repay = await tryGET([`/repayments?borrowerId=${id}`, `/borrowers/${id}/repayments`]);
       setRepayments(Array.isArray(repay) ? repay : repay?.items || []);
     } catch {}
   };
@@ -188,15 +187,12 @@ const BorrowerDetails = () => {
   if (!borrower) return <div className="p-4 dark:bg-slate-950 min-h-screen">Loading...</div>;
 
   const bName = displayName(borrower);
+  const visibleComments = showAllComments ? comments : comments.slice(0, 3);
   const deposits = summarizeSavings("deposit");
   const withdrawals = summarizeSavings("withdrawal");
   const charges = summarizeSavings("charge");
   const interest = summarizeSavings("interest");
   const canAddRepayment = String(userRole || "").toLowerCase() === "admin";
-
-  /* ---------- small, compact comment box ---------- */
-  const [showAllComments, setShowAllComments] = useState(false);
-  const visibleComments = showAllComments ? comments : comments.slice(0, 3);
 
   return (
     <div className="p-4 space-y-4 dark:bg-slate-950 min-h-screen">
@@ -353,9 +349,7 @@ const BorrowerDetails = () => {
           {/* Loans table */}
           {activeTab === "loans" && (
             <>
-              {errors.loans && (
-                <div className="mb-3 text-sm text-red-600 dark:text-red-300">{errors.loans}</div>
-              )}
+              {errors.loans && <div className="mb-3 text-sm text-red-600 dark:text-red-300">{errors.loans}</div>}
               {loans.length === 0 ? (
                 <div className="p-4 text-sm text-gray-600 dark:text-slate-300 border rounded dark:border-slate-800">
                   No loans for this borrower.
@@ -478,9 +472,7 @@ const BorrowerDetails = () => {
           {/* Savings table + summary badges */}
           {activeTab === "savings" && (
             <>
-              {errors.savings && (
-                <div className="mb-3 text-sm text-red-600 dark:text-red-300">{errors.savings}</div>
-              )}
+              {errors.savings && <div className="mb-3 text-sm text-red-600 dark:text-red-300">{errors.savings}</div>}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
                 <div className="p-2 rounded bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-200">
                   Deposits: <strong>{money(deposits)}</strong>
@@ -552,7 +544,7 @@ const BorrowerDetails = () => {
             </>
           )}
 
-          {/* Documents placeholder (kept minimal) */}
+          {/* Documents */}
           {activeTab === "documents" && (
             <div className="text-sm text-gray-600 dark:text-slate-300">
               <Link
