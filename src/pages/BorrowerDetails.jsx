@@ -26,27 +26,28 @@ const initials = (nameLike) => {
 };
 
 const chip = (status) => {
-  const base = "px-2 py-1 text-xs font-semibold rounded";
+  const base = "px-2 py-0.5 text-xs font-semibold rounded-full";
   switch (String(status || "").toLowerCase()) {
     case "pending":
-      return `${base} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200`;
+      return `${base} bg-amber-100 text-amber-800`;
     case "approved":
-      return `${base} bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-200`;
+      return `${base} bg-emerald-100 text-emerald-700`;
     case "rejected":
-      return `${base} bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-200`;
+      return `${base} bg-rose-100 text-rose-700`;
     case "active":
-      return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200`;
-    case "closed":
-      return `${base} bg-gray-200 text-gray-700 dark:bg-slate-800 dark:text-slate-200`;
+      return `${base} bg-blue-100 text-blue-700`;
     case "disabled":
+      return `${base} bg-slate-200 text-slate-700`;
     case "blacklisted":
-      return `${base} bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200`;
+      return `${base} bg-red-200 text-red-800`;
+    case "closed":
+      return `${base} bg-gray-200 text-gray-700`;
     default:
-      return `${base} bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300`;
+      return `${base} bg-gray-100 text-gray-600`;
   }
 };
 
-/* Robust GET (tries the endpoints your server is most likely to support FIRST) */
+/* GET with graceful fallbacks (prefers ?borrowerId=, matching your API) */
 const tryGET = async (paths = [], opts = {}) => {
   let lastErr;
   for (const p of paths) {
@@ -60,9 +61,67 @@ const tryGET = async (paths = [], opts = {}) => {
   throw lastErr || new Error(`All endpoints failed: ${paths.join(", ")}`);
 };
 
-/* POST/DELETE helpers with tenant header when present */
-const withTenant = (tenantId) =>
-  tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {};
+const withTenant = (tenantId) => (tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {});
+
+/* Small visual helpers */
+const Card = ({ title, icon, children, className = "" }) => (
+  <section className={`bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4 md:p-5 ${className}`}>
+    {title && (
+      <div className="flex items-center gap-2 mb-3">
+        {icon}
+        <h2 className="text-base md:text-lg font-semibold text-slate-900">{title}</h2>
+      </div>
+    )}
+    {children}
+  </section>
+);
+
+const Field = ({ label, children }) => (
+  <div>
+    <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</div>
+    <div className="mt-1 text-sm text-slate-900">{children ?? "—"}</div>
+  </div>
+);
+
+const DlGrid = ({ items, cols = 3 }) => (
+  <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-${cols}`}>
+    {items.map((it, i) => (
+      <Field key={i} label={it.label}>
+        {it.value ?? "—"}
+      </Field>
+    ))}
+  </div>
+);
+
+const PillTabs = ({ tabs, active, onChange }) => (
+  <div className="flex flex-wrap gap-2 border-b border-slate-200 px-2 pt-2">
+    {tabs.map((t) => {
+      const is = active === t.key;
+      return (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`px-3 py-1.5 text-sm rounded-full border ${
+            is
+              ? "bg-indigo-600 text-white border-indigo-600"
+              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
+          }`}
+        >
+          {t.label}
+          {typeof t.count === "number" && (
+            <span
+              className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full text-xs ${
+                is ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+              } px-1.5`}
+            >
+              {t.count}
+            </span>
+          )}
+        </button>
+      );
+    })}
+  </div>
+);
 
 const BorrowerDetails = () => {
   const { id } = useParams();
@@ -74,36 +133,30 @@ const BorrowerDetails = () => {
   const [repayments, setRepayments] = useState([]);
   const [comments, setComments] = useState([]);
 
-  // Repayments (shared modal)
   const [showRepaymentModal, setShowRepaymentModal] = useState(false);
   const [selectedLoanForRepayment, setSelectedLoanForRepayment] = useState(null);
 
-  // Schedule modal
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState([]);
   const [selectedLoan, setSelectedLoan] = useState(null);
 
-  // Savings
   const [savings, setSavings] = useState([]);
   const [filteredSavings, setFilteredSavings] = useState([]);
-  const [savingsBalance, setSavingsBalance] = useState(0);
   const [filterType, setFilterType] = useState("all");
 
-  const [activeTab, setActiveTab] = useState("loans"); // default tab
+  const [activeTab, setActiveTab] = useState("loans");
   const [errors, setErrors] = useState({ loans: null, savings: null });
 
-  /* compact comments (sidebar) */
   const [showAllComments, setShowAllComments] = useState(false);
 
   const fetchBorrowerBundle = async () => {
     setErrors({ loans: null, savings: null });
     try {
-      const borrowerData = await tryGET([`/borrowers/${id}`]);
-      setBorrower(borrowerData);
+      const b = await tryGET([`/borrowers/${id}`]);
+      setBorrower(b);
 
-      const qTenant = borrowerData?.tenantId ? `&tenantId=${encodeURIComponent(borrowerData.tenantId)}` : "";
+      const qTenant = b?.tenantId ? `&tenantId=${encodeURIComponent(b.tenantId)}` : "";
 
-      // Prefer ?borrowerId= first to avoid 404/500 based on your server behavior
       const [loanData, repayData, commentData, savingsData] = await Promise.all([
         tryGET([`/loans?borrowerId=${id}${qTenant}`, `/borrowers/${id}/loans`, `/loans/borrower/${id}`]).catch(() => {
           setErrors((x) => ({ ...x, loans: "Couldn’t load loans." }));
@@ -115,14 +168,12 @@ const BorrowerDetails = () => {
           `/repayments/borrower/${id}`,
         ]).catch(() => []),
         tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
-        tryGET([
-          `/savings?borrowerId=${id}${qTenant}`,
-          `/borrowers/${id}/savings`,
-          `/savings/borrower/${id}`,
-        ]).catch(() => {
-          setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
-          return {};
-        }),
+        tryGET([`/savings?borrowerId=${id}${qTenant}`, `/borrowers/${id}/savings`, `/savings/borrower/${id}`]).catch(
+          () => {
+            setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
+            return {};
+          }
+        ),
       ]);
 
       setLoans(Array.isArray(loanData) ? loanData : loanData?.items || []);
@@ -135,7 +186,6 @@ const BorrowerDetails = () => {
         ? savingsData
         : [];
       setSavings(txs);
-      setSavingsBalance(safeNum(savingsData?.balance, 0));
       setFilteredSavings(txs);
     } catch (err) {
       console.error("Fetch borrower bundle failed:", err?.message || err);
@@ -185,18 +235,17 @@ const BorrowerDetails = () => {
     } catch {}
   };
 
-  // Admin actions (defensive fallbacks)
+  // Admin actions
   const handleDisable = async () => {
     if (!window.confirm("Disable this borrower? They will not be able to apply or receive disbursements.")) return;
     try {
       await api.post(`/borrowers/${id}/disable`, {}, withTenant(borrower?.tenantId));
       setBorrower((b) => ({ ...b, status: "disabled" }));
     } catch {
-      // fallback: patch status if granular endpoint not present
       try {
         await api.patch(`/borrowers/${id}`, { status: "disabled" }, withTenant(borrower?.tenantId));
         setBorrower((b) => ({ ...b, status: "disabled" }));
-      } catch (e) {
+      } catch {
         alert("Could not disable borrower.");
       }
     }
@@ -227,9 +276,6 @@ const BorrowerDetails = () => {
     }
   };
 
-  const summarizeSavings = (type) =>
-    savings.reduce((sum, tx) => (tx.type === type ? sum + safeNum(tx.amount) : sum), 0);
-
   const missedRepayments = useMemo(() => {
     const today = new Date();
     return repayments.filter((r) => {
@@ -240,299 +286,287 @@ const BorrowerDetails = () => {
     }).length;
   }, [repayments]);
 
-  if (!borrower) return <div className="p-4 dark:bg-slate-950 min-h-screen">Loading...</div>;
+  if (!borrower) return <div className="p-4 min-h-screen bg-slate-50">Loading...</div>;
 
   const bName = displayName(borrower);
-  const visibleComments = showAllComments ? comments : comments.slice(0, 3);
-  const deposits = summarizeSavings("deposit");
-  const withdrawals = summarizeSavings("withdrawal");
-  const charges = summarizeSavings("charge");
-  const interest = summarizeSavings("interest");
-  const canAddRepayment = String(userRole || "").toLowerCase() === "admin";
-
   const tenantQuery = borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : "";
+  const visibleComments = showAllComments ? comments : comments.slice(0, 3);
 
-  /* quick contact links */
   const tel = (p) => (p ? `tel:${p}` : undefined);
   const sms = (p) => (p ? `sms:${p}` : undefined);
   const wa = (p) => (p ? `https://wa.me/${String(p).replace(/[^\d]/g, "")}` : undefined);
   const mail = (e) => (e ? `mailto:${e}` : undefined);
 
+  const deposits = savings.reduce((s, t) => (t.type === "deposit" ? s + safeNum(t.amount) : s), 0);
+  const withdrawals = savings.reduce((s, t) => (t.type === "withdrawal" ? s + safeNum(t.amount) : s), 0);
+  const charges = savings.reduce((s, t) => (t.type === "charge" ? s + safeNum(t.amount) : s), 0);
+  const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
+
   return (
-    <div className="p-4 dark:bg-slate-950 min-h-screen">
-      {/* Header (breadcrumbs + compact actions; no export buttons on this page) */}
-      <div className="flex items-center justify-between mb-3">
+    <div className="p-4 md:p-6 bg-slate-50 min-h-screen">
+      {/* Top bar */}
+      <div className="flex items-center justify-between mb-4">
         <div className="text-sm">
-          <Link to={`/borrowers${tenantQuery}`} className="text-indigo-600 hover:underline dark:text-indigo-400">
+          <Link to={`/borrowers${tenantQuery}`} className="text-indigo-600 hover:underline">
             Borrowers
           </Link>{" "}
-          <span className="text-gray-400 dark:text-slate-500">/</span>{" "}
-          <span className="text-gray-700 dark:text-slate-100">{bName}</span>
+          <span className="text-slate-400">/</span>{" "}
+          <span className="text-slate-900 font-medium">{bName}</span>
         </div>
-
         <div className="flex gap-2">
           <Link
             to={`/borrowers/${encodeURIComponent(borrower.id)}/edit${tenantQuery}`}
-            className="px-3 py-1.5 text-sm rounded border dark:border-slate-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800"
+            className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 text-slate-800 hover:bg-slate-50"
           >
             Edit
           </Link>
           <button
             onClick={handleDisable}
-            className="px-3 py-1.5 text-sm rounded border dark:border-slate-700 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800"
+            className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 text-slate-800 hover:bg-slate-50"
           >
             Disable
           </button>
           <button
             onClick={handleBlacklist}
-            className="px-3 py-1.5 text-sm rounded border border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-900/20"
+            className="px-3 py-1.5 text-sm rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
           >
             Blacklist
           </button>
           <button
             onClick={handleDelete}
-            className="px-3 py-1.5 text-sm rounded border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/20"
+            className="px-3 py-1.5 text-sm rounded-xl border border-red-200 text-red-700 hover:bg-red-50"
           >
             Delete
           </button>
         </div>
       </div>
 
-      {/* Main layout: profile (left, wide) + sidebar comments (right, narrow) */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* LEFT: profile + KPIs + tabs */}
-        <div className="lg:col-span-3 space-y-4">
-          {/* Big Profile Card */}
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-5">
-            <div className="flex gap-5 items-start">
-              {/* Avatar / Photo */}
-              <div className="relative">
+      {/* Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+        {/* MAIN */}
+        <div className="lg:col-span-3 space-y-5">
+          {/* Profile */}
+          <Card>
+            <div className="flex gap-5">
+              {/* Avatar */}
+              <div className="relative shrink-0">
                 {borrower.photoUrl ? (
-                  <img
-                    src={borrower.photoUrl}
-                    alt={bName}
-                    className="w-24 h-24 rounded-2xl object-cover shadow"
-                  />
+                  <img src={borrower.photoUrl} alt={bName} className="w-24 h-24 rounded-2xl object-cover ring-1 ring-slate-200" />
                 ) : (
-                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-semibold shadow">
+                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-semibold">
                     {initials(bName)}
                   </div>
                 )}
-                <span className={`absolute -bottom-2 left-2 ${chip(borrower.status)} shadow px-2`}>
+                <span className={`absolute -bottom-2 left-2 ${chip(borrower.status)} ring-1 ring-black/5`}>
                   {borrower.status || "—"}
                 </span>
               </div>
 
-              {/* Identity + Contacts */}
+              {/* Name + quick contact */}
               <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <h1 className="text-2xl font-semibold dark:text-slate-100">{bName}</h1>
-                  <span className="text-xs text-gray-500 dark:text-slate-400">
-                    ID: {borrower.id} • Tenant: {borrower.tenantId || "—"}
-                  </span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-900">{bName}</h1>
+                  <span className="text-xs text-slate-500">ID: {borrower.id}</span>
+                  <span className="text-xs text-slate-500">Tenant: {borrower.tenantId || "—"}</span>
                 </div>
 
-                {/* Contacts row */}
-                <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">Phone</div>
+                <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <Field label="Phone">
                     <div className="flex items-center gap-2">
                       <span>{borrower.phone || "—"}</span>
                       {borrower.phone && (
                         <>
-                          <a className="underline text-indigo-600" href={tel(borrower.phone)}>Call</a>
-                          <a className="underline text-indigo-600" href={sms(borrower.phone)}>SMS</a>
-                          <a className="underline text-indigo-600" href={wa(borrower.phone)} target="_blank" rel="noreferrer">WhatsApp</a>
+                          <a className="underline text-indigo-600" href={tel(borrower.phone)}>
+                            Call
+                          </a>
+                          <a className="underline text-indigo-600" href={sms(borrower.phone)}>
+                            SMS
+                          </a>
+                          <a className="underline text-indigo-600" href={wa(borrower.phone)} target="_blank" rel="noreferrer">
+                            WhatsApp
+                          </a>
                         </>
                       )}
                     </div>
-                  </div>
+                  </Field>
 
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">Email</div>
+                  <Field label="Email">
                     <div className="flex items-center gap-2">
                       <span>{borrower.email || "—"}</span>
                       {borrower.email && (
-                        <a className="underline text-indigo-600" href={mail(borrower.email)}>Email</a>
+                        <a className="underline text-indigo-600" href={mail(borrower.email)}>
+                          Email
+                        </a>
                       )}
                     </div>
-                  </div>
+                  </Field>
 
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">Address</div>
-                    <span>
-                      {borrower.address ||
-                        [borrower.street, borrower.village, borrower.ward, borrower.district, borrower.region]
-                          .filter(Boolean)
-                          .join(", ") || "—"}
-                    </span>
-                  </div>
-
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">DOB</div>
-                    <span>{borrower.birthDate ? new Date(borrower.birthDate).toLocaleDateString() : "—"}</span>
-                  </div>
-
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">Occupation</div>
-                    <span>{borrower.occupation || "—"}</span>
-                  </div>
-
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">Sector</div>
-                    <span>{borrower.sector || borrower.businessSector || "—"}</span>
-                  </div>
-                </div>
-
-                {/* IDs row */}
-                <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">National ID</div>
-                    <span>{borrower.nationalId || borrower.idNumber || "—"}</span>
-                  </div>
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">Customer No.</div>
-                    <span>{borrower.customerNumber || borrower.accountNumber || "—"}</span>
-                  </div>
-                  <div className="text-gray-600 dark:text-slate-300">
-                    <div className="text-xs uppercase tracking-wide text-gray-400 dark:text-slate-500">Branch / Officer</div>
-                    <span>
-                      {displayBranch(borrower)} / {displayOfficer(borrower)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Related contacts: spouse & next of kin */}
-                <div className="mt-4 grid sm:grid-cols-2 gap-3">
-                  <ContactCard
-                    title="Spouse"
-                    name={borrower.spouseName}
-                    phone={borrower.spousePhone}
-                    email={borrower.spouseEmail}
-                  />
-                  <ContactCard
-                    title="Next of Kin"
-                    name={borrower.nextOfKinName || borrower.kinName}
-                    phone={borrower.nextOfKinPhone || borrower.kinPhone}
-                    email={borrower.nextOfKinEmail || borrower.kinEmail}
-                    sub={borrower.nextOfKinRelationship || borrower.kinRelationship}
-                  />
+                  <Field label="Address">
+                    {borrower.addressLine ||
+                      [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city]
+                        .filter(Boolean)
+                        .join(", ") ||
+                      "—"}
+                  </Field>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="bg-white dark:bg-slate-900 dark:border-slate-800 border rounded p-4">
-              <p className="text-xs text-gray-500 dark:text-slate-400">PAR %</p>
-              <p className="mt-1 text-2xl font-semibold dark:text-slate-100">
-                {Number.isFinite(Number(borrower.parPercent)) ? `${Number(borrower.parPercent).toFixed(2)}%` : "0%"}
-              </p>
+            {/* Divider */}
+            <hr className="my-4 border-slate-200" />
+
+            {/* Identity mirrors Add Borrower */}
+            <div className="grid gap-5">
+              <DlGrid
+                cols={3}
+                items={[
+                  { label: "Gender", value: borrower.gender },
+                  {
+                    label: "Birth Date",
+                    value: borrower.birthDate ? new Date(borrower.birthDate).toLocaleDateString() : "—",
+                  },
+                  { label: "Occupation / Business", value: borrower.occupation },
+                  { label: "Employment Status", value: borrower.employmentStatus },
+                  { label: "Secondary Phone", value: borrower.secondaryPhone },
+                  { label: "Customer No.", value: borrower.customerNumber || borrower.accountNumber },
+                ]}
+              />
+
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Card title="ID Document">
+                  <DlGrid
+                    cols={2}
+                    items={[
+                      { label: "ID Type", value: borrower.idType },
+                      { label: "ID Number", value: borrower.idNumber },
+                      {
+                        label: "Issued On",
+                        value: borrower.idIssuedDate ? new Date(borrower.idIssuedDate).toLocaleDateString() : "—",
+                      },
+                      {
+                        label: "Expiry Date",
+                        value: borrower.idExpiryDate ? new Date(borrower.idExpiryDate).toLocaleDateString() : "—",
+                      },
+                    ]}
+                  />
+                </Card>
+
+                <Card title="Assignment & Registration">
+                  <DlGrid
+                    cols={2}
+                    items={[
+                      { label: "Branch", value: displayBranch(borrower) },
+                      { label: "Loan Officer", value: displayOfficer(borrower) },
+                      { label: "Loan Type", value: borrower.loanType || "individual" },
+                      { label: "Group ID", value: borrower.groupId },
+                      {
+                        label: "Registration Date",
+                        value: borrower.regDate ? new Date(borrower.regDate).toLocaleDateString() : "—",
+                      },
+                    ]}
+                  />
+                </Card>
+              </div>
+
+              <Card title="Next of Kin">
+                <DlGrid
+                  cols={3}
+                  items={[
+                    { label: "Full Name", value: borrower.nextKinName || borrower.nextOfKinName },
+                    { label: "Phone", value: borrower.nextKinPhone || borrower.nextOfKinPhone },
+                    { label: "Relationship", value: borrower.nextOfKinRelationship || borrower.kinRelationship },
+                  ]}
+                />
+              </Card>
             </div>
-            <div className="bg-white dark:bg-slate-900 dark:border-slate-800 border rounded p-4">
-              <p className="text-xs text-gray-500 dark:text-slate-400">Overdue Amount</p>
-              <p className="mt-1 text-2xl font-semibold dark:text-slate-100">{money(borrower.overdueAmount)}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-900 dark:border-slate-800 border rounded p-4">
-              <p className="text-xs text-gray-500 dark:text-slate-400">Missed Repayments</p>
-              <p className="mt-1 text-2xl font-semibold dark:text-slate-100">{missedRepayments}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-900 dark:border-slate-800 border rounded p-4">
-              <p className="text-xs text-gray-500 dark:text-slate-400">Net Savings</p>
-              <p className="mt-1 text-2xl font-semibold dark:text-slate-100">{money(borrower.netSavings)}</p>
-            </div>
+          </Card>
+
+          {/* KPI */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[
+              { k: "PAR %", v: Number.isFinite(Number(borrower.parPercent)) ? `${Number(borrower.parPercent).toFixed(2)}%` : "0%" },
+              { k: "Overdue Amount", v: money(borrower.overdueAmount) },
+              { k: "Missed Repayments", v: missedRepayments },
+              { k: "Net Savings", v: money(borrower.netSavings) },
+            ].map((c, i) => (
+              <div key={i} className="rounded-2xl bg-white ring-1 ring-slate-200 p-4">
+                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{c.k}</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-900">{c.v}</div>
+              </div>
+            ))}
           </div>
 
           {/* Tabs */}
-          <div className="bg-white dark:bg-slate-900 dark:border dark:border-slate-800 rounded-xl">
-            <div className="border-b dark:border-slate-800 flex flex-wrap">
-              {["loans", "repayments", "savings", "documents", "activity"].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setActiveTab(t)}
-                  className={`px-4 py-2 text-sm border-b-2 -mb-px ${
-                    activeTab === t
-                      ? "border-indigo-600 text-indigo-700 dark:text-indigo-300"
-                      : "border-transparent text-gray-600 dark:text-slate-300"
-                  }`}
-                >
-                  {t[0].toUpperCase() + t.slice(1)}
-                </button>
-              ))}
-            </div>
+          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200">
+            <PillTabs
+              active={activeTab}
+              onChange={setActiveTab}
+              tabs={[
+                { key: "loans", label: "Loans", count: loans.length },
+                { key: "repayments", label: "Repayments", count: repayments.length },
+                { key: "savings", label: "Savings", count: filteredSavings.length },
+                { key: "documents", label: "Documents" },
+                { key: "activity", label: "Activity" },
+              ]}
+            />
 
-            <div className="p-4">
+            <div className="p-4 md:p-5">
               {/* Loans */}
               {activeTab === "loans" && (
                 <>
-                  {errors.loans && <div className="mb-3 text-sm text-red-600 dark:text-red-300">{errors.loans}</div>}
+                  {errors.loans && <div className="mb-3 text-sm text-rose-600">{errors.loans}</div>}
                   {loans.length === 0 ? (
-                    <div className="p-4 text-sm text-gray-600 dark:text-slate-300 border rounded dark:border-slate-800">
-                      No loans for this borrower.
-                      <Link
-                        to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
-                          borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-                        }`}
-                        className="ml-2 text-indigo-600 hover:underline dark:text-indigo-400"
-                      >
-                        Create loan
-                      </Link>
-                    </div>
+                    <Empty
+                      text={
+                        <>
+                          No loans for this borrower.
+                          <Link
+                            to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
+                              borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                            }`}
+                            className="ml-1 underline text-indigo-600"
+                          >
+                            Create loan
+                          </Link>
+                        </>
+                      }
+                    />
                   ) : (
-                    <div className="overflow-auto">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-slate-800/50">
-                          <tr className="text-left dark:text-slate-300">
-                            <th className="px-3 py-2">Loan</th>
-                            <th className="px-3 py-2">Reference</th>
-                            <th className="px-3 py-2">Status</th>
-                            <th className="px-3 py-2">Amount</th>
-                            <th className="px-3 py-2">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {loans.map((l) => (
-                            <tr key={l.id} className="border-b last:border-0 dark:border-slate-800">
-                              <td className="px-3 py-2">
-                                <Link
-                                  to={`/loans/${encodeURIComponent(l.id)}${
-                                    borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-                                  }`}
-                                  className="text-indigo-600 hover:underline dark:text-indigo-400"
-                                >
-                                  {l.id}
-                                </Link>
-                              </td>
-                              <td className="px-3 py-2 dark:text-slate-100">{l.reference || `L-${l.id}`}</td>
-                              <td className="px-3 py-2">
-                                <span className={chip(l.status)}>{String(l.status || "—")}</span>
-                              </td>
-                              <td className="px-3 py-2 dark:text-slate-100">{money(l.amount)}</td>
-                              <td className="px-3 py-2 flex gap-2">
-                                <button
-                                  className="px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
-                                  onClick={() => handleViewSchedule(l.id)}
-                                >
-                                  Schedule
-                                </button>
-                                {canAddRepayment && (
-                                  <button
-                                    className="px-2 py-1 border rounded hover:bg-gray-50 dark:hover:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
-                                    onClick={() => {
-                                      setSelectedLoanForRepayment(l);
-                                      setShowRepaymentModal(true);
-                                    }}
-                                  >
-                                    Repay
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <Table
+                      head={["Loan", "Reference", "Status", "Amount", "Actions"]}
+                      rows={loans.map((l) => [
+                        <Link
+                          to={`/loans/${encodeURIComponent(l.id)}${
+                            borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                          }`}
+                          className="text-indigo-600 underline"
+                        >
+                          {l.id}
+                        </Link>,
+                        l.reference || `L-${l.id}`,
+                        <span className={chip(l.status)}>{String(l.status || "—")}</span>,
+                        <div className="text-right tabular-nums">{money(l.amount)}</div>,
+                        <div className="flex gap-2">
+                          <button
+                            className="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                            onClick={() => handleViewSchedule(l.id)}
+                          >
+                            Schedule
+                          </button>
+                          {String(userRole || "").toLowerCase() === "admin" && (
+                            <button
+                              className="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                              onClick={() => {
+                                setSelectedLoanForRepayment(l);
+                                setShowRepaymentModal(true);
+                              }}
+                            >
+                              Repay
+                            </button>
+                          )}
+                        </div>,
+                      ])}
+                    />
                   )}
                 </>
               )}
@@ -541,53 +575,32 @@ const BorrowerDetails = () => {
               {activeTab === "repayments" && (
                 <>
                   {repayments.length === 0 ? (
-                    <div className="p-4 text-sm text-gray-600 dark:text-slate-300 border rounded dark:border-slate-800">
-                      No repayments recorded for this borrower.
-                    </div>
+                    <Empty text="No repayments recorded for this borrower." />
                   ) : (
-                    <div className="overflow-auto">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-slate-800/50">
-                          <tr className="text-left dark:text-slate-300">
-                            <th className="px-3 py-2">Date</th>
-                            <th className="px-3 py-2">Amount</th>
-                            <th className="px-3 py-2">Loan</th>
-                            <th className="px-3 py-2">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {repayments.map((r, i) => (
-                            <tr key={`${r.id || i}`} className="border-b last:border-0 dark:border-slate-800">
-                              <td className="px-3 py-2 dark:text-slate-100">
-                                {r.date
-                                  ? new Date(r.date).toLocaleDateString()
-                                  : r.createdAt
-                                  ? new Date(r.createdAt).toLocaleDateString()
-                                  : "—"}
-                              </td>
-                              <td className="px-3 py-2 dark:text-slate-100">{money(r.amount)}</td>
-                              <td className="px-3 py-2">
-                                {r.loanId ? (
-                                  <Link
-                                    to={`/loans/${encodeURIComponent(r.loanId)}${
-                                      borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-                                    }`}
-                                    className="text-indigo-600 hover:underline dark:text-indigo-400"
-                                  >
-                                    {r.loanId}
-                                  </Link>
-                                ) : (
-                                  "—"
-                                )}
-                              </td>
-                              <td className="px-3 py-2">
-                                <span className={chip(r.status)}>{r.status || "—"}</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <Table
+                      head={["Date", "Amount", "Loan", "Status"]}
+                      rows={repayments.map((r, i) => [
+                        r.date
+                          ? new Date(r.date).toLocaleDateString()
+                          : r.createdAt
+                          ? new Date(r.createdAt).toLocaleDateString()
+                          : "—",
+                        <div className="text-right tabular-nums">{money(r.amount)}</div>,
+                        r.loanId ? (
+                          <Link
+                            to={`/loans/${encodeURIComponent(r.loanId)}${
+                              borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                            }`}
+                            className="text-indigo-600 underline"
+                          >
+                            {r.loanId}
+                          </Link>
+                        ) : (
+                          "—"
+                        ),
+                        <span className={chip(r.status)}>{r.status || "—"}</span>,
+                      ])}
+                    />
                   )}
                 </>
               )}
@@ -595,29 +608,22 @@ const BorrowerDetails = () => {
               {/* Savings */}
               {activeTab === "savings" && (
                 <>
-                  {errors.savings && <div className="mb-3 text-sm text-red-600 dark:text-red-300">{errors.savings}</div>}
+                  {errors.savings && <div className="mb-3 text-sm text-rose-600">{errors.savings}</div>}
+
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
-                    <div className="p-2 rounded bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-200">
-                      Deposits: <strong>{money(deposits)}</strong>
-                    </div>
-                    <div className="p-2 rounded bg-amber-50 dark:bg-amber-900/20 dark:text-amber-200">
-                      Withdrawals: <strong>{money(withdrawals)}</strong>
-                    </div>
-                    <div className="p-2 rounded bg-sky-50 dark:bg-sky-900/20 dark:text-sky-200">
-                      Interest: <strong>{money(interest)}</strong>
-                    </div>
-                    <div className="p-2 rounded bg-rose-50 dark:bg-rose-900/20 dark:text-rose-200">
-                      Charges: <strong>{money(charges)}</strong>
-                    </div>
+                    <BadgeCard label="Deposits" value={money(deposits)} tone="emerald" />
+                    <BadgeCard label="Withdrawals" value={money(withdrawals)} tone="amber" />
+                    <BadgeCard label="Interest" value={money(interest)} tone="sky" />
+                    <BadgeCard label="Charges" value={money(charges)} tone="rose" />
                   </div>
 
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm dark:text-slate-200">Filter:</span>
+                      <span className="text-sm text-slate-700">Filter:</span>
                       <select
                         value={filterType}
                         onChange={(e) => setFilterType(e.target.value)}
-                        className="border rounded px-2 py-1 text-sm dark:bg-slate-950 dark:border-slate-700 dark:text-slate-100"
+                        className="border rounded px-2 py-1 text-sm"
                       >
                         <option value="all">All</option>
                         <option value="deposit">Deposits</option>
@@ -627,68 +633,49 @@ const BorrowerDetails = () => {
                       </select>
                     </div>
                     <Link
-                      to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(
-                        borrower.id
-                      )}`}
-                      className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+                      to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(borrower.id)}`}
+                      className="text-sm text-indigo-600 underline"
                     >
                       View savings accounts
                     </Link>
                   </div>
 
                   {filteredSavings.length === 0 ? (
-                    <div className="p-4 text-sm text-gray-600 dark:text-slate-300 border rounded dark:border-slate-800">
-                      No savings transactions for this borrower.
-                    </div>
+                    <Empty text="No savings transactions for this borrower." />
                   ) : (
-                    <div className="overflow-auto">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-slate-800/50">
-                          <tr className="text-left dark:text-slate-300">
-                            <th className="px-3 py-2">Date</th>
-                            <th className="px-3 py-2">Type</th>
-                            <th className="px-3 py-2">Amount</th>
-                            <th className="px-3 py-2">Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredSavings.map((tx, i) => (
-                            <tr key={`${tx.id || i}`} className="border-b last:border-0 dark:border-slate-800">
-                              <td className="px-3 py-2 dark:text-slate-100">
-                                {tx.date ? new Date(tx.date).toLocaleDateString() : "—"}
-                              </td>
-                              <td className="px-3 py-2 capitalize dark:text-slate-100">{tx.type}</td>
-                              <td className="px-3 py-2 dark:text-slate-100">{money(tx.amount)}</td>
-                              <td className="px-3 py-2 dark:text-slate-100">{tx.notes || "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <Table
+                      head={["Date", "Type", "Amount", "Notes"]}
+                      rows={filteredSavings.map((tx, i) => [
+                        tx.date ? new Date(tx.date).toLocaleDateString() : "—",
+                        <span className="capitalize">{tx.type}</span>,
+                        <div className="text-right tabular-nums">{money(tx.amount)}</div>,
+                        tx.notes || "—",
+                      ])}
+                    />
                   )}
                 </>
               )}
 
               {/* Documents */}
               {activeTab === "documents" && (
-                <div className="text-sm text-gray-600 dark:text-slate-300">
+                <div className="text-sm text-slate-700">
                   <Link
                     to={`/borrowers/${encodeURIComponent(borrower.id)}/documents${tenantQuery}`}
-                    className="text-indigo-600 hover:underline dark:text-indigo-400"
+                    className="text-indigo-600 underline"
                   >
                     Manage KYC documents
                   </Link>
                 </div>
               )}
 
-              {/* Activity timeline */}
+              {/* Activity */}
               {activeTab === "activity" && (
                 <ActivityTimeline
                   loans={loans}
                   repayments={repayments}
                   savings={savings}
                   comments={comments}
-                  canAddRepayment={canAddRepayment}
+                  canAddRepayment={String(userRole || "").toLowerCase() === "admin"}
                   onAddRepayment={() => {
                     const active = loans.find((l) => l.status === "active") || loans[0];
                     if (active) {
@@ -702,10 +689,9 @@ const BorrowerDetails = () => {
           </div>
         </div>
 
-        {/* RIGHT: comments sidebar */}
-        <aside className="lg:col-span-1 space-y-4">
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">
-            <h3 className="font-semibold text-sm mb-2 dark:text-slate-100">Notes</h3>
+        {/* NOTES SIDEBAR */}
+        <aside className="lg:col-span-1 space-y-5">
+          <Card title="Notes">
             <input
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -713,18 +699,18 @@ const BorrowerDetails = () => {
                   e.currentTarget.value = "";
                 }
               }}
-              placeholder="Add a note…"
-              className="w-full border rounded px-3 py-2 text-sm mb-3 dark:bg-slate-950 dark:border-slate-700 dark:text-slate-100"
+              placeholder="Add a note and press Enter…"
+              className="w-full border rounded-lg px-3 py-2 text-sm mb-3"
             />
             {comments.length === 0 ? (
-              <div className="text-xs text-gray-500 dark:text-slate-400">No notes yet.</div>
+              <div className="text-xs text-slate-500">No notes yet.</div>
             ) : (
               <>
                 <ul className="space-y-2">
-                  {(showAllComments ? comments : comments.slice(0, 3)).map((c, i) => (
-                    <li key={`${i}-${c.createdAt}`} className="border rounded p-2 text-xs dark:border-slate-700">
-                      <div className="dark:text-slate-100">{c.content}</div>
-                      <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-1">
+                  {visibleComments.map((c, i) => (
+                    <li key={`${i}-${c.createdAt}`} className="border rounded-lg p-2 text-xs">
+                      <div className="text-slate-900">{c.content}</div>
+                      <div className="text-[10px] text-slate-500 mt-1">
                         {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
                       </div>
                     </li>
@@ -733,18 +719,18 @@ const BorrowerDetails = () => {
                 {comments.length > 3 && (
                   <button
                     onClick={() => setShowAllComments((s) => !s)}
-                    className="mt-2 text-xs px-2 py-1 rounded border w-full dark:border-slate-700 dark:text-slate-100"
+                    className="mt-3 w-full text-xs px-2 py-1 rounded-lg border"
                   >
                     {showAllComments ? "Show less" : `Show all (${comments.length})`}
                   </button>
                 )}
               </>
             )}
-          </div>
+          </Card>
         </aside>
       </div>
 
-      {/* Schedule modal */}
+      {/* Modals */}
       {showScheduleModal && selectedLoan && (
         <LoanScheduleModal
           loan={selectedLoan}
@@ -753,7 +739,6 @@ const BorrowerDetails = () => {
         />
       )}
 
-      {/* Repayment modal */}
       {showRepaymentModal && selectedLoanForRepayment && (
         <RepaymentModal
           isOpen={showRepaymentModal}
@@ -766,50 +751,48 @@ const BorrowerDetails = () => {
   );
 };
 
-/* ------- Small subcomponents ------- */
-const ContactCard = ({ title, name, phone, email, sub }) => {
-  const tel = phone ? `tel:${phone}` : undefined;
-  const sms = phone ? `sms:${phone}` : undefined;
-  const wa = phone ? `https://wa.me/${String(phone).replace(/[^\d]/g, "")}` : undefined;
-  const mail = email ? `mailto:${email}` : undefined;
+/* ---------- Support UI pieces ---------- */
+const Empty = ({ text }) => (
+  <div className="p-6 text-sm text-slate-600 border border-dashed rounded-2xl">{text}</div>
+);
 
+const Table = ({ head = [], rows = [] }) => (
+  <div className="overflow-auto rounded-xl ring-1 ring-slate-200">
+    <table className="min-w-full text-sm">
+      <thead className="bg-slate-50">
+        <tr className="text-left text-slate-700">
+          {head.map((h, i) => (
+            <th key={i} className={`px-3 py-2 ${i === head.length - 1 ? "text-right" : ""}`}>
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={i} className="odd:bg-white even:bg-slate-50">
+            {r.map((c, j) => (
+              <td key={j} className={`px-3 py-2 align-top ${j === head.length - 1 ? "text-right" : ""}`}>
+                {c}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+const BadgeCard = ({ label, value, tone = "emerald" }) => {
+  const toneMap = {
+    emerald: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+    sky: "bg-sky-50 text-sky-700",
+    rose: "bg-rose-50 text-rose-700",
+  };
   return (
-    <div className="border rounded-xl p-3 dark:border-slate-800">
-      <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">{title}</div>
-      <div className="font-medium dark:text-slate-100">{name || "—"}</div>
-      {sub && <div className="text-xs text-gray-500 dark:text-slate-400">{sub}</div>}
-      <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-        {phone || email ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {phone && <span>{phone}</span>}
-            {tel && (
-              <a className="underline text-indigo-600" href={tel}>
-                Call
-              </a>
-            )}
-            {sms && (
-              <a className="underline text-indigo-600" href={sms}>
-                SMS
-              </a>
-            )}
-            {wa && (
-              <a className="underline text-indigo-600" href={wa} target="_blank" rel="noreferrer">
-                WhatsApp
-              </a>
-            )}
-            {email && (
-              <>
-                <span>• {email}</span>
-                <a className="underline text-indigo-600" href={mail}>
-                  Email
-                </a>
-              </>
-            )}
-          </div>
-        ) : (
-          "No contact on file"
-        )}
-      </div>
+    <div className={`p-3 rounded-xl ${toneMap[tone]} text-sm`}>
+      {label}: <strong>{value}</strong>
     </div>
   );
 };
@@ -848,21 +831,18 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h4 className="font-semibold mb-2 dark:text-gray-100">📜 Activity Timeline</h4>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="font-semibold text-slate-900">📜 Activity Timeline</h4>
         {canAddRepayment && (
-          <button
-            onClick={onAddRepayment}
-            className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
-          >
+          <button onClick={onAddRepayment} className="px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">
             Record Repayment
           </button>
         )}
       </div>
       <ul className="space-y-2 text-sm">
         {items.map((item, i) => (
-          <li key={i} className="border-l-4 pl-2 border-gray-300 dark:border-slate-700 dark:text-slate-200">
-            <span className="text-gray-500 dark:text-slate-400">
+          <li key={i} className="border-l-4 pl-3 border-slate-300 text-slate-800">
+            <span className="text-slate-500">
               {item.date ? new Date(item.date).toLocaleDateString() : "—"}
             </span>{" "}
             – {item.text}
