@@ -46,15 +46,20 @@ const statusChipCls = (status) => {
   }
 };
 
-/* resilient GET across possible mounts */
+/* resilient GET that logs which path succeeded */
 const tryGET = async (paths = [], opts = {}) => {
+  let lastErr;
   for (const p of paths) {
     try {
       const res = await api.get(p, opts);
+      console.debug("[BorrowerDetails] GET OK:", p); // <-- quick smoke log
       return res?.data;
-    } catch {}
+    } catch (e) {
+      lastErr = e;
+      console.debug("[BorrowerDetails] GET failed:", p);
+    }
   }
-  throw new Error(`All endpoints failed: ${paths.join(", ")}`);
+  throw lastErr || new Error(`All endpoints failed: ${paths.join(", ")}`);
 };
 
 const BorrowerDetails = () => {
@@ -80,6 +85,10 @@ const BorrowerDetails = () => {
   const [filteredSavings, setFilteredSavings] = useState([]);
   const [savingsBalance, setSavingsBalance] = useState(0);
   const [filterType, setFilterType] = useState("all");
+
+  // counts for quick-link badges
+  const loansCount = loans?.length || 0;
+  const repaymentsCount = repayments?.length || 0;
 
   const fetchBorrowerBundle = async () => {
     try {
@@ -177,21 +186,21 @@ const BorrowerDetails = () => {
       items.push({
         type: "loan",
         date: l.createdAt || l.disbursedAt || l.updatedAt || new Date().toISOString(),
-        text: `Loan ${l.id} - ${String(l.status || "").toUpperCase()}`,
+        text: `Loan ${l.id} • ${String(l.status || "").toUpperCase()}`,
       })
     );
     repayments.forEach((r) =>
       items.push({
         type: "repayment",
         date: r.date || r.createdAt || new Date().toISOString(),
-        text: `Repayment of ${money(r.amount)}`,
+        text: `Repayment • ${money(r.amount)} • Loan ${r.loanId || "—"}`,
       })
     );
     savings.forEach((s) =>
       items.push({
         type: "savings",
         date: s.date || s.createdAt || new Date().toISOString(),
-        text: `${s.type} of ${money(s.amount)}`,
+        text: `${s.type} • ${money(s.amount)}`,
       })
     );
     comments.forEach((c) =>
@@ -289,13 +298,19 @@ const BorrowerDetails = () => {
           </div>
         </div>
 
-        {/* Quick links */}
-        <div className="mt-3 flex flex-wrap gap-2 text-sm">
-          <Link to={`/loans?borrowerId=${encodeURIComponent(borrower.id)}`} className="text-indigo-600 hover:underline dark:text-indigo-400">Loans</Link>
+        {/* Quick links with counts */}
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <Link to={`/loans?borrowerId=${encodeURIComponent(borrower.id)}`} className="text-indigo-600 hover:underline dark:text-indigo-400">
+            Loans <span className="ml-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[11px] dark:bg-indigo-900/30 dark:text-indigo-200">{loansCount}</span>
+          </Link>
           <span className="text-gray-400">·</span>
-          <Link to={`/savings?borrowerId=${encodeURIComponent(borrower.id)}`} className="text-indigo-600 hover:underline dark:text-indigo-400">Savings</Link>
+          <Link to={`/savings?borrowerId=${encodeURIComponent(borrower.id)}`} className="text-indigo-600 hover:underline dark:text-indigo-400">
+            Savings
+          </Link>
           <span className="text-gray-400">·</span>
-          <Link to={`/repayments?borrowerId=${encodeURIComponent(borrower.id)}`} className="text-indigo-600 hover:underline dark:text-indigo-400">Repayments</Link>
+          <Link to={`/repayments?borrowerId=${encodeURIComponent(borrower.id)}`} className="text-indigo-600 hover:underline dark:text-indigo-400">
+            Repayments <span className="ml-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[11px] dark:bg-indigo-900/30 dark:text-indigo-200">{repaymentsCount}</span>
+          </Link>
           <span className="text-gray-400">·</span>
           <Link to={`/borrowers/${encodeURIComponent(borrower.id)}`} className="text-indigo-600 hover:underline dark:text-indigo-400">Profile</Link>
           <span className="text-gray-400">·</span>
@@ -335,18 +350,29 @@ const BorrowerDetails = () => {
         </p>
       </div>
 
-      {/* Loans */}
-      {!!loans.length && (
-        <div className="bg-white rounded shadow p-4 dark:bg-slate-900 dark:border dark:border-slate-800">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold dark:text-slate-100">Loans</h3>
+      {/* Loans (show even if empty) */}
+      <div className="bg-white rounded shadow p-4 dark:bg-slate-900 dark:border dark:border-slate-800">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold dark:text-slate-100">Loans</h3>
+          <Link
+            to={`/loans?borrowerId=${encodeURIComponent(borrower.id)}`}
+            className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            View all loans
+          </Link>
+        </div>
+
+        {loans.length === 0 ? (
+          <div className="p-4 text-sm text-gray-600 dark:text-slate-300 border rounded dark:border-slate-800">
+            No loans for this borrower yet.
             <Link
-              to={`/loans?borrowerId=${encodeURIComponent(borrower.id)}`}
-              className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+              to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}`}
+              className="ml-2 text-indigo-600 hover:underline dark:text-indigo-400"
             >
-              View all loans
+              Create new loan
             </Link>
           </div>
+        ) : (
           <div className="overflow-auto">
             <table className="w-full text-sm">
               <thead>
@@ -398,21 +424,26 @@ const BorrowerDetails = () => {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Recent repayments */}
-      {!!repayments.length && (
-        <div className="bg-white rounded shadow p-4 dark:bg-slate-900 dark:border dark:border-slate-800">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold dark:text-slate-100">Recent Repayments</h3>
-            <Link
-              to={`/repayments?borrowerId=${encodeURIComponent(borrower.id)}`}
-              className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
-            >
-              View all repayments
-            </Link>
+      {/* Recent repayments (show even if empty) */}
+      <div className="bg-white rounded shadow p-4 dark:bg-slate-900 dark:border dark:border-slate-800">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold dark:text-slate-100">Recent Repayments</h3>
+          <Link
+            to={`/repayments?borrowerId=${encodeURIComponent(borrower.id)}`}
+            className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            View all repayments
+          </Link>
+        </div>
+
+        {repayments.length === 0 ? (
+          <div className="p-4 text-sm text-gray-600 dark:text-slate-300 border rounded dark:border-slate-800">
+            No repayments recorded for this borrower yet.
           </div>
+        ) : (
           <div className="overflow-auto">
             <table className="w-full text-sm">
               <thead>
@@ -454,23 +485,29 @@ const BorrowerDetails = () => {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Comments */}
       <div className="bg-white rounded shadow p-4 dark:bg-slate-900 dark:border dark:border-slate-800">
         <h3 className="font-semibold mb-2 dark:text-slate-100">Comments</h3>
         <CommentInput onAdd={handleAddComment} />
-        <ul className="space-y-2 text-sm">
-          {comments.map((c, i) => (
-            <li key={`${i}-${c.createdAt}`} className="border rounded p-2 dark:border-slate-700">
-              <div className="dark:text-slate-100">{c.content}</div>
-              <div className="text-xs text-gray-500 dark:text-slate-400">
-                {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
-              </div>
-            </li>
-          ))}
-        </ul>
+        {comments.length === 0 ? (
+          <div className="p-4 text-sm text-gray-600 dark:text-slate-300 border rounded dark:border-slate-800">
+            No comments yet.
+          </div>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {comments.map((c, i) => (
+              <li key={`${i}-${c.createdAt}`} className="border rounded p-2 dark:border-slate-700">
+                <div className="dark:text-slate-100">{c.content}</div>
+                <div className="text-xs text-gray-500 dark:text-slate-400">
+                  {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Savings summary & transactions */}
@@ -520,30 +557,36 @@ const BorrowerDetails = () => {
           </Link>
         </div>
 
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left border-b dark:border-slate-800 dark:text-slate-300">
-                <th className="px-3 py-2">Date</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Amount</th>
-                <th className="px-3 py-2">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSavings.map((tx, i) => (
-                <tr key={`${tx.id || i}`} className="border-b last:border-0 dark:border-slate-800">
-                  <td className="px-3 py-2 dark:text-slate-100">
-                    {tx.date ? new Date(tx.date).toLocaleDateString() : "—"}
-                  </td>
-                  <td className="px-3 py-2 capitalize dark:text-slate-100">{tx.type}</td>
-                  <td className="px-3 py-2 dark:text-slate-100">{money(tx.amount)}</td>
-                  <td className="px-3 py-2 dark:text-slate-100">{tx.notes || "—"}</td>
+        {filteredSavings.length === 0 ? (
+          <div className="p-4 text-sm text-gray-600 dark:text-slate-300 border rounded dark:border-slate-800">
+            No savings transactions for this borrower.
+          </div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b dark:border-slate-800 dark:text-slate-300">
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2">Amount</th>
+                  <th className="px-3 py-2">Notes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredSavings.map((tx, i) => (
+                  <tr key={`${tx.id || i}`} className="border-b last:border-0 dark:border-slate-800">
+                    <td className="px-3 py-2 dark:text-slate-100">
+                      {tx.date ? new Date(tx.date).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-3 py-2 capitalize dark:text-slate-100">{tx.type}</td>
+                    <td className="px-3 py-2 dark:text-slate-100">{money(tx.amount)}</td>
+                    <td className="px-3 py-2 dark:text-slate-100">{tx.notes || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Activity timeline */}
