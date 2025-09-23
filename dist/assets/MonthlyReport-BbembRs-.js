@@ -1,0 +1,1 @@
+import{j as t}from"./index-Ba7wW-0c.js";import{R as o}from"./ReportShell-CC6Vkbdk.js";function n(){return t.jsx(o,{title:"Monthly Report",endpoint:"/reports/monthly",columns:[]})}export{n as default};

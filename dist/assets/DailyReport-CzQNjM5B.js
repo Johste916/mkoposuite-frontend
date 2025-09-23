@@ -1,0 +1,1 @@
+import{j as t}from"./index-Ba7wW-0c.js";import{R as o}from"./ReportShell-CC6Vkbdk.js";function p(){return t.jsx(o,{title:"Daily Report",endpoint:"/reports/daily",mode:"snapshot",columns:[]})}export{p as default};

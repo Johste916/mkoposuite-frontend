@@ -1,1 +1,0 @@
-import{j as t}from"./index-CSL_HVM5.js";import{R as e}from"./ReportShell-hzisRrAA.js";function o(){return t.jsx(e,{title:"Disbursement Report",endpoint:"/reports/disbursements/summary",columns:[]})}export{o as default};
