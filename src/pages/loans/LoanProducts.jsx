@@ -1,3 +1,4 @@
+// src/pages/loans/LoanProducts.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api";
@@ -104,7 +105,10 @@ export default function LoanProducts() {
   // actions
   const startCreate = () => navigate("/loans/products/new");
   const startEdit = (p) => navigate(`/loans/products/${p.id}/edit`);
-  const startView = (p) => { setViewItem(p); setOpenView(true); };
+  const startView = (p) => {
+    setViewItem(p);
+    setOpenView(true);
+  };
 
   const toggle = async (p) => {
     if (!confirm(`Set "${p.name}" to ${p.status === "active" ? "inactive" : "active"}?`)) return;
@@ -191,7 +195,9 @@ export default function LoanProducts() {
               }}
             >
               {[10, 20, 50].map((n) => (
-                <option key={n} value={n}>{n}</option>
+                <option key={n} value={n}>
+                  {n}
+                </option>
               ))}
             </select>
           </label>
@@ -217,10 +223,14 @@ export default function LoanProducts() {
                   <Th id="name">Name</Th>
                   <Th id="code">Code</Th>
                   <Th id="interestMethod">Method</Th>
-                  <Th id="interestRate" className="text-right">Rate (%)</Th>
+                  <Th id="interestRate" className="text-right">
+                    Rate (%)
+                  </Th>
                   <th className="p-2 border-b border-[var(--border)] text-right">Principal Range</th>
                   <th className="p-2 border-b border-[var(--border)] text-right">Term Range</th>
-                  <Th id="penaltyRate" className="text-right">Penalty (%)</Th>
+                  <Th id="penaltyRate" className="text-right">
+                    Penalty (%)
+                  </Th>
                   <Th id="status">Status</Th>
                   <th className="p-2 border-b border-[var(--border)]">Actions</th>
                 </tr>
@@ -233,8 +243,7 @@ export default function LoanProducts() {
                     <td className="px-2 py-2">{p.interestMethod}</td>
                     <td className="px-2 py-2 text-right">{p.interestRate ?? "—"}</td>
                     <td className="px-2 py-2 text-right">
-                      {p.minPrincipal != null ? fmtNum(p.minPrincipal) : "—"} –{" "}
-                      {p.maxPrincipal != null ? fmtNum(p.maxPrincipal) : "—"}
+                      {p.minPrincipal != null ? fmtNum(p.minPrincipal) : "—"} – {p.maxPrincipal != null ? fmtNum(p.maxPrincipal) : "—"}
                     </td>
                     <td className="px-2 py-2 text-right">
                       {p.minTermMonths ?? "—"} – {p.maxTermMonths ?? "—"} m
@@ -245,12 +254,18 @@ export default function LoanProducts() {
                     </td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-3 text-sm">
-                        <button className="text-indigo-600 hover:underline" onClick={() => startView(p)}>View</button>
-                        <button className="text-blue-600 hover:underline" onClick={() => startEdit(p)}>Edit</button>
+                        <button className="text-indigo-600 hover:underline" onClick={() => startView(p)}>
+                          View
+                        </button>
+                        <button className="text-blue-600 hover:underline" onClick={() => startEdit(p)}>
+                          Edit
+                        </button>
                         <button className="text-amber-700 hover:underline" onClick={() => toggle(p)}>
                           {p.status === "active" ? "Deactivate" : "Activate"}
                         </button>
-                        <button className="text-rose-600 hover:underline" onClick={() => remove(p)}>Delete</button>
+                        <button className="text-rose-600 hover:underline" onClick={() => remove(p)}>
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -276,7 +291,9 @@ export default function LoanProducts() {
                 >
                   Prev
                 </button>
-                <div className="text-sm">{page} / {totalPages}</div>
+                <div className="text-sm">
+                  {page} / {totalPages}
+                </div>
                 <button
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -339,8 +356,7 @@ export default function LoanProducts() {
               <div className="col-span-2">
                 <div className="text-xs uppercase tracking-wide muted">Principal Range</div>
                 <div>
-                  {viewItem.minPrincipal != null ? fmtNum(viewItem.minPrincipal) : "—"} –{" "}
-                  {viewItem.maxPrincipal != null ? fmtNum(viewItem.maxPrincipal) : "—"}
+                  {viewItem.minPrincipal != null ? fmtNum(viewItem.minPrincipal) : "—"} – {viewItem.maxPrincipal != null ? fmtNum(viewItem.maxPrincipal) : "—"}
                 </div>
               </div>
             </div>

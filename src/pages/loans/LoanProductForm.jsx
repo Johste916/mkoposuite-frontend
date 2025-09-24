@@ -1,5 +1,5 @@
 // src/pages/loans/LoanProductForm.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../../api";
 
@@ -33,7 +33,7 @@ export default function LoanProductForm() {
   const [loading, setLoading] = useState(editing);
   const [errors, setErrors] = useState({});
 
-  // Keep ALL inputs as strings while typing (prevents value “jumping”)
+  // Keep ALL inputs as strings while typing (prevents value “jumping”/clearing)
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -48,41 +48,46 @@ export default function LoanProductForm() {
     description: "",
   });
 
+  // stable setter
+  const set = useCallback((k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+  }, []);
+
   useEffect(() => {
     if (!editing) return;
     (async () => {
       try {
         const { data } = await api.get(`/loan-products/${id}`);
         setForm({
-          name: data.name || "",
-          code: data.code || "",
-          status: data.status || "active",
-          interestMethod: data.interestMethod || "flat",
+          name: data?.name ?? "",
+          code: data?.code ?? "",
+          status: data?.status ?? "active",
+          interestMethod: data?.interestMethod ?? "flat",
           interestRate:
-            data.interestRate === 0 || data.interestRate
+            data?.interestRate === 0 || data?.interestRate
               ? String(data.interestRate)
               : "",
           minPrincipal:
-            data.minPrincipal === 0 || data.minPrincipal
+            data?.minPrincipal === 0 || data?.minPrincipal
               ? String(data.minPrincipal)
               : "",
           maxPrincipal:
-            data.maxPrincipal === 0 || data.maxPrincipal
+            data?.maxPrincipal === 0 || data?.maxPrincipal
               ? String(data.maxPrincipal)
               : "",
           minTermMonths:
-            data.minTermMonths === 0 || data.minTermMonths
+            data?.minTermMonths === 0 || data?.minTermMonths
               ? String(data.minTermMonths)
               : "",
           maxTermMonths:
-            data.maxTermMonths === 0 || data.maxTermMonths
+            data?.maxTermMonths === 0 || data?.maxTermMonths
               ? String(data.maxTermMonths)
               : "",
           penaltyRate:
-            data.penaltyRate === 0 || data.penaltyRate
+            data?.penaltyRate === 0 || data?.penaltyRate
               ? String(data.penaltyRate)
               : "",
-          description: data.description || "",
+          description: data?.description ?? "",
         });
       } catch {
         alert("Failed to load product");
@@ -93,11 +98,15 @@ export default function LoanProductForm() {
     })();
   }, [editing, id, navigate]);
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  // Stop inputs losing focus due to global key handlers
+  // Stop inputs losing focus / getting cleared by global listeners
   const stopBubble = (e) => {
     e.stopPropagation();
+  };
+  const preventWheelChange = (e) => {
+    // Avoid number inputs changing on mouse wheel and then “snapping back”
+    e.target.blur();
+    e.stopPropagation();
+    setTimeout(() => e.target && e.target.focus(), 0);
   };
 
   const validate = () => {
@@ -193,6 +202,7 @@ export default function LoanProductForm() {
             <Field label="Name" error={errors.name}>
               <input
                 {...antiInjectorProps}
+                name="name"
                 className={inputClass}
                 value={form.name}
                 onKeyDown={stopBubble}
@@ -205,6 +215,7 @@ export default function LoanProductForm() {
             <Field label="Code" error={errors.code}>
               <input
                 {...antiInjectorProps}
+                name="code"
                 className={inputClass}
                 value={form.code}
                 onKeyDown={stopBubble}
@@ -218,6 +229,7 @@ export default function LoanProductForm() {
             <Field label="Status">
               <select
                 {...antiInjectorProps}
+                name="status"
                 className={inputClass}
                 value={form.status}
                 onKeyDown={stopBubble}
@@ -231,6 +243,7 @@ export default function LoanProductForm() {
             <Field label="Interest Method">
               <select
                 {...antiInjectorProps}
+                name="interestMethod"
                 className={inputClass}
                 value={form.interestMethod}
                 onKeyDown={stopBubble}
@@ -244,10 +257,12 @@ export default function LoanProductForm() {
             <Field label="Interest Rate (%)" error={errors.interestRate}>
               <input
                 {...antiInjectorProps}
+                name="interestRate"
                 type="number"
                 step="0.0001"
                 className={inputClass}
                 value={form.interestRate}
+                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
                 onChange={(e) => set("interestRate", e.target.value)}
                 placeholder="e.g. 3"
@@ -258,10 +273,12 @@ export default function LoanProductForm() {
             <Field label="Penalty Rate (%)">
               <input
                 {...antiInjectorProps}
+                name="penaltyRate"
                 type="number"
                 step="0.0001"
                 className={inputClass}
                 value={form.penaltyRate}
+                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
                 onChange={(e) => set("penaltyRate", e.target.value)}
                 placeholder="e.g. 1.5"
@@ -272,9 +289,11 @@ export default function LoanProductForm() {
             <Field label="Min Principal">
               <input
                 {...antiInjectorProps}
+                name="minPrincipal"
                 type="number"
                 className={inputClass}
                 value={form.minPrincipal}
+                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
                 onChange={(e) => set("minPrincipal", e.target.value)}
                 placeholder="e.g. 100000"
@@ -285,9 +304,11 @@ export default function LoanProductForm() {
             <Field label="Max Principal" error={errors.maxPrincipal}>
               <input
                 {...antiInjectorProps}
+                name="maxPrincipal"
                 type="number"
                 className={inputClass}
                 value={form.maxPrincipal}
+                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
                 onChange={(e) => set("maxPrincipal", e.target.value)}
                 placeholder="e.g. 10000000"
@@ -298,9 +319,11 @@ export default function LoanProductForm() {
             <Field label="Min Term (months)">
               <input
                 {...antiInjectorProps}
+                name="minTermMonths"
                 type="number"
                 className={inputClass}
                 value={form.minTermMonths}
+                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
                 onChange={(e) => set("minTermMonths", e.target.value)}
                 placeholder="e.g. 3"
@@ -311,9 +334,11 @@ export default function LoanProductForm() {
             <Field label="Max Term (months)" error={errors.maxTermMonths}>
               <input
                 {...antiInjectorProps}
+                name="maxTermMonths"
                 type="number"
                 className={inputClass}
                 value={form.maxTermMonths}
+                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
                 onChange={(e) => set("maxTermMonths", e.target.value)}
                 placeholder="e.g. 36"
@@ -325,6 +350,7 @@ export default function LoanProductForm() {
               <Field label="Internal Notes / Description">
                 <textarea
                   {...antiInjectorProps}
+                  name="description"
                   rows={3}
                   className={inputClass}
                   value={form.description || ""}

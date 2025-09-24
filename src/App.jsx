@@ -1,3 +1,4 @@
+// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -309,7 +310,7 @@ function App() {
                 />
                 <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
 
-                {/* Loan Products — list + full-page create/edit routes */}
+                {/* Loan Products — list + full-page create/edit */}
                 <Route
                   path="loans/products"
                   element={
