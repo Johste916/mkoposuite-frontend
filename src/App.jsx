@@ -1,4 +1,3 @@
-// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -57,40 +56,32 @@ const BulkRepayments = lazy(() => import("./pages/repayments/BulkRepayments"));
 const RepaymentCharts = lazy(() => import("./pages/repayments/RepaymentCharts"));
 const ApproveRepayments = lazy(() => import("./pages/repayments/ApproveRepayments"));
 
-// Misc (legacy/back-compat)
+// Misc
 const Disbursements = lazy(() => import("./pages/Disbursements"));
-const Sms = lazy(() => import("./pages/Sms")); // legacy/simple console
+const Sms = lazy(() => import("./pages/Sms"));
 
-// ✅ Banking (existing)
+// Banking
 const BanksList = lazy(() => import("./pages/banks/BanksList"));
 const BankForm = lazy(() => import("./pages/banks/BankForm"));
 const BankDetails = lazy(() => import("./pages/banks/BankDetails"));
-// ✅ Banking (generic features)
 const BankTransactions = lazy(() => import("./pages/banks/BankTransactions"));
 const BankTransfers = lazy(() => import("./pages/banks/BankTransfers"));
 const BankReconciliation = lazy(() => import("./pages/banks/BankReconciliation"));
 const BankStatements = lazy(() => import("./pages/banks/BankStatements"));
-
-// ✅ New Banking pages
 const BankApprovals = lazy(() => import("./pages/banks/BankApprovals"));
 const RulesGlMapping = lazy(() => import("./pages/banks/RulesGlMapping"));
 const ImportBankCsv = lazy(() => import("./pages/banks/ImportBankCsv"));
 const CashStatement = lazy(() => import("./pages/banks/CashStatements"));
 const CashReconciliation = lazy(() => import("./pages/banks/CashReconciliation"));
-
-// ✅ Cash pages
 const CashTransactions = lazy(() => import("./pages/banks/CashTransactions"));
 const CashTransactionForm = lazy(() => import("./pages/banks/CashTransactionForm"));
-// NEW: Cash Accounts management
 const CashAccountsList = lazy(() => import("./pages/banks/CashAccountsList"));
 const CashAccountForm = lazy(() => import("./pages/banks/CashAccountForm"));
 
-// User management (modular pages)
+// User management
 const Users = lazy(() => import("./pages/user-management/Users"));
 const Roles = lazy(() => import("./pages/user-management/Roles"));
 const Permissions = lazy(() => import("./pages/user-management/Permissions"));
-
-// ✅ NEW: all-in-one Staff/User management page (enriched)
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 
 const Branches = lazy(() => import("./pages/Branches"));
@@ -104,11 +95,10 @@ const Organization = lazy(() => import("./pages/account/Organization"));
 const Profile = lazy(() => import("./pages/account/Profile"));
 const AdminTenants = lazy(() => import("./pages/admin/Tenants"));
 
-// NEW MODULES
+// New modules
 const CollateralList = lazy(() => import("./pages/collateral/CollateralList"));
 const CollateralForm = lazy(() => import("./pages/collateral/CollateralForm"));
 const Assets = lazy(() => import("./pages/assets/Assets"));
-
 const CollectionSheets = lazy(() => import("./pages/collections/CollectionSheets"));
 const CollectionSheetCreate = lazy(() => import("./pages/collections/CollectionSheetCreate"));
 const CollectionSheetEdit = lazy(() => import("./pages/collections/CollectionSheetEdit"));
@@ -173,12 +163,10 @@ const AllEntries = lazy(() => import("./pages/reports/AllEntries"));
 /* ---------- NEW PAGES wired to src/pages/*.jsx ---------- */
 const Subscription = lazy(() => import("./pages/Subscription"));
 const SupportTickets = lazy(() => import("./pages/SupportTickets"));
-const SMSConsole = lazy(() => import("./pages/SMSConsole")); // legacy/simple console replacement
+const SMSConsole = lazy(() => import("./pages/SMSConsole"));
 const BillingByPhone = lazy(() => import("./pages/BillingByPhone"));
 const ImpersonateTenant = lazy(() => import("./pages/ImpersonateTenant"));
 const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
-
-// NEW: Modern SMS Center page
 const SmsCenter = lazy(() => import("./pages/SmsCenter"));
 
 /* ---------- Small themed fallbacks ---------- */
@@ -297,11 +285,11 @@ function App() {
                 <Route path="borrowers/sms" element={<Sms />} />
                 <Route
                   path="borrowers/email"
-                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>}
+                  element={<div className="card p-4">Send Email to Borrowers</div>}
                 />
                 <Route
                   path="borrowers/invite"
-                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>}
+                  element={<div className="card p-4">Invite Borrowers</div>}
                 />
 
                 {/* Groups */}
@@ -413,7 +401,7 @@ function App() {
                 <Route path="collections/sms" element={<Sms />} />
                 <Route
                   path="collections/email"
-                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>}
+                  element={<div className="card p-4">Send Collection Emails</div>}
                 />
 
                 {/* Savings */}
@@ -425,13 +413,11 @@ function App() {
                 <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
                 <Route path="savings-transactions/*" element={<Navigate to="/savings/transactions" replace />} />
 
-                {/* ✅ Banking */}
+                {/* Banking */}
                 <Route path="banks" element={<BanksList />} />
                 <Route path="banks/add" element={<BankForm />} />
                 <Route path="banks/:id" element={<BankDetails />} />
                 <Route path="banks/:id/edit" element={<BankForm />} />
-
-                {/* Banking features under the same section */}
                 <Route path="banks/transactions" element={<BankTransactions />} />
                 <Route path="banks/transfers" element={<BankTransfers />} />
                 <Route path="banks/reconciliation" element={<BankReconciliation />} />
@@ -451,7 +437,6 @@ function App() {
                 {/* Helpful aliases */}
                 <Route path="bank-accounts" element={<Navigate to="/banks" replace />} />
                 <Route path="bank-accounts/add" element={<Navigate to="/banks/add" replace />} />
-                {/* Legacy redirects */}
                 <Route path="bank" element={<Navigate to="/banks" replace />} />
                 <Route path="banking" element={<Navigate to="/banks" replace />} />
 
@@ -529,21 +514,12 @@ function App() {
 
                 {/* Other Income */}
                 <Route path="other-income" element={<OtherIncome />} />
-                <Route
-                  path="other-income/add"
-                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>}
-                />
-                <Route
-                  path="other-income/csv"
-                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>}
-                />
+                <Route path="other-income/add" element={<div className="card p-4">Add Other Income</div>} />
+                <Route path="other-income/csv" element={<div className="card p-4">Upload Other Income CSV</div>} />
 
                 {/* Assets */}
                 <Route path="assets" element={<Assets />} />
-                <Route
-                  path="assets/add"
-                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>}
-                />
+                <Route path="assets/add" element={<div className="card p-4">Add Asset</div>} />
 
                 {/* Accounting */}
                 <Route
@@ -614,7 +590,7 @@ function App() {
                   }
                 />
 
-                {/* ✅ NEW: User Management routes (index shows all-in-one page) */}
+                {/* User Management */}
                 <Route
                   path="user-management"
                   element={
@@ -629,7 +605,7 @@ function App() {
                   <Route path="permissions" element={<Permissions />} />
                 </Route>
 
-                {/* Friendly aliases to avoid breaking old links */}
+                {/* Aliases */}
                 <Route path="users" element={<Navigate to="/user-management/users" replace />} />
                 <Route path="roles" element={<Navigate to="/user-management/roles" replace />} />
                 <Route path="permissions" element={<Navigate to="/user-management/permissions" replace />} />
@@ -640,7 +616,7 @@ function App() {
                 {/* Branches */}
                 <Route path="branches" element={<Branches />} />
 
-                {/* Legacy (kept Disbursements & Sms) */}
+                {/* Legacy */}
                 <Route path="disbursements" element={<Disbursements />} />
                 <Route path="sms" element={<Sms />} />
 

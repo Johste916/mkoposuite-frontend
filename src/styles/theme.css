@@ -14,6 +14,16 @@
   --menu-bg: #ffffff;
   --menu-fg: var(--fg);
   --menu-shadow: 0 8px 28px rgba(0,0,0,.12);
+
+  /* Table/KPI helpers */
+  --table-head-bg: #f8fafc;
+  --table-foot-bg: #f8fafc;
+  --table-row-odd: #ffffff;
+  --table-row-even: #fbfdff;
+  --kpi-bg: #f8fafc;
+
+  --badge-bg: #e2e8f0;
+  --badge-fg: #334155;
 }
 
 /* Auto-dark when no explicit theme forced */
@@ -32,48 +42,28 @@
     --input-border: #273244;
     --menu-bg: #0f141c;
     --menu-fg: var(--fg);
+
+    --table-head-bg: #111927;
+    --table-foot-bg: #111927;
+    --table-row-odd: #0f172a;
+    --table-row-even: #0e1526;
+    --kpi-bg: #0e1526;
+
+    --badge-bg: #1f2937;
+    --badge-fg: #cbd5e1;
   }
 }
 
 /* Forced theme via data attribute */
-[data-theme="light"] {
-  --bg: #ffffff;
-  --fg: #0b0f14;
-  --muted: #6b7280;
-  --card: #ffffff;
-  --border: #e5e7eb;
-  --ring: #2563eb;
-
-  --input-bg: #ffffff;
-  --input-fg: var(--fg);
-  --input-placeholder: var(--muted);
-  --input-border: var(--border);
-  --menu-bg: #ffffff;
-  --menu-fg: var(--fg);
-}
-
-[data-theme="dark"] {
-  --bg: #0b0f14;
-  --fg: #edf1f7;
-  --muted: #9aa4b2;
-  --card: #0f141c;
-  --border: #1f2937;
-  --ring: #60a5fa;
-
-  --input-bg: #111827;
-  --input-fg: var(--fg);
-  --input-placeholder: var(--muted);
-  --input-border: #273244;
-  --menu-bg: #0f141c;
-  --menu-fg: var(--fg);
-}
+[data-theme="light"] { }
+[data-theme="dark"]  { }
 
 /* ---------- Global app surfaces ---------- */
-html{ font-size: 15px; color-scheme: light dark; }
-body{ background: var(--bg); color: var(--fg); }
+html { font-size: 15px; color-scheme: light dark; }
+body { background: var(--bg); color: var(--fg); }
 
 /* Focus ring */
-:focus-visible{ outline: 2px solid var(--ring); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* ---------- Reusable components ---------- */
 
@@ -94,11 +84,11 @@ input::placeholder, textarea::placeholder { color: var(--input-placeholder); }
 /* Make native selects inherit theme */
 select, option { color: var(--input-fg); background-color: var(--input-bg); }
 
-/* Card & muted text helpers (used in your pages already) */
+/* Card & muted text helpers (used in pages) */
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; }
 .muted { color: var(--muted); }
 
-/* Dropdown/menus (for libs that mount popovers) */
+/* Dropdown/menus */
 .menu {
   background: var(--menu-bg);
   color: var(--menu-fg);

@@ -277,13 +277,13 @@ const Borrowers = () => {
         <div className="flex gap-2">
           <button
             onClick={() => navigate("/borrowers/add")}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+            className="btn-primary inline-flex items-center gap-2"
           >
             <PlusCircle className="w-4 h-4" /> Add Borrower
           </button>
           <button
             onClick={() => pushToast("CSV import coming soon", "info")}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 shadow-sm dark:bg-slate-900 dark:hover:bg-slate-800 border-[var(--border)]"
+            className="btn-ghost inline-flex items-center gap-2"
           >
             <Upload className="w-4 h-4" /> Import CSV
           </button>
@@ -307,7 +307,7 @@ const Borrowers = () => {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            <div className="relative z-50 min-w-[200px]">
+            <div className="filter-field min-w-[200px]">
               <select
                 value={branchId}
                 onChange={(e) => {
@@ -325,7 +325,7 @@ const Borrowers = () => {
               </select>
             </div>
 
-            <div className="relative z-50 min-w-[200px]">
+            <div className="filter-field min-w-[200px]">
               <select
                 value={officerId}
                 onChange={(e) => {
@@ -343,7 +343,7 @@ const Borrowers = () => {
               </select>
             </div>
 
-            <div className="relative z-50 min-w-[180px]">
+            <div className="filter-field min-w-[180px]">
               <select
                 value={status}
                 onChange={(e) => {
@@ -372,7 +372,7 @@ const Borrowers = () => {
         <div className="overflow-x-auto">
           {/* Desktop table */}
           <table className="min-w-full text-sm hidden md:table">
-            <thead className="bg-gray-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <thead className="bg-[var(--table-head-bg)] text-[var(--fg)]/80">
               <tr>
                 <Th label="Name" sortKey="name" sort={sort} dir={dir} onSort={onSort} />
                 <Th label="Phone" sortKey="phone" sort={sort} dir={dir} onSort={onSort} />
@@ -396,7 +396,7 @@ const Borrowers = () => {
                 rows.map((b) => (
                   <tr
                     key={b.id}
-                    className="border-t border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
+                    className="border-t border-[var(--border)] hover:bg-[var(--hover)]"
                   >
                     <td className="px-4 py-2">{displayName(b)}</td>
                     <td className="px-4 py-2">{b.phone || "—"}</td>
@@ -410,13 +410,13 @@ const Borrowers = () => {
                       <div className="flex gap-3 justify-end">
                         <Link
                           to={`/borrowers/${encodeURIComponent(b.id)}`}
-                          className="text-indigo-600 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
+                          className="link"
                         >
                           View
                         </Link>
                         <Link
                           to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
-                          className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                          className="link-alt"
                         >
                           New Loan
                         </Link>
@@ -473,13 +473,13 @@ const Borrowers = () => {
                     <div className="mt-4 flex items-center justify-end gap-2">
                       <Link
                         to={`/borrowers/${encodeURIComponent(b.id)}`}
-                        className="px-3 py-2 text-sm rounded-lg border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
+                        className="btn-ghost"
                       >
                         View
                       </Link>
                       <Link
                         to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
-                        className="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                        className="btn-primary"
                       >
                         New Loan
                       </Link>
@@ -492,7 +492,7 @@ const Borrowers = () => {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-3 py-2 border-t text-sm rounded-b-xl bg-gray-50 dark:bg-slate-800 border-[var(--border)]">
+        <div className="flex items-center justify-between px-3 py-2 border-t text-sm rounded-b-xl bg-[var(--table-foot-bg)] border-[var(--border)]">
           <div className="muted">
             {pageFrom}–{pageTo} of {total}
           </div>
@@ -500,7 +500,7 @@ const Borrowers = () => {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-1.5 border rounded-lg disabled:opacity-50 bg-white dark:bg-slate-900 border-[var(--border)]"
+              className="btn-icon disabled:opacity-50"
               aria-label="Previous page"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -508,7 +508,7 @@ const Borrowers = () => {
             <button
               onClick={() => setPage((p) => (p * PAGE_SIZE < total ? p + 1 : p))}
               disabled={page * PAGE_SIZE >= total}
-              className="p-1.5 border rounded-lg disabled:opacity-50 bg-white dark:bg-slate-900 border-[var(--border)]"
+              className="btn-icon disabled:opacity-50"
               aria-label="Next page"
             >
               <ChevronRight className="w-4 h-4" />
@@ -529,7 +529,7 @@ const Borrowers = () => {
                 className={`px-3 py-2 text-sm border-b-2 -mb-px ${
                   drawerTab === t
                     ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 dark:text-slate-400"
+                    : "border-transparent muted"
                 }`}
               >
                 {t[0].toUpperCase() + t.slice(1)}
@@ -540,7 +540,7 @@ const Borrowers = () => {
           {/* Tab content */}
           <div>
             {drawerLoading ? (
-              <div className="text-slate-500 dark:text-slate-400 text-sm">Loading…</div>
+              <div className="muted text-sm">Loading…</div>
             ) : drawerTab === "overview" ? (
               <OverviewTab data={drawerData.overview} />
             ) : drawerTab === "loans" ? (
@@ -583,7 +583,7 @@ const Drawer = ({ title, onClose, children }) => (
         <h3 className="text-lg font-semibold">{title}</h3>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
+          className="p-1 rounded hover:bg-[var(--hover)]"
           aria-label="Close drawer"
         >
           <X className="w-5 h-5" />
@@ -595,7 +595,7 @@ const Drawer = ({ title, onClose, children }) => (
 );
 
 const OverviewTab = ({ data }) => {
-  if (!data) return <p className="text-slate-500 dark:text-slate-400 text-sm">No overview data.</p>;
+  if (!data) return <p className="muted text-sm">No overview data.</p>;
   const name = data.name || `${data.firstName || ""} ${data.lastName || ""}`.trim() || "—";
   const branch = data.branchName || data.Branch?.name || data.branch?.name || "—";
   const officer = data.officerName || data.officer?.name || data.loanOfficer?.name || "—";
@@ -620,12 +620,12 @@ const OverviewTab = ({ data }) => {
 
 const LoansTab = ({ items }) => {
   if (!Array.isArray(items) || items.length === 0) {
-    return <p className="text-slate-500 dark:text-slate-400 text-sm">No loans.</p>;
+    return <p className="muted text-sm">No loans.</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+        <thead className="bg-[var(--table-head-bg)] text-[var(--fg)]/80">
           <tr>
             <th className="px-3 py-2 text-left">Loan #</th>
             <th className="px-3 py-2 text-left">Product</th>
@@ -652,12 +652,12 @@ const LoansTab = ({ items }) => {
 
 const SavingsTab = ({ items }) => {
   if (!Array.isArray(items) || items.length === 0) {
-    return <p className="text-slate-500 dark:text-slate-400 text-sm">No savings accounts.</p>;
+    return <p className="muted text-sm">No savings accounts.</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+        <thead className="bg-[var(--table-head-bg)] text-[var(--fg)]/80">
           <tr>
             <th className="px-3 py-2 text-left">Account #</th>
             <th className="px-3 py-2 text-left">Balance</th>
@@ -684,13 +684,13 @@ const DocumentsTab = ({ items }) => {
       <div className="mb-3">
         <button
           onClick={() => alert("KYC upload coming soon")}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 shadow-sm dark:bg-slate-900 dark:hover:bg-slate-800 border-[var(--border)]"
+          className="btn-ghost inline-flex items-center gap-2"
         >
           <FileUp className="w-4 h-4" /> Upload Document
         </button>
       </div>
       {!Array.isArray(items) || items.length === 0 ? (
-        <p className="text-slate-500 dark:text-slate-400 text-sm">No documents.</p>
+        <p className="muted text-sm">No documents.</p>
       ) : (
         <ul className="space-y-2">
           {items.map((d) => (
@@ -699,14 +699,14 @@ const DocumentsTab = ({ items }) => {
                 <IdCard className="w-4 h-4 text-[var(--muted)]" />
                 <div>
                   <p className="text-sm font-medium">{d.fileName || "Document"}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs muted">
                     {d.type || "KYC"} • {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
                   </p>
                 </div>
               </div>
               {d.url && (
                 <a
-                  className="text-indigo-600 hover:text-indigo-800 underline text-sm dark:text-indigo-400 dark:hover:text-indigo-300"
+                  className="link text-sm"
                   href={d.url}
                   target="_blank"
                   rel="noreferrer"
@@ -725,13 +725,13 @@ const DocumentsTab = ({ items }) => {
 /* Small UI helpers */
 const InfoCard = ({ label, value }) => (
   <div className="card p-4 shadow-sm">
-    <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+    <p className="text-[11px] uppercase tracking-wide muted">{label}</p>
     <p className="text-base font-semibold mt-1">{value}</p>
   </div>
 );
 const Stat = ({ label, value }) => (
-  <div className="rounded-2xl p-4 border bg-gray-50 dark:bg-slate-800 border-[var(--border)]">
-    <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+  <div className="rounded-2xl p-4 border bg-[var(--kpi-bg)] border-[var(--border)]">
+    <p className="text-[11px] uppercase tracking-wide muted">{label}</p>
     <p className="text-xl font-semibold mt-1">{value}</p>
   </div>
 );
