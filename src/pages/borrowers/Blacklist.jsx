@@ -10,7 +10,8 @@ const BorrowerBlacklist = () => {
   const load = async (signal) => {
     try {
       setLoading(true);
-      const res = await api.get("/borrowers/blacklist/list", { signal });
+      const cfg = signal ? { signal } : {};
+      const res = await api.get("/borrowers/blacklist/list", cfg);
       const list = Array.isArray(res.data) ? res.data : res.data?.items || res.data?.data || [];
       setRows(list);
       setErr("");
@@ -54,16 +55,20 @@ const BorrowerBlacklist = () => {
     }
   };
 
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
+  const nameOf = (r) => r?.name || `${r?.firstName || ""} ${r?.lastName || ""}`.trim() || r?.id || "—";
+
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 md:p-6 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
       <h1 className="text-2xl font-semibold">Blacklist</h1>
 
-      <form onSubmit={onSubmit} className="bg-white rounded-xl border shadow p-4 space-y-3 max-w-2xl">
+      {/* Add form */}
+      <form onSubmit={onSubmit} className="card p-4 space-y-3 max-w-2xl">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <input
             name="borrowerId"
             placeholder="Borrower ID"
-            className="border rounded-lg px-3 py-2"
+            className="input"
             value={form.borrowerId}
             onChange={onChange}
             required
@@ -71,59 +76,63 @@ const BorrowerBlacklist = () => {
           <input
             name="reason"
             placeholder="Reason"
-            className="border rounded-lg px-3 py-2"
+            className="input"
             value={form.reason}
             onChange={onChange}
           />
           <input
             name="until"
             type="date"
-            className="border rounded-lg px-3 py-2"
+            className="input"
             value={form.until}
             onChange={onChange}
           />
         </div>
-        <button className="px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700">
+        <button className="inline-flex items-center px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700">
           Add to Blacklist
         </button>
       </form>
 
-      <div className="bg-white rounded-xl shadow border overflow-hidden">
+      {/* Table */}
+      <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <th className="px-3 py-2 text-left">Borrower</th>
-              <th className="px-3 py-2 text-left">Reason</th>
-              <th className="px-3 py-2 text-left">Until</th>
+          <thead className="bg-[var(--table-head-bg,transparent)]">
+            <tr className="text-left text-[var(--fg)]/80">
+              <th className="px-3 py-2">Borrower</th>
+              <th className="px-3 py-2">Reason</th>
+              <th className="px-3 py-2">Until</th>
               <th className="px-3 py-2 text-right pr-4">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td className="p-4 text-gray-500" colSpan={4}>Loading…</td></tr>
+              <tr>
+                <td className="p-4 muted" colSpan={4}>Loading…</td>
+              </tr>
             ) : err ? (
-              <tr><td className="p-4 text-red-600" colSpan={4}>{err}</td></tr>
+              <tr>
+                <td className="p-4 text-rose-600 dark:text-rose-400" colSpan={4}>{err}</td>
+              </tr>
             ) : rows.length === 0 ? (
-              <tr><td className="p-4 text-gray-500" colSpan={4}>No blacklisted borrowers.</td></tr>
+              <tr>
+                <td className="p-4 muted" colSpan={4}>No blacklisted borrowers.</td>
+              </tr>
             ) : (
-              rows.map((r) => {
-                const name = r.name || `${r.firstName || ""} ${r.lastName || ""}`.trim() || r.id;
-                return (
-                  <tr key={r.id} className="border-t">
-                    <td className="px-3 py-2">{name}</td>
-                    <td className="px-3 py-2">{r.reason || "—"}</td>
-                    <td className="px-3 py-2">{r.until ? new Date(r.until).toLocaleDateString() : "—"}</td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        className="px-2 py-1 border rounded hover:bg-gray-50"
-                        onClick={() => remove(r.id)}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
+              rows.map((r) => (
+                <tr key={r.id} className="border-t border-[var(--border)] odd:bg-[var(--table-row-odd,transparent)] even:bg-[var(--table-row-even,transparent)]">
+                  <td className="px-3 py-2">{nameOf(r)}</td>
+                  <td className="px-3 py-2">{r.reason || "—"}</td>
+                  <td className="px-3 py-2">{fmtDate(r.until)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      className="px-2 py-1 border rounded-lg hover:bg-[var(--hover,#f9fafb)] dark:hover:bg-[color-mix(in_oklab,var(--fg)_8%,transparent)] border-[var(--border)]"
+                      onClick={() => remove(r.id)}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
