@@ -1,12 +1,25 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../../api";
-import { Camera, Upload, Save, X, User, IdCard, Phone, Calendar, MapPin, Building2, UserPlus } from "lucide-react";
+import {
+  Camera,
+  Upload,
+  Save,
+  X,
+  User,
+  IdCard,
+  Phone,
+  Calendar,
+  MapPin,
+  Building2,
+  UserPlus,
+} from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const classInput =
-  "w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
-const sectionCard = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-4 md:p-6";
+
+// Use shared themed classes
+const classInput = "input";
+const sectionCard = "card p-4 md:p-6";
 
 export default function AddBorrower() {
   const navigate = useNavigate();
@@ -166,43 +179,54 @@ export default function AddBorrower() {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8">
+    <div className="p-4 md:p-6 lg:p-8 bg-[var(--bg)] text-[var(--fg)]">
       {/* header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Add Borrower</h1>
-          <p className="text-sm text-gray-500">Capture full KYC & assign the borrower to a branch/officer.</p>
+          <p className="text-sm text-[var(--muted)]">
+            Capture full KYC & assign the borrower to a branch/officer.
+          </p>
         </div>
-        <Link to="/borrowers" className="text-indigo-600 hover:underline text-sm">Back to Borrowers</Link>
+        <Link
+          to="/borrowers"
+          className="text-indigo-600 hover:underline text-sm dark:text-indigo-400 dark:hover:text-indigo-300"
+        >
+          Back to Borrowers
+        </Link>
       </div>
 
-      {/* NOTE: removed sticky cards; actions moved to sticky footer */}
+      {/* form */}
       <form onSubmit={onSubmit} className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative">
-        {/* LEFT: identity + address + ID + kin (2/3 width) */}
+        {/* LEFT: identity + address + ID + kin */}
         <div className="xl:col-span-2 space-y-6">
-          {/* Profile photo now part of main flow so it scrolls with the form */}
+          {/* Profile photo */}
           <section className={sectionCard}>
             <div className="flex items-center gap-2 mb-4">
-              <Camera className="h-5 w-5 text-indigo-600"/>
+              <Camera className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">Profile Photo</h2>
             </div>
             <div className="flex items-center gap-4">
-              <div className="w-28 h-28 rounded-2xl bg-gray-100 overflow-hidden ring-1 ring-black/5 flex items-center justify-center">
+              <div className="w-28 h-28 rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--card)] flex items-center justify-center">
                 {photoPreview ? (
-                  <img src={photoPreview} alt="Profile photo preview" className="w-full h-full object-cover" />
+                  <img src={photoPreview} alt="Profile preview" className="w-full h-full object-cover" />
                 ) : (
-                  <User className="h-10 w-10 text-gray-400" />
+                  <User className="h-10 w-10 text-[var(--muted)]" />
                 )}
               </div>
               <div className="space-x-2">
-                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 cursor-pointer">
-                  <Upload className="h-4 w-4"/>
+                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer">
+                  <Upload className="h-4 w-4" />
                   <span>Upload</span>
                   <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
                 </label>
                 {photoFile && (
-                  <button type="button" onClick={removePhoto} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50">
-                    <X className="h-4 w-4"/>
+                  <button
+                    type="button"
+                    onClick={removePhoto}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover:bg-gray-50 dark:hover:bg-slate-800"
+                  >
+                    <X className="h-4 w-4" />
                     Remove
                   </button>
                 )}
@@ -213,51 +237,52 @@ export default function AddBorrower() {
           {/* identity */}
           <section className={sectionCard}>
             <div className="flex items-center gap-2 mb-4">
-              <User className="h-5 w-5 text-indigo-600"/>
+              <User className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">Identity</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-gray-600">First Name</label>
-                <input className={classInput} value={form.firstName} onChange={(e)=>setForm({...form, firstName:e.target.value})} required />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Last Name</label>
-                <input className={classInput} value={form.lastName} onChange={(e)=>setForm({...form, lastName:e.target.value})} required />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600 flex items-center gap-1"><Phone className="h-3.5 w-3.5"/> Phone</label>
-                <input className={classInput} value={form.phone} onChange={(e)=>setForm({...form, phone:e.target.value})} placeholder="e.g. +2557…" required />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Secondary #</label>
-                <input className={classInput} value={form.secondaryPhone} onChange={(e)=>setForm({...form, secondaryPhone:e.target.value})} placeholder="Optional" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Email</label>
-                <input type="email" className={classInput} value={form.email} onChange={(e)=>setForm({...form, email:e.target.value})} placeholder="name@email.com" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Business / Occupation</label>
-                <input className={classInput} value={form.occupation} onChange={(e)=>setForm({...form, occupation:e.target.value})} placeholder="e.g. Retail shop" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Gender</label>
-                <select className={classInput} value={form.gender} onChange={(e)=>setForm({...form, gender:e.target.value})} required>
+              <Field label="First Name">
+                <input className={classInput} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
+              </Field>
+              <Field label="Last Name">
+                <input className={classInput} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
+              </Field>
+              <Field label={<LabelWithIcon Icon={Phone} text="Phone" />}>
+                <input className={classInput} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="e.g. +2557…" required />
+              </Field>
+              <Field label="Secondary #">
+                <input className={classInput} value={form.secondaryPhone} onChange={(e) => setForm({ ...form, secondaryPhone: e.target.value })} placeholder="Optional" />
+              </Field>
+              <Field label="Email">
+                <input type="email" className={classInput} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@email.com" />
+              </Field>
+              <Field label="Business / Occupation">
+                <input className={classInput} value={form.occupation} onChange={(e) => setForm({ ...form, occupation: e.target.value })} placeholder="e.g. Retail shop" />
+              </Field>
+              <Field label="Gender">
+                <select className={classInput} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} required>
                   <option value="">Select…</option>
-                  {genderOptions.map(o=> <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {genderOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-600 flex items-center gap-1"><Calendar className="h-3.5 w-3.5"/> Birth date</label>
-                <input type="date" className={classInput} value={form.birthDate} onChange={(e)=>setForm({...form, birthDate:e.target.value})} />
-              </div>
+              </Field>
+              <Field label={<LabelWithIcon Icon={Calendar} text="Birth date" />}>
+                <input type="date" className={classInput} value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
+              </Field>
               <div className="md:col-span-2">
-                <label className="text-xs text-gray-600">Employment / Working Status</label>
-                <select className={classInput} value={form.employmentStatus} onChange={(e)=>setForm({...form, employmentStatus:e.target.value})}>
-                  <option value="">Select…</option>
-                  {employmentOptions.map(o=> <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <Field label="Employment / Working Status">
+                  <select className={classInput} value={form.employmentStatus} onChange={(e) => setForm({ ...form, employmentStatus: e.target.value })}>
+                    <option value="">Select…</option>
+                    {employmentOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
               </div>
             </div>
           </section>
@@ -265,138 +290,171 @@ export default function AddBorrower() {
           {/* address */}
           <section className={sectionCard}>
             <div className="flex items-center gap-2 mb-4">
-              <MapPin className="h-5 w-5 text-indigo-600"/>
+              <MapPin className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">Address</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="text-xs text-gray-600">Address Line</label>
-                <input className={classInput} value={form.addressLine} onChange={(e)=>setForm({...form, addressLine:e.target.value})} />
+                <Field label="Address Line">
+                  <input className={classInput} value={form.addressLine} onChange={(e) => setForm({ ...form, addressLine: e.target.value })} />
+                </Field>
               </div>
-              <div>
-                <label className="text-xs text-gray-600">City</label>
-                <input className={classInput} value={form.city} onChange={(e)=>setForm({...form, city:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">District</label>
-                <input className={classInput} value={form.district} onChange={(e)=>setForm({...form, district:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Ward</label>
-                <input className={classInput} value={form.ward} onChange={(e)=>setForm({...form, ward:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Street</label>
-                <input className={classInput} value={form.street} onChange={(e)=>setForm({...form, street:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">House #</label>
-                <input className={classInput} value={form.houseNumber} onChange={(e)=>setForm({...form, houseNumber:e.target.value})} />
-              </div>
+              <Field label="City">
+                <input className={classInput} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              </Field>
+              <Field label="District">
+                <input className={classInput} value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
+              </Field>
+              <Field label="Ward">
+                <input className={classInput} value={form.ward} onChange={(e) => setForm({ ...form, ward: e.target.value })} />
+              </Field>
+              <Field label="Street">
+                <input className={classInput} value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
+              </Field>
+              <Field label="House #">
+                <input className={classInput} value={form.houseNumber} onChange={(e) => setForm({ ...form, houseNumber: e.target.value })} />
+              </Field>
             </div>
           </section>
 
           {/* identity docs */}
           <section className={sectionCard}>
             <div className="flex items-center gap-2 mb-4">
-              <IdCard className="h-5 w-5 text-indigo-600"/>
+              <IdCard className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">ID Document</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-gray-600">ID Type</label>
-                <select className={classInput} value={form.idType} onChange={(e)=>setForm({...form, idType:e.target.value})}>
+              <Field label="ID Type">
+                <select className={classInput} value={form.idType} onChange={(e) => setForm({ ...form, idType: e.target.value })}>
                   <option value="">Select…</option>
-                  {idTypeOptions.map(o=> <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {idTypeOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">ID Number</label>
-                <input className={classInput} value={form.idNumber} onChange={(e)=>setForm({...form, idNumber:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Issued on</label>
-                <input type="date" className={classInput} value={form.idIssuedDate} onChange={(e)=>setForm({...form, idIssuedDate:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Expiry date</label>
-                <input type="date" className={classInput} value={form.idExpiryDate} onChange={(e)=>setForm({...form, idExpiryDate:e.target.value})} />
-              </div>
+              </Field>
+              <Field label="ID Number">
+                <input className={classInput} value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} />
+              </Field>
+              <Field label="Issued on">
+                <input type="date" className={classInput} value={form.idIssuedDate} onChange={(e) => setForm({ ...form, idIssuedDate: e.target.value })} />
+              </Field>
+              <Field label="Expiry date">
+                <input type="date" className={classInput} value={form.idExpiryDate} onChange={(e) => setForm({ ...form, idExpiryDate: e.target.value })} />
+              </Field>
             </div>
           </section>
 
           {/* next of kin */}
           <section className={sectionCard}>
             <div className="flex items-center gap-2 mb-4">
-              <UserPlus className="h-5 w-5 text-indigo-600"/>
+              <UserPlus className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">Next of Kin</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-gray-600">Full Name</label>
-                <input className={classInput} value={form.nextKinName} onChange={(e)=>setForm({...form, nextKinName:e.target.value})} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Phone</label>
-                <input className={classInput} value={form.nextKinPhone} onChange={(e)=>setForm({...form, nextKinPhone:e.target.value})} />
-              </div>
+              <Field label="Full Name">
+                <input className={classInput} value={form.nextKinName} onChange={(e) => setForm({ ...form, nextKinName: e.target.value })} />
+              </Field>
+              <Field label="Phone">
+                <input className={classInput} value={form.nextKinPhone} onChange={(e) => setForm({ ...form, nextKinPhone: e.target.value })} />
+              </Field>
             </div>
           </section>
         </div>
 
-        {/* RIGHT: assignment (no sticky) */}
+        {/* RIGHT: assignment */}
         <div className="space-y-6">
           <section className={sectionCard}>
             <div className="flex items-center gap-2 mb-4">
-              <Building2 className="h-5 w-5 text-indigo-600"/>
+              <Building2 className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">Assignment & Loan Type</h2>
             </div>
             <div className="grid gap-4">
-              <div>
-                <label className="text-xs text-gray-600">Branch</label>
-                <select className={classInput} value={form.branchId} onChange={(e)=>setForm({...form, branchId:e.target.value})} required>
+              <Field label="Branch">
+                <select
+                  className={classInput}
+                  value={form.branchId}
+                  onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+                  required
+                >
                   <option value="">Select branch…</option>
-                  {branches.map(b=> <option key={b.id} value={b.id}>{b.name}</option>)}
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Loan Officer</label>
-                <select className={classInput} value={form.loanOfficerId} onChange={(e)=>setForm({...form, loanOfficerId:e.target.value})}>
+              </Field>
+
+              <Field label="Loan Officer">
+                <select
+                  className={classInput}
+                  value={form.loanOfficerId}
+                  onChange={(e) => setForm({ ...form, loanOfficerId: e.target.value })}
+                >
                   <option value="">Select officer… (optional)</option>
-                  {officers.map(o=> <option key={o.id} value={o.id}>{o.name || `${o.firstName || ""} ${o.lastName || ""}`}</option>)}
+                  {officers.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name || `${o.firstName || ""} ${o.lastName || ""}`}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Loan Type</label>
-                <select className={classInput} value={form.loanType} onChange={(e)=>setForm({...form, loanType:e.target.value})}>
-                  {loanTypeOptions.map(o=> <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Field>
+
+              <Field label="Loan Type">
+                <select
+                  className={classInput}
+                  value={form.loanType}
+                  onChange={(e) => setForm({ ...form, loanType: e.target.value })}
+                >
+                  {loanTypeOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              {form.loanType === 'group' && (
-                <div>
-                  <label className="text-xs text-gray-600">Group ID</label>
-                  <input className={classInput} value={form.groupId} onChange={(e)=>setForm({...form, groupId:e.target.value})} placeholder="Enter group identifier" />
-                </div>
+              </Field>
+
+              {form.loanType === "group" && (
+                <Field label="Group ID">
+                  <input
+                    className={classInput}
+                    value={form.groupId}
+                    onChange={(e) => setForm({ ...form, groupId: e.target.value })}
+                    placeholder="Enter group identifier"
+                  />
+                </Field>
               )}
-              <div>
-                <label className="text-xs text-gray-600 flex items-center gap-1"><Calendar className="h-3.5 w-3.5"/> Registration Date</label>
-                <input type="date" className={classInput} value={form.regDate} onChange={(e)=>setForm({...form, regDate:e.target.value})} />
-              </div>
+
+              <Field label={<LabelWithIcon Icon={Calendar} text="Registration Date" />}>
+                <input
+                  type="date"
+                  className={classInput}
+                  value={form.regDate}
+                  onChange={(e) => setForm({ ...form, regDate: e.target.value })}
+                />
+              </Field>
             </div>
           </section>
         </div>
 
-        {/* sticky bottom action bar (always accessible) */}
+        {/* sticky bottom action bar */}
         <div className="col-span-full">
-          <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-t">
+          <div className="sticky bottom-0 inset-x-0 z-20 border-t bg-[var(--card)]/90 backdrop-blur supports-[backdrop-filter]:bg-[var(--card)]/70 border-[var(--border)]">
             <div className="max-w-screen-2xl mx-auto px-4 py-3 flex justify-end gap-3">
-              <Link to="/borrowers" className="px-4 py-2 rounded-xl border hover:bg-gray-50">Cancel</Link>
+              <Link
+                to="/borrowers"
+                className="px-4 py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-gray-50 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </Link>
               <button
                 disabled={submitting}
                 type="submit"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
               >
-                <Save className="h-4 w-4"/>
+                <Save className="h-4 w-4" />
                 {submitting ? "Saving…" : "Save"}
               </button>
             </div>
@@ -404,5 +462,24 @@ export default function AddBorrower() {
         </div>
       </form>
     </div>
+  );
+}
+
+/* ---------- tiny helpers for consistent labels ---------- */
+function Field({ label, children }) {
+  return (
+    <div>
+      <div className="text-xs font-medium tracking-wide text-[var(--muted)] mb-1">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function LabelWithIcon({ Icon, text }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Icon className="h-3.5 w-3.5 text-[var(--muted)]" />
+      {text}
+    </span>
   );
 }

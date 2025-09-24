@@ -1,0 +1,1 @@
+import{j as e}from"./index-Bhy8wnkc.js";import{R as t}from"./ReportShell-D6LhVUDf.js";function s(){return e.jsx(t,{title:"Fees Report",endpoint:"/reports/fees/summary",columns:[]})}export{s as default};
