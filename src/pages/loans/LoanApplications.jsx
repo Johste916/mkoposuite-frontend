@@ -1,4 +1,3 @@
-// src/pages/loans/LoanApplications.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api";
@@ -9,8 +8,8 @@ import {
 /* ---------------- helpers ---------------- */
 const today = () => new Date().toLocaleDateString("en-CA"); // local YYYY-MM-DD
 const clsInput =
-  "w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all";
-const card = "bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-5 md:p-7";
+  "input";
+const card = "card p-5 md:p-7";
 
 // normalize any backend list shape to an array
 const toArray = (data) =>
@@ -156,7 +155,9 @@ export default function LoanApplications() {
       try {
         const [p, bws] = await Promise.all([
           api.get("/loan-products"),
-          api.get("/borrowers", { params: { page: 1, pageSize: 500 } }).catch(() => ({ data: { items: [] } })),
+          api
+            .get("/borrowers", { params: { page: 1, pageSize: 500 } })
+            .catch(() => ({ data: { items: [] } })),
         ]);
         setProducts(toArray(p.data));
         setBorrowers(toArray(bws.data));
@@ -176,8 +177,14 @@ export default function LoanApplications() {
   }, []);
 
   // safe lists for .find/.map
-  const productList = useMemo(() => (Array.isArray(products) ? products : []), [products]);
-  const borrowerList = useMemo(() => (Array.isArray(borrowers) ? borrowers : []), [borrowers]);
+  const productList = useMemo(
+    () => (Array.isArray(products) ? products : []),
+    [products]
+  );
+  const borrowerList = useMemo(
+    () => (Array.isArray(borrowers) ? borrowers : []),
+    [borrowers]
+  );
 
   /* ----------- compute loan # when borrower changes ----------- */
   useEffect(() => {
@@ -188,9 +195,13 @@ export default function LoanApplications() {
         let total = 0;
         try {
           const r = await api.get(`/borrowers/${form.borrowerId}/loans`);
-          total = Array.isArray(r.data) ? r.data.length : (r.data?.items?.length || 0);
+          total = Array.isArray(r.data)
+            ? r.data.length
+            : r.data?.items?.length || 0;
         } catch {
-          const r2 = await api.get("/loans", { params: { borrowerId: form.borrowerId, page: 1, pageSize: 1 } });
+          const r2 = await api.get("/loans", {
+            params: { borrowerId: form.borrowerId, page: 1, pageSize: 1 },
+          });
           total = r2.data?.total || 0;
         }
         const next = (total + 1).toString().padStart(3, "0");
@@ -218,7 +229,10 @@ export default function LoanApplications() {
     const key = Math.random().toString(36).slice(2);
     setForm((f) => ({
       ...f,
-      attachmentsMeta: [...f.attachmentsMeta, { type: typeLabel || "other", note: "", fileKey: key }],
+      attachmentsMeta: [
+        ...f.attachmentsMeta,
+        { type: typeLabel || "other", note: "", fileKey: key },
+      ],
     }));
   };
   const setFile = (fileKey, file) => {
@@ -226,22 +240,42 @@ export default function LoanApplications() {
     else filesRef.current[fileKey] = file;
   };
   const updateAttachment = (idx, patch) =>
-    setForm((f) => ({ ...f, attachmentsMeta: f.attachmentsMeta.map((a, i) => (i === idx ? { ...a, ...patch } : a)) }));
+    setForm((f) => ({
+      ...f,
+      attachmentsMeta: f.attachmentsMeta.map((a, i) =>
+        i === idx ? { ...a, ...patch } : a
+      ),
+    }));
   const removeAttachment = (idx) =>
     setForm((f) => {
       const toRemove = f.attachmentsMeta[idx];
       if (toRemove?.fileKey) delete filesRef.current[toRemove.fileKey];
-      return { ...f, attachmentsMeta: f.attachmentsMeta.filter((_, i) => i !== idx) };
+      return {
+        ...f,
+        attachmentsMeta: f.attachmentsMeta.filter((_, i) => i !== idx),
+      };
     });
 
   const findSpouseConsentMetaIndex = () =>
-    form.attachmentsMeta.findIndex((a) => String(a.type || "").toLowerCase() === "spouse: consent declaration");
+    form.attachmentsMeta.findIndex(
+      (a) =>
+        String(a.type || "").toLowerCase() ===
+        "spouse: consent declaration"
+    );
 
   /* ----------- fees handlers ----------- */
-  const addFee = () => setForm((f) => ({ ...f, fees: [...f.fees, { name: "", amount: "", paid: false }] }));
+  const addFee = () =>
+    setForm((f) => ({
+      ...f,
+      fees: [...f.fees, { name: "", amount: "", paid: false }],
+    }));
   const updateFee = (idx, patch) =>
-    setForm((f) => ({ ...f, fees: f.fees.map((x, i) => (i === idx ? { ...x, ...patch } : x)) }));
-  const removeFee = (idx) => setForm((f) => ({ ...f, fees: f.fees.filter((_, i) => i !== idx) }));
+    setForm((f) => ({
+      ...f,
+      fees: f.fees.map((x, i) => (i === idx ? { ...x, ...patch } : x)),
+    }));
+  const removeFee = (idx) =>
+    setForm((f) => ({ ...f, fees: f.fees.filter((_, i) => i !== idx) }));
 
   /* ----------- guarantors ----------- */
   const addGuarantor = () =>
@@ -261,9 +295,17 @@ export default function LoanApplications() {
       ],
     }));
   const updateGuarantor = (idx, patch) =>
-    setForm((f) => ({ ...f, guarantors: f.guarantors.map((g, i) => (i === idx ? { ...g, ...patch } : g)) }));
+    setForm((f) => ({
+      ...f,
+      guarantors: f.guarantors.map((g, i) =>
+        i === idx ? { ...g, ...patch } : g
+      ),
+    }));
   const removeGuarantor = (idx) =>
-    setForm((f) => ({ ...f, guarantors: f.guarantors.filter((_, i) => i !== idx) }));
+    setForm((f) => ({
+      ...f,
+      guarantors: f.guarantors.filter((_, i) => i !== idx),
+    }));
 
   /* ----------- submit ----------- */
   const onSubmit = async (e) => {
@@ -272,8 +314,10 @@ export default function LoanApplications() {
     // basic validation
     if (!form.borrowerId) return alert("Select a borrower");
     if (!form.productId) return alert("Select a loan product");
-    if (!form.principal || Number(form.principal) <= 0) return alert("Enter a principal amount");
-    if (!form.durationMonths) return alert("Enter loan duration (months)");
+    if (!form.principal || Number(form.principal) <= 0)
+      return alert("Enter a principal amount");
+    if (!form.durationMonths)
+      return alert("Enter loan duration (months)");
 
     if (form.collateralType === "Other" && !form.collateralOther.trim()) {
       return alert("Please specify the collateral for 'Other'.");
@@ -288,7 +332,8 @@ export default function LoanApplications() {
       if (form.mobileProvider === "other" && !form.mobileProviderOther.trim()) {
         return alert("Please specify the mobile money provider.");
       }
-      if (!form.mobilePhone.trim()) return alert("Enter the mobile money phone number.");
+      if (!form.mobilePhone.trim())
+        return alert("Enter the mobile money phone number.");
       const digits = form.mobilePhone.replace(/\D/g, "");
       if (digits.length < 9 || digits.length > 15) {
         return alert("Mobile money phone number looks invalid.");
@@ -301,13 +346,14 @@ export default function LoanApplications() {
       const meta = i >= 0 ? form.attachmentsMeta[i] : null;
       const fileAttached = meta ? !!filesRef.current[meta.fileKey] : false;
       if (!fileAttached) {
-        return alert("Please attach the spouse consent declaration (signed).");
+        return alert(
+          "Please attach the spouse consent declaration (signed)."
+        );
       }
     }
 
     setSubmitting(true);
     try {
-      // fold collateral "Other"
       const foldedCollateralType =
         form.collateralType === "Other" && form.collateralOther.trim()
           ? `Other: ${form.collateralOther.trim()}`
@@ -319,7 +365,8 @@ export default function LoanApplications() {
         const providerLabel =
           form.mobileProvider === "other"
             ? form.mobileProviderOther.trim()
-            : MOBILE_PROVIDERS.find((p) => p.value === form.mobileProvider)?.label || form.mobileProvider;
+            : MOBILE_PROVIDERS.find((p) => p.value === form.mobileProvider)
+                ?.label || form.mobileProvider;
         const parts = [
           `Provider: ${providerLabel}`,
           `Phone: ${form.mobilePhone.trim()}`,
@@ -329,7 +376,9 @@ export default function LoanApplications() {
       } else if (form.disbursementMethod === "other") {
         const parts = [
           `Method: ${form.disbursementOther.trim()}`,
-          form.disbursementOtherDetails?.trim() ? `Details: ${form.disbursementOtherDetails.trim()}` : null,
+          form.disbursementOtherDetails?.trim()
+            ? `Details: ${form.disbursementOtherDetails.trim()}`
+            : null,
           disbursementReference ? `Ref: ${disbursementReference}` : null,
         ].filter(Boolean);
         disbursementReference = parts.join(" | ");
@@ -355,14 +404,20 @@ export default function LoanApplications() {
         interestAmount: form.interestAmount || null,
 
         // fees + repayments + disbursement
-        fees: form.fees.map((f) => ({ ...f, amount: String(f.amount || "").trim() })),
+        fees: form.fees.map((f) => ({
+          ...f,
+          amount: String(f.amount || "").trim(),
+        })),
         repaymentCycle: form.repaymentCycle,
         numberOfRepayments: String(form.numberOfRepayments || "").trim(),
         disbursementMethod: form.disbursementMethod,
-        disbursementBankId: form.disbursementMethod === "bank" ? form.disbursementBankId || null : null,
+        disbursementBankId:
+          form.disbursementMethod === "bank"
+            ? form.disbursementBankId || null
+            : null,
         disbursementReference: disbursementReference || null,
 
-        // spouse (only if married; backend can ignore unknown fields safely)
+        // spouse
         spouse:
           form.maritalStatus === "married"
             ? {
@@ -385,7 +440,10 @@ export default function LoanApplications() {
         const file = filesRef.current[meta.fileKey];
         if (file) {
           fd.append("files", file, file.name);
-          fd.append("filesMeta", JSON.stringify({ type: meta.type, note: meta.note, name: file.name }));
+          fd.append(
+            "filesMeta",
+            JSON.stringify({ type: meta.type, note: meta.note, name: file.name })
+          );
         }
       }
 
@@ -421,7 +479,7 @@ export default function LoanApplications() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Add Loan</h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm muted">
             Follow the steps below. Start by selecting a borrower, then continue down the page.
           </p>
         </div>
@@ -441,7 +499,7 @@ export default function LoanApplications() {
           <div className="grid md:grid-cols-2 gap-4">
             {/* Borrower */}
             <div>
-              <label className="text-xs text-gray-600">Borrower</label>
+              <label className="text-xs muted">Borrower</label>
               <div className="flex gap-2">
                 <select
                   className={`${clsInput} flex-1`}
@@ -459,7 +517,7 @@ export default function LoanApplications() {
                 <Link
                   target="_blank"
                   to="/borrowers/add"
-                  className="px-3 py-2 rounded-lg border hover:bg-gray-50 inline-flex items-center gap-2"
+                  className="px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800 inline-flex items-center gap-2"
                 >
                   <PlusCircle className="h-4 w-4" /> Add
                 </Link>
@@ -468,7 +526,7 @@ export default function LoanApplications() {
 
             {/* Product */}
             <div>
-              <label className="text-xs text-gray-600">Loan Product</label>
+              <label className="text-xs muted">Loan Product</label>
               <select
                 className={clsInput}
                 value={form.productId}
@@ -495,7 +553,7 @@ export default function LoanApplications() {
             </div>
 
             <div>
-              <label className="text-xs text-gray-600">Loan # (auto)</label>
+              <label className="text-xs muted">Loan # (auto)</label>
               <input className={clsInput} value={loadingCounts ? "…" : form.loanNumber || "—"} readOnly />
             </div>
           </div>
@@ -509,7 +567,7 @@ export default function LoanApplications() {
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-600">Principal Amount</label>
+              <label className="text-xs muted">Principal Amount</label>
               <input
                 type="number"
                 inputMode="numeric"
@@ -520,7 +578,7 @@ export default function LoanApplications() {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600 flex items-center gap-1">
+              <label className="text-xs muted flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5" /> Loan Release Date
               </label>
               <input
@@ -532,7 +590,7 @@ export default function LoanApplications() {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Collateral Type</label>
+              <label className="text-xs muted">Collateral Type</label>
               <select
                 className={clsInput}
                 value={form.collateralType}
@@ -558,7 +616,7 @@ export default function LoanApplications() {
               )}
             </div>
             <div>
-              <label className="text-xs text-gray-600">Collateral Amount</label>
+              <label className="text-xs muted">Collateral Amount</label>
               <input
                 type="number"
                 inputMode="numeric"
@@ -568,7 +626,7 @@ export default function LoanApplications() {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Loan Duration (months)</label>
+              <label className="text-xs muted">Loan Duration (months)</label>
               <input
                 type="number"
                 inputMode="numeric"
@@ -589,7 +647,7 @@ export default function LoanApplications() {
           </div>
           <div className="grid md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
-              <label className="text-xs text-gray-600">Interest Method</label>
+              <label className="text-xs muted">Interest Method</label>
               <select
                 className={clsInput}
                 value={form.interestMethod}
@@ -603,7 +661,7 @@ export default function LoanApplications() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-600">Interest Rate (%)</label>
+              <label className="text-xs muted">Interest Rate (%)</label>
               <input
                 type="number"
                 step="0.01"
@@ -617,7 +675,7 @@ export default function LoanApplications() {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Interest Amount (optional)</label>
+              <label className="text-xs muted">Interest Amount (optional)</label>
               <input
                 type="number"
                 inputMode="numeric"
@@ -637,7 +695,7 @@ export default function LoanApplications() {
           </div>
           <div className="grid md:grid-cols-3 gap-4">
             <div>
-              <label className="text-xs text-gray-600">Repayment Cycle</label>
+              <label className="text-xs muted">Repayment Cycle</label>
               <select
                 className={clsInput}
                 value={form.repaymentCycle}
@@ -651,7 +709,7 @@ export default function LoanApplications() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-600"># of Repayments</label>
+              <label className="text-xs muted"># of Repayments</label>
               <input
                 type="number"
                 inputMode="numeric"
@@ -661,7 +719,7 @@ export default function LoanApplications() {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Loan Status (label)</label>
+              <label className="text-xs muted">Loan Status (label)</label>
               <select
                 className={clsInput}
                 value={form.statusLabel}
@@ -673,7 +731,7 @@ export default function LoanApplications() {
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-gray-500 mt-1">DB status stays “pending” on create.</p>
+              <p className="text-[11px] muted mt-1">DB status stays “pending” on create.</p>
             </div>
           </div>
         </section>
@@ -688,13 +746,13 @@ export default function LoanApplications() {
             <button
               type="button"
               onClick={addFee}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
             >
               <PlusCircle className="h-4 w-4" /> Add Fee
             </button>
           </div>
           {form.fees.length === 0 ? (
-            <p className="text-sm text-gray-500">No fees added.</p>
+            <p className="text-sm muted">No fees added.</p>
           ) : (
             <div className="space-y-3">
               {form.fees.map((fee, i) => (
@@ -724,7 +782,7 @@ export default function LoanApplications() {
                   <button
                     type="button"
                     onClick={() => removeFee(i)}
-                    className="p-2 rounded hover:bg-gray-50"
+                    className="p-2 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
                     aria-label="Remove fee"
                   >
                     <X className="h-4 w-4" />
@@ -733,7 +791,7 @@ export default function LoanApplications() {
               ))}
             </div>
           )}
-          <p className="text-xs text-gray-500 mt-2">Unpaid fees will be included in the repayment schedule.</p>
+          <p className="text-xs muted mt-2">Unpaid fees will be included in the repayment schedule.</p>
         </section>
 
         {/* 6) Guarantors */}
@@ -746,23 +804,23 @@ export default function LoanApplications() {
             <button
               type="button"
               onClick={addGuarantor}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-gray-50"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
             >
               <PlusCircle className="h-4 w-4" /> Add Guarantor
             </button>
           </div>
           {form.guarantors.length === 0 ? (
-            <p className="text-sm text-gray-500">No guarantors added.</p>
+            <p className="text-sm muted">No guarantors added.</p>
           ) : (
             <div className="space-y-4">
               {form.guarantors.map((g, i) => (
-                <div key={i} className="border rounded-xl p-3 space-y-3">
+                <div key={i} className="border border-[var(--border)] rounded-xl p-3 space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium text-gray-800">Guarantor #{i + 1}</div>
+                    <div className="text-sm font-medium">Guarantor #{i + 1}</div>
                     <button
                       type="button"
                       onClick={() => removeGuarantor(i)}
-                      className="p-1 rounded hover:bg-gray-50"
+                      className="p-1 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
                       aria-label="Remove guarantor"
                     >
                       <X className="h-4 w-4" />
@@ -771,7 +829,7 @@ export default function LoanApplications() {
 
                   <div className="grid gap-3">
                     <div>
-                      <label className="text-xs text-gray-600">Source</label>
+                      <label className="text-xs muted">Source</label>
                       <select
                         className={clsInput}
                         value={g.type}
@@ -784,7 +842,7 @@ export default function LoanApplications() {
 
                     {g.type === "existing" ? (
                       <div>
-                        <label className="text-xs text-gray-600">Borrower</label>
+                        <label className="text-xs muted">Borrower</label>
                         <select
                           className={clsInput}
                           value={g.borrowerId || ""}
@@ -866,7 +924,7 @@ export default function LoanApplications() {
                   key={lbl}
                   type="button"
                   onClick={() => addAttachment(lbl)}
-                  className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                  className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
                 >
                   + {lbl.replace(/Borrower: |Guarantor: |Spouse: /g, "")}
                 </button>
@@ -875,7 +933,7 @@ export default function LoanApplications() {
           </div>
 
           {form.attachmentsMeta.length === 0 ? (
-            <p className="text-sm text-gray-500">No files attached.</p>
+            <p className="text-sm muted">No files attached.</p>
           ) : (
             <div className="space-y-3">
               {form.attachmentsMeta.map((a, i) => (
@@ -902,7 +960,7 @@ export default function LoanApplications() {
                   <button
                     type="button"
                     onClick={() => removeAttachment(i)}
-                    className="p-2 rounded hover:bg-gray-50"
+                    className="p-2 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
                     aria-label="Remove attachment"
                   >
                     <X className="h-4 w-4" />
@@ -911,7 +969,7 @@ export default function LoanApplications() {
               ))}
             </div>
           )}
-          <p className="text-xs text-gray-500 mt-2">Accepted images/PDFs as supported by your backend.</p>
+          <p className="text-xs muted mt-2">Accepted images/PDFs as supported by your backend.</p>
         </section>
 
         {/* 8) Disbursement */}
@@ -922,7 +980,7 @@ export default function LoanApplications() {
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-600">Method</label>
+              <label className="text-xs muted">Method</label>
               <select
                 className={clsInput}
                 value={form.disbursementMethod}
@@ -950,7 +1008,7 @@ export default function LoanApplications() {
 
             {/* Reference (generic) */}
             <div>
-              <label className="text-xs text-gray-600">Reference (optional)</label>
+              <label className="text-xs muted">Reference (optional)</label>
               <input
                 className={clsInput}
                 value={form.disbursementReference}
@@ -962,7 +1020,7 @@ export default function LoanApplications() {
             {/* BANK */}
             {form.disbursementMethod === "bank" && (
               <div className="md:col-span-2">
-                <label className="text-xs text-gray-600">Bank</label>
+                <label className="text-xs muted">Bank</label>
                 <div className="flex gap-2">
                   <select
                     className={`${clsInput} flex-1`}
@@ -979,11 +1037,15 @@ export default function LoanApplications() {
                   <Link
                     to="/banks/add"
                     target="_blank"
-                    className="px-3 py-2 rounded-lg border hover:bg-gray-50 inline-flex items-center gap-2"
+                    className="px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800 inline-flex items-center gap-2"
                   >
                     <PlusCircle className="h-4 w-4" /> Add
                   </Link>
-                  <Link to="/banks" target="_blank" className="px-3 py-2 rounded-lg border hover:bg-gray-50">
+                  <Link
+                    to="/banks"
+                    target="_blank"
+                    className="px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
+                  >
                     Manage
                   </Link>
                 </div>
@@ -999,7 +1061,7 @@ export default function LoanApplications() {
             {form.disbursementMethod === "mobile_money" && (
               <>
                 <div>
-                  <label className="text-xs text-gray-600">Provider</label>
+                  <label className="text-xs muted">Provider</label>
                   <select
                     className={clsInput}
                     value={form.mobileProvider}
@@ -1025,7 +1087,7 @@ export default function LoanApplications() {
                   )}
                 </div>
                 <div>
-                  <label className="text-xs text-gray-600">Phone Number</label>
+                  <label className="text-xs muted">Phone Number</label>
                   <input
                     className={clsInput}
                     placeholder="e.g. 07xxxxxxxx or +2557xxxxxxxx"
@@ -1040,7 +1102,7 @@ export default function LoanApplications() {
             {form.disbursementMethod === "other" && (
               <>
                 <div>
-                  <label className="text-xs text-gray-600">Specify method</label>
+                  <label className="text-xs muted">Specify method</label>
                   <input
                     className={clsInput}
                     placeholder="e.g., cheque, voucher, petty cash"
@@ -1050,7 +1112,7 @@ export default function LoanApplications() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-600">Details (optional)</label>
+                  <label className="text-xs muted">Details (optional)</label>
                   <input
                     className={clsInput}
                     placeholder="Instructions / place of collection"
@@ -1071,7 +1133,7 @@ export default function LoanApplications() {
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-600">Marital Status</label>
+              <label className="text-xs muted">Marital Status</label>
               <select
                 className={clsInput}
                 value={form.maritalStatus}
@@ -1116,13 +1178,13 @@ export default function LoanApplications() {
                 />
 
                 {/* Spouse consent upload (as attachment) */}
-                <div className="md:col-span-2 border rounded-xl p-3">
+                <div className="md:col-span-2 border border-[var(--border)] rounded-xl p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm font-medium">Spouse Consent Declaration (signed)</div>
                     <button
                       type="button"
                       onClick={ensureSpouseConsentAttachment}
-                      className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                      className="text-xs px-2 py-1 rounded border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
                     >
                       + Add consent upload
                     </button>
@@ -1131,7 +1193,7 @@ export default function LoanApplications() {
                     const idx = findSpouseConsentMetaIndex();
                     if (idx === -1) {
                       return (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs muted">
                           Click “Add consent upload” to attach the signed declaration.
                         </p>
                       );
@@ -1157,7 +1219,7 @@ export default function LoanApplications() {
                         <button
                           type="button"
                           onClick={() => removeAttachment(idx)}
-                          className="p-2 rounded hover:bg-gray-50"
+                          className="p-2 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
                           aria-label="Remove spouse consent"
                         >
                           <X className="h-4 w-4" />
@@ -1165,7 +1227,7 @@ export default function LoanApplications() {
                       </div>
                     );
                   })()}
-                  <p className="text-[11px] text-gray-500 mt-2">
+                  <p className="text-[11px] muted mt-2">
                     This replaces the old text field. Upload the signed consent form here.
                   </p>
                 </div>
@@ -1175,9 +1237,9 @@ export default function LoanApplications() {
         </section>
 
         {/* sticky bottom actions */}
-        <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-t">
+        <div className="sticky bottom-0 inset-x-0 z-20 bg-[var(--card)] backdrop-blur supports-[backdrop-filter]:bg-[var(--card)] border-t border-[var(--border)]">
           <div className="max-w-6xl mx-auto px-4 py-3 flex justify-end gap-3">
-            <Link to="/loans" className="px-4 py-2 rounded-xl border hover:bg-gray-50">
+            <Link to="/loans" className="px-4 py-2 rounded-xl border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800">
               Cancel
             </Link>
             <button
