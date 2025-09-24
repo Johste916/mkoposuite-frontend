@@ -1,3 +1,4 @@
+// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -283,14 +284,8 @@ function App() {
                 <Route path="borrowers/reports" element={<BorrowerReports />} />
                 <Route path="borrowers/:id" element={<BorrowerDetails />} />
                 <Route path="borrowers/sms" element={<Sms />} />
-                <Route
-                  path="borrowers/email"
-                  element={<div className="card p-4">Send Email to Borrowers</div>}
-                />
-                <Route
-                  path="borrowers/invite"
-                  element={<div className="card p-4">Invite Borrowers</div>}
-                />
+                <Route path="borrowers/email" element={<div className="card p-4">Send Email to Borrowers</div>} />
+                <Route path="borrowers/invite" element={<div className="card p-4">Invite Borrowers</div>} />
 
                 {/* Groups */}
                 <Route path="borrowers/groups" element={<BorrowerGroups />} />
@@ -313,6 +308,8 @@ function App() {
                   }
                 />
                 <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
+
+                {/* Loan Products — list + full-page create/edit ready */}
                 <Route
                   path="loans/products"
                   element={
@@ -321,6 +318,24 @@ function App() {
                     </RoleProtectedRoute>
                   }
                 />
+                <Route
+                  path="loans/products/new"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director"]}>
+                      <LoanProducts />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="loans/products/:id"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director"]}>
+                      <LoanProducts />
+                    </RoleProtectedRoute>
+                  }
+                />
+
+                {/* Calculators / schedules */}
                 <Route
                   path="loans/calculator"
                   element={
@@ -337,6 +352,7 @@ function App() {
                     </RoleProtectedRoute>
                   }
                 />
+
                 <Route path="loans/:id" element={<LoanDetails />} />
                 <Route path="loans/:id/disburse" element={<DisburseLoan />} />
                 {/* Loan aliases */}
@@ -399,10 +415,7 @@ function App() {
                 <Route path="collections/missed" element={<CollectionSheets />} />
                 <Route path="collections/past-maturity" element={<CollectionSheets />} />
                 <Route path="collections/sms" element={<Sms />} />
-                <Route
-                  path="collections/email"
-                  element={<div className="card p-4">Send Collection Emails</div>}
-                />
+                <Route path="collections/email" element={<div className="card p-4">Send Collection Emails</div>} />
 
                 {/* Savings */}
                 <Route path="savings" element={<Savings />} />
@@ -619,6 +632,10 @@ function App() {
                 {/* Legacy */}
                 <Route path="disbursements" element={<Disbursements />} />
                 <Route path="sms" element={<Sms />} />
+
+                {/* Helpful aliases for Loan Products at root level */}
+                <Route path="loan-products" element={<Navigate to="/loans/products" replace />} />
+                <Route path="loan-products/new" element={<Navigate to="/loans/products/new" replace />} />
 
                 {/* 404 inside shell */}
                 <Route path="*" element={<NotFound />} />
