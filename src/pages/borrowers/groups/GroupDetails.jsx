@@ -71,15 +71,10 @@ function normalizeGroup(g) {
   };
 }
 
-/* Best-effort fetcher:
-   1) Try /:id routes
-   2) Try query-string lookups (?id=, ?groupId=, ?code=)
-   3) Fallback: fetch list and find locally
-*/
+/* Best-effort fetcher (id, query, list fallback) */
 async function fetchGroupFlexible(id, signal) {
   const enc = encodeURIComponent(id);
 
-  // 1) direct id routes (with common prefixes)
   const direct = await tryGET(
     [
       `/borrowers/groups/${enc}`,
@@ -93,7 +88,6 @@ async function fetchGroupFlexible(id, signal) {
   ).catch(() => null);
   if (direct) return normalizeGroup(direct);
 
-  // 2) query lookups (some APIs only support filtering)
   const byQuery =
     (await tryGET(
       [
@@ -119,13 +113,11 @@ async function fetchGroupFlexible(id, signal) {
       { signal }
     ).catch(() => null)) || null;
 
-  // Some backends return a list for query endpoints
   if (byQuery) {
     const arr = Array.isArray(byQuery)
       ? byQuery
       : byQuery.items || byQuery.rows || byQuery.data || [];
     if (arr.length) {
-      // find best match by any common key
       const found =
         arr.find(
           (g) =>
@@ -140,7 +132,6 @@ async function fetchGroupFlexible(id, signal) {
     }
   }
 
-  // 3) fallback: get all and match locally
   const list = await tryGET(
     [
       `/borrowers/groups?include=members`,
@@ -250,16 +241,16 @@ const GroupDetails = () => {
   const members = Array.isArray(group?.members) ? group.members : [];
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
       <h1 className="text-2xl font-semibold">Group #{groupId}</h1>
 
-      {loading && <div>Loading…</div>}
-      {error && <div className="text-red-600">{error}</div>}
+      {loading && <div className="muted">Loading…</div>}
+      {error && <div className="text-rose-600 dark:text-rose-400">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-white rounded shadow p-4">
+        <div className="card p-4">
           <h3 className="font-semibold mb-2">Overview</h3>
-          <ul className="text-sm text-gray-700 space-y-1">
+          <ul className="text-sm space-y-1">
             <li><b>Name:</b> {group?.name ?? "—"}</li>
             <li><b>Branch:</b> {group?.branchName ?? "—"}</li>
             <li><b>Officer:</b> {group?.officerName ?? "—"}</li>
@@ -267,7 +258,7 @@ const GroupDetails = () => {
           </ul>
         </div>
 
-        <div className="bg-white rounded shadow p-4 lg:col-span-2">
+        <div className="card p-4 lg:col-span-2">
           <h3 className="font-semibold mb-2">Members</h3>
 
           <div className="flex items-center gap-2 mb-3">
@@ -287,18 +278,18 @@ const GroupDetails = () => {
             </button>
           </div>
 
-          <ul className="text-sm divide-y">
+          <ul className="text-sm divide-y divide-[var(--border)]">
             {members.length === 0 ? (
-              <li className="py-2 text-gray-500">No members yet.</li>
+              <li className="py-2 muted">No members yet.</li>
             ) : (
               members.map((m) => (
                 <li key={m.id} className="py-2 flex items-center justify-between">
                   <div>
-                    {m.name} <span className="text-gray-500">• {m.phone || "—"}</span>
-                    {m.role && <span className="ml-2 text-xs uppercase text-gray-400">{m.role}</span>}
+                    {m.name} <span className="muted">• {m.phone || "—"}</span>
+                    {m.role && <span className="ml-2 text-[11px] uppercase muted">{m.role}</span>}
                   </div>
                   <button
-                    className="px-2 py-1 border rounded hover:bg-gray-50"
+                    className="px-2 py-1 border rounded border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
                     onClick={() => removeMember(m.id)}
                   >
                     Remove

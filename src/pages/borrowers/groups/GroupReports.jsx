@@ -1,4 +1,3 @@
-// src/pages/borrowers/groups/GroupReports.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../../api";
 
@@ -57,7 +56,6 @@ const GroupReports = () => {
       ]);
       setSummary(toSummary(data));
     } catch (err) {
-      // Show a clean error but keep the page usable
       setError(
         err?.response?.status === 404
           ? "Group report endpoint not implemented."
@@ -72,50 +70,49 @@ const GroupReports = () => {
   useEffect(() => { fetchGroupSummary(); }, []);
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Group Reports</h1>
         <button
           onClick={fetchGroupSummary}
-          className="px-3 py-2 rounded bg-slate-100 hover:bg-slate-200"
+          className="px-3 py-2 rounded border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
         >
           Refresh
         </button>
       </div>
 
       {loading ? (
-        <p className="text-gray-500">Loading group analytics...</p>
+        <p className="muted">Loading group analytics...</p>
       ) : error ? (
-        <p className="text-red-600">{error}</p>
+        <p className="text-rose-600 dark:text-rose-400">{error}</p>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded shadow p-4">
-              <div className="text-xs text-gray-500">Total Groups</div>
+            <div className="card p-4">
+              <div className="text-xs muted">Total Groups</div>
               <div className="text-xl font-semibold">{summary.totalGroups || 0}</div>
             </div>
-            <div className="bg-white rounded shadow p-4">
-              <div className="text-xs text-gray-500">Active Groups</div>
+            <div className="card p-4">
+              <div className="text-xs muted">Active Groups</div>
               <div className="text-xl font-semibold">{summary.activeGroups || 0}</div>
             </div>
-            <div className="bg-white rounded shadow p-4">
-              <div className="text-xs text-gray-500">Total Group Loans</div>
+            <div className="card p-4">
+              <div className="text-xs muted">Total Group Loans</div>
               <div className="text-xl font-semibold">
                 {Number(summary.totalLoans || 0).toLocaleString()}
               </div>
             </div>
-            <div className="bg-white rounded shadow p-4">
-              <div className="text-xs text-gray-500">PAR</div>
-              <div className="text-xl font-semibold text-red-600">
+            <div className="card p-4">
+              <div className="text-xs muted">PAR</div>
+              <div className="text-xl font-semibold text-rose-600 dark:text-rose-400">
                 {summary.par || "0%"}
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded shadow p-4">
-            <p className="text-sm text-gray-600">
-              Charts and trends (by branch, officer, performance tiers) will appear
-              here once backend analytics endpoints are available.
+          <div className="card p-4">
+            <p className="text-sm muted">
+              Charts and trends (by branch, officer, performance tiers) will appear here once backend analytics endpoints are available.
             </p>
           </div>
         </>

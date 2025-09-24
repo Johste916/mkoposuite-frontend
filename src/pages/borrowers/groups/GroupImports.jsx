@@ -1,4 +1,3 @@
-// src/pages/borrowers/groups/GroupImports.jsx
 import React, { useState } from "react";
 import api from "../../../api";
 
@@ -54,7 +53,6 @@ const GroupImports = () => {
   };
 
   const downloadSample = () => {
-    // Minimal CSV template that your backend can accept/ignore extra columns safely.
     const csv =
       "name,branchId,officerId,meetingDay,notes,members\n" +
       "Group A,1,,monday,Example notes,\"254700000001;254700000002\"\n" +
@@ -71,9 +69,9 @@ const GroupImports = () => {
   };
 
   return (
-    <div className="max-w-2xl p-4 space-y-4">
+    <div className="max-w-2xl p-4 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
       <h1 className="text-2xl font-semibold">Group Imports</h1>
-      <div className="bg-white rounded shadow p-4 space-y-4">
+      <div className="card p-4 space-y-4">
         <form onSubmit={handleImport} className="space-y-3">
           <input
             type="file"
@@ -81,22 +79,22 @@ const GroupImports = () => {
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             className="block w-full"
           />
-          <div className="text-xs text-gray-500">
-            Accepted: CSV/XLSX. Columns: <b>name, branchId, officerId, meetingDay, notes, members</b>{' '}
-            (meetingDay must be lowercase to match DB enum: monday…sunday; members can be a semicolon-separated list of borrower identifiers or phone numbers).
+          <div className="text-xs muted">
+            Accepted: CSV/XLSX. Columns: <b>name, branchId, officerId, meetingDay, notes, members</b>{" "}
+            (meetingDay must be lowercase: monday…sunday; members can be a semicolon-separated list).
           </div>
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={!file || importing}
-              className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-60"
+              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60"
             >
               {importing ? "Uploading…" : "Upload"}
             </button>
             <button
               type="button"
               onClick={downloadSample}
-              className="px-3 py-2 border rounded"
+              className="px-3 py-2 border rounded border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
             >
               Download Sample
             </button>

@@ -149,29 +149,29 @@ const AddGroup = () => {
   };
 
   return (
-    <div className="p-4 max-w-2xl">
+    <div className="p-4 max-w-2xl bg-[var(--bg)] text-[var(--fg)]">
       <h1 className="text-2xl font-semibold mb-4">Add Group</h1>
-      <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded-xl border shadow">
+      <form onSubmit={handleSubmit} className="card p-4 space-y-4">
         <div>
-          <label className="block text-sm text-gray-700 mb-1">Name</label>
+          <label className="block text-xs muted mb-1">Name</label>
           <input
             name="name"
             value={form.name}
             onChange={onChange}
             required
-            className="w-full border rounded-lg px-3 py-2"
+            className="input"
             placeholder="Group name"
           />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Branch</label>
+            <label className="block text-xs muted mb-1">Branch</label>
             <select
               name="branchId"
               value={form.branchId}
               onChange={onChange}
-              className="w-full border rounded-lg px-3 py-2 bg-white"
+              className="input"
               disabled={loadingBranches || !branchOptions.length}
             >
               <option value="">{loadingBranches ? "Loading…" : "(Select branch)"}</option>
@@ -180,12 +180,12 @@ const AddGroup = () => {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Loan Officer</label>
+            <label className="block text-xs muted mb-1">Loan Officer</label>
             <select
               name="officerId"
               value={form.officerId}
               onChange={onChange}
-              className="w-full border rounded-lg px-3 py-2 bg-white"
+              className="input"
               disabled={loadingOfficers || !officerOptions.length}
             >
               <option value="">{loadingOfficers ? "Loading…" : "(None yet)"}</option>
@@ -194,12 +194,12 @@ const AddGroup = () => {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Meeting Day</label>
+            <label className="block text-xs muted mb-1">Meeting Day</label>
             <select
               name="meetingDay"
               value={form.meetingDay}
               onChange={onChange}
-              className="w-full border rounded-lg px-3 py-2 bg-white"
+              className="input"
             >
               <option value="">(None)</option>
               {MEETING_DAYS.map((d) => <option key={d} value={d}>{d[0].toUpperCase()+d.slice(1)}</option>)}
@@ -208,12 +208,12 @@ const AddGroup = () => {
         </div>
 
         <div>
-          <label className="block text-sm text-gray-700 mb-1">Notes</label>
+          <label className="block text-xs muted mb-1">Notes</label>
           <textarea
             name="notes"
             value={form.notes}
             onChange={onChange}
-            className="w-full border rounded-lg px-3 py-2"
+            className="input"
             rows={3}
             placeholder="Optional notes about this group"
           />

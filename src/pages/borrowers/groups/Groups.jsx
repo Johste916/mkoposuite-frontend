@@ -43,7 +43,6 @@ const BorrowerGroups = () => {
     (async () => {
       try {
         setLoading(true);
-        // Prefer including members if your API supports it (helps GroupDetails fallback).
         const data = await tryGET(
           [
             "/borrowers/groups?include=members",
@@ -68,7 +67,7 @@ const BorrowerGroups = () => {
   const fmtMoney = (v) => `TZS ${Number(v || 0).toLocaleString()}`;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Borrower Groups</h1>
         <Link
@@ -79,34 +78,34 @@ const BorrowerGroups = () => {
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl shadow border overflow-hidden">
+      <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <th className="px-3 py-2 text-left">Name</th>
-              <th className="px-3 py-2 text-left">Members</th>
-              <th className="px-3 py-2 text-left">Branch</th>
-              <th className="px-3 py-2 text-left">Loans</th>
-              <th className="px-3 py-2 text-left">Outstanding</th>
+          <thead>
+            <tr className="text-left muted">
+              <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Members</th>
+              <th className="px-3 py-2">Branch</th>
+              <th className="px-3 py-2">Loans</th>
+              <th className="px-3 py-2">Outstanding</th>
               <th className="px-3 py-2 text-right pr-4">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="p-4 text-gray-500">Loading…</td>
+                <td colSpan={6} className="p-4 muted">Loading…</td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={6} className="p-4 text-red-600">{error}</td>
+                <td colSpan={6} className="p-4 text-rose-600 dark:text-rose-400">{error}</td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-4 text-gray-500">No groups yet.</td>
+                <td colSpan={6} className="p-4 muted">No groups yet.</td>
               </tr>
             ) : (
               rows.map((g) => (
-                <tr key={g.id} className="border-t">
+                <tr key={g.id} className="border-t border-[var(--border)]">
                   <td className="px-3 py-2">{g.name}</td>
                   <td className="px-3 py-2">{g.membersCount}</td>
                   <td className="px-3 py-2">{g.branchName}</td>
@@ -115,7 +114,7 @@ const BorrowerGroups = () => {
                   <td className="px-3 py-2 text-right">
                     <Link
                       to={`/borrowers/groups/${encodeURIComponent(g.id)}`}
-                      className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                      className="text-indigo-600 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                     >
                       View
                     </Link>
