@@ -14,18 +14,6 @@ const toNumberOrNull = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-// Common props to hard-disable Grammarly and similar injectors
-const antiInjectorProps = {
-  "data-gramm": "false",
-  "data-gramm_editor": "false",
-  "data-enable-grammarly": "false",
-  "data-ms-editor": "false",
-  autoComplete: "off",
-  autoCorrect: "off",
-  autoCapitalize: "off",
-  spellCheck: false,
-};
-
 export default function LoanProductForm() {
   const navigate = useNavigate();
   const { id } = useParams(); // if present => edit
@@ -57,6 +45,9 @@ export default function LoanProductForm() {
   // numeric-only change handler (allows digits and a single ".")
   const handleNumericChange = (key) => (e) => {
     let v = e.target.value;
+    // Allow empty
+    if (v === "") return set(key, "");
+
     // Remove any non-digit/non-dot chars
     v = v.replace(/[^\d.]/g, "");
     // Keep only the first dot
@@ -111,9 +102,6 @@ export default function LoanProductForm() {
       }
     })();
   }, [editing, id, navigate]);
-
-  // Stop inputs losing focus due to global listeners
-  const stopBubble = (e) => e.stopPropagation();
 
   const validate = () => {
     const e = {};
@@ -207,24 +195,21 @@ export default function LoanProductForm() {
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Name" error={errors.name}>
               <input
-                {...antiInjectorProps}
                 name="name"
                 className={inputClass}
                 value={form.name}
-                onKeyDown={stopBubble}
                 onChange={(e) => set("name", e.target.value)}
                 placeholder="e.g. Business Working Capital"
                 required
+                autoFocus
               />
             </Field>
 
             <Field label="Code" error={errors.code}>
               <input
-                {...antiInjectorProps}
                 name="code"
                 className={inputClass}
                 value={form.code}
-                onKeyDown={stopBubble}
                 onChange={(e) => set("code", e.target.value)}
                 onBlur={(e) => set("code", e.target.value.toUpperCase())}
                 placeholder="e.g. BWC"
@@ -234,11 +219,9 @@ export default function LoanProductForm() {
 
             <Field label="Status">
               <select
-                {...antiInjectorProps}
                 name="status"
                 className={inputClass}
                 value={form.status}
-                onKeyDown={stopBubble}
                 onChange={(e) => set("status", e.target.value)}
               >
                 <option value="active">Active</option>
@@ -248,11 +231,9 @@ export default function LoanProductForm() {
 
             <Field label="Interest Method">
               <select
-                {...antiInjectorProps}
                 name="interestMethod"
                 className={inputClass}
                 value={form.interestMethod}
-                onKeyDown={stopBubble}
                 onChange={(e) => set("interestMethod", e.target.value)}
               >
                 <option value="flat">Flat</option>
@@ -262,12 +243,10 @@ export default function LoanProductForm() {
 
             <Field label="Interest Rate (%)" error={errors.interestRate}>
               <input
-                {...antiInjectorProps}
                 name="interestRate"
                 type="text"
                 className={inputClass}
                 value={form.interestRate}
-                onKeyDown={stopBubble}
                 onChange={handleNumericChange("interestRate")}
                 placeholder="e.g. 3 or 3.5"
                 inputMode="decimal"
@@ -276,12 +255,10 @@ export default function LoanProductForm() {
 
             <Field label="Penalty Rate (%)">
               <input
-                {...antiInjectorProps}
                 name="penaltyRate"
                 type="text"
                 className={inputClass}
                 value={form.penaltyRate}
-                onKeyDown={stopBubble}
                 onChange={handleNumericChange("penaltyRate")}
                 placeholder="e.g. 1.5"
                 inputMode="decimal"
@@ -290,12 +267,10 @@ export default function LoanProductForm() {
 
             <Field label="Min Principal">
               <input
-                {...antiInjectorProps}
                 name="minPrincipal"
                 type="text"
                 className={inputClass}
                 value={form.minPrincipal}
-                onKeyDown={stopBubble}
                 onChange={handleNumericChange("minPrincipal")}
                 placeholder="e.g. 100000"
                 inputMode="numeric"
@@ -304,12 +279,10 @@ export default function LoanProductForm() {
 
             <Field label="Max Principal" error={errors.maxPrincipal}>
               <input
-                {...antiInjectorProps}
                 name="maxPrincipal"
                 type="text"
                 className={inputClass}
                 value={form.maxPrincipal}
-                onKeyDown={stopBubble}
                 onChange={handleNumericChange("maxPrincipal")}
                 placeholder="e.g. 10000000"
                 inputMode="numeric"
@@ -318,12 +291,10 @@ export default function LoanProductForm() {
 
             <Field label="Min Term (months)">
               <input
-                {...antiInjectorProps}
                 name="minTermMonths"
                 type="text"
                 className={inputClass}
                 value={form.minTermMonths}
-                onKeyDown={stopBubble}
                 onChange={handleNumericChange("minTermMonths")}
                 placeholder="e.g. 3"
                 inputMode="numeric"
@@ -332,12 +303,10 @@ export default function LoanProductForm() {
 
             <Field label="Max Term (months)" error={errors.maxTermMonths}>
               <input
-                {...antiInjectorProps}
                 name="maxTermMonths"
                 type="text"
                 className={inputClass}
                 value={form.maxTermMonths}
-                onKeyDown={stopBubble}
                 onChange={handleNumericChange("maxTermMonths")}
                 placeholder="e.g. 36"
                 inputMode="numeric"
@@ -347,12 +316,10 @@ export default function LoanProductForm() {
             <div className="sm:col-span-2">
               <Field label="Internal Notes / Description">
                 <textarea
-                  {...antiInjectorProps}
                   name="description"
                   rows={3}
                   className={inputClass}
                   value={form.description || ""}
-                  onKeyDown={stopBubble}
                   onChange={(e) => set("description", e.target.value)}
                   placeholder="Optional details visible to staff only."
                 />
