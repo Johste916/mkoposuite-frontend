@@ -5,11 +5,23 @@ import api from "../../api";
 
 const cls = (...xs) => xs.filter(Boolean).join(" ");
 
-// convert form string -> number or null
+// convert form string -> number or null for submit
 const toNumberOrNull = (v) => {
   if (v === "" || v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+};
+
+// Common props to hard-disable Grammarly and similar injectors
+const antiInjectorProps = {
+  "data-gramm": "false",
+  "data-gramm_editor": "false",
+  "data-enable-grammarly": "false",
+  "data-ms-editor": "false",
+  autoComplete: "off",
+  autoCorrect: "off",
+  autoCapitalize: "off",
+  spellCheck: false,
 };
 
 export default function LoanProductForm() {
@@ -21,13 +33,13 @@ export default function LoanProductForm() {
   const [loading, setLoading] = useState(editing);
   const [errors, setErrors] = useState({});
 
-  // Keep ALL inputs as strings while typing
+  // Keep ALL inputs as strings while typing (prevents value “jumping”)
   const [form, setForm] = useState({
     name: "",
     code: "",
     status: "active",
     interestMethod: "flat",
-    interestRate: "",     // string for smooth typing
+    interestRate: "",
     minPrincipal: "",
     maxPrincipal: "",
     minTermMonths: "",
@@ -83,6 +95,11 @@ export default function LoanProductForm() {
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Stop inputs losing focus due to global key handlers
+  const stopBubble = (e) => {
+    e.stopPropagation();
+  };
+
   const validate = () => {
     const e = {};
 
@@ -94,13 +111,10 @@ export default function LoanProductForm() {
 
     if (!String(form.name).trim()) e.name = "Name is required";
     if (!String(form.code).trim()) e.code = "Code is required";
-
     if (interestRate === null || interestRate < 0)
       e.interestRate = "Interest rate must be 0 or more";
-
     if (minP !== null && maxP !== null && maxP < minP)
       e.maxPrincipal = "Max must be ≥ Min";
-
     if (minT !== null && maxT !== null && maxT < minT)
       e.maxTermMonths = "Max must be ≥ Min";
 
@@ -113,7 +127,6 @@ export default function LoanProductForm() {
     if (!validate()) return;
     setSaving(true);
 
-    // convert to payload with numbers/nulls
     const payload = {
       name: form.name.trim(),
       code: form.code.trim().toUpperCase(),
@@ -179,8 +192,10 @@ export default function LoanProductForm() {
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Name" error={errors.name}>
               <input
+                {...antiInjectorProps}
                 className={inputClass}
                 value={form.name}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("name", e.target.value)}
                 placeholder="e.g. Business Working Capital"
                 required
@@ -189,8 +204,10 @@ export default function LoanProductForm() {
 
             <Field label="Code" error={errors.code}>
               <input
+                {...antiInjectorProps}
                 className={inputClass}
                 value={form.code}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("code", e.target.value)}
                 onBlur={(e) => set("code", e.target.value.toUpperCase())}
                 placeholder="e.g. BWC"
@@ -200,8 +217,10 @@ export default function LoanProductForm() {
 
             <Field label="Status">
               <select
+                {...antiInjectorProps}
                 className={inputClass}
                 value={form.status}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("status", e.target.value)}
               >
                 <option value="active">Active</option>
@@ -211,8 +230,10 @@ export default function LoanProductForm() {
 
             <Field label="Interest Method">
               <select
+                {...antiInjectorProps}
                 className={inputClass}
                 value={form.interestMethod}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("interestMethod", e.target.value)}
               >
                 <option value="flat">Flat</option>
@@ -222,72 +243,92 @@ export default function LoanProductForm() {
 
             <Field label="Interest Rate (%)" error={errors.interestRate}>
               <input
+                {...antiInjectorProps}
                 type="number"
                 step="0.0001"
                 className={inputClass}
                 value={form.interestRate}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("interestRate", e.target.value)}
                 placeholder="e.g. 3"
+                inputMode="decimal"
               />
             </Field>
 
             <Field label="Penalty Rate (%)">
               <input
+                {...antiInjectorProps}
                 type="number"
                 step="0.0001"
                 className={inputClass}
                 value={form.penaltyRate}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("penaltyRate", e.target.value)}
                 placeholder="e.g. 1.5"
+                inputMode="decimal"
               />
             </Field>
 
             <Field label="Min Principal">
               <input
+                {...antiInjectorProps}
                 type="number"
                 className={inputClass}
                 value={form.minPrincipal}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("minPrincipal", e.target.value)}
                 placeholder="e.g. 100000"
+                inputMode="numeric"
               />
             </Field>
 
             <Field label="Max Principal" error={errors.maxPrincipal}>
               <input
+                {...antiInjectorProps}
                 type="number"
                 className={inputClass}
                 value={form.maxPrincipal}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("maxPrincipal", e.target.value)}
                 placeholder="e.g. 10000000"
+                inputMode="numeric"
               />
             </Field>
 
             <Field label="Min Term (months)">
               <input
+                {...antiInjectorProps}
                 type="number"
                 className={inputClass}
                 value={form.minTermMonths}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("minTermMonths", e.target.value)}
                 placeholder="e.g. 3"
+                inputMode="numeric"
               />
             </Field>
 
             <Field label="Max Term (months)" error={errors.maxTermMonths}>
               <input
+                {...antiInjectorProps}
                 type="number"
                 className={inputClass}
                 value={form.maxTermMonths}
+                onKeyDown={stopBubble}
                 onChange={(e) => set("maxTermMonths", e.target.value)}
                 placeholder="e.g. 36"
+                inputMode="numeric"
               />
             </Field>
 
             <div className="sm:col-span-2">
               <Field label="Internal Notes / Description">
                 <textarea
+                  {...antiInjectorProps}
                   rows={3}
                   className={inputClass}
                   value={form.description || ""}
+                  onKeyDown={stopBubble}
                   onChange={(e) => set("description", e.target.value)}
                   placeholder="Optional details visible to staff only."
                 />
