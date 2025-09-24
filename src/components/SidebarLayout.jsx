@@ -63,7 +63,6 @@ const NAV = () => [
 
       // ✅ Loan Products module
       { label: "Loan Products", to: "/loans/products" },
-      { label: "Add Loan Product", to: "/loans/products/new" },
 
       { label: "Review Queue", to: "/loans/review-queue" },
       { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
