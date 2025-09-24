@@ -1,41 +1,110 @@
-/* Global theme defaults that are safe for all modules. Loaded via styles/tailwind.css */
+/* ---------- Color tokens ---------- */
+:root {
+  --bg: #ffffff;
+  --fg: #0b0f14;
+  --muted: #6b7280;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --ring: #2563eb;
 
-@layer base {
-  html {
-    /* Lets the browser auto-theme form controls (where supported) */
-    color-scheme: light dark;
-  }
+  --input-bg: #ffffff;
+  --input-fg: var(--fg);
+  --input-placeholder: var(--muted);
+  --input-border: var(--border);
+  --menu-bg: #ffffff;
+  --menu-fg: var(--fg);
+  --menu-shadow: 0 8px 28px rgba(0,0,0,.12);
+}
 
-  body {
-    @apply bg-gray-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100;
-  }
+/* Auto-dark when no explicit theme forced */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f14;
+    --fg: #edf1f7;
+    --muted: #9aa4b2;
+    --card: #0f141c;
+    --border: #1f2937;
+    --ring: #60a5fa;
 
-  /* Consistent, visible focus in both themes */
-  :focus-visible {
-    outline: 2px solid rgb(59 130 246 / 60%);
-    outline-offset: 2px;
-  }
-
-  /* Readable placeholders in dark mode */
-  input::placeholder,
-  textarea::placeholder {
-    @apply text-slate-400 dark:text-slate-500;
-  }
-
-  /* Make native selects inherit theme colors */
-  select,
-  option {
-    color: inherit;
-    background-color: inherit;
+    --input-bg: #111827;
+    --input-fg: var(--fg);
+    --input-placeholder: var(--muted);
+    --input-border: #273244;
+    --menu-bg: #0f141c;
+    --menu-fg: var(--fg);
   }
 }
 
-@layer utilities {
-  /* Handy card + button utilities if you want them app-wide */
-  .ms-card {
-    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl;
-  }
-  .ms-btn {
-    @apply border rounded-lg bg-white hover:bg-gray-50 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-700;
-  }
+/* Forced theme via data attribute */
+[data-theme="light"] {
+  --bg: #ffffff;
+  --fg: #0b0f14;
+  --muted: #6b7280;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --ring: #2563eb;
+
+  --input-bg: #ffffff;
+  --input-fg: var(--fg);
+  --input-placeholder: var(--muted);
+  --input-border: var(--border);
+  --menu-bg: #ffffff;
+  --menu-fg: var(--fg);
 }
+
+[data-theme="dark"] {
+  --bg: #0b0f14;
+  --fg: #edf1f7;
+  --muted: #9aa4b2;
+  --card: #0f141c;
+  --border: #1f2937;
+  --ring: #60a5fa;
+
+  --input-bg: #111827;
+  --input-fg: var(--fg);
+  --input-placeholder: var(--muted);
+  --input-border: #273244;
+  --menu-bg: #0f141c;
+  --menu-fg: var(--fg);
+}
+
+/* ---------- Global app surfaces ---------- */
+html{ font-size: 15px; color-scheme: light dark; }
+body{ background: var(--bg); color: var(--fg); }
+
+/* Focus ring */
+:focus-visible{ outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* ---------- Reusable components ---------- */
+
+/* Inputs (text/select/textarea) */
+.input,
+input[type="text"], input[type="search"], input[type="number"],
+select, textarea {
+  width: 100%;
+  border-radius: .5rem;
+  padding: .5rem .75rem;
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--input-border);
+}
+.input::placeholder,
+input::placeholder, textarea::placeholder { color: var(--input-placeholder); }
+
+/* Make native selects inherit theme */
+select, option { color: var(--input-fg); background-color: var(--input-bg); }
+
+/* Card & muted text helpers (used in your pages already) */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; }
+.muted { color: var(--muted); }
+
+/* Dropdown/menus (for libs that mount popovers) */
+.menu {
+  background: var(--menu-bg);
+  color: var(--menu-fg);
+  box-shadow: var(--menu-shadow);
+  border: 1px solid var(--input-border);
+}
+
+/* Ensure filter dropdowns float above sticky headers/tables */
+.filter-field { position: relative; z-index: 50; }
