@@ -1,0 +1,1 @@
+import{j as t}from"./index-DUtn1vUj.js";import{T as o}from"./TypesEditor-BhKzV96O.js";import"./admin-DOZpNDUN.js";import"./index-SoVevxw5.js";function m(){return t.jsx(o,{title:"Loan Investment Products",category:"loan-investment-products"})}export{m as default};

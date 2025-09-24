@@ -8,6 +8,8 @@ const cls = (...xs) => xs.filter(Boolean).join(" ");
 // convert form string -> number or null for submit
 const toNumberOrNull = (v) => {
   if (v === "" || v === null || v === undefined) return null;
+  // treat lone "." as empty
+  if (v.trim() === ".") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
@@ -48,10 +50,22 @@ export default function LoanProductForm() {
     description: "",
   });
 
-  // stable setter
   const set = useCallback((k, v) => {
     setForm((f) => ({ ...f, [k]: v }));
   }, []);
+
+  // numeric-only change handler (allows digits and a single ".")
+  const handleNumericChange = (key) => (e) => {
+    let v = e.target.value;
+    // Remove any non-digit/non-dot chars
+    v = v.replace(/[^\d.]/g, "");
+    // Keep only the first dot
+    const dot = v.indexOf(".");
+    if (dot !== -1) {
+      v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "");
+    }
+    set(key, v);
+  };
 
   useEffect(() => {
     if (!editing) return;
@@ -98,16 +112,8 @@ export default function LoanProductForm() {
     })();
   }, [editing, id, navigate]);
 
-  // Stop inputs losing focus / getting cleared by global listeners
-  const stopBubble = (e) => {
-    e.stopPropagation();
-  };
-  const preventWheelChange = (e) => {
-    // Avoid number inputs changing on mouse wheel and then “snapping back”
-    e.target.blur();
-    e.stopPropagation();
-    setTimeout(() => e.target && e.target.focus(), 0);
-  };
+  // Stop inputs losing focus due to global listeners
+  const stopBubble = (e) => e.stopPropagation();
 
   const validate = () => {
     const e = {};
@@ -258,14 +264,12 @@ export default function LoanProductForm() {
               <input
                 {...antiInjectorProps}
                 name="interestRate"
-                type="number"
-                step="0.0001"
+                type="text"
                 className={inputClass}
                 value={form.interestRate}
-                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
-                onChange={(e) => set("interestRate", e.target.value)}
-                placeholder="e.g. 3"
+                onChange={handleNumericChange("interestRate")}
+                placeholder="e.g. 3 or 3.5"
                 inputMode="decimal"
               />
             </Field>
@@ -274,13 +278,11 @@ export default function LoanProductForm() {
               <input
                 {...antiInjectorProps}
                 name="penaltyRate"
-                type="number"
-                step="0.0001"
+                type="text"
                 className={inputClass}
                 value={form.penaltyRate}
-                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
-                onChange={(e) => set("penaltyRate", e.target.value)}
+                onChange={handleNumericChange("penaltyRate")}
                 placeholder="e.g. 1.5"
                 inputMode="decimal"
               />
@@ -290,12 +292,11 @@ export default function LoanProductForm() {
               <input
                 {...antiInjectorProps}
                 name="minPrincipal"
-                type="number"
+                type="text"
                 className={inputClass}
                 value={form.minPrincipal}
-                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
-                onChange={(e) => set("minPrincipal", e.target.value)}
+                onChange={handleNumericChange("minPrincipal")}
                 placeholder="e.g. 100000"
                 inputMode="numeric"
               />
@@ -305,12 +306,11 @@ export default function LoanProductForm() {
               <input
                 {...antiInjectorProps}
                 name="maxPrincipal"
-                type="number"
+                type="text"
                 className={inputClass}
                 value={form.maxPrincipal}
-                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
-                onChange={(e) => set("maxPrincipal", e.target.value)}
+                onChange={handleNumericChange("maxPrincipal")}
                 placeholder="e.g. 10000000"
                 inputMode="numeric"
               />
@@ -320,12 +320,11 @@ export default function LoanProductForm() {
               <input
                 {...antiInjectorProps}
                 name="minTermMonths"
-                type="number"
+                type="text"
                 className={inputClass}
                 value={form.minTermMonths}
-                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
-                onChange={(e) => set("minTermMonths", e.target.value)}
+                onChange={handleNumericChange("minTermMonths")}
                 placeholder="e.g. 3"
                 inputMode="numeric"
               />
@@ -335,12 +334,11 @@ export default function LoanProductForm() {
               <input
                 {...antiInjectorProps}
                 name="maxTermMonths"
-                type="number"
+                type="text"
                 className={inputClass}
                 value={form.maxTermMonths}
-                onWheel={preventWheelChange}
                 onKeyDown={stopBubble}
-                onChange={(e) => set("maxTermMonths", e.target.value)}
+                onChange={handleNumericChange("maxTermMonths")}
                 placeholder="e.g. 36"
                 inputMode="numeric"
               />
