@@ -1,5 +1,9 @@
+// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
+
+/* ---------- Theme provider (new wrap) ---------- */
+import { ThemeProvider } from "./providers/ThemeProvider";
 
 // Auth/public
 const Login = lazy(() => import("./pages/Login"));
@@ -177,460 +181,481 @@ const TenantsAdminNew = lazy(() => import("./pages/TenantsAdmin"));
 // NEW: Modern SMS Center page
 const SmsCenter = lazy(() => import("./pages/SmsCenter"));
 
+/* ---------- Small themed fallbacks ---------- */
 const Fallback = () => (
-  <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading…</div>
+  <div className="p-6 text-sm" style={{ color: "var(--fg)", background: "var(--bg)" }}>
+    Loading…
+  </div>
 );
 
 const Forbidden = () => (
-  <div className="p-6">
+  <div className="p-6" style={{ color: "var(--fg)", background: "var(--bg)" }}>
     <h1 className="text-2xl font-bold text-rose-600 dark:text-rose-300">403 — Forbidden</h1>
-    <p className="mt-2 text-slate-700 dark:text-slate-300">
-      You don’t have permission to access this area.
-    </p>
+    <p className="mt-2 opacity-80">You don’t have permission to access this area.</p>
   </div>
 );
 
 function App() {
   return (
-    <Suspense fallback={<Fallback />}>
-      <ToastProvider>
-        <FeatureConfigProvider>
-          <Routes>
-            {/* Public */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+    <ThemeProvider>
+      <Suspense fallback={<Fallback />}>
+        <ToastProvider>
+          <FeatureConfigProvider>
+            <Routes>
+              {/* Public */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
 
-            {/* Protected shell */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <SidebarLayout />
-                </ProtectedRoute>
-              }
-            >
-              {/* Dashboard */}
-              <Route index element={<Dashboard />} />
-
-              {/* Admin hub */}
+              {/* Protected shell */}
               <Route
-                path="admin"
+                path="/"
                 element={
-                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin", "developer"]}>
-                    <Outlet />
-                  </RoleProtectedRoute>
+                  <ProtectedRoute>
+                    <SidebarLayout />
+                  </ProtectedRoute>
                 }
               >
-                <Route index element={<Admin />} />
+                {/* Dashboard */}
+                <Route index element={<Dashboard />} />
+
+                {/* Admin hub */}
                 <Route
-                  path="tenants"
+                  path="admin"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin", "developer"]}>
+                      <Outlet />
+                    </RoleProtectedRoute>
+                  }
+                >
+                  <Route index element={<Admin />} />
+                  <Route
+                    path="tenants"
+                    element={
+                      <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
+                        <AdminTenants />
+                      </RoleProtectedRoute>
+                    }
+                  />
+                  <Route path=":slug" element={<AdminRouter />} />
+                </Route>
+
+                {/* Account hub */}
+                <Route path="account/settings" element={<AccountSettings />} />
+                <Route path="account/profile" element={<Profile />} />
+                <Route
+                  path="account/organization"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin", "developer"]}>
+                      <Organization />
+                    </RoleProtectedRoute>
+                  }
+                />
+                {/* Canonical account pages */}
+                <Route path="account/billing" element={<Billing />} />
+                <Route path="account/security" element={<Navigate to="/account/security/change-password" replace />} />
+                <Route path="account/security/change-password" element={<ChangePassword />} />
+                <Route path="account/security/2fa" element={<TwoFactor />} />
+
+                {/* Tenants entry inside Account hub */}
+                <Route
+                  path="account/tenants"
                   element={
                     <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
                       <AdminTenants />
                     </RoleProtectedRoute>
                   }
                 />
-                <Route path=":slug" element={<AdminRouter />} />
+
+                {/* Aliases */}
+                <Route path="profile" element={<Navigate to="/account/profile" replace />} />
+                <Route path="settings" element={<Navigate to="/account/settings" replace />} />
+                <Route path="settings/profile" element={<Navigate to="/account/profile" replace />} />
+                <Route path="account" element={<Navigate to="/account/settings" replace />} />
+                <Route path="organization" element={<Navigate to="/account/organization" replace />} />
+                <Route path="org" element={<Navigate to="/account/organization" replace />} />
+
+                {/* Canonical account legacy paths */}
+                <Route path="billing" element={<Billing />} />
+                <Route path="change-password" element={<ChangePassword />} />
+                <Route path="2fa" element={<TwoFactor />} />
+
+                {/* Back-compat for /settings/* */}
+                <Route path="settings/billing" element={<Navigate to="/billing" replace />} />
+                <Route path="settings/change-password" element={<Navigate to="/change-password" replace />} />
+                <Route path="settings/2fa" element={<Navigate to="/2fa" replace />} />
+                <Route path="settings/organization" element={<Navigate to="/account/organization" replace />} />
+                <Route path="settings/org" element={<Navigate to="/account/organization" replace />} />
+
+                {/* Borrowers */}
+                <Route path="borrowers" element={<Borrowers />} />
+                <Route path="borrowers/add" element={<AddBorrower />} />
+                <Route path="borrowers/kyc" element={<KycQueue />} />
+                <Route path="borrowers/blacklist" element={<Blacklist />} />
+                <Route path="borrowers/imports" element={<BorrowerImports />} />
+                <Route path="borrowers/reports" element={<BorrowerReports />} />
+                <Route path="borrowers/:id" element={<BorrowerDetails />} />
+                <Route path="borrowers/sms" element={<Sms />} />
+                <Route
+                  path="borrowers/email"
+                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>}
+                />
+                <Route
+                  path="borrowers/invite"
+                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>}
+                />
+
+                {/* Groups */}
+                <Route path="borrowers/groups" element={<BorrowerGroups />} />
+                <Route path="borrowers/groups/add" element={<AddGroup />} />
+                <Route path="borrowers/groups/:groupId" element={<GroupDetails />} />
+                <Route path="borrowers/groups/imports" element={<GroupImports />} />
+                <Route path="borrowers/groups/reports" element={<GroupReports />} />
+
+                {/* Loans */}
+                <Route path="loans" element={<Loans />} />
+                <Route path="loans/applications" element={<LoanApplications />} />
+                <Route path="loans/add" element={<Navigate to="/loans/applications" replace />} />
+                <Route path="loans/status/:status" element={<LoanStatusList />} />
+                <Route
+                  path="loans/review-queue"
+                  element={
+                    <RoleProtectedRoute allow={["branch_manager", "compliance", "admin", "director"]}>
+                      <LoanReview />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
+                <Route
+                  path="loans/products"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director"]}>
+                      <LoanProducts />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="loans/calculator"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director"]}>
+                      <LoanSchedulePage />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="loans/schedule"
+                  element={
+                    <RoleProtectedRoute allow={["branch_manager", "admin", "director"]}>
+                      <LoanSchedulePage />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route path="loans/:id" element={<LoanDetails />} />
+                <Route path="loans/:id/disburse" element={<DisburseLoan />} />
+                {/* Loan aliases */}
+                <Route path="loans/due" element={<Navigate to="/loans/status/due" replace />} />
+                <Route path="loans/missed" element={<Navigate to="/loans/status/missed" replace />} />
+                <Route path="loans/arrears" element={<Navigate to="/loans/status/arrears" replace />} />
+                <Route path="loans/no-repayments" element={<Navigate to="/loans/status/no-repayments" replace />} />
+                <Route path="loans/past-maturity" element={<Navigate to="/loans/status/past-maturity" replace />} />
+                <Route path="loans/principal-outstanding" element={<Navigate to="/loans/status/principal-outstanding" replace />} />
+                <Route path="loans/1-month-late" element={<Navigate to="/loans/status/1-month-late" replace />} />
+                <Route path="loans/3-months-late" element={<Navigate to="/loans/status/3-months-late" replace />} />
+
+                {/* Repayments */}
+                <Route path="repayments" element={<Repayments />} />
+                <Route path="repayments/new" element={<ManualRepayment />} />
+                <Route path="repayments/receipts" element={<RepaymentReceipts />} />
+                <Route path="repayments/bulk" element={<BulkRepayments />} />
+                <Route path="repayments/csv" element={<UploadRepaymentsCSV />} />
+                <Route path="repayments/charts" element={<RepaymentCharts />} />
+                <Route path="repayments/approve" element={<ApproveRepayments />} />
+
+                {/* Collateral */}
+                <Route path="collateral" element={<CollateralList />} />
+                <Route
+                  path="collateral/new"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
+                      <CollateralForm mode="create" />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="collateral/:id/edit"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
+                      <CollateralForm mode="edit" />
+                    </RoleProtectedRoute>
+                  }
+                />
+
+                {/* Collection Sheets */}
+                <Route path="collections" element={<CollectionSheets />} />
+                <Route
+                  path="collections/new"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
+                      <CollectionSheetCreate />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="collections/:id/edit"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
+                      <CollectionSheetEdit />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route path="collections/daily" element={<CollectionSheets />} />
+                <Route path="collections/missed" element={<CollectionSheets />} />
+                <Route path="collections/past-maturity" element={<CollectionSheets />} />
+                <Route path="collections/sms" element={<Sms />} />
+                <Route
+                  path="collections/email"
+                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>}
+                />
+
+                {/* Savings */}
+                <Route path="savings" element={<Savings />} />
+                <Route path="savings/report" element={<Savings />} />
+                <Route path="savings/transactions" element={<SavingsTransactions />} />
+                <Route path="savings/transactions/csv" element={<UploadSavingsCSV />} />
+                <Route path="savings/transactions/approve" element={<ApproveSavingsTx />} />
+                <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
+                <Route path="savings-transactions/*" element={<Navigate to="/savings/transactions" replace />} />
+
+                {/* ✅ Banking */}
+                <Route path="banks" element={<BanksList />} />
+                <Route path="banks/add" element={<BankForm />} />
+                <Route path="banks/:id" element={<BankDetails />} />
+                <Route path="banks/:id/edit" element={<BankForm />} />
+
+                {/* Banking features under the same section */}
+                <Route path="banks/transactions" element={<BankTransactions />} />
+                <Route path="banks/transfers" element={<BankTransfers />} />
+                <Route path="banks/reconciliation" element={<BankReconciliation />} />
+                <Route path="banks/statements" element={<BankStatements />} />
+                <Route path="banks/import" element={<ImportBankCsv />} />
+                <Route path="banks/approvals" element={<BankApprovals />} />
+                <Route path="banks/rules" element={<RulesGlMapping />} />
+
+                {/* Cash under Banking */}
+                <Route path="cash/accounts" element={<CashAccountsList />} />
+                <Route path="cash/accounts/new" element={<CashAccountForm />} />
+                <Route path="cash/transactions" element={<CashTransactions />} />
+                <Route path="cash/transactions/add" element={<CashTransactionForm />} />
+                <Route path="cash/reconciliation" element={<CashReconciliation />} />
+                <Route path="cash/statements" element={<CashStatement />} />
+
+                {/* Helpful aliases */}
+                <Route path="bank-accounts" element={<Navigate to="/banks" replace />} />
+                <Route path="bank-accounts/add" element={<Navigate to="/banks/add" replace />} />
+                {/* Legacy redirects */}
+                <Route path="bank" element={<Navigate to="/banks" replace />} />
+                <Route path="banking" element={<Navigate to="/banks" replace />} />
+
+                {/* Investors */}
+                <Route path="investors" element={<Investors />} />
+                <Route path="investors/add" element={<AddInvestor />} />
+                <Route path="investors/:id" element={<InvestorDetails />} />
+
+                {/* E-Signatures */}
+                <Route path="esignatures" element={<ESignatures />} />
+
+                {/* HR & Payroll */}
+                <Route path="payroll" element={<Payroll />} />
+                <Route
+                  path="payroll/add"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "payroll_admin"]}>
+                      <AddPayroll />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="payroll/report"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "payroll_admin"]}>
+                      <PayrollReport />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route path="hr" element={<Navigate to="/hr/employees" replace />} />
+                <Route
+                  path="hr/employees"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
+                      <HREmployees />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="hr/attendance"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
+                      <HRAttendance />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route path="hr/leave" element={<HRLeave />} />
+                <Route
+                  path="hr/contracts"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
+                      <HRContracts />
+                    </RoleProtectedRoute>
+                  }
+                />
+
+                {/* Expenses */}
+                <Route path="expenses" element={<Expenses />} />
+                <Route
+                  path="expenses/add"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "accountant", "branch_manager"]}>
+                      <AddExpense />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="expenses/csv"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "accountant", "branch_manager"]}>
+                      <UploadExpensesCSV />
+                    </RoleProtectedRoute>
+                  }
+                />
+
+                {/* Other Income */}
+                <Route path="other-income" element={<OtherIncome />} />
+                <Route
+                  path="other-income/add"
+                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>}
+                />
+                <Route
+                  path="other-income/csv"
+                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>}
+                />
+
+                {/* Assets */}
+                <Route path="assets" element={<Assets />} />
+                <Route
+                  path="assets/add"
+                  element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>}
+                />
+
+                {/* Accounting */}
+                <Route
+                  path="accounting"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "accountant"]}>
+                      <Outlet />
+                    </RoleProtectedRoute>
+                  }
+                >
+                  <Route index element={<Navigate to="/accounting/trial-balance" replace />} />
+                  <Route path="chart-of-accounts" element={<ChartOfAccounts />} />
+                  <Route path="trial-balance" element={<TrialBalance />} />
+                  <Route path="profit-loss" element={<ProfitLoss />} />
+                  <Route path="cashflow" element={<Cashflow />} />
+                  <Route path="manual-journal" element={<ManualJournal />} />
+                  <Route path="coa" element={<Navigate to="/accounting/chart-of-accounts" replace />} />
+                  <Route path="tb" element={<Navigate to="/accounting/trial-balance" replace />} />
+                  <Route path="pnl" element={<Navigate to="/accounting/profit-loss" replace />} />
+                </Route>
+
+                {/* Reports */}
+                <Route path="reports" element={<Outlet />}>
+                  <Route index element={<Navigate to="/reports/borrowers" replace />} />
+                  <Route path="borrowers" element={<BorrowersReport />} />
+                  <Route path="loans" element={<LoanReport />} />
+                  <Route path="arrears-aging" element={<ArrearsAging />} />
+                  <Route path="collections" element={<CollectionsReport />} />
+                  <Route path="collector" element={<CollectorReport />} />
+                  <Route path="deferred-income" element={<DeferredIncome />} />
+                  <Route path="deferred-income-monthly" element={<DeferredIncomeMonthly />} />
+                  <Route path="pro-rata" element={<ProRataCollections />} />
+                  <Route path="disbursement" element={<DisbursementReport />} />
+                  <Route path="fees" element={<FeesReport />} />
+                  <Route path="loan-officer" element={<LoanProductsReport />} />
+                  <Route path="loan-products" element={<LoanProductsReport />} />
+                  <Route path="mfrs" element={<MfrsRatios />} />
+                  <Route path="daily" element={<DailyReport />} />
+                  <Route path="monthly" element={<MonthlyReport />} />
+                  <Route path="outstanding" element={<OutstandingReport />} />
+                  <Route path="par" element={<ParReport />} />
+                  <Route path="at-a-glance" element={<AtAGlance />} />
+                  <Route path="all" element={<AllEntries />} />
+                </Route>
+
+                {/* Support & Subscription & Tools */}
+                <Route path="subscription" element={<Subscription />} />
+                <Route path="support-tickets" element={<SupportTickets />} />
+                <Route path="sms-console" element={<SMSConsole />} />
+                <Route path="sms-center" element={<SmsCenter />} />
+                <Route path="billing-by-phone" element={<BillingByPhone />} />
+
+                {/* Admin tools */}
+                <Route
+                  path="impersonate-tenant"
+                  element={
+                    <RoleProtectedRoute allow={["system_admin", "super_admin", "admin", "director", "developer"]}>
+                      <ImpersonateTenant />
+                    </RoleProtectedRoute>
+                  }
+                />
+                <Route
+                  path="tenants-admin"
+                  element={
+                    <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
+                      <TenantsAdminNew />
+                    </RoleProtectedRoute>
+                  }
+                />
+
+                {/* ✅ NEW: User Management routes (index shows all-in-one page) */}
+                <Route
+                  path="user-management"
+                  element={
+                    <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin"]}>
+                      <Outlet />
+                    </RoleProtectedRoute>
+                  }
+                >
+                  <Route index element={<UserManagement />} />
+                  <Route path="users" element={<Users />} />
+                  <Route path="roles" element={<Roles />} />
+                  <Route path="permissions" element={<Permissions />} />
+                </Route>
+
+                {/* Friendly aliases to avoid breaking old links */}
+                <Route path="users" element={<Navigate to="/user-management/users" replace />} />
+                <Route path="roles" element={<Navigate to="/user-management/roles" replace />} />
+                <Route path="permissions" element={<Navigate to="/user-management/permissions" replace />} />
+                <Route path="staff" element={<Navigate to="/user-management" replace />} />
+                <Route path="staffs" element={<Navigate to="/user-management" replace />} />
+                <Route path="user-management/staff" element={<Navigate to="/user-management" replace />} />
+
+                {/* Branches */}
+                <Route path="branches" element={<Branches />} />
+
+                {/* Legacy (kept Disbursements & Sms) */}
+                <Route path="disbursements" element={<Disbursements />} />
+                <Route path="sms" element={<Sms />} />
+
+                {/* 404 inside shell */}
+                <Route path="*" element={<NotFound />} />
               </Route>
 
-              {/* Account hub */}
-              <Route path="account/settings" element={<AccountSettings />} />
-              <Route path="account/profile" element={<Profile />} />
-              <Route
-                path="account/organization"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin", "developer"]}>
-                    <Organization />
-                  </RoleProtectedRoute>
-                }
-              />
-              {/* Canonical account pages */}
-              <Route path="account/billing" element={<Billing />} />
-              <Route path="account/security" element={<Navigate to="/account/security/change-password" replace />} />
-              <Route path="account/security/change-password" element={<ChangePassword />} />
-              <Route path="account/security/2fa" element={<TwoFactor />} />
-
-              {/* Tenants entry inside Account hub */}
-              <Route
-                path="account/tenants"
-                element={
-                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
-                    <AdminTenants />
-                  </RoleProtectedRoute>
-                }
-              />
-
-              {/* Aliases */}
-              <Route path="profile" element={<Navigate to="/account/profile" replace />} />
-              <Route path="settings" element={<Navigate to="/account/settings" replace />} />
-              <Route path="settings/profile" element={<Navigate to="/account/profile" replace />} />
-              <Route path="account" element={<Navigate to="/account/settings" replace />} />
-              <Route path="organization" element={<Navigate to="/account/organization" replace />} />
-              <Route path="org" element={<Navigate to="/account/organization" replace />} />
-
-              {/* Canonical account legacy paths */}
-              <Route path="billing" element={<Billing />} />
-              <Route path="change-password" element={<ChangePassword />} />
-              <Route path="2fa" element={<TwoFactor />} />
-
-              {/* Back-compat for /settings/* */}
-              <Route path="settings/billing" element={<Navigate to="/billing" replace />} />
-              <Route path="settings/change-password" element={<Navigate to="/change-password" replace />} />
-              <Route path="settings/2fa" element={<Navigate to="/2fa" replace />} />
-              <Route path="settings/organization" element={<Navigate to="/account/organization" replace />} />
-              <Route path="settings/org" element={<Navigate to="/account/organization" replace />} />
-
-              {/* Borrowers */}
-              <Route path="borrowers" element={<Borrowers />} />
-              <Route path="borrowers/add" element={<AddBorrower />} />
-              <Route path="borrowers/kyc" element={<KycQueue />} />
-              <Route path="borrowers/blacklist" element={<Blacklist />} />
-              <Route path="borrowers/imports" element={<BorrowerImports />} />
-              <Route path="borrowers/reports" element={<BorrowerReports />} />
-              <Route path="borrowers/:id" element={<BorrowerDetails />} />
-              <Route path="borrowers/sms" element={<Sms />} />
-              <Route path="borrowers/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Email to Borrowers</div>} />
-              <Route path="borrowers/invite" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Invite Borrowers</div>} />
-
-              {/* Groups */}
-              <Route path="borrowers/groups" element={<BorrowerGroups />} />
-              <Route path="borrowers/groups/add" element={<AddGroup />} />
-              <Route path="borrowers/groups/:groupId" element={<GroupDetails />} />
-              <Route path="borrowers/groups/imports" element={<GroupImports />} />
-              <Route path="borrowers/groups/reports" element={<GroupReports />} />
-
-              {/* Loans */}
-              <Route path="loans" element={<Loans />} />
-              <Route path="loans/applications" element={<LoanApplications />} />
-              <Route path="loans/add" element={<Navigate to="/loans/applications" replace />} />
-              <Route path="loans/status/:status" element={<LoanStatusList />} />
-              <Route
-                path="loans/review-queue"
-                element={
-                  <RoleProtectedRoute allow={["branch_manager", "compliance", "admin", "director"]}>
-                    <LoanReview />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
-              <Route
-                path="loans/products"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director"]}>
-                    <LoanProducts />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="loans/calculator"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director"]}>
-                    <LoanSchedulePage />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="loans/schedule"
-                element={
-                  <RoleProtectedRoute allow={["branch_manager", "admin", "director"]}>
-                    <LoanSchedulePage />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route path="loans/:id" element={<LoanDetails />} />
-              <Route path="loans/:id/disburse" element={<DisburseLoan />} />
-              {/* Loan aliases */}
-              <Route path="loans/due" element={<Navigate to="/loans/status/due" replace />} />
-              <Route path="loans/missed" element={<Navigate to="/loans/status/missed" replace />} />
-              <Route path="loans/arrears" element={<Navigate to="/loans/status/arrears" replace />} />
-              <Route path="loans/no-repayments" element={<Navigate to="/loans/status/no-repayments" replace />} />
-              <Route path="loans/past-maturity" element={<Navigate to="/loans/status/past-maturity" replace />} />
-              <Route path="loans/principal-outstanding" element={<Navigate to="/loans/status/principal-outstanding" replace />} />
-              <Route path="loans/1-month-late" element={<Navigate to="/loans/status/1-month-late" replace />} />
-              <Route path="loans/3-months-late" element={<Navigate to="/loans/status/3-months-late" replace />} />
-
-              {/* Repayments */}
-              <Route path="repayments" element={<Repayments />} />
-              <Route path="repayments/new" element={<ManualRepayment />} />
-              <Route path="repayments/receipts" element={<RepaymentReceipts />} />
-              <Route path="repayments/bulk" element={<BulkRepayments />} />
-              <Route path="repayments/csv" element={<UploadRepaymentsCSV />} />
-              <Route path="repayments/charts" element={<RepaymentCharts />} />
-              <Route path="repayments/approve" element={<ApproveRepayments />} />
-
-              {/* Collateral */}
-              <Route path="collateral" element={<CollateralList />} />
-              <Route
-                path="collateral/new"
-                element={
-                  <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
-                    <CollateralForm mode="create" />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="collateral/:id/edit"
-                element={
-                  <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
-                    <CollateralForm mode="edit" />
-                  </RoleProtectedRoute>
-                }
-              />
-
-              {/* Collection Sheets */}
-              <Route path="collections" element={<CollectionSheets />} />
-              <Route
-                path="collections/new"
-                element={
-                  <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
-                    <CollectionSheetCreate />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="collections/:id/edit"
-                element={
-                  <RoleProtectedRoute allow={["admin", "branch_manager", "director"]}>
-                    <CollectionSheetEdit />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route path="collections/daily" element={<CollectionSheets />} />
-              <Route path="collections/missed" element={<CollectionSheets />} />
-              <Route path="collections/past-maturity" element={<CollectionSheets />} />
-              <Route path="collections/sms" element={<Sms />} />
-              <Route path="collections/email" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Send Collection Emails</div>} />
-
-              {/* Savings */}
-              <Route path="savings" element={<Savings />} />
-              <Route path="savings/report" element={<Savings />} />
-              <Route path="savings/transactions" element={<SavingsTransactions />} />
-              <Route path="savings/transactions/csv" element={<UploadSavingsCSV />} />
-              <Route path="savings/transactions/approve" element={<ApproveSavingsTx />} />
-              <Route path="savings-transactions" element={<Navigate to="/savings/transactions" replace />} />
-              <Route path="savings-transactions/*" element={<Navigate to="/savings/transactions" replace />} />
-
-              {/* ✅ Banking */}
-              <Route path="banks" element={<BanksList />} />
-              <Route path="banks/add" element={<BankForm />} />
-              <Route path="banks/:id" element={<BankDetails />} />
-              <Route path="banks/:id/edit" element={<BankForm />} />
-
-              {/* Banking features under the same section */}
-              <Route path="banks/transactions" element={<BankTransactions />} />
-              <Route path="banks/transfers" element={<BankTransfers />} />
-              <Route path="banks/reconciliation" element={<BankReconciliation />} />
-              <Route path="banks/statements" element={<BankStatements />} />
-              <Route path="banks/import" element={<ImportBankCsv />} />
-              <Route path="banks/approvals" element={<BankApprovals />} />
-              <Route path="banks/rules" element={<RulesGlMapping />} />
-
-              {/* Cash under Banking */}
-              <Route path="cash/accounts" element={<CashAccountsList />} />
-              <Route path="cash/accounts/new" element={<CashAccountForm />} />
-              <Route path="cash/transactions" element={<CashTransactions />} />
-              <Route path="cash/transactions/add" element={<CashTransactionForm />} />
-              <Route path="cash/reconciliation" element={<CashReconciliation />} />
-              <Route path="cash/statements" element={<CashStatement />} />
-
-              {/* Helpful aliases */}
-              <Route path="bank-accounts" element={<Navigate to="/banks" replace />} />
-              <Route path="bank-accounts/add" element={<Navigate to="/banks/add" replace />} />
-              {/* Legacy redirects */}
-              <Route path="bank" element={<Navigate to="/banks" replace />} />
-              <Route path="banking" element={<Navigate to="/banks" replace />} />
-
-              {/* Investors */}
-              <Route path="investors" element={<Investors />} />
-              <Route path="investors/add" element={<AddInvestor />} />
-              <Route path="investors/:id" element={<InvestorDetails />} />
-
-              {/* E-Signatures */}
-              <Route path="esignatures" element={<ESignatures />} />
-
-              {/* HR & Payroll */}
-              <Route path="payroll" element={<Payroll />} />
-              <Route
-                path="payroll/add"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin"]}>
-                    <AddPayroll />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="payroll/report"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin"]}>
-                    <PayrollReport />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route path="hr" element={<Navigate to="/hr/employees" replace />} />
-              <Route
-                path="hr/employees"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
-                    <HREmployees />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="hr/attendance"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
-                    <HRAttendance />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route path="hr/leave" element={<HRLeave />} />
-              <Route
-                path="hr/contracts"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "payroll_admin", "branch_manager"]}>
-                    <HRContracts />
-                  </RoleProtectedRoute>
-                }
-              />
-
-              {/* Expenses */}
-              <Route path="expenses" element={<Expenses />} />
-              <Route
-                path="expenses/add"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "accountant", "branch_manager"]}>
-                    <AddExpense />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="expenses/csv"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "accountant", "branch_manager"]}>
-                    <UploadExpensesCSV />
-                  </RoleProtectedRoute>
-                }
-              />
-
-              {/* Other Income */}
-              <Route path="other-income" element={<OtherIncome />} />
-              <Route path="other-income/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Other Income</div>} />
-              <Route path="other-income/csv" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Upload Other Income CSV</div>} />
-
-              {/* Assets */}
-              <Route path="assets" element={<Assets />} />
-              <Route path="assets/add" element={<div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4">Add Asset</div>} />
-
-              {/* Accounting */}
-              <Route
-                path="accounting"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "accountant"]}>
-                    <Outlet />
-                  </RoleProtectedRoute>
-                }
-              >
-                <Route index element={<Navigate to="/accounting/trial-balance" replace />} />
-                <Route path="chart-of-accounts" element={<ChartOfAccounts />} />
-                <Route path="trial-balance" element={<TrialBalance />} />
-                <Route path="profit-loss" element={<ProfitLoss />} />
-                <Route path="cashflow" element={<Cashflow />} />
-                <Route path="manual-journal" element={<ManualJournal />} />
-                <Route path="coa" element={<Navigate to="/accounting/chart-of-accounts" replace />} />
-                <Route path="tb" element={<Navigate to="/accounting/trial-balance" replace />} />
-                <Route path="pnl" element={<Navigate to="/accounting/profit-loss" replace />} />
-              </Route>
-
-              {/* Reports */}
-              <Route path="reports" element={<Outlet />}>
-                <Route index element={<Navigate to="/reports/borrowers" replace />} />
-                <Route path="borrowers" element={<BorrowersReport />} />
-                <Route path="loans" element={<LoanReport />} />
-                <Route path="arrears-aging" element={<ArrearsAging />} />
-                <Route path="collections" element={<CollectionsReport />} />
-                <Route path="collector" element={<CollectorReport />} />
-                <Route path="deferred-income" element={<DeferredIncome />} />
-                <Route path="deferred-income-monthly" element={<DeferredIncomeMonthly />} />
-                <Route path="pro-rata" element={<ProRataCollections />} />
-                <Route path="disbursement" element={<DisbursementReport />} />
-                <Route path="fees" element={<FeesReport />} />
-                <Route path="loan-officer" element={<LoanProductsReport />} />
-                <Route path="loan-products" element={<LoanProductsReport />} />
-                <Route path="mfrs" element={<MfrsRatios />} />
-                <Route path="daily" element={<DailyReport />} />
-                <Route path="monthly" element={<MonthlyReport />} />
-                <Route path="outstanding" element={<OutstandingReport />} />
-                <Route path="par" element={<ParReport />} />
-                <Route path="at-a-glance" element={<AtAGlance />} />
-                <Route path="all" element={<AllEntries />} />
-              </Route>
-
-              {/* Support & Subscription & Tools */}
-              <Route path="subscription" element={<Subscription />} />
-              <Route path="support-tickets" element={<SupportTickets />} />
-              <Route path="sms-console" element={<SMSConsole />} />
-              <Route path="sms-center" element={<SmsCenter />} />
-              <Route path="billing-by-phone" element={<BillingByPhone />} />
-
-              {/* Admin tools */}
-              <Route
-                path="impersonate-tenant"
-                element={
-                  <RoleProtectedRoute allow={["system_admin", "super_admin", "admin", "director", "developer"]}>
-                    <ImpersonateTenant />
-                  </RoleProtectedRoute>
-                }
-              />
-              <Route
-                path="tenants-admin"
-                element={
-                  <RoleProtectedRoute allow={["system_admin", "owner", "super_admin", "admin", "director"]}>
-                    <TenantsAdminNew />
-                  </RoleProtectedRoute>
-                }
-              />
-
-              {/* ✅ NEW: User Management routes (index shows all-in-one page) */}
-              <Route
-                path="user-management"
-                element={
-                  <RoleProtectedRoute allow={["admin", "director", "super_admin", "system_admin"]}>
-                    <Outlet />
-                  </RoleProtectedRoute>
-                }
-              >
-                <Route index element={<UserManagement />} />
-                <Route path="users" element={<Users />} />
-                <Route path="roles" element={<Roles />} />
-                <Route path="permissions" element={<Permissions />} />
-              </Route>
-
-              {/* Friendly aliases to avoid breaking old links */}
-              <Route path="users" element={<Navigate to="/user-management/users" replace />} />
-              <Route path="roles" element={<Navigate to="/user-management/roles" replace />} />
-              <Route path="permissions" element={<Navigate to="/user-management/permissions" replace />} />
-              <Route path="staff" element={<Navigate to="/user-management" replace />} />
-              <Route path="staffs" element={<Navigate to="/user-management" replace />} />
-              <Route path="user-management/staff" element={<Navigate to="/user-management" replace />} />
-
-              {/* Branches */}
-              <Route path="branches" element={<Branches />} />
-
-              {/* Legacy (kept Disbursements & Sms) */}
-              <Route path="disbursements" element={<Disbursements />} />
-              <Route path="sms" element={<Sms />} />
-
-              {/* 404 inside shell */}
+              {/* 403 and hard 404 (outside shell) */}
+              <Route path="/403" element={<Forbidden />} />
               <Route path="*" element={<NotFound />} />
-            </Route>
-
-            {/* 403 and hard 404 (outside shell) */}
-            <Route path="/403" element={<Forbidden />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </FeatureConfigProvider>
-      </ToastProvider>
-    </Suspense>
+            </Routes>
+          </FeatureConfigProvider>
+        </ToastProvider>
+      </Suspense>
+    </ThemeProvider>
   );
 }
 

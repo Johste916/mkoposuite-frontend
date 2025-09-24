@@ -26,24 +26,25 @@ const initials = (nameLike) => {
 };
 
 const chip = (status) => {
-  const base = "px-2 py-0.5 text-xs font-semibold rounded-full";
+  const base =
+    "px-2 py-0.5 text-xs font-semibold rounded-full border bg-[var(--chip-bg)] text-[var(--chip-fg)] border-[var(--chip-border)]";
   switch (String(status || "").toLowerCase()) {
     case "pending":
-      return `${base} bg-amber-100 text-amber-800`;
+      return `${base} chip-amber`;
     case "approved":
-      return `${base} bg-emerald-100 text-emerald-700`;
+      return `${base} chip-emerald`;
     case "rejected":
-      return `${base} bg-rose-100 text-rose-700`;
+      return `${base} chip-rose`;
     case "active":
-      return `${base} bg-blue-100 text-blue-700`;
+      return `${base} chip-blue`;
     case "disabled":
-      return `${base} bg-slate-200 text-slate-700`;
+      return `${base} chip-slate`;
     case "blacklisted":
-      return `${base} bg-red-200 text-red-800`;
+      return `${base} chip-red`;
     case "closed":
-      return `${base} bg-gray-200 text-gray-700`;
+      return `${base} chip-gray`;
     default:
-      return `${base} bg-gray-100 text-gray-600`;
+      return `${base} chip-gray`;
   }
 };
 
@@ -65,11 +66,13 @@ const withTenant = (tenantId) => (tenantId ? { headers: { "X-Tenant-Id": tenantI
 
 /* Small visual helpers */
 const Card = ({ title, icon, children, className = "" }) => (
-  <section className={`bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4 md:p-5 ${className}`}>
+  <section
+    className={`rounded-2xl border p-4 md:p-5 bg-[var(--card)] border-[var(--border)] ${className}`}
+  >
     {title && (
       <div className="flex items-center gap-2 mb-3">
         {icon}
-        <h2 className="text-base md:text-lg font-semibold text-slate-900">{title}</h2>
+        <h2 className="text-base md:text-lg font-semibold text-[var(--fg)]">{title}</h2>
       </div>
     )}
     {children}
@@ -78,8 +81,10 @@ const Card = ({ title, icon, children, className = "" }) => (
 
 const Field = ({ label, children }) => (
   <div>
-    <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</div>
-    <div className="mt-1 text-sm text-slate-900">{children ?? "—"}</div>
+    <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">
+      {label}
+    </div>
+    <div className="mt-1 text-sm text-[var(--fg)]">{children ?? "—"}</div>
   </div>
 );
 
@@ -94,7 +99,7 @@ const DlGrid = ({ items, cols = 3 }) => (
 );
 
 const PillTabs = ({ tabs, active, onChange }) => (
-  <div className="flex flex-wrap gap-2 border-b border-slate-200 px-2 pt-2">
+  <div className="flex flex-wrap gap-2 border-b px-2 pt-2 border-[var(--border)]">
     {tabs.map((t) => {
       const is = active === t.key;
       return (
@@ -104,14 +109,14 @@ const PillTabs = ({ tabs, active, onChange }) => (
           className={`px-3 py-1.5 text-sm rounded-full border ${
             is
               ? "bg-indigo-600 text-white border-indigo-600"
-              : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
+              : "bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--hover)] border-[var(--border)]"
           }`}
         >
           {t.label}
           {typeof t.count === "number" && (
             <span
               className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full text-xs ${
-                is ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+                is ? "bg-white/20 text-white" : "bg-[var(--badge-bg)] text-[var(--badge-fg)]"
               } px-1.5`}
             >
               {t.count}
@@ -286,7 +291,11 @@ const BorrowerDetails = () => {
     }).length;
   }, [repayments]);
 
-  if (!borrower) return <div className="p-4 min-h-screen bg-slate-50">Loading...</div>;
+  if (!borrower) {
+    return (
+      <div className="p-4 min-h-screen bg-[var(--bg)] text-[var(--fg)]">Loading...</div>
+    );
+  }
 
   const bName = displayName(borrower);
   const tenantQuery = borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : "";
@@ -303,41 +312,26 @@ const BorrowerDetails = () => {
   const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
 
   return (
-    <div className="p-4 md:p-6 bg-slate-50 min-h-screen">
+    <div className="p-4 md:p-6 min-h-screen bg-[var(--bg)] text-[var(--fg)]">
       {/* Top bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-sm">
-          <Link to={`/borrowers${tenantQuery}`} className="text-indigo-600 hover:underline">
+          <Link to={`/borrowers${tenantQuery}`} className="link">
             Borrowers
           </Link>{" "}
-          <span className="text-slate-400">/</span>{" "}
-          <span className="text-slate-900 font-medium">{bName}</span>
+          <span className="text-[var(--muted)]">/</span>{" "}
+          <span className="font-medium">{bName}</span>
         </div>
         <div className="flex gap-2">
           <Link
             to={`/borrowers/${encodeURIComponent(borrower.id)}/edit${tenantQuery}`}
-            className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 text-slate-800 hover:bg-slate-50"
+            className="btn-ghost"
           >
             Edit
           </Link>
-          <button
-            onClick={handleDisable}
-            className="px-3 py-1.5 text-sm rounded-xl border border-slate-200 text-slate-800 hover:bg-slate-50"
-          >
-            Disable
-          </button>
-          <button
-            onClick={handleBlacklist}
-            className="px-3 py-1.5 text-sm rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50"
-          >
-            Blacklist
-          </button>
-          <button
-            onClick={handleDelete}
-            className="px-3 py-1.5 text-sm rounded-xl border border-red-200 text-red-700 hover:bg-red-50"
-          >
-            Delete
-          </button>
+          <button onClick={handleDisable} className="btn-ghost">Disable</button>
+          <button onClick={handleBlacklist} className="btn-rose">Blacklist</button>
+          <button onClick={handleDelete} className="btn-danger">Delete</button>
         </div>
       </div>
 
@@ -351,13 +345,17 @@ const BorrowerDetails = () => {
               {/* Avatar */}
               <div className="relative shrink-0">
                 {borrower.photoUrl ? (
-                  <img src={borrower.photoUrl} alt={bName} className="w-24 h-24 rounded-2xl object-cover ring-1 ring-slate-200" />
+                  <img
+                    src={borrower.photoUrl}
+                    alt={bName}
+                    className="w-24 h-24 rounded-2xl object-cover border border-[var(--border)]"
+                  />
                 ) : (
                   <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-semibold">
                     {initials(bName)}
                   </div>
                 )}
-                <span className={`absolute -bottom-2 left-2 ${chip(borrower.status)} ring-1 ring-black/5`}>
+                <span className={`absolute -bottom-2 left-2 ${chip(borrower.status)} shadow-sm`}>
                   {borrower.status || "—"}
                 </span>
               </div>
@@ -365,9 +363,9 @@ const BorrowerDetails = () => {
               {/* Name + quick contact */}
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-900">{bName}</h1>
-                  <span className="text-xs text-slate-500">ID: {borrower.id}</span>
-                  <span className="text-xs text-slate-500">Tenant: {borrower.tenantId || "—"}</span>
+                  <h1 className="text-2xl font-bold tracking-tight">{bName}</h1>
+                  <span className="text-xs text-[var(--muted)]">ID: {borrower.id}</span>
+                  <span className="text-xs text-[var(--muted)]">Tenant: {borrower.tenantId || "—"}</span>
                 </div>
 
                 <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -376,13 +374,9 @@ const BorrowerDetails = () => {
                       <span>{borrower.phone || "—"}</span>
                       {borrower.phone && (
                         <>
-                          <a className="underline text-indigo-600" href={tel(borrower.phone)}>
-                            Call
-                          </a>
-                          <a className="underline text-indigo-600" href={sms(borrower.phone)}>
-                            SMS
-                          </a>
-                          <a className="underline text-indigo-600" href={wa(borrower.phone)} target="_blank" rel="noreferrer">
+                          <a className="link" href={tel(borrower.phone)}>Call</a>
+                          <a className="link" href={sms(borrower.phone)}>SMS</a>
+                          <a className="link" href={wa(borrower.phone)} target="_blank" rel="noreferrer">
                             WhatsApp
                           </a>
                         </>
@@ -394,9 +388,7 @@ const BorrowerDetails = () => {
                     <div className="flex items-center gap-2">
                       <span>{borrower.email || "—"}</span>
                       {borrower.email && (
-                        <a className="underline text-indigo-600" href={mail(borrower.email)}>
-                          Email
-                        </a>
+                        <a className="link" href={mail(borrower.email)}>Email</a>
                       )}
                     </div>
                   </Field>
@@ -413,7 +405,7 @@ const BorrowerDetails = () => {
             </div>
 
             {/* Divider */}
-            <hr className="my-4 border-slate-200" />
+            <hr className="my-4 border-[var(--border)]" />
 
             {/* Identity mirrors Add Borrower */}
             <div className="grid gap-5">
@@ -489,15 +481,15 @@ const BorrowerDetails = () => {
               { k: "Missed Repayments", v: missedRepayments },
               { k: "Net Savings", v: money(borrower.netSavings) },
             ].map((c, i) => (
-              <div key={i} className="rounded-2xl bg-white ring-1 ring-slate-200 p-4">
-                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{c.k}</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-900">{c.v}</div>
+              <div key={i} className="rounded-2xl p-4 border bg-[var(--kpi-bg)] border-[var(--border)]">
+                <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">{c.k}</div>
+                <div className="mt-1 text-2xl font-semibold text-[var(--fg)]">{c.v}</div>
               </div>
             ))}
           </div>
 
           {/* Tabs */}
-          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200">
+          <div className="rounded-2xl border bg-[var(--card)] border-[var(--border)]">
             <PillTabs
               active={activeTab}
               onChange={setActiveTab}
@@ -524,7 +516,7 @@ const BorrowerDetails = () => {
                             to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
                               borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                             }`}
-                            className="ml-1 underline text-indigo-600"
+                            className="ml-1 link"
                           >
                             Create loan
                           </Link>
@@ -539,7 +531,7 @@ const BorrowerDetails = () => {
                           to={`/loans/${encodeURIComponent(l.id)}${
                             borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                           }`}
-                          className="text-indigo-600 underline"
+                          className="link"
                         >
                           {l.id}
                         </Link>,
@@ -548,14 +540,14 @@ const BorrowerDetails = () => {
                         <div className="text-right tabular-nums">{money(l.amount)}</div>,
                         <div className="flex gap-2">
                           <button
-                            className="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                            className="btn-ghost"
                             onClick={() => handleViewSchedule(l.id)}
                           >
                             Schedule
                           </button>
                           {String(userRole || "").toLowerCase() === "admin" && (
                             <button
-                              className="px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                              className="btn-ghost"
                               onClick={() => {
                                 setSelectedLoanForRepayment(l);
                                 setShowRepaymentModal(true);
@@ -579,7 +571,7 @@ const BorrowerDetails = () => {
                   ) : (
                     <Table
                       head={["Date", "Amount", "Loan", "Status"]}
-                      rows={repayments.map((r, i) => [
+                      rows={repayments.map((r) => [
                         r.date
                           ? new Date(r.date).toLocaleDateString()
                           : r.createdAt
@@ -591,7 +583,7 @@ const BorrowerDetails = () => {
                             to={`/loans/${encodeURIComponent(r.loanId)}${
                               borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                             }`}
-                            className="text-indigo-600 underline"
+                            className="link"
                           >
                             {r.loanId}
                           </Link>
@@ -619,22 +611,24 @@ const BorrowerDetails = () => {
 
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-700">Filter:</span>
-                      <select
-                        value={filterType}
-                        onChange={(e) => setFilterType(e.target.value)}
-                        className="border rounded px-2 py-1 text-sm"
-                      >
-                        <option value="all">All</option>
-                        <option value="deposit">Deposits</option>
-                        <option value="withdrawal">Withdrawals</option>
-                        <option value="interest">Interest</option>
-                        <option value="charge">Charges</option>
-                      </select>
+                      <span className="text-sm text-[var(--fg)]/80">Filter:</span>
+                      <label className="relative z-50">
+                        <select
+                          value={filterType}
+                          onChange={(e) => setFilterType(e.target.value)}
+                          className="input text-sm"
+                        >
+                          <option value="all">All</option>
+                          <option value="deposit">Deposits</option>
+                          <option value="withdrawal">Withdrawals</option>
+                          <option value="interest">Interest</option>
+                          <option value="charge">Charges</option>
+                        </select>
+                      </label>
                     </div>
                     <Link
                       to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(borrower.id)}`}
-                      className="text-sm text-indigo-600 underline"
+                      className="link text-sm"
                     >
                       View savings accounts
                     </Link>
@@ -645,7 +639,7 @@ const BorrowerDetails = () => {
                   ) : (
                     <Table
                       head={["Date", "Type", "Amount", "Notes"]}
-                      rows={filteredSavings.map((tx, i) => [
+                      rows={filteredSavings.map((tx) => [
                         tx.date ? new Date(tx.date).toLocaleDateString() : "—",
                         <span className="capitalize">{tx.type}</span>,
                         <div className="text-right tabular-nums">{money(tx.amount)}</div>,
@@ -658,10 +652,10 @@ const BorrowerDetails = () => {
 
               {/* Documents */}
               {activeTab === "documents" && (
-                <div className="text-sm text-slate-700">
+                <div className="text-sm">
                   <Link
                     to={`/borrowers/${encodeURIComponent(borrower.id)}/documents${tenantQuery}`}
-                    className="text-indigo-600 underline"
+                    className="link"
                   >
                     Manage KYC documents
                   </Link>
@@ -700,17 +694,17 @@ const BorrowerDetails = () => {
                 }
               }}
               placeholder="Add a note and press Enter…"
-              className="w-full border rounded-lg px-3 py-2 text-sm mb-3"
+              className="input w-full text-sm mb-3"
             />
             {comments.length === 0 ? (
-              <div className="text-xs text-slate-500">No notes yet.</div>
+              <div className="text-xs text-[var(--muted)]">No notes yet.</div>
             ) : (
               <>
                 <ul className="space-y-2">
                   {visibleComments.map((c, i) => (
-                    <li key={`${i}-${c.createdAt}`} className="border rounded-lg p-2 text-xs">
-                      <div className="text-slate-900">{c.content}</div>
-                      <div className="text-[10px] text-slate-500 mt-1">
+                    <li key={`${i}-${c.createdAt}`} className="p-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--card)]">
+                      <div className="text-[var(--fg)]">{c.content}</div>
+                      <div className="text-[10px] text-[var(--muted)] mt-1">
                         {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
                       </div>
                     </li>
@@ -719,7 +713,7 @@ const BorrowerDetails = () => {
                 {comments.length > 3 && (
                   <button
                     onClick={() => setShowAllComments((s) => !s)}
-                    className="mt-3 w-full text-xs px-2 py-1 rounded-lg border"
+                    className="mt-3 w-full text-xs btn-ghost"
                   >
                     {showAllComments ? "Show less" : `Show all (${comments.length})`}
                   </button>
@@ -753,14 +747,16 @@ const BorrowerDetails = () => {
 
 /* ---------- Support UI pieces ---------- */
 const Empty = ({ text }) => (
-  <div className="p-6 text-sm text-slate-600 border border-dashed rounded-2xl">{text}</div>
+  <div className="p-6 text-sm rounded-2xl border border-dashed border-[var(--border)] text-[var(--muted)] bg-[var(--card)]">
+    {text}
+  </div>
 );
 
 const Table = ({ head = [], rows = [] }) => (
-  <div className="overflow-auto rounded-xl ring-1 ring-slate-200">
+  <div className="overflow-auto rounded-xl border border-[var(--border)] bg-[var(--card)]">
     <table className="min-w-full text-sm">
-      <thead className="bg-slate-50">
-        <tr className="text-left text-slate-700">
+      <thead className="bg-[var(--table-head-bg)] text-[var(--fg)]/80">
+        <tr className="text-left">
           {head.map((h, i) => (
             <th key={i} className={`px-3 py-2 ${i === head.length - 1 ? "text-right" : ""}`}>
               {h}
@@ -770,7 +766,7 @@ const Table = ({ head = [], rows = [] }) => (
       </thead>
       <tbody>
         {rows.map((r, i) => (
-          <tr key={i} className="odd:bg-white even:bg-slate-50">
+          <tr key={i} className="odd:bg-[var(--table-row-odd)] even:bg-[var(--table-row-even)]">
             {r.map((c, j) => (
               <td key={j} className={`px-3 py-2 align-top ${j === head.length - 1 ? "text-right" : ""}`}>
                 {c}
@@ -785,13 +781,13 @@ const Table = ({ head = [], rows = [] }) => (
 
 const BadgeCard = ({ label, value, tone = "emerald" }) => {
   const toneMap = {
-    emerald: "bg-emerald-50 text-emerald-700",
-    amber: "bg-amber-50 text-amber-700",
-    sky: "bg-sky-50 text-sky-700",
-    rose: "bg-rose-50 text-rose-700",
+    emerald: "badge-emerald",
+    amber: "badge-amber",
+    sky: "badge-sky",
+    rose: "badge-rose",
   };
   return (
-    <div className={`p-3 rounded-xl ${toneMap[tone]} text-sm`}>
+    <div className={`p-3 rounded-xl text-sm ${toneMap[tone]}`}>
       {label}: <strong>{value}</strong>
     </div>
   );
@@ -832,17 +828,17 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h4 className="font-semibold text-slate-900">📜 Activity Timeline</h4>
+        <h4 className="font-semibold">📜 Activity Timeline</h4>
         {canAddRepayment && (
-          <button onClick={onAddRepayment} className="px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+          <button onClick={onAddRepayment} className="btn-primary">
             Record Repayment
           </button>
         )}
       </div>
       <ul className="space-y-2 text-sm">
         {items.map((item, i) => (
-          <li key={i} className="border-l-4 pl-3 border-slate-300 text-slate-800">
-            <span className="text-slate-500">
+          <li key={i} className="border-l-4 pl-3 border-[var(--border)] text-[var(--fg)]">
+            <span className="text-[var(--muted)]">
               {item.date ? new Date(item.date).toLocaleDateString() : "—"}
             </span>{" "}
             – {item.text}
