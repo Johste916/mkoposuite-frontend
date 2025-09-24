@@ -8,8 +8,7 @@ const cls = (...xs) => xs.filter(Boolean).join(" ");
 // convert form string -> number or null for submit
 const toNumberOrNull = (v) => {
   if (v === "" || v === null || v === undefined) return null;
-  // treat lone "." as empty
-  if (v.trim() === ".") return null;
+  if (String(v).trim() === ".") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
@@ -23,7 +22,7 @@ export default function LoanProductForm() {
   const [loading, setLoading] = useState(editing);
   const [errors, setErrors] = useState({});
 
-  // Keep ALL inputs as strings while typing (prevents value “jumping”/clearing)
+  // Keep inputs as plain strings while typing
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -38,25 +37,7 @@ export default function LoanProductForm() {
     description: "",
   });
 
-  const set = useCallback((k, v) => {
-    setForm((f) => ({ ...f, [k]: v }));
-  }, []);
-
-  // numeric-only change handler (allows digits and a single ".")
-  const handleNumericChange = (key) => (e) => {
-    let v = e.target.value;
-    // Allow empty
-    if (v === "") return set(key, "");
-
-    // Remove any non-digit/non-dot chars
-    v = v.replace(/[^\d.]/g, "");
-    // Keep only the first dot
-    const dot = v.indexOf(".");
-    if (dot !== -1) {
-      v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "");
-    }
-    set(key, v);
-  };
+  const set = useCallback((k, v) => setForm((f) => ({ ...f, [k]: v })), []);
 
   useEffect(() => {
     if (!editing) return;
@@ -69,29 +50,17 @@ export default function LoanProductForm() {
           status: data?.status ?? "active",
           interestMethod: data?.interestMethod ?? "flat",
           interestRate:
-            data?.interestRate === 0 || data?.interestRate
-              ? String(data.interestRate)
-              : "",
+            data?.interestRate === 0 || data?.interestRate ? String(data.interestRate) : "",
           minPrincipal:
-            data?.minPrincipal === 0 || data?.minPrincipal
-              ? String(data.minPrincipal)
-              : "",
+            data?.minPrincipal === 0 || data?.minPrincipal ? String(data.minPrincipal) : "",
           maxPrincipal:
-            data?.maxPrincipal === 0 || data?.maxPrincipal
-              ? String(data.maxPrincipal)
-              : "",
+            data?.maxPrincipal === 0 || data?.maxPrincipal ? String(data.maxPrincipal) : "",
           minTermMonths:
-            data?.minTermMonths === 0 || data?.minTermMonths
-              ? String(data.minTermMonths)
-              : "",
+            data?.minTermMonths === 0 || data?.minTermMonths ? String(data.minTermMonths) : "",
           maxTermMonths:
-            data?.maxTermMonths === 0 || data?.maxTermMonths
-              ? String(data.maxTermMonths)
-              : "",
+            data?.maxTermMonths === 0 || data?.maxTermMonths ? String(data.maxTermMonths) : "",
           penaltyRate:
-            data?.penaltyRate === 0 || data?.penaltyRate
-              ? String(data.penaltyRate)
-              : "",
+            data?.penaltyRate === 0 || data?.penaltyRate ? String(data.penaltyRate) : "",
           description: data?.description ?? "",
         });
       } catch {
@@ -105,7 +74,6 @@ export default function LoanProductForm() {
 
   const validate = () => {
     const e = {};
-
     const interestRate = toNumberOrNull(form.interestRate);
     const minP = toNumberOrNull(form.minPrincipal);
     const maxP = toNumberOrNull(form.maxPrincipal);
@@ -114,12 +82,9 @@ export default function LoanProductForm() {
 
     if (!String(form.name).trim()) e.name = "Name is required";
     if (!String(form.code).trim()) e.code = "Code is required";
-    if (interestRate === null || interestRate < 0)
-      e.interestRate = "Interest rate must be 0 or more";
-    if (minP !== null && maxP !== null && maxP < minP)
-      e.maxPrincipal = "Max must be ≥ Min";
-    if (minT !== null && maxT !== null && maxT < minT)
-      e.maxTermMonths = "Max must be ≥ Min";
+    if (interestRate === null || interestRate < 0) e.interestRate = "Interest rate must be 0 or more";
+    if (minP !== null && maxP !== null && maxP < minP) e.maxPrincipal = "Max must be ≥ Min";
+    if (minT !== null && maxT !== null && maxT < minT) e.maxTermMonths = "Max must be ≥ Min";
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -160,9 +125,7 @@ export default function LoanProductForm() {
 
   const Field = ({ label, children, error }) => (
     <label className="block">
-      <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-        {label}
-      </div>
+      <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</div>
       {children}
       {error && <div className="mt-1 text-xs text-rose-600">{error}</div>}
     </label>
@@ -176,14 +139,9 @@ export default function LoanProductForm() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">
-            {editing ? "Edit Loan Product" : "Create Loan Product"}
-          </h2>
+          <h2 className="text-2xl font-bold">{editing ? "Edit Loan Product" : "Create Loan Product"}</h2>
         </div>
-        <Link
-          to="/loans/products"
-          className="px-4 py-2 rounded border border-slate-200 dark:border-slate-700"
-        >
+        <Link to="/loans/products" className="px-4 py-2 rounded border border-slate-200 dark:border-slate-700">
           Back to list
         </Link>
       </div>
@@ -247,7 +205,7 @@ export default function LoanProductForm() {
                 type="text"
                 className={inputClass}
                 value={form.interestRate}
-                onChange={handleNumericChange("interestRate")}
+                onChange={(e) => set("interestRate", e.target.value)}
                 placeholder="e.g. 3 or 3.5"
                 inputMode="decimal"
               />
@@ -259,7 +217,7 @@ export default function LoanProductForm() {
                 type="text"
                 className={inputClass}
                 value={form.penaltyRate}
-                onChange={handleNumericChange("penaltyRate")}
+                onChange={(e) => set("penaltyRate", e.target.value)}
                 placeholder="e.g. 1.5"
                 inputMode="decimal"
               />
@@ -271,7 +229,7 @@ export default function LoanProductForm() {
                 type="text"
                 className={inputClass}
                 value={form.minPrincipal}
-                onChange={handleNumericChange("minPrincipal")}
+                onChange={(e) => set("minPrincipal", e.target.value)}
                 placeholder="e.g. 100000"
                 inputMode="numeric"
               />
@@ -283,7 +241,7 @@ export default function LoanProductForm() {
                 type="text"
                 className={inputClass}
                 value={form.maxPrincipal}
-                onChange={handleNumericChange("maxPrincipal")}
+                onChange={(e) => set("maxPrincipal", e.target.value)}
                 placeholder="e.g. 10000000"
                 inputMode="numeric"
               />
@@ -295,7 +253,7 @@ export default function LoanProductForm() {
                 type="text"
                 className={inputClass}
                 value={form.minTermMonths}
-                onChange={handleNumericChange("minTermMonths")}
+                onChange={(e) => set("minTermMonths", e.target.value)}
                 placeholder="e.g. 3"
                 inputMode="numeric"
               />
@@ -307,7 +265,7 @@ export default function LoanProductForm() {
                 type="text"
                 className={inputClass}
                 value={form.maxTermMonths}
-                onChange={handleNumericChange("maxTermMonths")}
+                onChange={(e) => set("maxTermMonths", e.target.value)}
                 placeholder="e.g. 36"
                 inputMode="numeric"
               />
