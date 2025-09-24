@@ -1,9 +1,16 @@
+// src/pages/loans/LoanProductForm.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../../api";
 
 const cls = (...xs) => xs.filter(Boolean).join(" ");
-const asFloat = (v) => (v === "" || v === null || v === undefined ? "" : Number(v));
+
+// convert form string -> number or null
+const toNumberOrNull = (v) => {
+  if (v === "" || v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 export default function LoanProductForm() {
   const navigate = useNavigate();
@@ -14,12 +21,13 @@ export default function LoanProductForm() {
   const [loading, setLoading] = useState(editing);
   const [errors, setErrors] = useState({});
 
+  // Keep ALL inputs as strings while typing
   const [form, setForm] = useState({
     name: "",
     code: "",
     status: "active",
     interestMethod: "flat",
-    interestRate: 0,
+    interestRate: "",     // string for smooth typing
     minPrincipal: "",
     maxPrincipal: "",
     minTermMonths: "",
@@ -38,12 +46,30 @@ export default function LoanProductForm() {
           code: data.code || "",
           status: data.status || "active",
           interestMethod: data.interestMethod || "flat",
-          interestRate: data.interestRate ?? 0,
-          minPrincipal: data.minPrincipal ?? "",
-          maxPrincipal: data.maxPrincipal ?? "",
-          minTermMonths: data.minTermMonths ?? "",
-          maxTermMonths: data.maxTermMonths ?? "",
-          penaltyRate: data.penaltyRate ?? "",
+          interestRate:
+            data.interestRate === 0 || data.interestRate
+              ? String(data.interestRate)
+              : "",
+          minPrincipal:
+            data.minPrincipal === 0 || data.minPrincipal
+              ? String(data.minPrincipal)
+              : "",
+          maxPrincipal:
+            data.maxPrincipal === 0 || data.maxPrincipal
+              ? String(data.maxPrincipal)
+              : "",
+          minTermMonths:
+            data.minTermMonths === 0 || data.minTermMonths
+              ? String(data.minTermMonths)
+              : "",
+          maxTermMonths:
+            data.maxTermMonths === 0 || data.maxTermMonths
+              ? String(data.maxTermMonths)
+              : "",
+          penaltyRate:
+            data.penaltyRate === 0 || data.penaltyRate
+              ? String(data.penaltyRate)
+              : "",
           description: data.description || "",
         });
       } catch {
@@ -59,14 +85,25 @@ export default function LoanProductForm() {
 
   const validate = () => {
     const e = {};
+
+    const interestRate = toNumberOrNull(form.interestRate);
+    const minP = toNumberOrNull(form.minPrincipal);
+    const maxP = toNumberOrNull(form.maxPrincipal);
+    const minT = toNumberOrNull(form.minTermMonths);
+    const maxT = toNumberOrNull(form.maxTermMonths);
+
     if (!String(form.name).trim()) e.name = "Name is required";
     if (!String(form.code).trim()) e.code = "Code is required";
-    if (form.interestRate === "" || Number(form.interestRate) < 0)
+
+    if (interestRate === null || interestRate < 0)
       e.interestRate = "Interest rate must be 0 or more";
-    if (form.minPrincipal !== "" && form.maxPrincipal !== "" && Number(form.maxPrincipal) < Number(form.minPrincipal))
+
+    if (minP !== null && maxP !== null && maxP < minP)
       e.maxPrincipal = "Max must be ≥ Min";
-    if (form.minTermMonths !== "" && form.maxTermMonths !== "" && Number(form.maxTermMonths) < Number(form.minTermMonths))
+
+    if (minT !== null && maxT !== null && maxT < minT)
       e.maxTermMonths = "Max must be ≥ Min";
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -75,11 +112,27 @@ export default function LoanProductForm() {
     e.preventDefault();
     if (!validate()) return;
     setSaving(true);
+
+    // convert to payload with numbers/nulls
+    const payload = {
+      name: form.name.trim(),
+      code: form.code.trim().toUpperCase(),
+      status: form.status,
+      interestMethod: form.interestMethod,
+      interestRate: toNumberOrNull(form.interestRate) ?? 0,
+      minPrincipal: toNumberOrNull(form.minPrincipal),
+      maxPrincipal: toNumberOrNull(form.maxPrincipal),
+      minTermMonths: toNumberOrNull(form.minTermMonths),
+      maxTermMonths: toNumberOrNull(form.maxTermMonths),
+      penaltyRate: toNumberOrNull(form.penaltyRate),
+      description: form.description || "",
+    };
+
     try {
       if (editing) {
-        await api.put(`/loan-products/${id}`, form);
+        await api.put(`/loan-products/${id}`, payload);
       } else {
-        await api.post("/loan-products", form);
+        await api.post("/loan-products", payload);
       }
       navigate("/loans/products");
     } catch {
@@ -91,7 +144,9 @@ export default function LoanProductForm() {
 
   const Field = ({ label, children, error }) => (
     <label className="block">
-      <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</div>
+      <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+        {label}
+      </div>
       {children}
       {error && <div className="mt-1 text-xs text-rose-600">{error}</div>}
     </label>
@@ -105,12 +160,14 @@ export default function LoanProductForm() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">{editing ? "Edit Loan Product" : "Create Loan Product"}</h2>
-          <p className="muted text-sm">
-            {editing ? "Update a loan product’s lending terms." : "Define a new loan product for use in applications."}
-          </p>
+          <h2 className="text-2xl font-bold">
+            {editing ? "Edit Loan Product" : "Create Loan Product"}
+          </h2>
         </div>
-        <Link to="/loans/products" className="px-4 py-2 rounded border border-slate-200 dark:border-slate-700">
+        <Link
+          to="/loans/products"
+          className="px-4 py-2 rounded border border-slate-200 dark:border-slate-700"
+        >
           Back to list
         </Link>
       </div>
@@ -129,21 +186,29 @@ export default function LoanProductForm() {
                 required
               />
             </Field>
+
             <Field label="Code" error={errors.code}>
               <input
                 className={inputClass}
                 value={form.code}
-                onChange={(e) => set("code", e.target.value.toUpperCase())}
+                onChange={(e) => set("code", e.target.value)}
+                onBlur={(e) => set("code", e.target.value.toUpperCase())}
                 placeholder="e.g. BWC"
                 required
               />
             </Field>
+
             <Field label="Status">
-              <select className={inputClass} value={form.status} onChange={(e) => set("status", e.target.value)}>
+              <select
+                className={inputClass}
+                value={form.status}
+                onChange={(e) => set("status", e.target.value)}
+              >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </Field>
+
             <Field label="Interest Method">
               <select
                 className={inputClass}
@@ -154,62 +219,69 @@ export default function LoanProductForm() {
                 <option value="reducing">Reducing</option>
               </select>
             </Field>
+
             <Field label="Interest Rate (%)" error={errors.interestRate}>
               <input
                 type="number"
                 step="0.0001"
                 className={inputClass}
                 value={form.interestRate}
-                onChange={(e) => set("interestRate", asFloat(e.target.value))}
+                onChange={(e) => set("interestRate", e.target.value)}
                 placeholder="e.g. 3"
               />
             </Field>
+
             <Field label="Penalty Rate (%)">
               <input
                 type="number"
                 step="0.0001"
                 className={inputClass}
                 value={form.penaltyRate}
-                onChange={(e) => set("penaltyRate", asFloat(e.target.value))}
+                onChange={(e) => set("penaltyRate", e.target.value)}
                 placeholder="e.g. 1.5"
               />
             </Field>
+
             <Field label="Min Principal">
               <input
                 type="number"
                 className={inputClass}
                 value={form.minPrincipal}
-                onChange={(e) => set("minPrincipal", asFloat(e.target.value))}
+                onChange={(e) => set("minPrincipal", e.target.value)}
                 placeholder="e.g. 100000"
               />
             </Field>
+
             <Field label="Max Principal" error={errors.maxPrincipal}>
               <input
                 type="number"
                 className={inputClass}
                 value={form.maxPrincipal}
-                onChange={(e) => set("maxPrincipal", asFloat(e.target.value))}
+                onChange={(e) => set("maxPrincipal", e.target.value)}
                 placeholder="e.g. 10000000"
               />
             </Field>
+
             <Field label="Min Term (months)">
               <input
                 type="number"
                 className={inputClass}
                 value={form.minTermMonths}
-                onChange={(e) => set("minTermMonths", asFloat(e.target.value))}
+                onChange={(e) => set("minTermMonths", e.target.value)}
                 placeholder="e.g. 3"
               />
             </Field>
+
             <Field label="Max Term (months)" error={errors.maxTermMonths}>
               <input
                 type="number"
                 className={inputClass}
                 value={form.maxTermMonths}
-                onChange={(e) => set("maxTermMonths", asFloat(e.target.value))}
+                onChange={(e) => set("maxTermMonths", e.target.value)}
                 placeholder="e.g. 36"
               />
             </Field>
+
             <div className="sm:col-span-2">
               <Field label="Internal Notes / Description">
                 <textarea
@@ -238,7 +310,7 @@ export default function LoanProductForm() {
                 saving ? "bg-indigo-400" : "bg-indigo-600 hover:bg-indigo-700"
               )}
             >
-              {saving ? "Saving…" : (editing ? "Update Product" : "Create Product")}
+              {saving ? "Saving…" : editing ? "Update Product" : "Create Product"}
             </button>
           </div>
         </form>
