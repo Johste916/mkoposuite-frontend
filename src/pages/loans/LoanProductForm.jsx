@@ -159,7 +159,6 @@ export default function LoanProductForm() {
                 onChange={(e) => set("name", e.target.value)}
                 placeholder="e.g. Business Working Capital"
                 required
-                autoFocus
               />
             </Field>
 
@@ -202,7 +201,8 @@ export default function LoanProductForm() {
             <Field label="Interest Rate (%)" error={errors.interestRate}>
               <input
                 name="interestRate"
-                type="text"
+                type="number"
+                step="0.0001"
                 className={inputClass}
                 value={form.interestRate}
                 onChange={(e) => set("interestRate", e.target.value)}
@@ -214,7 +214,8 @@ export default function LoanProductForm() {
             <Field label="Penalty Rate (%)">
               <input
                 name="penaltyRate"
-                type="text"
+                type="number"
+                step="0.0001"
                 className={inputClass}
                 value={form.penaltyRate}
                 onChange={(e) => set("penaltyRate", e.target.value)}
@@ -226,7 +227,7 @@ export default function LoanProductForm() {
             <Field label="Min Principal">
               <input
                 name="minPrincipal"
-                type="text"
+                type="number"
                 className={inputClass}
                 value={form.minPrincipal}
                 onChange={(e) => set("minPrincipal", e.target.value)}
@@ -238,7 +239,7 @@ export default function LoanProductForm() {
             <Field label="Max Principal" error={errors.maxPrincipal}>
               <input
                 name="maxPrincipal"
-                type="text"
+                type="number"
                 className={inputClass}
                 value={form.maxPrincipal}
                 onChange={(e) => set("maxPrincipal", e.target.value)}
@@ -250,7 +251,7 @@ export default function LoanProductForm() {
             <Field label="Min Term (months)">
               <input
                 name="minTermMonths"
-                type="text"
+                type="number"
                 className={inputClass}
                 value={form.minTermMonths}
                 onChange={(e) => set("minTermMonths", e.target.value)}
@@ -262,7 +263,7 @@ export default function LoanProductForm() {
             <Field label="Max Term (months)" error={errors.maxTermMonths}>
               <input
                 name="maxTermMonths"
-                type="text"
+                type="number"
                 className={inputClass}
                 value={form.maxTermMonths}
                 onChange={(e) => set("maxTermMonths", e.target.value)}
