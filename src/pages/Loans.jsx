@@ -28,7 +28,7 @@ const Loan = () => {
     setLoading(true);
     try {
       const res = await api.get("/loans");
-      setLoans(res.data || []);
+      setLoans(Array.isArray(res.data) ? res.data : res.data?.items || []);
     } catch {
       alert("Failed to load loans");
     } finally {
@@ -38,7 +38,7 @@ const Loan = () => {
   const fetchBranches = async () => {
     try {
       const res = await api.get("/branches");
-      setBranches(Array.isArray(res.data) ? res.data : []);
+      setBranches(Array.isArray(res.data) ? res.data : res.data?.items || []);
     } catch {}
   };
   const fetchProducts = async () => {
@@ -56,8 +56,7 @@ const Loan = () => {
 
   // maps/helpers
   const productsById = useMemo(
-    () =>
-      Object.fromEntries((products || []).map((p) => [String(p.id), p])),
+    () => Object.fromEntries((products || []).map((p) => [String(p.id), p])),
     [products]
   );
 
@@ -80,10 +79,13 @@ const Loan = () => {
     return (loans || []).filter((l) => {
       const matchesStatus = statusFilter === "all" || l.status === statusFilter;
       const matchesSearch =
-        (l.Borrower?.name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (l.Borrower?.name || "")
+          .toLowerCase()
+          .includes(search.toLowerCase()) ||
         String(l.id || "").includes(search.trim());
       const matchesBranch =
-        !branchFilter || String(l.branchId || l.branch?.id) === String(branchFilter);
+        !branchFilter ||
+        String(l.branchId || l.branch?.id) === String(branchFilter);
       const matchesProduct =
         !productFilter || String(l.productId) === String(productFilter);
       return (
@@ -183,7 +185,7 @@ const Loan = () => {
       case "pending":
         return `${base} bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300`;
       case "approved":
-        return `${base} bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300`;
+        return `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300`;
       case "rejected":
         return `${base} bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300`;
       case "disbursed":
@@ -201,7 +203,10 @@ const Loan = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">All Loans</h2>
-        <Link className="text-indigo-600 hover:underline text-sm" to="/loans/applications">
+        <Link
+          className="text-indigo-600 hover:underline text-sm"
+          to="/loans/applications"
+        >
           New Application
         </Link>
       </div>

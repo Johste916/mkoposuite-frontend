@@ -1,3 +1,4 @@
+// src/layouts/SidebarLayout.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -59,6 +60,11 @@ const NAV = () => [
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
       { label: "View All Loans", to: "/loans" },
       { label: "Add Loan", to: "/loans/applications" },
+
+      // ✅ Loan Products module
+      { label: "Loan Products", to: "/loans/products" },
+      { label: "Add Loan Product", to: "/loans/products/new" },
+
       { label: "Review Queue", to: "/loans/review-queue" },
       { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
       { label: "Disbursed Loans", to: "/loans/status/disbursed" },
