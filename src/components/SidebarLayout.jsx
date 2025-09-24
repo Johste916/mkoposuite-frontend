@@ -60,7 +60,7 @@ const NAV = () => [
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
       // ✅ Loan Products module
       { label: "Loan Products", to: "/loans/products" },
-      
+
       { label: "View All Loans", to: "/loans" },
       { label: "Add Loan", to: "/loans/applications" },
 
