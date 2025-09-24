@@ -1,5 +1,6 @@
 // src/pages/loans/LoanProducts.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../../api";
 
 /* ------------------------------ small helpers ------------------------------ */
@@ -9,11 +10,9 @@ const fmtNum = (v) => {
   return new Intl.NumberFormat().format(n);
 };
 const cls = (...xs) => xs.filter(Boolean).join(" ");
-const asFloat = (v) => (v === "" || v === null || v === undefined ? "" : Number(v));
 
-/* ------------------------------ Drawer (generic) ---------------------------- */
+/* ------------------------------ Drawer (for view) -------------------------- */
 function Drawer({ open, title, children, onClose, width = 520 }) {
-  const ref = useRef(null);
   useEffect(() => {
     const onEsc = (e) => e.key === "Escape" && onClose?.();
     if (open) document.addEventListener("keydown", onEsc);
@@ -23,13 +22,8 @@ function Drawer({ open, title, children, onClose, width = 520 }) {
   if (!open) return null;
   return (
     <>
-      <div
-        className="fixed inset-0 z-40 bg-black/40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
       <aside
-        ref={ref}
         className="fixed right-0 top-0 bottom-0 z-50 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl overflow-auto"
         style={{ width }}
         role="dialog"
@@ -44,192 +38,10 @@ function Drawer({ open, title, children, onClose, width = 520 }) {
   );
 }
 
-/* --------------------------- Create / Edit form ---------------------------- */
-function ProductForm({ initial, onSubmit, onCancel, saving }) {
-  const [form, setForm] = useState(() => ({
-    name: "",
-    code: "",
-    status: "active",
-    interestMethod: "flat",
-    interestRate: 0,
-    minPrincipal: "",
-    maxPrincipal: "",
-    minTermMonths: "",
-    maxTermMonths: "",
-    penaltyRate: "",
-    description: "",
-    ...initial,
-  }));
-  const [errors, setErrors] = useState({});
-
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  const validate = () => {
-    const e = {};
-    if (!String(form.name).trim()) e.name = "Name is required";
-    if (!String(form.code).trim()) e.code = "Code is required";
-    if (form.interestRate === "" || Number(form.interestRate) < 0)
-      e.interestRate = "Interest rate must be 0 or more";
-    if (form.minPrincipal !== "" && form.maxPrincipal !== "" && Number(form.maxPrincipal) < Number(form.minPrincipal))
-      e.maxPrincipal = "Max must be ≥ Min";
-    if (form.minTermMonths !== "" && form.maxTermMonths !== "" && Number(form.maxTermMonths) < Number(form.minTermMonths))
-      e.maxTermMonths = "Max must be ≥ Min";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-    onSubmit?.(form);
-  };
-
-  const Field = ({ label, children, error }) => (
-    <label className="block">
-      <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</div>
-      {children}
-      {error && <div className="mt-1 text-xs text-rose-600">{error}</div>}
-    </label>
-  );
-
-  const inputClass =
-    "w-full input border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded px-3 py-2 text-sm";
-
-  return (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="grid sm:grid-cols-2 gap-3">
-        <Field label="Name" error={errors.name}>
-          <input
-            className={inputClass}
-            value={form.name}
-            onChange={(e) => set("name", e.target.value)}
-            placeholder="e.g. Business Working Capital"
-            required
-          />
-        </Field>
-        <Field label="Code" error={errors.code}>
-          <input
-            className={inputClass}
-            value={form.code}
-            onChange={(e) => set("code", e.target.value.toUpperCase())}
-            placeholder="e.g. BWC"
-            required
-          />
-        </Field>
-        <Field label="Status">
-          <select
-            className={inputClass}
-            value={form.status}
-            onChange={(e) => set("status", e.target.value)}
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-        </Field>
-        <Field label="Interest Method">
-          <select
-            className={inputClass}
-            value={form.interestMethod}
-            onChange={(e) => set("interestMethod", e.target.value)}
-          >
-            <option value="flat">Flat</option>
-            <option value="reducing">Reducing</option>
-          </select>
-        </Field>
-        <Field label="Interest Rate (%)" error={errors.interestRate}>
-          <input
-            type="number"
-            step="0.0001"
-            className={inputClass}
-            value={form.interestRate}
-            onChange={(e) => set("interestRate", asFloat(e.target.value))}
-            placeholder="e.g. 3"
-          />
-        </Field>
-        <Field label="Penalty Rate (%)">
-          <input
-            type="number"
-            step="0.0001"
-            className={inputClass}
-            value={form.penaltyRate}
-            onChange={(e) => set("penaltyRate", asFloat(e.target.value))}
-            placeholder="e.g. 1.5"
-          />
-        </Field>
-        <Field label="Min Principal">
-          <input
-            type="number"
-            className={inputClass}
-            value={form.minPrincipal}
-            onChange={(e) => set("minPrincipal", asFloat(e.target.value))}
-            placeholder="e.g. 100000"
-          />
-        </Field>
-        <Field label="Max Principal" error={errors.maxPrincipal}>
-          <input
-            type="number"
-            className={inputClass}
-            value={form.maxPrincipal}
-            onChange={(e) => set("maxPrincipal", asFloat(e.target.value))}
-            placeholder="e.g. 10000000"
-          />
-        </Field>
-        <Field label="Min Term (months)">
-          <input
-            type="number"
-            className={inputClass}
-            value={form.minTermMonths}
-            onChange={(e) => set("minTermMonths", asFloat(e.target.value))}
-            placeholder="e.g. 3"
-          />
-        </Field>
-        <Field label="Max Term (months)" error={errors.maxTermMonths}>
-          <input
-            type="number"
-            className={inputClass}
-            value={form.maxTermMonths}
-            onChange={(e) => set("maxTermMonths", asFloat(e.target.value))}
-            placeholder="e.g. 36"
-          />
-        </Field>
-        <div className="sm:col-span-2">
-          <Field label="Internal Notes / Description">
-            <textarea
-              rows={3}
-              className={inputClass}
-              value={form.description || ""}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder="Optional details visible to staff only."
-            />
-          </Field>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-end gap-2 pt-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 rounded border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={!!saving}
-          className={cls(
-            "px-4 py-2 rounded text-white text-sm",
-            saving ? "bg-indigo-400" : "bg-indigo-600 hover:bg-indigo-700"
-          )}
-        >
-          {saving ? "Saving…" : (initial?.id ? "Update Product" : "Create Product")}
-        </button>
-      </div>
-    </form>
-  );
-}
-
 /* --------------------------------- Page ----------------------------------- */
 export default function LoanProducts() {
+  const navigate = useNavigate();
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -239,11 +51,7 @@ export default function LoanProducts() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // drawers
-  const [openForm, setOpenForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(null);
-
+  // view drawer
   const [openView, setOpenView] = useState(false);
   const [viewItem, setViewItem] = useState(null);
 
@@ -295,38 +103,9 @@ export default function LoanProducts() {
   }, [sorted, page, pageSize]);
 
   // actions
-  const startCreate = () => {
-    setEditing(null);
-    setOpenForm(true);
-  };
-  const startEdit = (p) => {
-    setEditing(p);
-    setOpenForm(true);
-  };
-  const startView = (p) => {
-    setViewItem(p);
-    setOpenView(true);
-  };
-
-  const submit = async (payload) => {
-    setSaving(true);
-    try {
-      if (editing?.id) {
-        await api.put(`/loan-products/${editing.id}`, payload);
-      } else {
-        await api.post("/loan-products", payload);
-      }
-      setOpenForm(false);
-      setEditing(null);
-      await load();
-      // optional toast if you have one; fall back to alert
-      // toast.success("Saved");
-    } catch {
-      alert("Failed to save product.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const startCreate = () => navigate("/loans/products/new");
+  const startEdit = (p) => navigate(`/loans/products/${p.id}/edit`);
+  const startView = (p) => { setViewItem(p); setOpenView(true); };
 
   const toggle = async (p) => {
     if (!confirm(`Set "${p.name}" to ${p.status === "active" ? "inactive" : "active"}?`)) return;
@@ -361,9 +140,7 @@ export default function LoanProducts() {
     const active = sort.by === id;
     const dir = active ? sort.dir : "asc";
     return (
-      <th
-        className={cls("p-2 border-b border-[var(--border)] text-left text-xs uppercase tracking-wide", className)}
-      >
+      <th className={cls("p-2 border-b border-[var(--border)] text-left text-xs uppercase tracking-wide", className)}>
         <button
           className="inline-flex items-center gap-1 hover:underline"
           onClick={() =>
@@ -387,10 +164,7 @@ export default function LoanProducts() {
           <h2 className="text-2xl font-bold">Loan Products</h2>
           <p className="muted text-sm">Define the lending terms your team can use in applications.</p>
         </div>
-        <button
-          onClick={startCreate}
-          className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
-        >
+        <button onClick={startCreate} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">
           New Product
         </button>
       </div>
@@ -467,7 +241,9 @@ export default function LoanProducts() {
                       {p.minTermMonths ?? "—"} – {p.maxTermMonths ?? "—"} m
                     </td>
                     <td className="px-2 py-2 text-right">{p.penaltyRate ?? "—"}</td>
-                    <td className="px-2 py-2"><StatusBadge value={p.status} /></td>
+                    <td className="px-2 py-2">
+                      <StatusBadge value={p.status} />
+                    </td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-3 text-sm">
                         <button className="text-indigo-600 hover:underline" onClick={() => startView(p)}>View</button>
@@ -486,8 +262,7 @@ export default function LoanProducts() {
             {/* Pagination */}
             <div className="flex items-center justify-between px-3 py-2">
               <div className="text-xs muted">
-                Showing {(page - 1) * pageSize + 1}–
-                {Math.min(page * pageSize, sorted.length)} of {sorted.length}
+                Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sorted.length)} of {sorted.length}
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -521,20 +296,6 @@ export default function LoanProducts() {
         )}
       </div>
 
-      {/* Create/Edit Drawer */}
-      <Drawer
-        open={openForm}
-        title={editing ? `Edit: ${editing.name}` : "New Loan Product"}
-        onClose={() => (saving ? null : setOpenForm(false))}
-      >
-        <ProductForm
-          initial={editing || undefined}
-          onSubmit={submit}
-          onCancel={() => setOpenForm(false)}
-          saving={saving}
-        />
-      </Drawer>
-
       {/* View Drawer */}
       <Drawer open={openView} title="Product Details" onClose={() => setOpenView(false)} width={460}>
         {!viewItem ? (
@@ -552,7 +313,11 @@ export default function LoanProducts() {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide muted">Status</div>
-                <StatusBadge value={viewItem.status} />
+                <span className="inline-block mt-1">
+                  <span className="align-middle">
+                    <StatusBadge value={viewItem.status} />
+                  </span>
+                </span>
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide muted">Interest Method</div>
