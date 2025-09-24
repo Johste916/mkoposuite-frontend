@@ -15,7 +15,7 @@ const toNumberOrNull = (v) => {
 
 export default function LoanProductForm() {
   const navigate = useNavigate();
-  const { id } = useParams(); // if present => edit
+  const { id } = useParams();
   const editing = Boolean(id);
 
   const [saving, setSaving] = useState(false);
@@ -123,13 +123,18 @@ export default function LoanProductForm() {
     }
   };
 
-  const Field = ({ label, children, error }) => (
-    <label className="block">
-      <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</div>
-      {children}
-      {error && <div className="mt-1 text-xs text-rose-600">{error}</div>}
-    </label>
-  );
+  /* ---------- Field (label not wrapping the input) ---------- */
+  function Field({ id, label, error, children }) {
+    return (
+      <div>
+        <label htmlFor={id} className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+          {label}
+        </label>
+        {children}
+        {error && <div className="mt-1 text-xs text-rose-600">{error}</div>}
+      </div>
+    );
+  }
 
   const inputClass =
     "w-full input border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded px-3 py-2 text-sm";
@@ -151,8 +156,9 @@ export default function LoanProductForm() {
       ) : (
         <form onSubmit={submit} className="card p-4 space-y-4">
           <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Name" error={errors.name}>
+            <Field id="lp-name" label="Name" error={errors.name}>
               <input
+                id="lp-name"
                 name="name"
                 className={inputClass}
                 value={form.name}
@@ -162,8 +168,9 @@ export default function LoanProductForm() {
               />
             </Field>
 
-            <Field label="Code" error={errors.code}>
+            <Field id="lp-code" label="Code" error={errors.code}>
               <input
+                id="lp-code"
                 name="code"
                 className={inputClass}
                 value={form.code}
@@ -174,8 +181,9 @@ export default function LoanProductForm() {
               />
             </Field>
 
-            <Field label="Status">
+            <Field id="lp-status" label="Status">
               <select
+                id="lp-status"
                 name="status"
                 className={inputClass}
                 value={form.status}
@@ -186,8 +194,9 @@ export default function LoanProductForm() {
               </select>
             </Field>
 
-            <Field label="Interest Method">
+            <Field id="lp-method" label="Interest Method">
               <select
+                id="lp-method"
                 name="interestMethod"
                 className={inputClass}
                 value={form.interestMethod}
@@ -198,8 +207,9 @@ export default function LoanProductForm() {
               </select>
             </Field>
 
-            <Field label="Interest Rate (%)" error={errors.interestRate}>
+            <Field id="lp-rate" label="Interest Rate (%)" error={errors.interestRate}>
               <input
+                id="lp-rate"
                 name="interestRate"
                 type="number"
                 step="0.0001"
@@ -211,8 +221,9 @@ export default function LoanProductForm() {
               />
             </Field>
 
-            <Field label="Penalty Rate (%)">
+            <Field id="lp-penalty" label="Penalty Rate (%)">
               <input
+                id="lp-penalty"
                 name="penaltyRate"
                 type="number"
                 step="0.0001"
@@ -224,8 +235,9 @@ export default function LoanProductForm() {
               />
             </Field>
 
-            <Field label="Min Principal">
+            <Field id="lp-minp" label="Min Principal">
               <input
+                id="lp-minp"
                 name="minPrincipal"
                 type="number"
                 className={inputClass}
@@ -236,8 +248,9 @@ export default function LoanProductForm() {
               />
             </Field>
 
-            <Field label="Max Principal" error={errors.maxPrincipal}>
+            <Field id="lp-maxp" label="Max Principal" error={errors.maxPrincipal}>
               <input
+                id="lp-maxp"
                 name="maxPrincipal"
                 type="number"
                 className={inputClass}
@@ -248,8 +261,9 @@ export default function LoanProductForm() {
               />
             </Field>
 
-            <Field label="Min Term (months)">
+            <Field id="lp-mint" label="Min Term (months)">
               <input
+                id="lp-mint"
                 name="minTermMonths"
                 type="number"
                 className={inputClass}
@@ -260,8 +274,9 @@ export default function LoanProductForm() {
               />
             </Field>
 
-            <Field label="Max Term (months)" error={errors.maxTermMonths}>
+            <Field id="lp-maxt" label="Max Term (months)" error={errors.maxTermMonths}>
               <input
+                id="lp-maxt"
                 name="maxTermMonths"
                 type="number"
                 className={inputClass}
@@ -273,8 +288,9 @@ export default function LoanProductForm() {
             </Field>
 
             <div className="sm:col-span-2">
-              <Field label="Internal Notes / Description">
+              <Field id="lp-desc" label="Internal Notes / Description">
                 <textarea
+                  id="lp-desc"
                   name="description"
                   rows={3}
                   className={inputClass}
