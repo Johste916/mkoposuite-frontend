@@ -1,4 +1,3 @@
-// src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -44,6 +43,7 @@ const LoanApplications = lazy(() => import("./pages/loans/LoanApplications"));
 const LoanStatusList = lazy(() => import("./pages/loans/LoanStatusList"));
 const DisbursementQueue = lazy(() => import("./pages/loans/DisbursementQueue"));
 const LoanProducts = lazy(() => import("./pages/loans/LoanProducts"));
+const LoanProductForm = lazy(() => import("./pages/loans/LoanProductForm"));
 const LoanSchedulePage = lazy(() => import("./pages/loans/LoanSchedulePage"));
 const DisburseLoan = lazy(() => import("./pages/loans/DisburseLoan"));
 const LoanReview = lazy(() => import("./pages/loans/LoanReview"));
@@ -309,7 +309,7 @@ function App() {
                 />
                 <Route path="loans/disbursement-queue" element={<DisbursementQueue />} />
 
-                {/* Loan Products — list + full-page create/edit ready */}
+                {/* Loan Products — list + full-page create/edit routes */}
                 <Route
                   path="loans/products"
                   element={
@@ -322,15 +322,15 @@ function App() {
                   path="loans/products/new"
                   element={
                     <RoleProtectedRoute allow={["admin", "director"]}>
-                      <LoanProducts />
+                      <LoanProductForm />
                     </RoleProtectedRoute>
                   }
                 />
                 <Route
-                  path="loans/products/:id"
+                  path="loans/products/:id/edit"
                   element={
                     <RoleProtectedRoute allow={["admin", "director"]}>
-                      <LoanProducts />
+                      <LoanProductForm />
                     </RoleProtectedRoute>
                   }
                 />

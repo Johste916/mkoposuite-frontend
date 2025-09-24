@@ -1,5 +1,4 @@
-// src/pages/loans/LoanProducts.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api";
 
