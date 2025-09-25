@@ -1,3 +1,4 @@
+// src/pages/loans/LoanProducts.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -85,9 +86,32 @@ export default function LoanProducts() {
   const labelize = (v) => {
     if (v == null || v === "" || v === "-") return "-";
     const s = String(v);
-    // normalize SOME_COMMON_UPPERCASE or monthly/MONTHLY → Capitalize
     const low = s.toLowerCase();
     return low.charAt(0).toUpperCase() + low.slice(1);
+  };
+
+  const to2 = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return v ?? "-";
+    return n.toFixed(2);
+  };
+
+  const pluralizeUnit = (unit, val) => {
+    if (!unit) return "-";
+    const n = Number(val);
+    const u = String(unit).toLowerCase();
+    if (!Number.isFinite(n)) return labelize(u);
+    // normalize singular/plural
+    if (n === 1) {
+      if (u.endsWith("s")) return labelize(u.slice(0, -1));
+      if (u === "months") return "Month";
+      if (u === "weeks") return "Week";
+      if (u === "days") return "Day";
+      return labelize(u);
+    }
+    // plural
+    if (!u.endsWith("s")) return labelize(u + "s");
+    return labelize(u);
   };
 
   const buildParams = (over = {}) => {
@@ -256,10 +280,14 @@ export default function LoanProducts() {
                 items.map((r) => {
                   const id = r.id || r.uuid || r._id;
 
+                  // expanded aliases so period/term/unit render regardless of backend keys
                   const rate = pick(r.interestRate, r.interest_rate, r.rate_percent);
-                  const period = pick(r.interestPeriod, r.interest_period);
-                  const termVal = pick(r.term, r.tenor, r.duration);
-                  const unit = pick(r.termUnit, r.term_unit, r.tenor_unit, r.duration_unit);
+                  const period = pick(r.interestPeriod, r.interest_period, r.period, r.periodicity);
+                  const termVal = pick(r.term, r.tenor, r.duration, r.term_value, r.tenor_value, r.duration_value);
+                  const unit = pick(
+                    r.termUnit, r.term_unit, r.unit, r.termType, r.term_type,
+                    r.duration_unit, r.tenor_unit, r.period_unit, r.periodicity_unit
+                  );
 
                   const pMin = pick(
                     r.principalMin, r.principal_min,
@@ -275,12 +303,10 @@ export default function LoanProducts() {
                     <tr key={id}>
                       <td className="px-3 py-2 font-medium">{r.name || "-"}</td>
                       <td className="px-3 py-2">{r.code || "-"}</td>
-                      <td className="px-3 py-2 text-right">
-                        {rate ?? "-"}
-                      </td>
+                      <td className="px-3 py-2 text-right">{to2(rate)}</td>
                       <td className="px-3 py-2">{labelize(period ?? "-")}</td>
                       <td className="px-3 py-2 text-right">{termVal ?? "-"}</td>
-                      <td className="px-3 py-2">{labelize(unit ?? "-")}</td>
+                      <td className="px-3 py-2">{pluralizeUnit(unit ?? "-", termVal)}</td>
                       <td className="px-3 py-2 text-right">{currency(pMin)}</td>
                       <td className="px-3 py-2 text-right">{currency(pMax)}</td>
                       <td className="px-3 py-2 text-right">{currency(fees)}</td>
