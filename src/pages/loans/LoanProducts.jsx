@@ -12,25 +12,31 @@ const fmtNum = (v) => {
 const cls = (...xs) => xs.filter(Boolean).join(" ");
 
 /* ------------------------------ Drawer (for view) -------------------------- */
+/* No global keydown listeners here (keeps focus stable across the app) */
 function Drawer({ open, title, children, onClose, width = 520 }) {
-  useEffect(() => {
-    const onEsc = (e) => e.key === "Escape" && onClose?.();
-    if (open) document.addEventListener("keydown", onEsc);
-    return () => document.removeEventListener("keydown", onEsc);
-  }, [open, onClose]);
-
   if (!open) return null;
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div
+        className="fixed inset-0 z-40 bg-black/40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
       <aside
         className="fixed right-0 top-0 bottom-0 z-50 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl overflow-auto"
         style={{ width }}
         role="dialog"
         aria-modal="true"
       >
-        <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+        <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
           <div className="text-lg font-semibold">{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Close
+          </button>
         </div>
         <div className="p-4">{children}</div>
       </aside>
@@ -72,9 +78,10 @@ export default function LoanProducts() {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     const c = new AbortController();
-    const id = setTimeout(() => load(c.signal), 240);
+    const id = setTimeout(() => load(c.signal), 240); // debounce search
     return () => {
       clearTimeout(id);
       c.abort();
@@ -145,6 +152,7 @@ export default function LoanProducts() {
     return (
       <th className={cls("p-2 border-b border-[var(--border)] text-left text-xs uppercase tracking-wide", className)}>
         <button
+          type="button"
           className="inline-flex items-center gap-1 hover:underline"
           onClick={() =>
             setSort((s) =>
@@ -317,7 +325,11 @@ export default function LoanProducts() {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide muted">Status</div>
-                <span className="inline-block mt-1"><span className="align-middle"><StatusBadge value={viewItem.status} /></span></span>
+                <span className="inline-block mt-1">
+                  <span className="align-middle">
+                    <StatusBadge value={viewItem.status} />
+                  </span>
+                </span>
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide muted">Interest Method</div>
@@ -333,11 +345,16 @@ export default function LoanProducts() {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide muted">Term (months)</div>
-                <div>{viewItem.minTermMonths ?? "—"} – {viewItem.maxTermMonths ?? "—"}</div>
+                <div>
+                  {viewItem.minTermMonths ?? "—"} – {viewItem.maxTermMonths ?? "—"}
+                </div>
               </div>
               <div className="col-span-2">
                 <div className="text-xs uppercase tracking-wide muted">Principal Range</div>
-                <div>{viewItem.minPrincipal != null ? fmtNum(viewItem.minPrincipal) : "—"} – {viewItem.maxPrincipal != null ? fmtNum(viewItem.maxPrincipal) : "—"}</div>
+                <div>
+                  {viewItem.minPrincipal != null ? fmtNum(viewItem.minPrincipal) : "—"} –{" "}
+                  {viewItem.maxPrincipal != null ? fmtNum(viewItem.maxPrincipal) : "—"}
+                </div>
               </div>
             </div>
             {viewItem.description && (
