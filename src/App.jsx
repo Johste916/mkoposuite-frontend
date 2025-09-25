@@ -13,7 +13,7 @@ const Signup = lazy(() => import("./pages/public/Signup"));
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 // FIX: SidebarLayout actual path
-import SidebarLayout from "./layouts/SidebarLayout";
+import SidebarLayout from "./components/SidebarLayout.jsx";
 
 // Feature flags + toasts
 import { FeatureConfigProvider } from "./context/FeatureConfigContext";
