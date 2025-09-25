@@ -1,11 +1,11 @@
 // src/pages/loans/LoanProductForm.jsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../../api";
 
 const cls = (...xs) => xs.filter(Boolean).join(" ");
 
-// convert form string -> number or null for submit
+// string -> number or null (for submit)
 const toNumberOrNull = (v) => {
   if (v === "" || v === null || v === undefined) return null;
   if (String(v).trim() === ".") return null;
@@ -22,23 +22,25 @@ export default function LoanProductForm() {
   const [loading, setLoading] = useState(editing);
   const [errors, setErrors] = useState({});
 
-  // Keep inputs as plain strings while typing
+  // keep inputs as plain strings while typing
   const [form, setForm] = useState({
     name: "",
     code: "",
     status: "active",
     interestMethod: "flat",
     interestRate: "",
+    penaltyRate: "",
     minPrincipal: "",
     maxPrincipal: "",
     minTermMonths: "",
     maxTermMonths: "",
-    penaltyRate: "",
     description: "",
   });
 
-  const set = useCallback((k, v) => setForm((f) => ({ ...f, [k]: v })), []);
+  // simple setter
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  // load for edit
   useEffect(() => {
     if (!editing) return;
     (async () => {
@@ -49,18 +51,12 @@ export default function LoanProductForm() {
           code: data?.code ?? "",
           status: data?.status ?? "active",
           interestMethod: data?.interestMethod ?? "flat",
-          interestRate:
-            data?.interestRate === 0 || data?.interestRate ? String(data.interestRate) : "",
-          minPrincipal:
-            data?.minPrincipal === 0 || data?.minPrincipal ? String(data.minPrincipal) : "",
-          maxPrincipal:
-            data?.maxPrincipal === 0 || data?.maxPrincipal ? String(data.maxPrincipal) : "",
-          minTermMonths:
-            data?.minTermMonths === 0 || data?.minTermMonths ? String(data.minTermMonths) : "",
-          maxTermMonths:
-            data?.maxTermMonths === 0 || data?.maxTermMonths ? String(data.maxTermMonths) : "",
-          penaltyRate:
-            data?.penaltyRate === 0 || data?.penaltyRate ? String(data.penaltyRate) : "",
+          interestRate: (data?.interestRate ?? "") === "" ? "" : String(data?.interestRate ?? ""),
+          penaltyRate: (data?.penaltyRate ?? "") === "" ? "" : String(data?.penaltyRate ?? ""),
+          minPrincipal: (data?.minPrincipal ?? "") === "" ? "" : String(data?.minPrincipal ?? ""),
+          maxPrincipal: (data?.maxPrincipal ?? "") === "" ? "" : String(data?.maxPrincipal ?? ""),
+          minTermMonths: (data?.minTermMonths ?? "") === "" ? "" : String(data?.minTermMonths ?? ""),
+          maxTermMonths: (data?.maxTermMonths ?? "") === "" ? "" : String(data?.maxTermMonths ?? ""),
           description: data?.description ?? "",
         });
       } catch {
@@ -72,6 +68,7 @@ export default function LoanProductForm() {
     })();
   }, [editing, id, navigate]);
 
+  // validate
   const validate = () => {
     const e = {};
     const interestRate = toNumberOrNull(form.interestRate);
@@ -90,6 +87,7 @@ export default function LoanProductForm() {
     return Object.keys(e).length === 0;
   };
 
+  // submit
   const submit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
@@ -101,11 +99,11 @@ export default function LoanProductForm() {
       status: form.status,
       interestMethod: form.interestMethod,
       interestRate: toNumberOrNull(form.interestRate) ?? 0,
+      penaltyRate: toNumberOrNull(form.penaltyRate),
       minPrincipal: toNumberOrNull(form.minPrincipal),
       maxPrincipal: toNumberOrNull(form.maxPrincipal),
       minTermMonths: toNumberOrNull(form.minTermMonths),
       maxTermMonths: toNumberOrNull(form.maxTermMonths),
-      penaltyRate: toNumberOrNull(form.penaltyRate),
       description: form.description || "",
     };
 
@@ -123,29 +121,25 @@ export default function LoanProductForm() {
     }
   };
 
-  /* ---------- Field (label not wrapping the input) ---------- */
-  function Field({ id, label, error, children }) {
-    return (
-      <div>
-        <label htmlFor={id} className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
-          {label}
-        </label>
-        {children}
-        {error && <div className="mt-1 text-xs text-rose-600">{error}</div>}
-      </div>
-    );
-  }
+  // plain field wrapper (label does NOT wrap the input)
+  const Field = ({ id, label, error, children }) => (
+    <div>
+      <label htmlFor={id} className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+        {label}
+      </label>
+      {children}
+      {error && <div className="mt-1 text-xs text-rose-600">{error}</div>}
+    </div>
+  );
 
   const inputClass =
     "w-full input border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded px-3 py-2 text-sm";
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">{editing ? "Edit Loan Product" : "Create Loan Product"}</h2>
-        </div>
+        <h2 className="text-2xl font-bold">{editing ? "Edit Loan Product" : "Create Loan Product"}</h2>
         <Link to="/loans/products" className="px-4 py-2 rounded border border-slate-200 dark:border-slate-700">
           Back to list
         </Link>
@@ -159,7 +153,6 @@ export default function LoanProductForm() {
             <Field id="lp-name" label="Name" error={errors.name}>
               <input
                 id="lp-name"
-                name="name"
                 className={inputClass}
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
@@ -171,7 +164,6 @@ export default function LoanProductForm() {
             <Field id="lp-code" label="Code" error={errors.code}>
               <input
                 id="lp-code"
-                name="code"
                 className={inputClass}
                 value={form.code}
                 onChange={(e) => set("code", e.target.value)}
@@ -184,7 +176,6 @@ export default function LoanProductForm() {
             <Field id="lp-status" label="Status">
               <select
                 id="lp-status"
-                name="status"
                 className={inputClass}
                 value={form.status}
                 onChange={(e) => set("status", e.target.value)}
@@ -197,7 +188,6 @@ export default function LoanProductForm() {
             <Field id="lp-method" label="Interest Method">
               <select
                 id="lp-method"
-                name="interestMethod"
                 className={inputClass}
                 value={form.interestMethod}
                 onChange={(e) => set("interestMethod", e.target.value)}
@@ -210,7 +200,6 @@ export default function LoanProductForm() {
             <Field id="lp-rate" label="Interest Rate (%)" error={errors.interestRate}>
               <input
                 id="lp-rate"
-                name="interestRate"
                 type="number"
                 step="0.0001"
                 className={inputClass}
@@ -224,7 +213,6 @@ export default function LoanProductForm() {
             <Field id="lp-penalty" label="Penalty Rate (%)">
               <input
                 id="lp-penalty"
-                name="penaltyRate"
                 type="number"
                 step="0.0001"
                 className={inputClass}
@@ -238,7 +226,6 @@ export default function LoanProductForm() {
             <Field id="lp-minp" label="Min Principal">
               <input
                 id="lp-minp"
-                name="minPrincipal"
                 type="number"
                 className={inputClass}
                 value={form.minPrincipal}
@@ -251,7 +238,6 @@ export default function LoanProductForm() {
             <Field id="lp-maxp" label="Max Principal" error={errors.maxPrincipal}>
               <input
                 id="lp-maxp"
-                name="maxPrincipal"
                 type="number"
                 className={inputClass}
                 value={form.maxPrincipal}
@@ -264,7 +250,6 @@ export default function LoanProductForm() {
             <Field id="lp-mint" label="Min Term (months)">
               <input
                 id="lp-mint"
-                name="minTermMonths"
                 type="number"
                 className={inputClass}
                 value={form.minTermMonths}
@@ -277,7 +262,6 @@ export default function LoanProductForm() {
             <Field id="lp-maxt" label="Max Term (months)" error={errors.maxTermMonths}>
               <input
                 id="lp-maxt"
-                name="maxTermMonths"
                 type="number"
                 className={inputClass}
                 value={form.maxTermMonths}
@@ -291,7 +275,6 @@ export default function LoanProductForm() {
               <Field id="lp-desc" label="Internal Notes / Description">
                 <textarea
                   id="lp-desc"
-                  name="description"
                   rows={3}
                   className={inputClass}
                   value={form.description || ""}
