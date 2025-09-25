@@ -1,4 +1,3 @@
-// src/pages/loans/LoanProductForm.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api";
@@ -110,7 +109,7 @@ export default function LoanProductForm() {
 
   const prefersSnake = serverShape?.snake ?? true;
 
-  // ---------- build variants
+  // ---------- build base + alias-rich variants
   const baseNormalized = useMemo(() => {
     const interestPeriod = normEnum(form.interestPeriod, ["weekly", "monthly", "yearly"], "lower");
     const termUnit = normEnum(form.termUnit, ["days", "weeks", "months"], "lower");
@@ -128,92 +127,49 @@ export default function LoanProductForm() {
     };
   }, [form]);
 
-  const buildVariant = (style) => {
+  // A super-set payload that includes **aliases** many backends use.
+  // We send one payload that covers camelCase, snake_case and common alternates.
+  const buildAliasSuperset = (enums = "lower") => {
     const p = baseNormalized;
+    const ip = normEnum(p.interestPeriod, ["weekly", "monthly", "yearly"], enums);
+    const tu = normEnum(p.termUnit, ["days", "weeks", "months"], enums);
 
-    if (style === "snake_lower") {
-      return {
-        name: p.name,
-        code: p.code || null,
-        interest_rate: p.interestRate,
-        interest_period: p.interestPeriod,
-        term: p.term,
-        term_unit: p.termUnit,
-        principal_min: p.principalMin,
-        principal_max: p.principalMax,
-        fees_total: p.fees,
-        active: p.active,
-      };
-    }
+    return {
+      // canonical
+      name: p.name,
+      code: p.code || null,
+      interestRate: p.interestRate,
+      interestPeriod: ip,
+      term: p.term,
+      termUnit: tu,
+      principalMin: p.principalMin,
+      principalMax: p.principalMax,
+      fees: p.fees,
+      active: p.active,
 
-    if (style === "camel_lower") {
-      return {
-        name: p.name,
-        code: p.code || null,
-        interestRate: p.interestRate,
-        interestPeriod: p.interestPeriod,
-        term: p.term,
-        termUnit: p.termUnit,
-        principalMin: p.principalMin,
-        principalMax: p.principalMax,
-        fees: p.fees,
-        active: p.active,
-      };
-    }
+      // snake aliases
+      interest_rate: p.interestRate,
+      interest_period: ip,
+      term_unit: tu,
+      principal_min: p.principalMin,
+      principal_max: p.principalMax,
+      fees_total: p.fees,
 
-    if (style === "snake_upper_enums") {
-      return {
-        name: p.name,
-        code: p.code || null,
-        interest_rate: p.interestRate,
-        interest_period: normEnum(p.interestPeriod, ["weekly", "monthly", "yearly"], "upper"),
-        term: p.term,
-        term_unit: normEnum(p.termUnit, ["days", "weeks", "months"], "upper"),
-        principal_min: p.principalMin,
-        principal_max: p.principalMax,
-        fees_total: p.fees,
-        active: p.active,
-      };
-    }
+      // other common aliases used by various codebases
+      min_amount: p.principalMin,
+      max_amount: p.principalMax,
+      minimum_principal: p.principalMin,
+      maximum_principal: p.principalMax,
+      minPrincipal: p.principalMin,
+      maxPrincipal: p.principalMax,
 
-    if (style === "camel_upper_enums") {
-      return {
-        name: p.name,
-        code: p.code || null,
-        interestRate: p.interestRate,
-        interestPeriod: normEnum(p.interestPeriod, ["weekly", "monthly", "yearly"], "upper"),
-        term: p.term,
-        termUnit: normEnum(p.termUnit, ["days", "weeks", "months"], "upper"),
-        principalMin: p.principalMin,
-        principalMax: p.principalMax,
-        fees: p.fees,
-        active: p.active,
-      };
-    }
-
-    // minimal snake, often accepted by strict backends
-    if (style === "snake_minimal") {
-      return {
-        name: p.name,
-        interest_rate: p.interestRate,
-        interest_period: p.interestPeriod,
-        term: p.term,
-        term_unit: p.termUnit,
-        principal_min: p.principalMin,
-        principal_max: p.principalMax,
-        active: p.active,
-      };
-    }
-
-    return p;
+      tenor: p.term,              // some APIs use tenor
+      tenor_unit: tu,
+      duration: p.term,           // others use duration
+      duration_unit: tu,
+      rate_percent: p.interestRate, // sometimes rate_percent is used
+    };
   };
-
-  // order: prefer server shape first, then fallbacks
-  const variantOrder = useMemo(() => {
-    const primary = prefersSnake ? ["snake_lower", "snake_upper_enums"] : ["camel_lower", "camel_upper_enums"];
-    const others = prefersSnake ? ["camel_lower", "camel_upper_enums"] : ["snake_lower", "snake_upper_enums"];
-    return [...primary, "snake_minimal", ...others];
-  }, [prefersSnake]);
 
   // ---------- load when editing
   useEffect(() => {
@@ -224,18 +180,19 @@ export default function LoanProductForm() {
         setLoading(true);
         const { data } = await api.get(`/loan-products/${id}`, { headers: buildHeaders() });
         if (canceled) return;
-        const get = (a, b, d = "") => data?.[a] ?? data?.[b] ?? d;
+        const get = (a, b, c, d = "") => data?.[a] ?? data?.[b] ?? data?.[c] ?? d;
+
         setForm({
           name: get("name"),
           code: get("code"),
-          interestRate: String(get("interestRate", "interest_rate", "")),
-          interestPeriod: (get("interestPeriod", "interest_period", "monthly") || "monthly"),
-          term: String(get("term", "", "")),
-          termUnit: (get("termUnit", "term_unit", "months") || "months"),
-          principalMin: String(get("principalMin", "principal_min", "")),
-          principalMax: String(get("principalMax", "principal_max", "")),
-          fees: String(get("fees", "fees_total", "")),
-          active: Boolean(get("active", "", true)),
+          interestRate: String(get("interestRate", "interest_rate", "rate_percent", "")),
+          interestPeriod: (get("interestPeriod", "interest_period", "", "monthly") || "monthly"),
+          term: String(get("term", "tenor", "duration", "")),
+          termUnit: (get("termUnit", "term_unit", "tenor_unit", "months") || "months"),
+          principalMin: String(get("principalMin", "principal_min", "min_amount", "")),
+          principalMax: String(get("principalMax", "principal_max", "max_amount", "")),
+          fees: String(get("fees", "fees_total", "fee", "")),
+          active: Boolean(get("active", "", "", true)),
         });
       } catch (e) {
         setErr(readErrorBody(e) || "Failed to load product");
@@ -252,26 +209,12 @@ export default function LoanProductForm() {
     setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
   };
 
-  const tryPost = async () => {
+  const tryPostOnce = async (payload) => {
     const headers = buildHeaders();
-    const attempts = [];
-    for (const style of variantOrder) {
-      const payload = buildVariant(style);
-      try {
-        const res = isEdit
-          ? await api.put(`/loan-products/${id}`, payload, { headers })
-          : await api.post(`/loan-products`, payload, { headers });
-        return { ok: true, style, payload, res };
-      } catch (e) {
-        attempts.push({
-          style,
-          payload,
-          error: readErrorBody(e),
-          status: e?.response?.status,
-        });
-      }
+    if (isEdit) {
+      return api.put(`/loan-products/${id}`, payload, { headers });
     }
-    return { ok: false, attempts };
+    return api.post(`/loan-products`, payload, { headers });
   };
 
   const onSubmit = async (e) => {
@@ -279,22 +222,35 @@ export default function LoanProductForm() {
     setErr("");
     setDebug(null);
 
-    // basic client validation
     if (!form.name?.trim()) return setErr("Name is required");
     if (toNumber(form.principalMax) && toNumber(form.principalMin) && toNumber(form.principalMax) < toNumber(form.principalMin)) {
       return setErr("Principal Max cannot be less than Principal Min");
     }
 
     setSaving(true);
-    const result = await tryPost();
-    setSaving(false);
 
-    if (result.ok) {
-      navigate("/loans/products", { replace: true });
-    } else {
-      setErr("Failed to create product");
-      setDebug(result.attempts); // show what we tried + server replies
+    // Try alias superset with lowercase enums first, then UPPERCASE and Capitalized,
+    // so enum mismatch won’t drop fields.
+    const attempts = [];
+    const variants = [
+      { label: "alias_superset_lower", payload: buildAliasSuperset("lower") },
+      { label: "alias_superset_upper", payload: buildAliasSuperset("upper") },
+      { label: "alias_superset_capital", payload: buildAliasSuperset("capital") },
+    ];
+
+    for (const v of variants) {
+      try {
+        const res = await tryPostOnce(v.payload);
+        setSaving(false);
+        return navigate("/loans/products", { replace: true });
+      } catch (e2) {
+        attempts.push({ label: v.label, payload: v.payload, error: readErrorBody(e2), status: e2?.response?.status });
+      }
     }
+
+    setSaving(false);
+    setErr("Failed to save product");
+    setDebug(attempts);
   };
 
   return (
@@ -313,7 +269,7 @@ export default function LoanProductForm() {
         <details open className="mb-3 rounded-md border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2 text-xs">
           <summary className="cursor-pointer select-none">Show attempts & server responses</summary>
           <pre className="overflow-auto whitespace-pre-wrap">
-            {JSON.stringify({ prefersSnake, variantOrder, attempts: debug }, null, 2)}
+            {JSON.stringify(debug, null, 2)}
           </pre>
         </details>
       )}

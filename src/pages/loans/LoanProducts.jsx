@@ -1,4 +1,3 @@
-// src/pages/loans/LoanProducts.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -12,17 +11,8 @@ import {
 } from "react-icons/fi";
 import api from "../../api";
 
-/**
- * If your backend uses different query param names, change these.
- * Examples:
- *   { page: "pageNumber", limit: "pageSize", search: "search" }
- *   { page: "page", limit: "perPage", search: "query" }
- */
-const PAGINATION_KEYS = {
-  page: "page",
-  limit: "limit",
-  search: "q",
-};
+/** Edit these if your API uses different list param names */
+const PAGINATION_KEYS = { page: "page", limit: "limit", search: "q" };
 
 export default function LoanProducts() {
   const navigate = useNavigate();
@@ -84,6 +74,22 @@ export default function LoanProducts() {
     return new Intl.NumberFormat().format(num);
   };
 
+  // safely pick first non-null/undefined/empty from many aliases
+  const pick = (...vals) => {
+    for (const v of vals) {
+      if (v !== undefined && v !== null && v !== "") return v;
+    }
+    return undefined;
+  };
+
+  const labelize = (v) => {
+    if (v == null || v === "" || v === "-") return "-";
+    const s = String(v);
+    // normalize SOME_COMMON_UPPERCASE or monthly/MONTHLY → Capitalize
+    const low = s.toLowerCase();
+    return low.charAt(0).toUpperCase() + low.slice(1);
+  };
+
   const buildParams = (over = {}) => {
     const p = {
       page: over.page ?? page,
@@ -95,10 +101,6 @@ export default function LoanProducts() {
       [PAGINATION_KEYS.limit]: p.pageSize,
     };
     if (p.q !== undefined) params[PAGINATION_KEYS.search] = p.q;
-
-    // If your API uses offset/limit, uncomment:
-    // params.offset = (p.page - 1) * p.pageSize;
-
     return params;
   };
 
@@ -112,7 +114,6 @@ export default function LoanProducts() {
         headers: buildHeaders(),
       });
 
-      // Flexible parsing
       if (Array.isArray(data)) {
         setItems(data);
         setTotal(data.length);
@@ -137,13 +138,8 @@ export default function LoanProducts() {
     }
   };
 
-  // initial + when page/pageSize changes
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
+  useEffect(() => { fetchData(); /* eslint-disable-next-line */ }, [page, pageSize]);
 
-  // debounced search
   useEffect(() => {
     if (debRef.current) clearTimeout(debRef.current);
     debRef.current = setTimeout(() => {
@@ -259,29 +255,35 @@ export default function LoanProducts() {
               ) : (
                 items.map((r) => {
                   const id = r.id || r.uuid || r._id;
+
+                  const rate = pick(r.interestRate, r.interest_rate, r.rate_percent);
+                  const period = pick(r.interestPeriod, r.interest_period);
+                  const termVal = pick(r.term, r.tenor, r.duration);
+                  const unit = pick(r.termUnit, r.term_unit, r.tenor_unit, r.duration_unit);
+
+                  const pMin = pick(
+                    r.principalMin, r.principal_min,
+                    r.min_amount, r.minimum_principal, r.minPrincipal
+                  );
+                  const pMax = pick(
+                    r.principalMax, r.principal_max,
+                    r.max_amount, r.maximum_principal, r.maxPrincipal
+                  );
+                  const fees = pick(r.fees, r.fees_total, r.fee);
+
                   return (
                     <tr key={id}>
                       <td className="px-3 py-2 font-medium">{r.name || "-"}</td>
                       <td className="px-3 py-2">{r.code || "-"}</td>
                       <td className="px-3 py-2 text-right">
-                        {r.interestRate ?? r.interest_rate ?? "-"}
+                        {rate ?? "-"}
                       </td>
-                      <td className="px-3 py-2 capitalize">
-                        {(r.interestPeriod ?? r.interest_period ?? "-") || "-"}
-                      </td>
-                      <td className="px-3 py-2 text-right">{r.term ?? "-"}</td>
-                      <td className="px-3 py-2 capitalize">
-                        {(r.termUnit ?? r.term_unit ?? "-") || "-"}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {currency(r.principalMin ?? r.principal_min)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {currency(r.principalMax ?? r.principal_max)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {currency(r.fees ?? r.fees_total)}
-                      </td>
+                      <td className="px-3 py-2">{labelize(period ?? "-")}</td>
+                      <td className="px-3 py-2 text-right">{termVal ?? "-"}</td>
+                      <td className="px-3 py-2">{labelize(unit ?? "-")}</td>
+                      <td className="px-3 py-2 text-right">{currency(pMin)}</td>
+                      <td className="px-3 py-2 text-right">{currency(pMax)}</td>
+                      <td className="px-3 py-2 text-right">{currency(fees)}</td>
                       <td className="px-3 py-2 text-center">
                         <button
                           onClick={() => onToggleActive(r)}
