@@ -11,6 +11,7 @@ export default function LoanProductForm() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [err, setErr] = useState("");
+  const [rawErr, setRawErr] = useState(null); // for debugging view
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -24,35 +25,19 @@ export default function LoanProductForm() {
     active: true,
   });
 
-  // ---- utilities
-  const readError = (e) => {
-    const r = e?.response;
-    const d = r?.data;
-    try {
-      if (typeof d === "string" && d) return d;
-      if (d?.message) return d.message;
-      if (d?.error) return d.error;
-      if (Array.isArray(d?.errors) && d.errors.length) {
-        return d.errors.map(x => x.message || x.msg || JSON.stringify(x)).join(", ");
-      }
-      if (d && typeof d === "object") return JSON.stringify(d);
-    } catch {}
-    return r?.statusText || e?.message || "Server error";
-  };
-
+  // ---------- utils
   const toNumber = (v) => {
-    if (v === "" || v === null || typeof v === "undefined") return null;
+    if (v === "" || v == null) return null;
     const n = Number(String(v).replace(/,/g, ""));
     return Number.isFinite(n) ? n : null;
   };
 
-  const normalizeEnums = (s, allowed) => {
-    const v = String(s || "").toLowerCase();
-    return allowed.includes(v) ? v : allowed[0];
+  const normEnum = (v, allowed) => {
+    const x = String(v || "").toLowerCase();
+    return allowed.includes(x) ? x : allowed[0];
   };
 
   const buildHeaders = () => {
-    // Ensure auth + tenant + branch are sent even if SidebarLayout hasn’t run yet
     const token =
       localStorage.getItem("token") ||
       localStorage.getItem("jwt") ||
@@ -79,6 +64,36 @@ export default function LoanProductForm() {
     return headers;
   };
 
+  const parseServerError = (e) => {
+    const r = e?.response;
+    const d = r?.data;
+    setRawErr(d ?? r ?? e);
+
+    // Common Postgres/Sequelize signatures
+    const bodyText =
+      typeof d === "string" ? d :
+      d?.message || d?.error || d?.detail || d?.hint ||
+      (Array.isArray(d?.errors) && d.errors.map(x => x.message || x.msg || JSON.stringify(x)).join(", ")) ||
+      "";
+
+    const txt = bodyText?.toString().toLowerCase();
+
+    if (txt.includes("duplicate key value") || txt.includes("unique constraint")) {
+      return "A product with the same unique value already exists (e.g. code or name). Try a different one.";
+    }
+    if (txt.includes("null value in column")) {
+      return "A required field is missing on the server. Please ensure all required fields are filled.";
+    }
+    if (txt.includes("invalid input syntax") || txt.includes("cast")) {
+      return "One or more fields have an invalid type/format. Check numbers and enums.";
+    }
+    if (txt.includes("column") && txt.includes("does not exist")) {
+      return "The server expects a different field name. Please share the server response shown below.";
+    }
+    // Generic
+    return bodyText || r?.statusText || e?.message || "Server error";
+  };
+
   const validate = () => {
     const interestRate = toNumber(form.interestRate) ?? 0;
     const term = toNumber(form.term) ?? 0;
@@ -94,12 +109,13 @@ export default function LoanProductForm() {
   };
 
   const buildPayload = () => {
-    const interestPeriod = normalizeEnums(form.interestPeriod, ["weekly", "monthly", "yearly"]);
-    const termUnit = normalizeEnums(form.termUnit, ["days", "weeks", "months"]);
+    // keep payload *minimal* but compatible, with snake_case aliases
+    const interestPeriod = normEnum(form.interestPeriod, ["weekly", "monthly", "yearly"]);
+    const termUnit = normEnum(form.termUnit, ["days", "weeks", "months"]);
 
     const p = {
       name: form.name?.trim(),
-      code: form.code?.trim(),
+      code: form.code?.trim() || null,
       interestRate: toNumber(form.interestRate) ?? 0,
       interestPeriod,
       term: toNumber(form.term) ?? 0,
@@ -110,9 +126,9 @@ export default function LoanProductForm() {
       active: !!form.active,
     };
 
-    // snake_case aliases (covers backends expecting these)
     return {
       ...p,
+      // snake_case aliases
       interest_rate: p.interestRate,
       interest_period: p.interestPeriod,
       term_unit: p.termUnit,
@@ -122,7 +138,7 @@ export default function LoanProductForm() {
     };
   };
 
-  // ---- Load for edit
+  // ---------- load when editing
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -131,8 +147,8 @@ export default function LoanProductForm() {
         setLoading(true);
         const { data } = await api.get(`/loan-products/${id}`, { headers: buildHeaders() });
         if (cancelled) return;
-
         const get = (a, b, d = "") => data?.[a] ?? data?.[b] ?? d;
+
         setForm({
           name: get("name"),
           code: get("code"),
@@ -146,7 +162,7 @@ export default function LoanProductForm() {
           active: Boolean(get("active", "", true)),
         });
       } catch (e) {
-        if (!cancelled) setErr(readError(e) || "Failed to load product");
+        setErr(parseServerError(e) || "Failed to load product");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -154,6 +170,7 @@ export default function LoanProductForm() {
     return () => { cancelled = true; };
   }, [id, isEdit]);
 
+  // ---------- handlers
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
@@ -162,9 +179,13 @@ export default function LoanProductForm() {
   const onSubmit = async (e) => {
     e.preventDefault();
     setErr("");
+    setRawErr(null);
 
     const v = validate();
-    if (v) { setErr(v); return; }
+    if (v) {
+      setErr(v);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -178,8 +199,7 @@ export default function LoanProductForm() {
       }
       navigate("/loans/products", { replace: true });
     } catch (e) {
-      const msg = readError(e) || "Failed to save product";
-      setErr(msg);
+      setErr(parseServerError(e) || "Failed to create product");
       // eslint-disable-next-line no-console
       console.error("LoanProduct save error:", e?.response || e);
     } finally {
@@ -194,9 +214,18 @@ export default function LoanProductForm() {
       </h1>
 
       {err && (
-        <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 text-rose-700 px-3 py-2 text-sm">
+        <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 text-rose-700 px-3 py-2 text-sm">
           {err}
         </div>
+      )}
+      {/* Developer helper: shows raw backend body when debugging 500s */}
+      {rawErr && (
+        <details className="mb-3 rounded-md border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2 text-xs">
+          <summary className="cursor-pointer select-none">Show server response</summary>
+          <pre className="overflow-auto whitespace-pre-wrap">
+            {typeof rawErr === "string" ? rawErr : JSON.stringify(rawErr, null, 2)}
+          </pre>
+        </details>
       )}
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
@@ -212,6 +241,7 @@ export default function LoanProductForm() {
               placeholder="e.g. Express Loan"
             />
           </div>
+
           <div>
             <label className="block text-sm mb-1">Code</label>
             <input
@@ -235,13 +265,14 @@ export default function LoanProductForm() {
               className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
             />
           </div>
+
           <div>
             <label className="block text-sm mb-1">Interest Period</label>
             <select
               name="interestPeriod"
               value={form.interestPeriod}
               onChange={onChange}
-              className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
+              className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 capitalize"
             >
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
@@ -261,13 +292,14 @@ export default function LoanProductForm() {
               placeholder="e.g. 12"
             />
           </div>
+
           <div>
             <label className="block text-sm mb-1">Term Unit</label>
             <select
               name="termUnit"
               value={form.termUnit}
               onChange={onChange}
-              className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
+              className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 capitalize"
             >
               <option value="days">Days</option>
               <option value="weeks">Weeks</option>
@@ -287,6 +319,7 @@ export default function LoanProductForm() {
               placeholder="0"
             />
           </div>
+
           <div>
             <label className="block text-sm mb-1">Principal Max</label>
             <input
