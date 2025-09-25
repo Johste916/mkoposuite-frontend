@@ -1,60 +1,26 @@
-// src/pages/loans/LoanProducts.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api";
 
-/* helpers */
-const fmtNum = (v) => {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "—";
-  return new Intl.NumberFormat().format(n);
-};
+/** Lightweight helpers (no global styles, no heavy effects) */
 const cls = (...xs) => xs.filter(Boolean).join(" ");
+const fmtNum = (v) => Number.isFinite(Number(v)) ? new Intl.NumberFormat().format(Number(v)) : "—";
 
-/* Drawer: no global listeners */
-function Drawer({ open, title, children, onClose, width = 520 }) {
-  if (!open) return null;
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <aside
-        className="fixed right-0 top-0 bottom-0 z-50 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-auto"
-        style={{ width }}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
-          <div className="text-lg font-semibold">{title}</div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            Close
-          </button>
-        </div>
-        <div className="p-4">{children}</div>
-      </aside>
-    </>
-  );
-}
-
+/** Pure table page (no drawers, no modals, no shadows) */
 export default function LoanProducts() {
   const navigate = useNavigate();
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // list UX
   const [q, setQ] = useState("");
   const [sort, setSort] = useState({ by: "name", dir: "asc" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const [openView, setOpenView] = useState(false);
-  const [viewItem, setViewItem] = useState(null);
-
-  const cardClass =
-    "rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900";
+  const container = "rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900";
+  const ctrl = "px-3 py-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none";
 
   const load = async (signal) => {
     setLoading(true);
@@ -75,20 +41,18 @@ export default function LoanProducts() {
 
   useEffect(() => {
     const c = new AbortController();
-    const id = setTimeout(() => load(c.signal), 240);
-    return () => {
-      clearTimeout(id);
-      c.abort();
-    };
+    const id = setTimeout(() => load(c.signal), 220);
+    return () => { clearTimeout(id); c.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
+  // sort + paginate (string-safe)
   const sorted = useMemo(() => {
     const arr = [...items];
     const { by, dir } = sort;
     arr.sort((a, b) => {
-      const av = (a?.[by] ?? "").toString().toLowerCase();
-      const bv = (b?.[by] ?? "").toString().toLowerCase();
+      const av = ((a?.[by] ?? "") + "").toLowerCase();
+      const bv = ((b?.[by] ?? "") + "").toLowerCase();
       if (av < bv) return dir === "asc" ? -1 : 1;
       if (av > bv) return dir === "asc" ? 1 : -1;
       return 0;
@@ -102,9 +66,9 @@ export default function LoanProducts() {
     return sorted.slice(start, start + pageSize);
   }, [sorted, page, pageSize]);
 
+  // actions (keep same endpoints to avoid breaking backend)
   const startCreate = () => navigate("/loans/products/new");
   const startEdit = (p) => navigate(`/loans/products/${p.id}/edit`);
-  const startView = (p) => { setViewItem(p); setOpenView(true); };
 
   const toggle = async (p) => {
     if (!confirm(`Set "${p.name}" to ${p.status === "active" ? "inactive" : "active"}?`)) return;
@@ -162,7 +126,7 @@ export default function LoanProducts() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Loan Products</h2>
-          <p className="muted text-sm">Define the lending terms your team can use in applications.</p>
+          <p className="muted text-sm">Define the lending terms your team can use.</p>
         </div>
         <button onClick={startCreate} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">
           New Product
@@ -170,37 +134,31 @@ export default function LoanProducts() {
       </div>
 
       {/* Filters */}
-      <div className={`${cardClass} p-3 flex flex-col md:flex-row gap-3 md:items-center md:justify-between`}>
+      <div className={`${container} p-3 flex flex-col md:flex-row gap-3 md:items-center md:justify-between`}>
         <input
-          className="px-3 py-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm md:w-96"
+          className={cls(ctrl, "md:w-96")}
           placeholder="Search by name or code…"
           value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => { setQ(e.target.value); setPage(1); }}
+          aria-label="Search products"
         />
         <div className="flex items-center gap-2">
           <label className="text-xs">
             Page size
             <select
-              className="ml-2 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              className={cls(ctrl, "ml-2 px-2 py-1")}
               value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              aria-label="Page size"
             >
-              {[10, 20, 50].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
+              {[10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
         </div>
       </div>
 
       {/* Table */}
-      <div className={`${cardClass} overflow-x-auto`}>
+      <div className={`${container} overflow-x-auto`}>
         {loading ? (
           <p className="p-4 muted">Loading…</p>
         ) : items.length === 0 ? (
@@ -213,7 +171,7 @@ export default function LoanProducts() {
         ) : (
           <>
             <table className="min-w-full text-sm">
-              <thead className="text-[var(--fg)]">
+              <thead>
                 <tr>
                   <Th id="name">Name</Th>
                   <Th id="code">Code</Th>
@@ -240,12 +198,9 @@ export default function LoanProducts() {
                       {p.minTermMonths ?? "—"} – {p.maxTermMonths ?? "—"} m
                     </td>
                     <td className="px-2 py-2 text-right">{p.penaltyRate ?? "—"}</td>
-                    <td className="px-2 py-2">
-                      <StatusBadge value={p.status} />
-                    </td>
+                    <td className="px-2 py-2"><StatusBadge value={p.status} /></td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-3 text-sm">
-                        <button className="text-indigo-600 hover:underline" onClick={() => startView(p)}>View</button>
                         <button className="text-blue-600 hover:underline" onClick={() => startEdit(p)}>Edit</button>
                         <button className="text-amber-700 hover:underline" onClick={() => toggle(p)}>
                           {p.status === "active" ? "Deactivate" : "Activate"}
@@ -294,56 +249,6 @@ export default function LoanProducts() {
           </>
         )}
       </div>
-
-      {/* View Drawer */}
-      <Drawer open={openView} title="Product Details" onClose={() => setOpenView(false)} width={460}>
-        {!viewItem ? (
-          <div className="muted">No product selected.</div>
-        ) : (
-          <div className="space-y-4 text-sm">
-            <div>
-              <div className="text-xs uppercase tracking-wide muted">Name</div>
-              <div className="font-medium">{viewItem.name}</div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-xs uppercase tracking-wide muted">Code</div>
-                <div>{viewItem.code}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide muted">Status</div>
-                <span className="inline-block mt-1"><span className="align-middle"><StatusBadge value={viewItem.status} /></span></span>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide muted">Interest Method</div>
-                <div>{viewItem.interestMethod}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide muted">Interest Rate (%)</div>
-                <div>{viewItem.interestRate ?? "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide muted">Penalty Rate (%)</div>
-                <div>{viewItem.penaltyRate ?? "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide muted">Term (months)</div>
-                <div>{viewItem.minTermMonths ?? "—"} – {viewItem.maxTermMonths ?? "—"}</div>
-              </div>
-              <div className="col-span-2">
-                <div className="text-xs uppercase tracking-wide muted">Principal Range</div>
-                <div>{viewItem.minPrincipal != null ? fmtNum(viewItem.minPrincipal) : "—"} – {viewItem.maxPrincipal != null ? fmtNum(viewItem.maxPrincipal) : "—"}</div>
-              </div>
-            </div>
-            {viewItem.description && (
-              <div>
-                <div className="text-xs uppercase tracking-wide muted">Description</div>
-                <div className="whitespace-pre-wrap">{viewItem.description}</div>
-              </div>
-            )}
-          </div>
-        )}
-      </Drawer>
     </div>
   );
 }
