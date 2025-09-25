@@ -27,6 +27,16 @@ import { BsBank } from "react-icons/bs";
 import api from "../api";
 import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigContext";
 
+/* --------------------------- editable target guard --------------------------- */
+function isEditableTarget(t) {
+  if (!t) return false;
+  if (t.isContentEditable) return true;
+  const tag = (t.tagName || "").toUpperCase();
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (t.closest && t.closest('[role="combobox"], [contenteditable="true"]')) return true;
+  return false;
+}
+
 /* -------------------------------- helpers --------------------------------- */
 const isUuid = (v) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
@@ -861,7 +871,7 @@ const SidebarLayout = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
         {/* Sidebar */}
         <aside className="hidden lg:block border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="h-[calc(100vh-56px)] sticky top[56px] lg:top-[56px] overflow-y-auto px-2 py-3">
+          <div className="h-[calc(100vh-56px)] sticky top-[56px] lg:top-[56px] overflow-y-auto px-2 py-3">
             <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Navigation
             </div>
@@ -884,14 +894,19 @@ const SidebarLayout = () => {
         </aside>
 
         {/* Main content */}
-        <main className="min-h[calc(100vh-56px)] lg:min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
+        <main
+          className="min-h-[calc(100vh-56px)] lg:min-h-[calc(100vh-56px)] px-3 md:px-6 py-4"
+          onKeyDownCapture={(e) => {
+            if (isEditableTarget(e.target)) e.stopPropagation();
+          }}
+        >
           <Outlet />
         </main>
       </div>
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z[70] lg:z-[70] flex">
+        <div className="lg:hidden fixed inset-0 z-[70] lg:z-[70] flex">
           <div className="w-72 max-w-[80vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
             <div className="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800">
               <span className="font-semibold">Menu</span>
