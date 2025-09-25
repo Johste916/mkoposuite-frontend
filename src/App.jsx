@@ -1,6 +1,6 @@
 // src/App.jsx
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 
 /* ---------- Theme provider (new wrap) ---------- */
 import { ThemeProvider } from "./providers/ThemeProvider";
@@ -12,7 +12,8 @@ const Signup = lazy(() => import("./pages/public/Signup"));
 // Shell
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
-import SidebarLayout from "./components/SidebarLayout";
+// FIX: SidebarLayout actual path
+import SidebarLayout from "./layouts/SidebarLayout";
 
 // Feature flags + toasts
 import { FeatureConfigProvider } from "./context/FeatureConfigContext";
@@ -185,9 +186,42 @@ const Forbidden = () => (
   </div>
 );
 
+/** ------------------------------------------------------------------------
+ * Global hotkey focus guard:
+ * Blocks app-wide hotkeys while user is typing in inputs.
+ * Non-invasive and safe across the app.
+ * ---------------------------------------------------------------------- */
+function HotkeyFocusGuard() {
+  useEffect(() => {
+    const isTypingElement = (el) => {
+      if (!el) return false;
+      const tag = el.tagName?.toLowerCase();
+      const editable = el.isContentEditable;
+      return (
+        editable ||
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        el.getAttribute?.("role") === "textbox"
+      );
+    };
+    const onKeydownCapture = (e) => {
+      if (isTypingElement(e.target)) {
+        // Prevent global listeners from acting on keystrokes intended for form fields
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("keydown", onKeydownCapture, { capture: true });
+    return () => window.removeEventListener("keydown", onKeydownCapture, { capture: true });
+  }, []);
+  return null;
+}
+
 function App() {
   return (
     <ThemeProvider>
+      {/* Hotkey guard mounted once for the whole app */}
+      <HotkeyFocusGuard />
       <Suspense fallback={<Fallback />}>
         <ToastProvider>
           <FeatureConfigProvider>
