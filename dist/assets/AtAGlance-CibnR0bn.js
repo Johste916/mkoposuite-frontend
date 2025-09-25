@@ -1,0 +1,1 @@
+import{j as t}from"./index-CecoMAn-.js";import{R as e}from"./ReportShell-XVBuZpU1.js";function a(){return t.jsx(e,{title:"At a Glance",endpoint:"/reports/at-a-glance",columns:[]})}export{a as default};
