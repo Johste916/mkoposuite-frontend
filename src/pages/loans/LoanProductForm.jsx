@@ -37,10 +37,8 @@ export default function LoanProductForm() {
     description: "",
   });
 
-  // simple setter
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  // load for edit
   useEffect(() => {
     if (!editing) return;
     (async () => {
@@ -68,7 +66,6 @@ export default function LoanProductForm() {
     })();
   }, [editing, id, navigate]);
 
-  // validate
   const validate = () => {
     const e = {};
     const interestRate = toNumberOrNull(form.interestRate);
@@ -87,7 +84,6 @@ export default function LoanProductForm() {
     return Object.keys(e).length === 0;
   };
 
-  // submit
   const submit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
@@ -121,7 +117,6 @@ export default function LoanProductForm() {
     }
   };
 
-  // plain field wrapper (label does NOT wrap the input)
   const Field = ({ id, label, error, children }) => (
     <div>
       <label htmlFor={id} className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
@@ -133,7 +128,11 @@ export default function LoanProductForm() {
   );
 
   const inputClass =
-    "w-full input border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded px-3 py-2 text-sm";
+    "w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800";
+
+  // local lightweight "card"
+  const cardClass =
+    "rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900";
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
@@ -146,9 +145,9 @@ export default function LoanProductForm() {
       </div>
 
       {loading ? (
-        <div className="card p-4">Loading…</div>
+        <div className={`${cardClass} p-4`}>Loading…</div>
       ) : (
-        <form onSubmit={submit} className="card p-4 space-y-4">
+        <form onSubmit={submit} className={`${cardClass} p-4 space-y-4`}>
           <div className="grid sm:grid-cols-2 gap-3">
             <Field id="lp-name" label="Name" error={errors.name}>
               <input

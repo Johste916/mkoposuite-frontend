@@ -27,16 +27,6 @@ import { BsBank } from "react-icons/bs";
 import api from "../api";
 import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigContext";
 
-/* --------------------------- editable target guard --------------------------- */
-function isEditableTarget(t) {
-  if (!t) return false;
-  if (t.isContentEditable) return true;
-  const tag = (t.tagName || "").toUpperCase();
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-  if (t.closest && t.closest('[role="combobox"], [contenteditable="true"]')) return true;
-  return false;
-}
-
 /* -------------------------------- helpers --------------------------------- */
 const isUuid = (v) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
@@ -68,12 +58,9 @@ const NAV = () => [
   },
   {
     label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
-      // ✅ Loan Products module
       { label: "Loan Products", to: "/loans/products" },
-
       { label: "View All Loans", to: "/loans" },
       { label: "Add Loan", to: "/loans/applications" },
-
       { label: "Review Queue", to: "/loans/review-queue" },
       { label: "Disbursement Queue", to: "/loans/disbursement-queue" },
       { label: "Disbursed Loans", to: "/loans/status/disbursed" },
@@ -117,14 +104,10 @@ const NAV = () => [
       { label: "Savings Report", to: "/savings/report" },
     ]
   },
-  /* ✅ Banking section (now includes Cash Accounts management) */
   {
     label: "Banking", icon: <BsBank />, to: "/banks", children: [
-      // Banks
       { label: "View Banks", to: "/banks" },
       { label: "Add Bank", to: "/banks/add" },
-
-      // Bank transactions
       { label: "View Bank Transactions", to: "/banks/transactions" },
       { label: "Transfers", to: "/banks/transfers" },
       { label: "Reconciliation", to: "/banks/reconciliation" },
@@ -132,8 +115,6 @@ const NAV = () => [
       { label: "Import Bank CSV", to: "/banks/import" },
       { label: "Approvals", to: "/banks/approvals" },
       { label: "Rules & GL Mapping", to: "/banks/rules" },
-
-      // Cash management
       { label: "Cash Accounts", to: "/cash/accounts" },
       { label: "Add Cash Account", to: "/cash/accounts/new" },
       { label: "View Cash Transactions", to: "/cash/transactions" },
@@ -189,7 +170,7 @@ const NAV = () => [
   },
   {
     label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
-      { label: "Staff", to: "/user-management" },                 // ✅ all-in-one page (index)
+      { label: "Staff", to: "/user-management" },
       { label: "Users", to: "/user-management/users" },
       { label: "Roles", to: "/user-management/roles" },
       { label: "Permissions", to: "/user-management/permissions" },
@@ -220,8 +201,7 @@ const NAV = () => [
   },
 ];
 
-const pathIsIn = (pathname, base) =>
-  pathname === base || pathname.startsWith(base + "/");
+const pathIsIn = (pathname, base) => pathname === base || pathname.startsWith(base + "/");
 
 /* --------------------------- Header Global Search -------------------------- */
 const HeaderGlobalSearch = ({ branchId }) => {
@@ -233,7 +213,6 @@ const HeaderGlobalSearch = ({ branchId }) => {
   const [sel, setSel] = useState(0);
   const debounceRef = useRef(null);
 
-  // Map backend "type" to destination + URL builder
   const ENTITY_ROUTES = useMemo(() => ({
     borrower: (h) => ({ to: `/borrowers/${h.id}` }),
     borrowers: (h) => ({ to: `/borrowers/${h.id}` }),
@@ -258,11 +237,7 @@ const HeaderGlobalSearch = ({ branchId }) => {
     setLoading(true);
     try {
       const res = await api.get("/search", {
-        params: {
-          q: query.trim(),
-          branchId: branchId || undefined,
-          limit: 12,
-        },
+        params: { q: query.trim(), branchId: branchId || undefined, limit: 12 },
       });
       const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.items) ? res.data.items : []);
       const norm = arr.map((h) => ({
@@ -315,7 +290,6 @@ const HeaderGlobalSearch = ({ branchId }) => {
     }
   };
 
-  // Group hits by type for headers
   const grouped = useMemo(() => {
     const g = {};
     hits.forEach((h) => {
@@ -509,14 +483,11 @@ const SidebarLayout = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState(null);
 
-  // tenant for multi-tenant header + API header
   const [tenant, setTenant] = useState(null); // { id, name }
-
   const [branches, setBranches] = useState([]);
   const [activeBranchId, setActiveBranchId] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Feature flags (admin-controlled)
   const featureCtx = useFeatureConfig();
   const { loading: featuresLoading, features } = featureCtx;
 
@@ -565,7 +536,6 @@ const SidebarLayout = () => {
     const storedDark = localStorage.getItem("darkMode");
     setDarkMode(storedDark === "true");
 
-    // inject Authorization header from local storage
     const tok =
       localStorage.getItem("token") ||
       localStorage.getItem("jwt") ||
@@ -574,7 +544,6 @@ const SidebarLayout = () => {
       localStorage.getItem("accessToken");
     if (tok) api.defaults.headers.common.Authorization = `Bearer ${tok.replace(/^Bearer /i, "")}`;
 
-    // load tenant from localStorage (set header only if UUID)
     try {
       const rawTenant = localStorage.getItem("tenant");
       if (rawTenant) {
@@ -679,22 +648,21 @@ const SidebarLayout = () => {
     return filterNavByFeatures(base, features, userRole, featureCtx);
   }, [features, userRole, featureCtx]);
 
-  /* close mobile + avatar when route changes */
+  // close mobile + avatar when route changes
   useEffect(() => {
     setMobileOpen(false);
     setAvatarOpen(false);
   }, [location.pathname]);
 
-  const initial =
-    (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
+  const initial = (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
 
   const toggleDark = useCallback(() => setDarkMode((v) => !v), []);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   return (
     <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
+      {/* Header (no backdrop-blur; cheaper paints) */}
+      <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="px-3 md:px-4">
           <div className="h-14 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -710,7 +678,6 @@ const SidebarLayout = () => {
                 <span className="text-slate-800 dark:text-slate-200">Suite</span>
               </span>
 
-              {/* Tenant badge */}
               {tenant?.name && (
                 <span className="ml-2 px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                   {tenant.name}
@@ -719,7 +686,6 @@ const SidebarLayout = () => {
             </div>
 
             <div className="hidden md:flex items-center gap-2 min-w-[280px] max-w-[640px] w-full">
-              {/* ✅ Functional global search (uses active branch) */}
               <HeaderGlobalSearch branchId={activeBranchId} />
             </div>
 
@@ -802,55 +768,27 @@ const SidebarLayout = () => {
                     {/* Admin/gated items */}
                     {hasAnyRole("system_admin","super_admin","admin","director","developer") && (
                       <>
-                        <NavLink
-                          to="/subscription"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
+                        <NavLink to="/subscription" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
                           <span className="inline-flex items-center gap-2"><FiSettings /> Subscription</span>
                         </NavLink>
-                        <NavLink
-                          to="/support-tickets"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
+                        <NavLink to="/support-tickets" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
                           <span className="inline-flex items-center gap-2"><FiSettings /> Support Tickets</span>
                         </NavLink>
-                        <NavLink
-                          to="/impersonate-tenant"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
+                        <NavLink to="/impersonate-tenant" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
                           <span className="inline-flex items-center gap-2"><FiUsers /> Impersonate</span>
                         </NavLink>
-                        <NavLink
-                          to="/tenants-admin"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
+                        <NavLink to="/tenants-admin" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
                           <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (New)</span>
                         </NavLink>
-                        <NavLink
-                          to="/account/organization"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
+                        <NavLink to="/account/organization" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
                           <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
                         </NavLink>
-                        <NavLink
-                          to="/admin/tenants"
-                          className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
+                        <NavLink to="/admin/tenants" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
                           <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (SysAdmin)</span>
                         </NavLink>
                       </>
                     )}
-                    <NavLink
-                      to="/admin"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
-                      onClick={() => setAvatarOpen(false)}
-                    >
+                    <NavLink to="/admin" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
                       <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
                     </NavLink>
                     <button
@@ -871,7 +809,7 @@ const SidebarLayout = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
         {/* Sidebar */}
         <aside className="hidden lg:block border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="h-[calc(100vh-56px)] sticky top-[56px] lg:top-[56px] overflow-y-auto px-2 py-3">
+          <div className="h-[calc(100vh-56px)] sticky top[56px] lg:top-[56px] overflow-y-auto px-2 py-3">
             <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Navigation
             </div>
@@ -894,19 +832,14 @@ const SidebarLayout = () => {
         </aside>
 
         {/* Main content */}
-        <main
-          className="min-h-[calc(100vh-56px)] lg:min-h-[calc(100vh-56px)] px-3 md:px-6 py-4"
-          onKeyDownCapture={(e) => {
-            if (isEditableTarget(e.target)) e.stopPropagation();
-          }}
-        >
+        <main className="min-h[calc(100vh-56px)] lg:min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
           <Outlet />
         </main>
       </div>
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-[70] lg:z-[70] flex">
+        <div className="lg:hidden fixed inset-0 z[70] lg:z-[70] flex">
           <div className="w-72 max-w-[80vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
             <div className="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800">
               <span className="font-semibold">Menu</span>

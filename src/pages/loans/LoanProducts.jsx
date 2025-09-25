@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api";
 
-/* ------------------------------ small helpers ------------------------------ */
+/* helpers */
 const fmtNum = (v) => {
   const n = Number(v);
   if (!Number.isFinite(n)) return "—";
@@ -11,24 +11,19 @@ const fmtNum = (v) => {
 };
 const cls = (...xs) => xs.filter(Boolean).join(" ");
 
-/* ------------------------------ Drawer (for view) -------------------------- */
-/* No global keydown listeners here (keeps focus stable across the app) */
+/* Drawer: no global listeners */
 function Drawer({ open, title, children, onClose, width = 520 }) {
   if (!open) return null;
   return (
     <>
-      <div
-        className="fixed inset-0 z-40 bg-black/40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
       <aside
-        className="fixed right-0 top-0 bottom-0 z-50 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl overflow-auto"
+        className="fixed right-0 top-0 bottom-0 z-50 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-auto"
         style={{ width }}
         role="dialog"
         aria-modal="true"
       >
-        <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
           <div className="text-lg font-semibold">{title}</div>
           <button
             type="button"
@@ -44,24 +39,23 @@ function Drawer({ open, title, children, onClose, width = 520 }) {
   );
 }
 
-/* --------------------------------- Page ----------------------------------- */
 export default function LoanProducts() {
   const navigate = useNavigate();
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // list UX
   const [q, setQ] = useState("");
   const [sort, setSort] = useState({ by: "name", dir: "asc" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // view drawer
   const [openView, setOpenView] = useState(false);
   const [viewItem, setViewItem] = useState(null);
 
-  // initial + reload
+  const cardClass =
+    "rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900";
+
   const load = async (signal) => {
     setLoading(true);
     try {
@@ -81,7 +75,7 @@ export default function LoanProducts() {
 
   useEffect(() => {
     const c = new AbortController();
-    const id = setTimeout(() => load(c.signal), 240); // debounce search
+    const id = setTimeout(() => load(c.signal), 240);
     return () => {
       clearTimeout(id);
       c.abort();
@@ -89,7 +83,6 @@ export default function LoanProducts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  // sort + paginate
   const sorted = useMemo(() => {
     const arr = [...items];
     const { by, dir } = sort;
@@ -109,13 +102,9 @@ export default function LoanProducts() {
     return sorted.slice(start, start + pageSize);
   }, [sorted, page, pageSize]);
 
-  // actions
   const startCreate = () => navigate("/loans/products/new");
   const startEdit = (p) => navigate(`/loans/products/${p.id}/edit`);
-  const startView = (p) => {
-    setViewItem(p);
-    setOpenView(true);
-  };
+  const startView = (p) => { setViewItem(p); setOpenView(true); };
 
   const toggle = async (p) => {
     if (!confirm(`Set "${p.name}" to ${p.status === "active" ? "inactive" : "active"}?`)) return;
@@ -181,9 +170,9 @@ export default function LoanProducts() {
       </div>
 
       {/* Filters */}
-      <div className="card p-3 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+      <div className={`${cardClass} p-3 flex flex-col md:flex-row gap-3 md:items-center md:justify-between`}>
         <input
-          className="input md:w-96"
+          className="px-3 py-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm md:w-96"
           placeholder="Search by name or code…"
           value={q}
           onChange={(e) => {
@@ -195,7 +184,7 @@ export default function LoanProducts() {
           <label className="text-xs">
             Page size
             <select
-              className="ml-2 input"
+              className="ml-2 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
@@ -203,9 +192,7 @@ export default function LoanProducts() {
               }}
             >
               {[10, 20, 50].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
+                <option key={n} value={n}>{n}</option>
               ))}
             </select>
           </label>
@@ -213,7 +200,7 @@ export default function LoanProducts() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-x-auto">
+      <div className={`${cardClass} overflow-x-auto`}>
         {loading ? (
           <p className="p-4 muted">Loading…</p>
         ) : items.length === 0 ? (
@@ -325,11 +312,7 @@ export default function LoanProducts() {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide muted">Status</div>
-                <span className="inline-block mt-1">
-                  <span className="align-middle">
-                    <StatusBadge value={viewItem.status} />
-                  </span>
-                </span>
+                <span className="inline-block mt-1"><span className="align-middle"><StatusBadge value={viewItem.status} /></span></span>
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide muted">Interest Method</div>
@@ -345,16 +328,11 @@ export default function LoanProducts() {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide muted">Term (months)</div>
-                <div>
-                  {viewItem.minTermMonths ?? "—"} – {viewItem.maxTermMonths ?? "—"}
-                </div>
+                <div>{viewItem.minTermMonths ?? "—"} – {viewItem.maxTermMonths ?? "—"}</div>
               </div>
               <div className="col-span-2">
                 <div className="text-xs uppercase tracking-wide muted">Principal Range</div>
-                <div>
-                  {viewItem.minPrincipal != null ? fmtNum(viewItem.minPrincipal) : "—"} –{" "}
-                  {viewItem.maxPrincipal != null ? fmtNum(viewItem.maxPrincipal) : "—"}
-                </div>
+                <div>{viewItem.minPrincipal != null ? fmtNum(viewItem.minPrincipal) : "—"} – {viewItem.maxPrincipal != null ? fmtNum(viewItem.maxPrincipal) : "—"}</div>
               </div>
             </div>
             {viewItem.description && (
