@@ -15,72 +15,68 @@ export default function LoanProductForm() {
     name: "",
     code: "",
     interestRate: "",
-    interestPeriod: "monthly", // monthly | weekly | yearly
+    interestPeriod: "monthly", // weekly | monthly | yearly
     term: "",
-    termUnit: "months",        // months | weeks | days
+    termUnit: "months",        // days | weeks | months
     principalMin: "",
     principalMax: "",
     fees: "",
     active: true,
   });
 
-  // ---- Load for edit
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!isEdit) return;
-      try {
-        setLoading(true);
-        const { data } = await api.get(`/loan-products/${id}`);
-        if (cancelled) return;
-
-        // accept either camelCase or snake_case from API
-        const get = (a, b, d = "") => data?.[a] ?? data?.[b] ?? d;
-
-        setForm({
-          name: get("name"),
-          code: get("code"),
-          interestRate: String(get("interestRate", "interest_rate", "")),
-          interestPeriod: (get("interestPeriod", "interest_period", "monthly") || "monthly").toLowerCase(),
-          term: String(get("term", "", "")),
-          termUnit: (get("termUnit", "term_unit", "months") || "months").toLowerCase(),
-          principalMin: String(get("principalMin", "principal_min", "")),
-          principalMax: String(get("principalMax", "principal_max", "")),
-          fees: String(get("fees", "fees_total", "")),
-          active: Boolean(get("active", "", true)),
-        });
-      } catch (e) {
-        if (!cancelled) {
-          setErr(readError(e) || "Failed to load product");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [id, isEdit]);
-
-  // ---- helpers
+  // ---- utilities
   const readError = (e) => {
     const r = e?.response;
-    return (
-      r?.data?.message ||
-      r?.data?.error ||
-      (Array.isArray(r?.data?.errors) ? r.data.errors.map(x => x.message || x).join(", ") : null) ||
-      r?.statusText ||
-      e?.message
-    );
-  };
-
-  const onChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
+    const d = r?.data;
+    try {
+      if (typeof d === "string" && d) return d;
+      if (d?.message) return d.message;
+      if (d?.error) return d.error;
+      if (Array.isArray(d?.errors) && d.errors.length) {
+        return d.errors.map(x => x.message || x.msg || JSON.stringify(x)).join(", ");
+      }
+      if (d && typeof d === "object") return JSON.stringify(d);
+    } catch {}
+    return r?.statusText || e?.message || "Server error";
   };
 
   const toNumber = (v) => {
     if (v === "" || v === null || typeof v === "undefined") return null;
     const n = Number(String(v).replace(/,/g, ""));
     return Number.isFinite(n) ? n : null;
+  };
+
+  const normalizeEnums = (s, allowed) => {
+    const v = String(s || "").toLowerCase();
+    return allowed.includes(v) ? v : allowed[0];
+  };
+
+  const buildHeaders = () => {
+    // Ensure auth + tenant + branch are sent even if SidebarLayout hasn’t run yet
+    const token =
+      localStorage.getItem("token") ||
+      localStorage.getItem("jwt") ||
+      localStorage.getItem("access_token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("accessToken");
+
+    let tenantId = "";
+    try {
+      const t = localStorage.getItem("tenant");
+      if (t) tenantId = JSON.parse(t)?.id || "";
+    } catch {}
+    tenantId = tenantId || localStorage.getItem("tenantId") || "";
+
+    const branchId = localStorage.getItem("activeBranchId") || "";
+
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (token) headers.Authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+    if (tenantId) headers["x-tenant-id"] = tenantId;
+    if (branchId) headers["x-branch-id"] = String(branchId);
+    return headers;
   };
 
   const validate = () => {
@@ -98,11 +94,10 @@ export default function LoanProductForm() {
   };
 
   const buildPayload = () => {
-    // normalize enums to lowercase
-    const interestPeriod = String(form.interestPeriod || "").toLowerCase();
-    const termUnit = String(form.termUnit || "").toLowerCase();
+    const interestPeriod = normalizeEnums(form.interestPeriod, ["weekly", "monthly", "yearly"]);
+    const termUnit = normalizeEnums(form.termUnit, ["days", "weeks", "months"]);
 
-    const payloadCamel = {
+    const p = {
       name: form.name?.trim(),
       code: form.code?.trim(),
       interestRate: toNumber(form.interestRate) ?? 0,
@@ -115,17 +110,53 @@ export default function LoanProductForm() {
       active: !!form.active,
     };
 
-    // include snake_case aliases to satisfy backends that expect them
-    const payloadSnake = {
-      interest_rate: payloadCamel.interestRate,
-      interest_period: payloadCamel.interestPeriod,
-      term_unit: payloadCamel.termUnit,
-      principal_min: payloadCamel.principalMin,
-      principal_max: payloadCamel.principalMax,
-      fees_total: payloadCamel.fees,
+    // snake_case aliases (covers backends expecting these)
+    return {
+      ...p,
+      interest_rate: p.interestRate,
+      interest_period: p.interestPeriod,
+      term_unit: p.termUnit,
+      principal_min: p.principalMin,
+      principal_max: p.principalMax,
+      fees_total: p.fees,
     };
+  };
 
-    return { ...payloadCamel, ...payloadSnake };
+  // ---- Load for edit
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!isEdit) return;
+      try {
+        setLoading(true);
+        const { data } = await api.get(`/loan-products/${id}`, { headers: buildHeaders() });
+        if (cancelled) return;
+
+        const get = (a, b, d = "") => data?.[a] ?? data?.[b] ?? d;
+        setForm({
+          name: get("name"),
+          code: get("code"),
+          interestRate: String(get("interestRate", "interest_rate", "")),
+          interestPeriod: (get("interestPeriod", "interest_period", "monthly") || "monthly").toLowerCase(),
+          term: String(get("term", "", "")),
+          termUnit: (get("termUnit", "term_unit", "months") || "months").toLowerCase(),
+          principalMin: String(get("principalMin", "principal_min", "")),
+          principalMax: String(get("principalMax", "principal_max", "")),
+          fees: String(get("fees", "fees_total", "")),
+          active: Boolean(get("active", "", true)),
+        });
+      } catch (e) {
+        if (!cancelled) setErr(readError(e) || "Failed to load product");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isEdit]);
+
+  const onChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
   };
 
   const onSubmit = async (e) => {
@@ -133,26 +164,22 @@ export default function LoanProductForm() {
     setErr("");
 
     const v = validate();
-    if (v) {
-      setErr(v);
-      return;
-    }
+    if (v) { setErr(v); return; }
 
     setSaving(true);
     try {
       const payload = buildPayload();
-      const config = { headers: { "Content-Type": "application/json" } };
+      const headers = buildHeaders();
 
       if (isEdit) {
-        await api.put(`/loan-products/${id}`, payload, config);
+        await api.put(`/loan-products/${id}`, payload, { headers });
       } else {
-        await api.post(`/loan-products`, payload, config);
+        await api.post(`/loan-products`, payload, { headers });
       }
       navigate("/loans/products", { replace: true });
     } catch (e) {
       const msg = readError(e) || "Failed to save product";
       setErr(msg);
-      // Optional: keep this during debugging; comment out later
       // eslint-disable-next-line no-console
       console.error("LoanProduct save error:", e?.response || e);
     } finally {
@@ -242,9 +269,9 @@ export default function LoanProductForm() {
               onChange={onChange}
               className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
             >
-              <option value="months">Months</option>
-              <option value="weeks">Weeks</option>
               <option value="days">Days</option>
+              <option value="weeks">Weeks</option>
+              <option value="months">Months</option>
             </select>
           </div>
 
