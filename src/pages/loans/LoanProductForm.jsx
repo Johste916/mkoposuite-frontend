@@ -1,5 +1,5 @@
 // src/pages/loans/LoanProductForm.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api";
 
@@ -13,7 +13,6 @@ function MoneyInput({ name, value, onChange, placeholder = "0", ...rest }) {
     return new Intl.NumberFormat().format(n);
   };
   const handle = (e) => {
-    // keep the raw characters but reformat
     const raw = e.target.value;
     const digits = raw.replace(/[^\d.-]/g, "");
     const formatted = format(digits);
@@ -37,12 +36,13 @@ const parseMoney = (s) => {
   return Number.isFinite(n) ? n : null;
 };
 
+const LOWER_UNITS = ["days", "weeks", "months", "years"];
+
 export default function LoanProductForm() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
 
-  // ---------- state
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [err, setErr] = useState("");
@@ -52,31 +52,16 @@ export default function LoanProductForm() {
     name: "",
     code: "",
     interestRate: "",
-    interestPeriod: "monthly", // weekly | monthly | yearly
+    interestPeriod: "monthly",
     term: "",
-    termUnit: "months",        // days | weeks | months
+    termUnit: "months",
     principalMin: "",
     principalMax: "",
     fees: "",
     active: true,
   });
 
-  // ---------- utils
-  const toNumber = (v) => {
-    if (v === "" || v == null) return null;
-    const n = Number(String(v).replace(/,/g, ""));
-    return Number.isFinite(n) ? n : null;
-  };
-
-  const normEnum = (v, allowed, casing = "lower") => {
-    const s = String(v || "");
-    const lower = s.toLowerCase();
-    const val = allowed.includes(lower) ? lower : allowed[0];
-    if (casing === "upper") return val.toUpperCase();
-    if (casing === "capital") return val.charAt(0).toUpperCase() + val.slice(1);
-    return val;
-  };
-
+  // ---------------- utils
   const buildHeaders = () => {
     const token =
       localStorage.getItem("token") ||
@@ -84,20 +69,12 @@ export default function LoanProductForm() {
       localStorage.getItem("access_token") ||
       localStorage.getItem("authToken") ||
       localStorage.getItem("accessToken");
-
     let tenantId = "";
-    try {
-      const t = localStorage.getItem("tenant");
-      if (t) tenantId = JSON.parse(t)?.id || "";
-    } catch {}
+    try { const t = localStorage.getItem("tenant"); if (t) tenantId = JSON.parse(t)?.id || ""; } catch {}
     tenantId = tenantId || localStorage.getItem("tenantId") || "";
-
     const branchId = localStorage.getItem("activeBranchId") || "";
 
-    const headers = {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
+    const headers = { "Content-Type": "application/json", Accept: "application/json" };
     if (token) headers.Authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     if (tenantId) headers["x-tenant-id"] = tenantId;
     if (branchId) headers["x-branch-id"] = String(branchId);
@@ -117,13 +94,25 @@ export default function LoanProductForm() {
     return r?.statusText || e?.message || "Server error";
   };
 
-  // ---------- handlers
-  const onChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
+  const normUnit = (v) => {
+    const s = String(v || "").toLowerCase();
+    if (LOWER_UNITS.includes(s)) return s;
+    if (s.endsWith("s") && LOWER_UNITS.includes(s)) return s;
+    // singulars
+    if (s === "day") return "days";
+    if (s === "week") return "weeks";
+    if (s === "month") return "months";
+    if (s === "year") return "years";
+    return "months";
   };
 
-  // read aliases when editing
+  const toNumber = (v) => {
+    if (v === "" || v == null) return null;
+    const n = Number(String(v).replace(/,/g, ""));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // ---------------- read when editing (broad alias + heuristics)
   useEffect(() => {
     let canceled = false;
     (async () => {
@@ -132,25 +121,55 @@ export default function LoanProductForm() {
         setLoading(true);
         const { data } = await api.get(`/loan-products/${id}`, { headers: buildHeaders() });
         if (canceled) return;
+
         const get = (...keys) => {
           for (const k of keys) {
             const v = data?.[k];
             if (v !== undefined && v !== null && v !== "") return v;
           }
-          return "";
+          return undefined;
         };
 
+        // 1) try known aliases first
+        let termVal = get("term", "tenor", "duration", "term_value", "loanTerm", "period_count", "repayment_term");
+        let unitVal = get("termUnit", "term_unit", "unit", "termType", "term_type", "duration_unit", "tenor_unit", "period_unit", "repayment_term_unit", "loanTermUnit");
+
+        // 2) heuristics: find any small-ish integer for term; any unit-like string for unit
+        if (termVal === undefined) {
+          for (const [k, v] of Object.entries(data)) {
+            if (v === null || v === undefined) continue;
+            if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 480) {
+              if (/(term|tenor|duration|period)/i.test(k)) { termVal = v; break; }
+            }
+          }
+        }
+        if (unitVal === undefined) {
+          for (const [k, v] of Object.entries(data)) {
+            if (v === null || v === undefined) continue;
+            const sv = String(v).toLowerCase();
+            if (typeof v === "string" && (LOWER_UNITS.includes(sv) || /(day|week|month|year)/i.test(sv))) {
+              if (/(unit|type|term|duration|tenor|period)/i.test(k) || LOWER_UNITS.includes(sv)) {
+                unitVal = sv; break;
+              }
+            }
+          }
+        }
+
+        // active aliases
+        const activeVal = get("active", "isActive", "enabled", "is_enabled", "is_enabled") ??
+          (String(get("status") || "").toLowerCase() === "active");
+
         setForm({
-          name: get("name"),
-          code: get("code"),
+          name: String(get("name") || ""),
+          code: String(get("code") || ""),
           interestRate: String(get("interestRate", "interest_rate", "rate_percent", "")),
-          interestPeriod: (get("interestPeriod", "interest_period", "period", "periodicity", "monthly") || "monthly"),
-          term: String(get("term", "tenor", "duration", "term_value", "")),
-          termUnit: (get("termUnit", "term_unit", "unit", "termType", "term_type", "duration_unit", "tenor_unit", "period_unit", "months") || "months"),
+          interestPeriod: String(get("interestPeriod", "interest_period", "period", "periodicity", "monthly") || "monthly").toLowerCase(),
+          term: termVal !== undefined ? String(termVal) : "",
+          termUnit: normUnit(unitVal),
           principalMin: new Intl.NumberFormat().format(Number(get("principalMin", "principal_min", "min_amount", "minimum_principal", "minPrincipal", 0))),
           principalMax: new Intl.NumberFormat().format(Number(get("principalMax", "principal_max", "max_amount", "maximum_principal", "maxPrincipal", 0))),
           fees: new Intl.NumberFormat().format(Number(get("fees", "fees_total", "fee", 0))),
-          active: Boolean(get("active", "")) || false,
+          active: Boolean(activeVal),
         });
       } catch (e) {
         setErr(readErrorBody(e) || "Failed to load product");
@@ -161,71 +180,97 @@ export default function LoanProductForm() {
     return () => { canceled = true; };
   }, [id, isEdit]);
 
+  // ---------------- handlers
+  const onChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
+  };
+
   const buildAliasSuperset = (enums = "lower") => {
-    // numbers parsed from formatted fields
-    const pMin = parseMoney(form.principalMin);
-    const pMax = parseMoney(form.principalMax);
-    const feeN = parseMoney(form.fees);
+    const periodLower = String(form.interestPeriod || "monthly").toLowerCase();
+    const period =
+      enums === "upper" ? periodLower.toUpperCase()
+      : enums === "capital" ? periodLower.charAt(0).toUpperCase() + periodLower.slice(1)
+      : periodLower;
 
-    const interestPeriod = normEnum(form.interestPeriod, ["weekly", "monthly", "yearly"], enums);
-    const termUnit = normEnum(form.termUnit, ["days", "weeks", "months"], enums);
+    const unitLower = normUnit(form.termUnit);
+    const unit =
+      enums === "upper" ? unitLower.toUpperCase()
+      : enums === "capital" ? unitLower.charAt(0).toUpperCase() + unitLower.slice(1)
+      : unitLower;
 
-    const p = {
+    const pMin = parseMoney(form.principalMin) ?? 0;
+    const pMax = parseMoney(form.principalMax) ?? 0;
+    const feeN = parseMoney(form.fees) ?? 0;
+
+    const payload = {
+      // canonical (camel)
       name: (form.name || "").trim(),
       code: (form.code || "").trim() || null,
       interestRate: toNumber(form.interestRate) ?? 0,
-      interestPeriod,
+      interestPeriod: period,
       term: toNumber(form.term) ?? 0,
-      termUnit,
-      principalMin: pMin ?? 0,
-      principalMax: pMax ?? 0,
-      fees: feeN ?? 0,
+      termUnit: unit,
+      principalMin: pMin,
+      principalMax: pMax,
+      fees: feeN,
       active: !!form.active,
+      isActive: !!form.active,
+      status: form.active ? "active" : "inactive",
+
+      // snake aliases
+      interest_rate: toNumber(form.interestRate) ?? 0,
+      interest_period: period,
+      term_unit: unit,
+      principal_min: pMin,
+      principal_max: pMax,
+      fees_total: feeN,
+
+      // alternates
+      min_amount: pMin,
+      max_amount: pMax,
+      minimum_principal: pMin,
+      maximum_principal: pMax,
+      minPrincipal: pMin,
+      maxPrincipal: pMax,
+
+      tenor: toNumber(form.term) ?? 0,
+      tenor_unit: unit,
+      duration: toNumber(form.term) ?? 0,
+      duration_unit: unit,
+
+      term_value: toNumber(form.term) ?? 0,
+      term_type: unit,
+
+      rate_percent: toNumber(form.interestRate) ?? 0,
+      period: period,
+      period_unit: unit,
+      periodicity: period,
+      periodicity_unit: unit,
     };
 
-    return {
-      // canonical
-      name: p.name,
-      code: p.code,
-      interestRate: p.interestRate,
-      interestPeriod: p.interestPeriod,
-      term: p.term,
-      termUnit: p.termUnit,
-      principalMin: p.principalMin,
-      principalMax: p.principalMax,
-      fees: p.fees,
-      active: p.active,
+    return payload;
+  };
 
-      // snake
-      interest_rate: p.interestRate,
-      interest_period: p.interestPeriod,
-      term_unit: p.termUnit,
-      principal_min: p.principalMin,
-      principal_max: p.principalMax,
-      fees_total: p.fees,
-
-      // alternates used by various stacks
-      min_amount: p.principalMin,
-      max_amount: p.principalMax,
-      minimum_principal: p.principalMin,
-      maximum_principal: p.principalMax,
-      minPrincipal: p.principalMin,
-      maxPrincipal: p.principalMax,
-
-      tenor: p.term,
-      tenor_unit: p.termUnit,
-      duration: p.term,
-      duration_unit: p.termUnit,
-
-      term_value: p.term,
-      term_type: p.termUnit,
-
-      rate_percent: p.interestRate,
-      period: p.interestPeriod,
-      period_unit: p.termUnit, // some APIs call unit "period_unit"
-      periodicity: p.interestPeriod,
-      periodicity_unit: p.termUnit,
-    };
+  const submitWithVariants = async () => {
+    const headers = buildHeaders();
+    const variants = [
+      { label: "alias_superset_lower", payload: buildAliasSuperset("lower") },
+      { label: "alias_superset_upper", payload: buildAliasSuperset("upper") },
+      { label: "alias_superset_capital", payload: buildAliasSuperset("capital") },
+    ];
+    const attempts = [];
+    for (const v of variants) {
+      try {
+        if (isEdit) {
+          return await api.put(`/loan-products/${id}`, v.payload, { headers });
+        }
+        return await api.post(`/loan-products`, v.payload, { headers });
+      } catch (e) {
+        attempts.push({ label: v.label, status: e?.response?.status, error: readErrorBody(e) });
+      }
+    }
+    throw attempts;
   };
 
   const onSubmit = async (e) => {
@@ -240,27 +285,10 @@ export default function LoanProductForm() {
     if (pMax && pMin && pMax < pMin) return setErr("Principal Max cannot be less than Principal Min");
 
     setSaving(true);
-    const variants = [
-      { label: "alias_superset_lower", payload: buildAliasSuperset("lower") },
-      { label: "alias_superset_upper", payload: buildAliasSuperset("upper") },
-      { label: "alias_superset_capital", payload: buildAliasSuperset("capital") },
-    ];
-    const attempts = [];
     try {
-      const headers = buildHeaders();
-      for (const v of variants) {
-        try {
-          if (isEdit) {
-            await api.put(`/loan-products/${id}`, v.payload, { headers });
-          } else {
-            await api.post(`/loan-products`, v.payload, { headers });
-          }
-          setSaving(false);
-          return navigate("/loans/products", { replace: true });
-        } catch (e2) {
-          attempts.push({ label: v.label, status: e2?.response?.status, error: readErrorBody(e2) });
-        }
-      }
+      await submitWithVariants();
+      navigate("/loans/products", { replace: true });
+    } catch (attempts) {
       setErr("Failed to save product");
       setDebug(attempts);
     } finally {
@@ -364,37 +392,23 @@ export default function LoanProductForm() {
               <option value="days">Days</option>
               <option value="weeks">Weeks</option>
               <option value="months">Months</option>
+              <option value="years">Years</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm mb-1">Principal Min</label>
-            <MoneyInput
-              name="principalMin"
-              value={form.principalMin}
-              onChange={onChange}
-              placeholder="0"
-            />
+            <MoneyInput name="principalMin" value={form.principalMin} onChange={onChange} placeholder="0" />
           </div>
 
           <div>
             <label className="block text-sm mb-1">Principal Max</label>
-            <MoneyInput
-              name="principalMax"
-              value={form.principalMax}
-              onChange={onChange}
-              placeholder="0"
-            />
+            <MoneyInput name="principalMax" value={form.principalMax} onChange={onChange} placeholder="0" />
           </div>
 
           <div>
             <label className="block text-sm mb-1">Fees (Total)</label>
-            <MoneyInput
-              name="fees"
-              value={form.fees}
-              onChange={onChange}
-              placeholder="0"
-            />
+            <MoneyInput name="fees" value={form.fees} onChange={onChange} placeholder="0" />
           </div>
 
           <div className="flex items-center gap-2 mt-6">
@@ -402,7 +416,7 @@ export default function LoanProductForm() {
               id="active"
               name="active"
               type="checkbox"
-              checked={form.active}
+              checked={!!form.active}
               onChange={onChange}
               className="h-4 w-4"
             />

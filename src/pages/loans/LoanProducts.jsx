@@ -51,14 +51,9 @@ export default function LoanProducts() {
       localStorage.getItem("access_token") ||
       localStorage.getItem("authToken") ||
       localStorage.getItem("accessToken");
-
     let tenantId = "";
-    try {
-      const t = localStorage.getItem("tenant");
-      if (t) tenantId = JSON.parse(t)?.id || "";
-    } catch {}
+    try { const t = localStorage.getItem("tenant"); if (t) tenantId = JSON.parse(t)?.id || ""; } catch {}
     tenantId = tenantId || localStorage.getItem("tenantId") || "";
-
     const branchId = localStorage.getItem("activeBranchId") || "";
 
     const headers = { Accept: "application/json" };
@@ -101,7 +96,6 @@ export default function LoanProducts() {
     const n = Number(val);
     const u = String(unit).toLowerCase();
     if (!Number.isFinite(n)) return labelize(u);
-    // normalize singular/plural
     if (n === 1) {
       if (u.endsWith("s")) return labelize(u.slice(0, -1));
       if (u === "months") return "Month";
@@ -109,7 +103,6 @@ export default function LoanProducts() {
       if (u === "days") return "Day";
       return labelize(u);
     }
-    // plural
     if (!u.endsWith("s")) return labelize(u + "s");
     return labelize(u);
   };
@@ -194,11 +187,12 @@ export default function LoanProducts() {
     try {
       setLoading(true);
       const id = row.id || row.uuid || row._id;
-      const next = !Boolean(row.active);
+      const next = !Boolean(row.active ?? row.isActive ?? (String(row.status || "").toLowerCase() === "active"));
+      // try PATCH then PUT
       try {
-        await api.patch(`/loan-products/${id}`, { active: next }, { headers: buildHeaders() });
+        await api.patch(`/loan-products/${id}`, { active: next, isActive: next, status: next ? "active" : "inactive" }, { headers: buildHeaders() });
       } catch {
-        await api.put(`/loan-products/${id}`, { active: next }, { headers: buildHeaders() });
+        await api.put(`/loan-products/${id}`, { active: next, isActive: next, status: next ? "active" : "inactive" }, { headers: buildHeaders() });
       }
       await fetchData();
     } catch (e) {
@@ -280,13 +274,17 @@ export default function LoanProducts() {
                 items.map((r) => {
                   const id = r.id || r.uuid || r._id;
 
-                  // expanded aliases so period/term/unit render regardless of backend keys
+                  // wide alias set so term/unit render regardless of backend keys
                   const rate = pick(r.interestRate, r.interest_rate, r.rate_percent);
                   const period = pick(r.interestPeriod, r.interest_period, r.period, r.periodicity);
-                  const termVal = pick(r.term, r.tenor, r.duration, r.term_value, r.tenor_value, r.duration_value);
+                  const termVal = pick(
+                    r.term, r.tenor, r.duration, r.term_value, r.tenor_value, r.duration_value,
+                    r.repayment_term, r.loanTerm, r.period_count
+                  );
                   const unit = pick(
                     r.termUnit, r.term_unit, r.unit, r.termType, r.term_type,
-                    r.duration_unit, r.tenor_unit, r.period_unit, r.periodicity_unit
+                    r.duration_unit, r.tenor_unit, r.period_unit, r.periodicity_unit,
+                    r.repayment_term_unit, r.loanTermUnit
                   );
 
                   const pMin = pick(
@@ -298,6 +296,10 @@ export default function LoanProducts() {
                     r.max_amount, r.maximum_principal, r.maxPrincipal
                   );
                   const fees = pick(r.fees, r.fees_total, r.fee);
+
+                  const active =
+                    r.active ?? r.isActive ??
+                    (String(r.status || "").toLowerCase() === "active");
 
                   return (
                     <tr key={id}>
@@ -314,12 +316,10 @@ export default function LoanProducts() {
                         <button
                           onClick={() => onToggleActive(r)}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                          title={r.active ? "Deactivate" : "Activate"}
+                          title={active ? "Deactivate" : "Activate"}
                         >
-                          {r.active ? <FiToggleRight /> : <FiToggleLeft />}
-                          <span className="text-xs">
-                            {r.active ? "Active" : "Inactive"}
-                          </span>
+                          {active ? <FiToggleRight /> : <FiToggleLeft />}
+                          <span className="text-xs">{active ? "Active" : "Inactive"}</span>
                         </button>
                       </td>
                       <td className="px-3 py-2 text-right">
