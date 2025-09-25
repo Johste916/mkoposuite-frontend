@@ -1,4 +1,4 @@
-// src/layouts/SidebarLayout.jsx
+// src/components/SidebarLayout.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -189,7 +189,7 @@ const NAV = () => [
       { label: "Pro-Rata Collections", to: "/reports/pro-rata" },
       { label: "Disbursement Report", to: "/reports/disbursement" },
       { label: "Fees Report", to: "/reports/fees" },
-      { label: "Loan Officer Report", to: "/reports/loan-products" },
+      { label: "Loan Officer Report", to: "/reports/loan-officer" }, // fixed route
       { label: "MFRS Ratios", to: "/reports/mfrs" },
       { label: "Daily Report", to: "/reports/daily" },
       { label: "Monthly Report", to: "/reports/monthly" },
@@ -809,7 +809,7 @@ const SidebarLayout = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
         {/* Sidebar */}
         <aside className="hidden lg:block border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="h-[calc(100vh-56px)] sticky top[56px] lg:top-[56px] overflow-y-auto px-2 py-3">
+          <div className="h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
             <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Navigation
             </div>
@@ -832,14 +832,14 @@ const SidebarLayout = () => {
         </aside>
 
         {/* Main content */}
-        <main className="min-h[calc(100vh-56px)] lg:min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
+        <main className="min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
           <Outlet />
         </main>
       </div>
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z[70] lg:z-[70] flex">
+        <div className="lg:hidden fixed inset-0 z-[70] flex">
           <div className="w-72 max-w-[80vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
             <div className="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800">
               <span className="font-semibold">Menu</span>
