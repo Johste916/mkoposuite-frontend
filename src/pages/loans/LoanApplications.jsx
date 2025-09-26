@@ -8,7 +8,7 @@ import {
 
 /* ---------------- helpers ---------------- */
 const today = () => new Date().toLocaleDateString("en-CA"); // local YYYY-MM-DD
-const clsInput = "input";
+const clsInput = "input text-black dark:text-white placeholder-black/60 dark:placeholder-white/70";
 
 /* Stronger, high-contrast borders & dividers */
 const strongBorder = "border-2 border-black/20 dark:border-white/30";
@@ -22,7 +22,7 @@ const card = `bg-white dark:bg-slate-900/40 rounded-2xl shadow-sm ${strongRing} 
 const rowShell = "grid items-center gap-3 p-3 md:p-4";
 const listShell = `rounded-xl overflow-hidden ${strongBorder}`;
 const listHead =
-  "bg-slate-50/80 dark:bg-slate-800/60 text-xs font-medium text-slate-700 dark:text-slate-200 grid gap-3 p-3 md:p-3.5";
+  "bg-slate-50/80 dark:bg-slate-800/60 text-xs font-bold text-black dark:text-white grid gap-3 p-3 md:p-3.5";
 const listBody = `${strongDivide}`;
 
 /* normalize any backend list shape to an array */
@@ -32,6 +32,17 @@ const toArray = (data) =>
   : Array.isArray(data?.rows) ? data.rows
   : Array.isArray(data?.results) ? data.results
   : [];
+
+/* money format helpers (commas while typing) */
+const unformatMoney = (v) => (v ?? "").toString().replace(/[^\d.]/g, "");
+const formatMoney = (v) => {
+  const s = unformatMoney(v);
+  if (!s) return "";
+  // keep only one dot (if any); we mostly expect integers, but this is tolerant.
+  const [int, dec] = s.split(".");
+  const withCommas = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return dec ? `${withCommas}.${dec.slice(0, 2)}` : withCommas;
+};
 
 const INTEREST_METHODS = [
   { value: "flat", label: "Flat rate" },
@@ -105,16 +116,16 @@ export default function LoanApplications() {
     productId: "",
     borrowerId: "",
     loanNumber: "",
-    principal: "",
+    principal: "",            // formatted with commas in UI
     releaseDate: today(),
     durationMonths: "",
     collateralType: "",
-    collateralAmount: "",
+    collateralAmount: "",     // formatted with commas in UI
     collateralOther: "",
     interestMethod: "flat",
-    interestRate: "",
-    interestAmount: "",
-    fees: [],
+    interestRate: "",         // auto from product; readOnly if provided
+    interestAmount: "",       // formatted with commas in UI
+    fees: [],                 // each fee.amount formatted with commas in UI
     repaymentCycle: "monthly",
     numberOfRepayments: "",
     statusLabel: "new loan",
@@ -230,29 +241,19 @@ export default function LoanApplications() {
   /* ----------- fees handlers ----------- */
   const addFee = () => setForm((f) => ({ ...f, fees: [...f.fees, { name: "", amount: "", paid: false }] }));
   const updateFee = (idx, patch) =>
-    setForm((f) => ({ ...f, fees: f.fees.map((x, i) => (i === idx ? { ...x, ...patch } : x)) }));
-  const removeFee = (idx) => setForm((f) => ({ ...f, fees: f.fees.filter((_, i) => i !== idx) }));
-
-  /* ----------- guarantors ----------- */
-  const addGuarantor = () =>
     setForm((f) => ({
       ...f,
-      guarantors: [
-        ...f.guarantors,
-        { type: "existing", borrowerId: "", name: "", occupation: "", residence: "", contacts: "", verification: "" },
-      ],
+      fees: f.fees.map((x, i) => (i === idx ? { ...x, ...patch, amount: patch.amount !== undefined ? formatMoney(patch.amount) : x.amount })),
     }));
-  const updateGuarantor = (idx, patch) =>
-    setForm((f) => ({ ...f, guarantors: f.guarantors.map((g, i) => (i === idx ? { ...g, ...patch } : g)) }));
-  const removeGuarantor = (idx) =>
-    setForm((f) => ({ ...f, guarantors: f.guarantors.filter((_, i) => i !== idx) }));
+  const removeFee = (idx) => setForm((f) => ({ ...f, fees: f.fees.filter((_, i) => i !== idx) }));
 
   /* ----------- submit ----------- */
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.borrowerId) return alert("Select a borrower");
     if (!form.productId) return alert("Select a loan product");
-    if (!form.principal || Number(form.principal) <= 0) return alert("Enter a principal amount");
+    if (!unformatMoney(form.principal) || Number(unformatMoney(form.principal)) <= 0)
+      return alert("Enter a principal amount");
     if (!form.durationMonths) return alert("Enter loan duration (months)");
 
     if (form.collateralType === "Other" && !form.collateralOther.trim()) {
@@ -310,16 +311,16 @@ export default function LoanApplications() {
         productId: form.productId,
         borrowerId: form.borrowerId,
         loanNumber: form.loanNumber || null,
-        amount: String(form.principal).trim(),
+        amount: unformatMoney(form.principal),
         currency: "TZS",
         releaseDate: form.releaseDate || today(),
         durationMonths: String(form.durationMonths).trim(),
         collateralType: foldedCollateralType,
-        collateralAmount: form.collateralAmount || null,
+        collateralAmount: unformatMoney(form.collateralAmount) || null,
         interestMethod: form.interestMethod,
         interestRate: form.interestRate || null,
-        interestAmount: form.interestAmount || null,
-        fees: form.fees.map((f) => ({ ...f, amount: String(f.amount || "").trim() })),
+        interestAmount: unformatMoney(form.interestAmount) || null,
+        fees: form.fees.map((f) => ({ ...f, amount: unformatMoney(f.amount) })),
         repaymentCycle: form.repaymentCycle,
         numberOfRepayments: String(form.numberOfRepayments || "").trim(),
         disbursementMethod: form.disbursementMethod,
@@ -363,20 +364,31 @@ export default function LoanApplications() {
     [productList, form.productId]
   );
 
+  // When product changes: auto-pick interest method & rate; make rate readOnly if provided by product.
+  const onSelectProduct = (id) => {
+    const prod = productList.find((p) => String(p.id) === String(id));
+    setForm((prev) => ({
+      ...prev,
+      productId: id,
+      interestMethod: prod?.interestMethod || prev.interestMethod,
+      interestRate: prod?.interestRate ?? "", // auto-pick; blank if none
+    }));
+  };
+
   const ensureSpouseConsentAttachment = () => {
     const idx = findSpouseConsentMetaIndex();
     if (idx === -1) addAttachment("Spouse: Consent declaration");
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8">
+    <div className="p-4 md:p-6 lg:p-8 text-black dark:text-white">
       {/* header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Add Loan</h1>
-          <p className="text-sm muted">Follow the steps below. Start by selecting a borrower, then continue down the page.</p>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Add Loan</h1>
+          <p className="text-sm">Follow the steps below. Start by selecting a borrower, then continue down the page.</p>
         </div>
-        <Link to="/loans" className="text-indigo-600 hover:underline text-sm">
+        <Link to="/loans" className="text-black underline text-sm font-semibold">
           Back to Loans
         </Link>
       </div>
@@ -386,12 +398,12 @@ export default function LoanApplications() {
         {/* 1) Borrower & Product */}
         <section className={card}>
           <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Wallet className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-semibold text-lg">1) Borrower & Product</h2>
+            <Wallet className="h-5 w-5 text-black dark:text-white" />
+            <h2 className="font-bold text-lg">1) Borrower & Product</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs muted">Borrower</label>
+              <label className="text-xs font-semibold">Borrower</label>
               <div className="flex gap-2">
                 <select
                   className={`${clsInput} flex-1`}
@@ -409,7 +421,7 @@ export default function LoanApplications() {
                 <Link
                   target="_blank"
                   to="/borrowers/add"
-                  className={`px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 inline-flex items-center gap-2 ${strongBorder}`}
+                  className={`px-3 py-2 rounded-lg hover:bg-gray-50 inline-flex items-center gap-2 ${strongBorder}`}
                 >
                   <PlusCircle className="h-4 w-4" /> Add
                 </Link>
@@ -417,33 +429,25 @@ export default function LoanApplications() {
             </div>
 
             <div>
-              <label className="text-xs muted">Loan Product</label>
+              <label className="text-xs font-semibold">Loan Product</label>
               <select
                 className={clsInput}
                 value={form.productId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  const prod = productList.find((p) => String(p.id) === String(id));
-                  setForm((prev) => ({
-                    ...prev,
-                    productId: id,
-                    interestMethod: prod?.interestMethod || prev.interestMethod,
-                    interestRate: prod?.interestRate ?? prev.interestRate,
-                  }));
-                }}
+                onChange={(e) => onSelectProduct(e.target.value)}
                 required
               >
                 <option value="">Select product…</option>
                 {productList.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}{p.code ? ` (${p.code})` : ""}
+                    {p.name}
+                    {p.code ? ` (${p.code})` : ""}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="text-xs muted">Loan # (auto)</label>
+              <label className="text-xs font-semibold">Loan # (auto)</label>
               <input className={clsInput} value={loadingCounts ? "…" : form.loanNumber || "—"} readOnly />
             </div>
           </div>
@@ -452,37 +456,81 @@ export default function LoanApplications() {
         {/* 2) Loan Terms */}
         <section className={card}>
           <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Building2 className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-semibold text-lg">2) Loan Terms</h2>
+            <Building2 className="h-5 w-5 text-black dark:text-white" />
+            <h2 className="font-bold text-lg">2) Loan Terms</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs muted">Principal Amount</label>
-              <input type="number" inputMode="numeric" className={clsInput} value={form.principal} onChange={(e) => setForm({ ...form, principal: e.target.value })} required />
+              <label className="text-xs font-semibold">Principal Amount</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className={clsInput}
+                value={form.principal}
+                onChange={(e) => setForm({ ...form, principal: formatMoney(e.target.value) })}
+                placeholder="e.g. 1,000,000"
+                required
+              />
             </div>
             <div>
-              <label className="text-xs muted flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Loan Release Date</label>
-              <input type="date" className={clsInput} value={form.releaseDate} onChange={(e) => setForm({ ...form, releaseDate: e.target.value })} required />
+              <label className="text-xs font-semibold flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5" /> Loan Release Date
+              </label>
+              <input
+                type="date"
+                className={clsInput}
+                value={form.releaseDate}
+                onChange={(e) => setForm({ ...form, releaseDate: e.target.value })}
+                required
+              />
             </div>
             <div>
-              <label className="text-xs muted">Collateral Type</label>
-              <select className={clsInput} value={form.collateralType} onChange={(e) => setForm({ ...form, collateralType: e.target.value })}>
+              <label className="text-xs font-semibold">Collateral Type</label>
+              <select
+                className={clsInput}
+                value={form.collateralType}
+                onChange={(e) => setForm({ ...form, collateralType: e.target.value })}
+              >
                 <option value="">Select…</option>
-                {COLLATERAL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                {COLLATERAL_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
               </select>
               {form.collateralType === "Other" && (
                 <div className="mt-2">
-                  <input className={clsInput} placeholder="Specify collateral" value={form.collateralOther} onChange={(e) => setForm({ ...form, collateralOther: e.target.value })} required />
+                  <input
+                    className={clsInput}
+                    placeholder="Specify collateral"
+                    value={form.collateralOther}
+                    onChange={(e) => setForm({ ...form, collateralOther: e.target.value })}
+                    required
+                  />
                 </div>
               )}
             </div>
             <div>
-              <label className="text-xs muted">Collateral Amount</label>
-              <input type="number" inputMode="numeric" className={clsInput} value={form.collateralAmount} onChange={(e) => setForm({ ...form, collateralAmount: e.target.value })} />
+              <label className="text-xs font-semibold">Collateral Amount</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className={clsInput}
+                value={form.collateralAmount}
+                onChange={(e) => setForm({ ...form, collateralAmount: formatMoney(e.target.value) })}
+                placeholder="e.g. 500,000"
+              />
             </div>
             <div>
-              <label className="text-xs muted">Loan Duration (months)</label>
-              <input type="number" inputMode="numeric" className={clsInput} value={form.durationMonths} onChange={(e) => setForm({ ...form, durationMonths: e.target.value })} required />
+              <label className="text-xs font-semibold">Loan Duration (months)</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                className={clsInput}
+                value={form.durationMonths}
+                onChange={(e) => setForm({ ...form, durationMonths: e.target.value })}
+                required
+              />
             </div>
           </div>
         </section>
@@ -490,23 +538,50 @@ export default function LoanApplications() {
         {/* 3) Interest */}
         <section className={card}>
           <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Landmark className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-semibold text-lg">3) Interest</h2>
+            <Landmark className="h-5 w-5 text-black dark:text-white" />
+            <h2 className="font-bold text-lg">3) Interest</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
-              <label className="text-xs muted">Interest Method</label>
-              <select className={clsInput} value={form.interestMethod} onChange={(e) => setForm({ ...form, interestMethod: e.target.value })}>
-                {INTEREST_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              <label className="text-xs font-semibold">Interest Method</label>
+              <select
+                className={clsInput}
+                value={form.interestMethod}
+                onChange={(e) => setForm({ ...form, interestMethod: e.target.value })}
+              >
+                {INTEREST_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="text-xs muted">Interest Rate (%)</label>
-              <input type="number" step="0.01" inputMode="decimal" className={clsInput} value={form.interestRate} onChange={(e) => setForm({ ...form, interestRate: e.target.value })} placeholder={selectedProduct?.interestRate ? String(selectedProduct.interestRate) : "e.g. 3"} />
+              <label className="text-xs font-semibold">Interest Rate (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                className={clsInput}
+                value={form.interestRate}
+                onChange={(e) => setForm({ ...form, interestRate: e.target.value })}
+                placeholder={selectedProduct?.interestRate ? String(selectedProduct.interestRate) : "e.g. 3"}
+                readOnly={selectedProduct?.interestRate !== undefined && selectedProduct?.interestRate !== null}
+              />
+              {selectedProduct?.interestRate != null && (
+                <p className="text-[11px] mt-1">Auto-picked from product.</p>
+              )}
             </div>
             <div>
-              <label className="text-xs muted">Interest Amount (optional)</label>
-              <input type="number" inputMode="numeric" className={clsInput} value={form.interestAmount} onChange={(e) => setForm({ ...form, interestAmount: e.target.value })} />
+              <label className="text-xs font-semibold">Interest Amount (optional)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className={clsInput}
+                value={form.interestAmount}
+                onChange={(e) => setForm({ ...form, interestAmount: formatMoney(e.target.value) })}
+                placeholder="e.g. 120,000"
+              />
             </div>
           </div>
         </section>
@@ -514,26 +589,48 @@ export default function LoanApplications() {
         {/* 4) Repayments */}
         <section className={card}>
           <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Calendar className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-semibold text-lg">4) Repayments</h2>
+            <Calendar className="h-5 w-5 text-black dark:text-white" />
+            <h2 className="font-bold text-lg">4) Repayments</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
             <div>
-              <label className="text-xs muted">Repayment Cycle</label>
-              <select className={clsInput} value={form.repaymentCycle} onChange={(e) => setForm({ ...form, repaymentCycle: e.target.value })}>
-                {REPAYMENT_CYCLES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              <label className="text-xs font-semibold">Repayment Cycle</label>
+              <select
+                className={clsInput}
+                value={form.repaymentCycle}
+                onChange={(e) => setForm({ ...form, repaymentCycle: e.target.value })}
+              >
+                {REPAYMENT_CYCLES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="text-xs muted"># of Repayments</label>
-              <input type="number" inputMode="numeric" className={clsInput} value={form.numberOfRepayments} onChange={(e) => setForm({ ...form, numberOfRepayments: e.target.value })} />
+              <label className="text-xs font-semibold"># of Repayments</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                className={clsInput}
+                value={form.numberOfRepayments}
+                onChange={(e) => setForm({ ...form, numberOfRepayments: e.target.value })}
+              />
             </div>
             <div>
-              <label className="text-xs muted">Loan Status (label)</label>
-              <select className={clsInput} value={form.statusLabel} onChange={(e) => setForm({ ...form, statusLabel: e.target.value })}>
-                {STATUS_LABELS.map((s) => <option key={s} value={s}>{s}</option>)}
+              <label className="text-xs font-semibold">Loan Status (label)</label>
+              <select
+                className={clsInput}
+                value={form.statusLabel}
+                onChange={(e) => setForm({ ...form, statusLabel: e.target.value })}
+              >
+                {STATUS_LABELS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
-              <p className="text-[11px] muted mt-1">DB status stays “pending” on create.</p>
+              <p className="text-[11px] mt-1">DB status stays “pending” on create.</p>
             </div>
           </div>
         </section>
@@ -542,20 +639,20 @@ export default function LoanApplications() {
         <section className={card}>
           <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <div className="flex items-center gap-2">
-              <FileUp className="h-5 w-5 text-indigo-600" />
-              <h2 className="font-semibold text-lg">5) Loan Fees</h2>
+              <FileUp className="h-5 w-5 text-black dark:text-white" />
+              <h2 className="font-bold text-lg">5) Loan Fees</h2>
             </div>
             <button
               type="button"
               onClick={addFee}
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 ${strongBorder}`}
             >
               <PlusCircle className="h-4 w-4" /> Add Fee
             </button>
           </div>
 
           {form.fees.length === 0 ? (
-            <p className="text-sm muted">No fees added.</p>
+            <p className="text-sm">No fees added.</p>
           ) : (
             <div className={listShell}>
               {/* head */}
@@ -576,7 +673,7 @@ export default function LoanApplications() {
                       onChange={(e) => updateFee(i, { name: e.target.value })}
                     />
                     <input
-                      type="number"
+                      type="text"
                       inputMode="numeric"
                       className={clsInput}
                       placeholder="Amount"
@@ -594,7 +691,7 @@ export default function LoanApplications() {
                     <button
                       type="button"
                       onClick={() => removeFee(i)}
-                      className="p-2 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
+                      className="p-2 rounded hover:bg-gray-50"
                       aria-label="Remove fee"
                     >
                       <X className="h-4 w-4" />
@@ -604,37 +701,37 @@ export default function LoanApplications() {
               </div>
             </div>
           )}
-          <p className="text-xs muted mt-2">Unpaid fees will be included in the repayment schedule.</p>
+          <p className="text-xs mt-2">Unpaid fees will be included in the repayment schedule.</p>
         </section>
 
         {/* 6) Guarantors */}
         <section className={card}>
           <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-indigo-600" />
-              <h2 className="font-semibold text-lg">6) Guarantors</h2>
+              <ShieldCheck className="h-5 w-5 text-black dark:text-white" />
+              <h2 className="font-bold text-lg">6) Guarantors</h2>
             </div>
             <button
               type="button"
               onClick={addGuarantor}
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 ${strongBorder}`}
             >
               <PlusCircle className="h-4 w-4" /> Add Guarantor
             </button>
           </div>
 
           {form.guarantors.length === 0 ? (
-            <p className="text-sm muted">No guarantors added.</p>
+            <p className="text-sm">No guarantors added.</p>
           ) : (
             <div className="space-y-4">
               {form.guarantors.map((g, i) => (
                 <div key={i} className={`rounded-xl p-3 md:p-4 space-y-3 ${strongBorder}`}>
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium">Guarantor #{i + 1}</div>
+                    <div className="text-sm font-bold">Guarantor #{i + 1}</div>
                     <button
                       type="button"
                       onClick={() => removeGuarantor(i)}
-                      className="p-1 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
+                      className="p-1 rounded hover:bg-gray-50"
                       aria-label="Remove guarantor"
                     >
                       <X className="h-4 w-4" />
@@ -643,11 +740,14 @@ export default function LoanApplications() {
 
                   <div className="grid gap-3">
                     <div>
-                      <label className="text-xs muted">Source</label>
+                      <label className="text-xs font-semibold">Source</label>
                       <select
                         className={clsInput}
                         value={g.type}
-                        onChange={(e) => updateGuarantor(i, { type: e.target.value })}
+                        onChange={(e) => setForm((f) => ({
+                          ...f,
+                          guarantors: f.guarantors.map((gg, idx) => idx === i ? { ...gg, type: e.target.value } : gg),
+                        }))}
                       >
                         <option value="existing">Select from borrowers</option>
                         <option value="manual">Enter manually</option>
@@ -656,11 +756,18 @@ export default function LoanApplications() {
 
                     {g.type === "existing" ? (
                       <div>
-                        <label className="text-xs muted">Borrower</label>
+                        <label className="text-xs font-semibold">Borrower</label>
                         <select
                           className={clsInput}
                           value={g.borrowerId || ""}
-                          onChange={(e) => updateGuarantor(i, { borrowerId: e.target.value })}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              guarantors: f.guarantors.map((gg, idx) =>
+                                idx === i ? { ...gg, borrowerId: e.target.value } : gg
+                              ),
+                            }))
+                          }
                         >
                           <option value="">Select borrower…</option>
                           {borrowerList.map((b) => (
@@ -676,7 +783,9 @@ export default function LoanApplications() {
                           className={clsInput}
                           placeholder="Full name"
                           value={g.name}
-                          onChange={(e) => updateGuarantor(i, { name: e.target.value })}
+                          onChange={(e) =>
+                            updateGuarantor(i, { name: e.target.value })
+                          }
                         />
                         <input
                           className={clsInput}
@@ -715,8 +824,8 @@ export default function LoanApplications() {
         <section className={card}>
           <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <div className="flex items-center gap-2">
-              <Upload className="h-5 w-5 text-indigo-600" />
-              <h2 className="font-semibold text-lg">7) Attachments</h2>
+              <Upload className="h-5 w-5 text-black dark:text-white" />
+              <h2 className="font-bold text-lg">7) Attachments</h2>
             </div>
             <div className="flex gap-2 flex-wrap">
               {[
@@ -738,7 +847,7 @@ export default function LoanApplications() {
                   key={lbl}
                   type="button"
                   onClick={() => addAttachment(lbl)}
-                  className={`text-xs px-2 py-1 rounded hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}
+                  className={`text-xs px-2 py-1 rounded hover:bg-gray-50 ${strongBorder}`}
                 >
                   + {lbl.replace(/Borrower: |Guarantor: |Spouse: /g, "")}
                 </button>
@@ -747,7 +856,7 @@ export default function LoanApplications() {
           </div>
 
           {form.attachmentsMeta.length === 0 ? (
-            <p className="text-sm muted">No files attached.</p>
+            <p className="text-sm">No files attached.</p>
           ) : (
             <div className={listShell}>
               {/* head */}
@@ -764,13 +873,27 @@ export default function LoanApplications() {
                       <input
                         className={clsInput}
                         value={a.type}
-                        onChange={(e) => updateAttachment(i, { type: e.target.value })}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            attachmentsMeta: f.attachmentsMeta.map((x, idx) =>
+                              idx === i ? { ...x, type: e.target.value } : x
+                            ),
+                          }))
+                        }
                       />
                       <input
                         className={clsInput}
                         placeholder="Note (optional)"
                         value={a.note}
-                        onChange={(e) => updateAttachment(i, { note: e.target.value })}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            attachmentsMeta: f.attachmentsMeta.map((x, idx) =>
+                              idx === i ? { ...x, note: e.target.value } : x
+                            ),
+                          }))
+                        }
                       />
                     </div>
                     <input
@@ -782,7 +905,7 @@ export default function LoanApplications() {
                     <button
                       type="button"
                       onClick={() => removeAttachment(i)}
-                      className="p-2 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
+                      className="p-2 rounded hover:bg-gray-50"
                       aria-label="Remove attachment"
                     >
                       <X className="h-4 w-4" />
@@ -792,18 +915,18 @@ export default function LoanApplications() {
               </div>
             </div>
           )}
-          <p className="text-xs muted mt-2">Accepted images/PDFs as supported by your backend.</p>
+          <p className="text-xs mt-2">Accepted images/PDFs as supported by your backend.</p>
         </section>
 
         {/* 8) Disbursement */}
         <section className={card}>
           <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Wallet className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-semibold text-lg">8) Disbursement</h2>
+            <Wallet className="h-5 w-5 text-black dark:text-white" />
+            <h2 className="font-bold text-lg">8) Disbursement</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs muted">Method</label>
+              <label className="text-xs font-semibold">Method</label>
               <select
                 className={clsInput}
                 value={form.disbursementMethod}
@@ -821,32 +944,57 @@ export default function LoanApplications() {
                   });
                 }}
               >
-                {DISBURSE_METHODS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                {DISBURSE_METHODS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div>
-              <label className="text-xs muted">Reference (optional)</label>
-              <input className={clsInput} value={form.disbursementReference} onChange={(e) => setForm({ ...form, disbursementReference: e.target.value })} placeholder="Txn ref / slip #" />
+              <label className="text-xs font-semibold">Reference (optional)</label>
+              <input
+                className={clsInput}
+                value={form.disbursementReference}
+                onChange={(e) => setForm({ ...form, disbursementReference: e.target.value })}
+                placeholder="Txn ref / slip #"
+              />
             </div>
 
             {form.disbursementMethod === "bank" && (
               <div className="md:col-span-2">
-                <label className="text-xs muted">Bank</label>
+                <label className="text-xs font-semibold">Bank</label>
                 <div className="flex gap-2">
-                  <select className={`${clsInput} flex-1`} value={form.disbursementBankId} onChange={(e) => setForm({ ...form, disbursementBankId: e.target.value })}>
+                  <select
+                    className={`${clsInput} flex-1`}
+                    value={form.disbursementBankId}
+                    onChange={(e) => setForm({ ...form, disbursementBankId: e.target.value })}
+                  >
                     <option value="">Select bank…</option>
-                    {banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
                   </select>
-                  <Link to="/banks/add" target="_blank" className={`px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 inline-flex items-center gap-2 ${strongBorder}`}>
+                  <Link
+                    to="/banks/add"
+                    target="_blank"
+                    className={`px-3 py-2 rounded-lg hover:bg-gray-50 inline-flex items-center gap-2 ${strongBorder}`}
+                  >
                     <PlusCircle className="h-4 w-4" /> Add
                   </Link>
-                  <Link to="/banks" target="_blank" className={`px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}>
+                  <Link
+                    to="/banks"
+                    target="_blank"
+                    className={`px-3 py-2 rounded-lg hover:bg-gray-50 ${strongBorder}`}
+                  >
                     Manage
                   </Link>
                 </div>
                 {banks.length === 0 && (
-                  <p className="text-[11px] text-amber-600 mt-1">
+                  <p className="text-[11px] mt-1">
                     No banks found. Use “Add” to register banks; this list is tenant-scoped via your API.
                   </p>
                 )}
@@ -856,20 +1004,39 @@ export default function LoanApplications() {
             {form.disbursementMethod === "mobile_money" && (
               <>
                 <div>
-                  <label className="text-xs muted">Provider</label>
-                  <select className={clsInput} value={form.mobileProvider} onChange={(e) => setForm({ ...form, mobileProvider: e.target.value })}>
+                  <label className="text-xs font-semibold">Provider</label>
+                  <select
+                    className={clsInput}
+                    value={form.mobileProvider}
+                    onChange={(e) => setForm({ ...form, mobileProvider: e.target.value })}
+                  >
                     <option value="">Select provider…</option>
-                    {MOBILE_PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                    {MOBILE_PROVIDERS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
                   </select>
                   {form.mobileProvider === "other" && (
                     <div className="mt-2">
-                      <input className={clsInput} placeholder="Specify provider" value={form.mobileProviderOther} onChange={(e) => setForm({ ...form, mobileProviderOther: e.target.value })} required />
+                      <input
+                        className={clsInput}
+                        placeholder="Specify provider"
+                        value={form.mobileProviderOther}
+                        onChange={(e) => setForm({ ...form, mobileProviderOther: e.target.value })}
+                        required
+                      />
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="text-xs muted">Phone Number</label>
-                  <input className={clsInput} placeholder="e.g. 07xxxxxxxx or +2557xxxxxxxx" value={form.mobilePhone} onChange={(e) => setForm({ ...form, mobilePhone: e.target.value })} />
+                  <label className="text-xs font-semibold">Phone Number</label>
+                  <input
+                    className={clsInput}
+                    placeholder="e.g. 07xxxxxxxx or +2557xxxxxxxx"
+                    value={form.mobilePhone}
+                    onChange={(e) => setForm({ ...form, mobilePhone: e.target.value })}
+                  />
                 </div>
               </>
             )}
@@ -877,12 +1044,23 @@ export default function LoanApplications() {
             {form.disbursementMethod === "other" && (
               <>
                 <div>
-                  <label className="text-xs muted">Specify method</label>
-                  <input className={clsInput} placeholder="e.g., cheque, voucher, petty cash" value={form.disbursementOther} onChange={(e) => setForm({ ...form, disbursementOther: e.target.value })} required />
+                  <label className="text-xs font-semibold">Specify method</label>
+                  <input
+                    className={clsInput}
+                    placeholder="e.g., cheque, voucher, petty cash"
+                    value={form.disbursementOther}
+                    onChange={(e) => setForm({ ...form, disbursementOther: e.target.value })}
+                    required
+                  />
                 </div>
                 <div>
-                  <label className="text-xs muted">Details (optional)</label>
-                  <input className={clsInput} placeholder="Instructions / place of collection" value={form.disbursementOtherDetails} onChange={(e) => setForm({ ...form, disbursementOtherDetails: e.target.value })} />
+                  <label className="text-xs font-semibold">Details (optional)</label>
+                  <input
+                    className={clsInput}
+                    placeholder="Instructions / place of collection"
+                    value={form.disbursementOtherDetails}
+                    onChange={(e) => setForm({ ...form, disbursementOtherDetails: e.target.value })}
+                  />
                 </div>
               </>
             )}
@@ -892,31 +1070,59 @@ export default function LoanApplications() {
         {/* 9) Marital status & Spouse */}
         <section className={card}>
           <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <User className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-semibold text-lg">9) Marital Status & Spouse</h2>
+            <User className="h-5 w-5 text-black dark:text-white" />
+            <h2 className="font-bold text-lg">9) Marital Status & Spouse</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs muted">Marital Status</label>
-              <select className={clsInput} value={form.maritalStatus} onChange={(e) => setForm({ ...form, maritalStatus: e.target.value })}>
-                {MARITAL_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              <label className="text-xs font-semibold">Marital Status</label>
+              <select
+                className={clsInput}
+                value={form.maritalStatus}
+                onChange={(e) => setForm({ ...form, maritalStatus: e.target.value })}
+              >
+                {MARITAL_STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="hidden md:block" />
             {form.maritalStatus === "married" && (
               <>
-                <input className={clsInput} placeholder="Spouse Name" value={form.spouseName} onChange={(e) => setForm({ ...form, spouseName: e.target.value })} />
-                <input className={clsInput} placeholder="Spouse Occupation" value={form.spouseOccupation} onChange={(e) => setForm({ ...form, spouseOccupation: e.target.value })} />
-                <input className={clsInput} placeholder="Spouse ID Number" value={form.spouseIdNumber} onChange={(e) => setForm({ ...form, spouseIdNumber: e.target.value })} />
-                <input className={clsInput} placeholder="Spouse Phone" value={form.spousePhone} onChange={(e) => setForm({ ...form, spousePhone: e.target.value })} />
+                <input
+                  className={clsInput}
+                  placeholder="Spouse Name"
+                  value={form.spouseName}
+                  onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
+                />
+                <input
+                  className={clsInput}
+                  placeholder="Spouse Occupation"
+                  value={form.spouseOccupation}
+                  onChange={(e) => setForm({ ...form, spouseOccupation: e.target.value })}
+                />
+                <input
+                  className={clsInput}
+                  placeholder="Spouse ID Number"
+                  value={form.spouseIdNumber}
+                  onChange={(e) => setForm({ ...form, spouseIdNumber: e.target.value })}
+                />
+                <input
+                  className={clsInput}
+                  placeholder="Spouse Phone"
+                  value={form.spousePhone}
+                  onChange={(e) => setForm({ ...form, spousePhone: e.target.value })}
+                />
 
                 <div className={`md:col-span-2 rounded-xl p-3 ${strongBorder}`}>
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm font-medium">Spouse Consent Declaration (signed)</div>
+                    <div className="text-sm font-bold">Spouse Consent Declaration (signed)</div>
                     <button
                       type="button"
                       onClick={ensureSpouseConsentAttachment}
-                      className={`text-xs px-2 py-1 rounded hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}
+                      className={`text-xs px-2 py-1 rounded hover:bg-gray-50 ${strongBorder}`}
                     >
                       + Add consent upload
                     </button>
@@ -924,7 +1130,7 @@ export default function LoanApplications() {
                   {(() => {
                     const idx = findSpouseConsentMetaIndex();
                     if (idx === -1) {
-                      return <p className="text-xs muted">Click “Add consent upload” to attach the signed declaration.</p>;
+                      return <p className="text-xs">Click “Add consent upload” to attach the signed declaration.</p>;
                     }
                     const meta = form.attachmentsMeta[idx];
                     return (
@@ -950,7 +1156,7 @@ export default function LoanApplications() {
                           <button
                             type="button"
                             onClick={() => removeAttachment(idx)}
-                            className="p-2 rounded hover:bg-gray-50 dark:hover:bg-slate-800"
+                            className="p-2 rounded hover:bg-gray-50"
                             aria-label="Remove spouse consent"
                           >
                             <X className="h-4 w-4" />
@@ -959,7 +1165,7 @@ export default function LoanApplications() {
                       </div>
                     );
                   })()}
-                  <p className="text-[11px] muted mt-2">This replaces the old text field. Upload the signed consent form here.</p>
+                  <p className="text-[11px] mt-2">This replaces the old text field. Upload the signed consent form here.</p>
                 </div>
               </>
             )}
@@ -967,12 +1173,16 @@ export default function LoanApplications() {
         </section>
 
         {/* sticky bottom actions */}
-        <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-t-2 border-black/20 dark:border-white/30">
+        <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 backdrop-blur border-t-2 border-black/20">
           <div className="max-w-6xl mx-auto px-4 py-3 flex justify-end gap-3">
-            <Link to="/loans" className={`px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}>
+            <Link to="/loans" className={`px-4 py-2 rounded-xl hover:bg-gray-50 ${strongBorder}`}>
               Cancel
             </Link>
-            <button disabled={submitting} type="submit" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm">
+            <button
+              disabled={submitting}
+              type="submit"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+            >
               <Save className="h-4 w-4" />
               {submitting ? "Submitting…" : "Submit"}
             </button>

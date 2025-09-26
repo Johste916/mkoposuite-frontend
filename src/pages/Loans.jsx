@@ -21,9 +21,7 @@ const toArray = (data) =>
 const currency = (n) => {
   const num = Number(n);
   if (!Number.isFinite(num)) return n ?? "—";
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
-    num
-  );
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(num);
 };
 
 const pct2 = (n) => {
@@ -61,9 +59,7 @@ const Loan = () => {
   const fetchLoans = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/loans", {
-        params: { page: 1, pageSize: 500 },
-      });
+      const res = await api.get("/loans", { params: { page: 1, pageSize: 500 } });
       setLoans(toArray(res.data));
     } catch {
       alert("Failed to load loans");
@@ -74,9 +70,7 @@ const Loan = () => {
   };
   const fetchBranches = async () => {
     try {
-      const res = await api.get("/branches", {
-        params: { page: 1, pageSize: 500 },
-      });
+      const res = await api.get("/branches", { params: { page: 1, pageSize: 500 } });
       setBranches(toArray(res.data));
     } catch {
       setBranches([]);
@@ -84,9 +78,7 @@ const Loan = () => {
   };
   const fetchProducts = async () => {
     try {
-      const res = await api.get("/loan-products", {
-        params: { page: 1, pageSize: 500 },
-      });
+      const res = await api.get("/loan-products", { params: { page: 1, pageSize: 500 } });
       setProducts(toArray(res.data));
     } catch {
       setProducts([]);
@@ -106,13 +98,8 @@ const Loan = () => {
   );
 
   const withinDate = (l) => {
-    // prefer startDate/disbursementDate -> fallback to createdAt
     const raw =
-      l.startDate ||
-      l.disbursementDate ||
-      l.releaseDate ||
-      l.createdAt ||
-      l.created_at;
+      l.startDate || l.disbursementDate || l.releaseDate || l.createdAt || l.created_at;
     if (!raw || (!dateFrom && !dateTo)) return true;
     const d = new Date(raw);
     if (dateFrom && d < new Date(dateFrom)) return false;
@@ -132,26 +119,17 @@ const Loan = () => {
       const matchesStatus = statusFilter === "all" || status === statusFilter;
 
       const borrowerName =
-        l.Borrower?.name ||
-        l.borrowerName ||
-        l.borrower_name ||
-        l.borrower?.name ||
-        "";
+        l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "";
       const matchesSearch =
         borrowerName.toLowerCase().includes(q) ||
-        String(l.id || l.loanId || "")
-          .toLowerCase()
-          .includes(q);
+        String(l.id || l.loanId || "").toLowerCase().includes(q);
 
       const bId = String(l.branchId || l.branch?.id || l.branch_id || "");
       const matchesBranch = !branchFilter || bId === String(branchFilter);
 
-      const matchesProduct =
-        !productFilter || String(l.productId) === String(productFilter);
+      const matchesProduct = !productFilter || String(l.productId) === String(productFilter);
 
-      return (
-        matchesStatus && matchesSearch && matchesBranch && matchesProduct && withinDate(l)
-      );
+      return matchesStatus && matchesSearch && matchesBranch && matchesProduct && withinDate(l);
     });
   }, [loans, statusFilter, search, branchFilter, productFilter, dateFrom, dateTo]);
 
@@ -162,9 +140,8 @@ const Loan = () => {
       0
     );
     const statusOf = (s) =>
-      filteredLoans.filter(
-        (l) => (l.status || l.loanStatus || "").toLowerCase() === s
-      ).length;
+      filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === s)
+        .length;
     return {
       total: filteredLoans.length,
       totalPrincipal,
@@ -193,11 +170,7 @@ const Loan = () => {
       filteredLoans.map((l) => ({
         id: l.id,
         borrower:
-          l.Borrower?.name ||
-          l.borrowerName ||
-          l.borrower_name ||
-          l.borrower?.name ||
-          "",
+          l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "",
         product: productsById[String(l.productId)]?.name || "",
         amount: l.amount ?? l.principal ?? "",
         rate: l.interestRate ?? l.rate ?? "",
@@ -232,9 +205,7 @@ const Loan = () => {
     doc.text("Loans Report", 14, 16);
     doc.autoTable({
       startY: 20,
-      head: [
-        ["ID", "Borrower", "Product", "Amount", "Rate (%)", "Term", "Branch", "Status"],
-      ],
+      head: [["ID", "Borrower", "Product", "Amount", "Rate (%)", "Term", "Branch", "Status"]],
       body: exportRows.map((r) => [
         r.id,
         r.borrower,
@@ -255,73 +226,65 @@ const Loan = () => {
     const base = "px-2 py-1 rounded text-xs font-semibold";
     switch (status) {
       case "pending":
-        return `${base} bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300`;
+        return `${base} bg-yellow-100 text-yellow-800`;
       case "approved":
-        return `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300`;
+        return `${base} bg-emerald-100 text-emerald-800`;
       case "rejected":
-        return `${base} bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300`;
+        return `${base} bg-rose-100 text-rose-800`;
       case "disbursed":
       case "active":
-        return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300`;
+        return `${base} bg-blue-100 text-blue-800`;
       case "closed":
-        return `${base} bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300`;
+        return `${base} bg-gray-100 text-gray-900`;
       default:
-        return `${base} bg-gray-200 text-gray-600 dark:bg-gray-800/60 dark:text-gray-300`;
+        return `${base} bg-gray-200 text-gray-900`;
     }
   };
 
   /* ---------------- render ---------------- */
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 text-black dark:text-white">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl md:text-3xl font-bold tracking-tight">All Loans</h2>
-        <Link className="text-indigo-600 hover:underline text-sm" to="/loans/applications">
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">All Loans</h2>
+        <Link className="text-black font-semibold underline" to="/loans/applications">
           New Application
         </Link>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div className="card p-4">
-          <p className="text-xs muted">Total</p>
-          <p className="text-lg font-semibold">{kpis.total}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs muted">Principal</p>
-          <p className="text-lg font-semibold">{currency(kpis.totalPrincipal)}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs muted">Pending</p>
-          <p className="text-lg font-semibold">{kpis.pending}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs muted">Approved</p>
-          <p className="text-lg font-semibold">{kpis.approved}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs muted">Disbursed</p>
-          <p className="text-lg font-semibold">{kpis.disbursed}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs muted">Active</p>
-          <p className="text-lg font-semibold">{kpis.active}</p>
-        </div>
+        {[
+          { label: "Total", value: kpis.total },
+          { label: "Principal", value: currency(kpis.totalPrincipal) },
+          { label: "Pending", value: kpis.pending },
+          { label: "Approved", value: kpis.approved },
+          { label: "Disbursed", value: kpis.disbursed },
+          { label: "Active", value: kpis.active },
+        ].map((k, i) => (
+          <div
+            key={i}
+            className="card p-4 ring-2 ring-black/10 border-2 border-black/20 text-black dark:text-white"
+          >
+            <p className="text-xs"> {k.label} </p>
+            <p className="text-lg font-bold">{k.value}</p>
+          </div>
+        ))}
       </div>
 
       {/* Filters & Export */}
-      <div className="card p-4 grid grid-cols-1 md:grid-cols-6 gap-3">
+      <div className="card p-4 grid grid-cols-1 md:grid-cols-6 gap-3 ring-2 ring-black/10 border-2 border-black/20 text-black dark:text-white">
         <input
           type="text"
           placeholder="Search borrower or loan ID…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="input md:col-span-2"
+          className="input md:col-span-2 text-black"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="input"
+          className="input text-black"
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
@@ -334,7 +297,7 @@ const Loan = () => {
         <select
           value={branchFilter}
           onChange={(e) => setBranchFilter(e.target.value)}
-          className="input"
+          className="input text-black"
         >
           <option value="">All Branches</option>
           {branches.map((b) => (
@@ -346,7 +309,7 @@ const Loan = () => {
         <select
           value={productFilter}
           onChange={(e) => setProductFilter(e.target.value)}
-          className="input"
+          className="input text-black"
         >
           <option value="">All Products</option>
           {products.map((p) => (
@@ -355,45 +318,32 @@ const Loan = () => {
             </option>
           ))}
         </select>
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          className="input"
-        />
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          className="input"
-        />
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input text-black" />
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input text-black" />
         <div className="md:col-span-6 flex justify-end gap-2">
           <CSVLink
             data={exportRows}
             headers={exportHeaders}
             filename="loans.csv"
-            className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+            className="px-4 py-2 rounded bg-black text-white hover:opacity-90"
           >
             Export CSV
           </CSVLink>
-          <button
-            onClick={exportPDF}
-            className="px-4 py-2 rounded bg-rose-600 text-white hover:bg-rose-700"
-          >
+          <button onClick={exportPDF} className="px-4 py-2 rounded bg-black text-white hover:opacity-90">
             Export PDF
           </button>
         </div>
       </div>
 
       {/* Table */}
-      <div className="card overflow-x-auto">
+      <div className="card overflow-x-auto ring-2 ring-black/10 border-2 border-black/20">
         {loading ? (
-          <p className="p-4 muted">Loading loans…</p>
+          <p className="p-4">Loading loans…</p>
         ) : filteredLoans.length === 0 ? (
-          <p className="p-4 muted">No loans found.</p>
+          <p className="p-4">No loans found.</p>
         ) : (
-          <table className="min-w-full text-sm border border-slate-200 dark:border-slate-800">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 text-[var(--fg)]">
+          <table className="min-w-full text-sm border-2 border-black/30">
+            <thead className="bg-white text-black">
               <tr>
                 {[
                   "ID",
@@ -407,10 +357,7 @@ const Loan = () => {
                   "Status",
                   "Actions",
                 ].map((h) => (
-                  <th
-                    key={h}
-                    className="p-2 border-b border-l border-slate-200 dark:border-slate-800 text-left first:border-l-0"
-                  >
+                  <th key={h} className="p-2 border-2 border-black/30 text-left">
                     {h}
                   </th>
                 ))}
@@ -420,89 +367,46 @@ const Loan = () => {
               {filteredLoans.map((l) => {
                 const status = l.status || l.loanStatus;
                 const borrowerName =
-                  l.Borrower?.name ||
-                  l.borrowerName ||
-                  l.borrower_name ||
-                  l.borrower?.name ||
-                  "N/A";
-                const productName =
-                  productsById[String(l.productId)]?.name || "—";
+                  l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "N/A";
+                const productName = productsById[String(l.productId)]?.name || "—";
                 const amount = currency(l.amount ?? l.principal);
                 const rate = pct2(l.interestRate ?? l.rate);
                 const term = l.termMonths ?? l.durationMonths ?? l.term_months ?? "—";
                 const branchName = l.branch?.name || "—";
-                const start =
-                  fmtDate(
-                    l.startDate ||
-                      l.disbursementDate ||
-                      l.releaseDate ||
-                      l.createdAt ||
-                      l.created_at
-                  );
+                const start = fmtDate(
+                  l.startDate || l.disbursementDate || l.releaseDate || l.createdAt || l.created_at
+                );
 
                 return (
-                  <tr
-                    key={l.id}
-                    className="hover:bg-gray-50 dark:hover:bg-slate-800"
-                  >
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
-                      {l.id}
-                    </td>
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
-                      {borrowerName}
-                    </td>
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
-                      {productName}
-                    </td>
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
-                      {amount}
-                    </td>
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
-                      {rate}
-                    </td>
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
-                      {term}
-                    </td>
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
-                      {branchName}
-                    </td>
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
-                      {start}
-                    </td>
-                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                  <tr key={l.id} className="hover:bg-gray-50">
+                    <td className="px-2 py-2 border-2 border-black/20">{l.id}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{borrowerName}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{productName}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{amount}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{rate}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{term}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{branchName}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{start}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">
                       <span className={statusBadge(status)}>{status}</span>
                     </td>
-                    <td className="px-2 py-2 border-t border-l border-r border-slate-200 dark:border-slate-800">
-                      <div className="space-x-2">
-                        <button
-                          onClick={() => navigate(`/loans/${l.id}`)}
-                          className="text-indigo-600 hover:underline"
-                        >
+                    <td className="px-2 py-2 border-2 border-black/20">
+                      <div className="space-x-3">
+                        <button onClick={() => navigate(`/loans/${l.id}`)} className="text-black underline">
                           View
                         </button>
                         {(status || "").toLowerCase() === "pending" && (
                           <>
-                            <button
-                              onClick={() => handleStatusUpdate(l.id, "approve")}
-                              className="text-emerald-600 hover:underline"
-                            >
+                            <button onClick={() => handleStatusUpdate(l.id, "approve")} className="text-black underline">
                               Approve
                             </button>
-                            <button
-                              onClick={() => handleStatusUpdate(l.id, "reject")}
-                              className="text-rose-600 hover:underline"
-                            >
+                            <button onClick={() => handleStatusUpdate(l.id, "reject")} className="text-black underline">
                               Reject
                             </button>
                           </>
                         )}
                         {(status || "").toLowerCase() === "approved" && (
-                          <button
-                            onClick={() =>
-                              handleStatusUpdate(l.id, "disburse")
-                            }
-                            className="text-indigo-600 hover:underline"
-                          >
+                          <button onClick={() => handleStatusUpdate(l.id, "disburse")} className="text-black underline">
                             Disburse
                           </button>
                         )}
