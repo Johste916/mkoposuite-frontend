@@ -38,6 +38,7 @@ const unformatMoney = (v) => (v ?? "").toString().replace(/[^\d.]/g, "");
 const formatMoney = (v) => {
   const s = unformatMoney(v);
   if (!s) return "";
+  // keep only one dot (if any); we mostly expect integers, but this is tolerant.
   const [int, dec] = s.split(".");
   const withCommas = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return dec ? `${withCommas}.${dec.slice(0, 2)}` : withCommas;
@@ -146,7 +147,7 @@ export default function LoanApplications() {
   });
 
   // files store; key -> File
-  the filesRef = useRef({}); // {fileKey: File}
+  const filesRef = useRef({}); // {fileKey: File}
 
   /* ----------- fetch dropdowns ----------- */
   useEffect(() => {
@@ -254,16 +255,16 @@ export default function LoanApplications() {
     }));
   const removeFee = (idx) => setForm((f) => ({ ...f, fees: f.fees.filter((_, i) => i !== idx) }));
 
-  /* ----------- guarantors ----------- */
+  /* ----------- guarantors handlers ----------- */
   const addGuarantor = () =>
     setForm((f) => ({
       ...f,
       guarantors: [
         ...f.guarantors,
         {
-          type: "existing",
-          borrowerId: "",
-          name: "",
+          type: "existing",       // "existing" (select borrower) or "manual"
+          borrowerId: "",         // used when type === "existing"
+          name: "",               // used when type === "manual"
           occupation: "",
           residence: "",
           contacts: "",
@@ -778,9 +779,7 @@ export default function LoanApplications() {
                       <select
                         className={clsInput}
                         value={g.type}
-                        onChange={(e) =>
-                          updateGuarantor(i, { type: e.target.value })
-                        }
+                        onChange={(e) => updateGuarantor(i, { type: e.target.value })}
                       >
                         <option value="existing">Select from borrowers</option>
                         <option value="manual">Enter manually</option>
