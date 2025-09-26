@@ -243,7 +243,15 @@ export default function LoanApplications() {
   const updateFee = (idx, patch) =>
     setForm((f) => ({
       ...f,
-      fees: f.fees.map((x, i) => (i === idx ? { ...x, ...patch, amount: patch.amount !== undefined ? formatMoney(patch.amount) : x.amount })),
+      fees: f.fees.map((x, i) =>
+        i === idx
+          ? {
+              ...x,
+              ...patch,
+              ...(patch.amount !== undefined ? { amount: formatMoney(patch.amount) } : {}),
+            }
+          : x
+      ),
     }));
   const removeFee = (idx) => setForm((f) => ({ ...f, fees: f.fees.filter((_, i) => i !== idx) }));
 
