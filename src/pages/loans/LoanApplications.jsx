@@ -38,7 +38,6 @@ const unformatMoney = (v) => (v ?? "").toString().replace(/[^\d.]/g, "");
 const formatMoney = (v) => {
   const s = unformatMoney(v);
   if (!s) return "";
-  // keep only one dot (if any); we mostly expect integers, but this is tolerant.
   const [int, dec] = s.split(".");
   const withCommas = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return dec ? `${withCommas}.${dec.slice(0, 2)}` : withCommas;
@@ -147,7 +146,7 @@ export default function LoanApplications() {
   });
 
   // files store; key -> File
-  const filesRef = useRef({}); // {fileKey: File}
+  the filesRef = useRef({}); // {fileKey: File}
 
   /* ----------- fetch dropdowns ----------- */
   useEffect(() => {
@@ -254,6 +253,33 @@ export default function LoanApplications() {
       ),
     }));
   const removeFee = (idx) => setForm((f) => ({ ...f, fees: f.fees.filter((_, i) => i !== idx) }));
+
+  /* ----------- guarantors ----------- */
+  const addGuarantor = () =>
+    setForm((f) => ({
+      ...f,
+      guarantors: [
+        ...f.guarantors,
+        {
+          type: "existing",
+          borrowerId: "",
+          name: "",
+          occupation: "",
+          residence: "",
+          contacts: "",
+          verification: "",
+        },
+      ],
+    }));
+
+  const updateGuarantor = (idx, patch) =>
+    setForm((f) => ({
+      ...f,
+      guarantors: f.guarantors.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
+    }));
+
+  const removeGuarantor = (idx) =>
+    setForm((f) => ({ ...f, guarantors: f.guarantors.filter((_, i) => i !== idx) }));
 
   /* ----------- submit ----------- */
   const onSubmit = async (e) => {
@@ -752,10 +778,9 @@ export default function LoanApplications() {
                       <select
                         className={clsInput}
                         value={g.type}
-                        onChange={(e) => setForm((f) => ({
-                          ...f,
-                          guarantors: f.guarantors.map((gg, idx) => idx === i ? { ...gg, type: e.target.value } : gg),
-                        }))}
+                        onChange={(e) =>
+                          updateGuarantor(i, { type: e.target.value })
+                        }
                       >
                         <option value="existing">Select from borrowers</option>
                         <option value="manual">Enter manually</option>
@@ -768,14 +793,7 @@ export default function LoanApplications() {
                         <select
                           className={clsInput}
                           value={g.borrowerId || ""}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              guarantors: f.guarantors.map((gg, idx) =>
-                                idx === i ? { ...gg, borrowerId: e.target.value } : gg
-                              ),
-                            }))
-                          }
+                          onChange={(e) => updateGuarantor(i, { borrowerId: e.target.value })}
                         >
                           <option value="">Select borrower…</option>
                           {borrowerList.map((b) => (
@@ -791,9 +809,7 @@ export default function LoanApplications() {
                           className={clsInput}
                           placeholder="Full name"
                           value={g.name}
-                          onChange={(e) =>
-                            updateGuarantor(i, { name: e.target.value })
-                          }
+                          onChange={(e) => updateGuarantor(i, { name: e.target.value })}
                         />
                         <input
                           className={clsInput}
