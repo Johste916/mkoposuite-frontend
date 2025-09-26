@@ -9,18 +9,21 @@ import {
 /* ---------------- helpers ---------------- */
 const today = () => new Date().toLocaleDateString("en-CA"); // local YYYY-MM-DD
 const clsInput = "input";
-const card =
-  "bg-white dark:bg-slate-900/40 rounded-2xl shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 border border-slate-200 dark:border-slate-800 p-5 md:p-7";
+
+/* Stronger, high-contrast borders & dividers */
+const strongBorder = "border-2 border-black/20 dark:border-white/30";
+const strongRing = "ring-2 ring-black/10 dark:ring-white/20";
+const strongDivide = "divide-y-2 divide-black/10 dark:divide-white/20";
+
+/* Card shell with stronger borders */
+const card = `bg-white dark:bg-slate-900/40 rounded-2xl shadow-sm ${strongRing} ${strongBorder} p-5 md:p-7`;
 
 /* Table-like row container for lists */
-const rowShell =
-  "grid items-center gap-3 p-3 md:p-4";
-const listShell =
-  "rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800";
+const rowShell = "grid items-center gap-3 p-3 md:p-4";
+const listShell = `rounded-xl overflow-hidden ${strongBorder}`;
 const listHead =
   "bg-slate-50/80 dark:bg-slate-800/60 text-xs font-medium text-slate-700 dark:text-slate-200 grid gap-3 p-3 md:p-3.5";
-const listBody =
-  "divide-y divide-slate-200 dark:divide-slate-800";
+const listBody = `${strongDivide}`;
 
 /* normalize any backend list shape to an array */
 const toArray = (data) =>
@@ -382,7 +385,7 @@ export default function LoanApplications() {
       <form onSubmit={onSubmit} className="max-w-6xl mx-auto space-y-5 md:space-y-6">
         {/* 1) Borrower & Product */}
         <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <Wallet className="h-5 w-5 text-indigo-600" />
             <h2 className="font-semibold text-lg">1) Borrower & Product</h2>
           </div>
@@ -406,7 +409,7 @@ export default function LoanApplications() {
                 <Link
                   target="_blank"
                   to="/borrowers/add"
-                  className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 inline-flex items-center gap-2"
+                  className={`px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 inline-flex items-center gap-2 ${strongBorder}`}
                 >
                   <PlusCircle className="h-4 w-4" /> Add
                 </Link>
@@ -448,7 +451,7 @@ export default function LoanApplications() {
 
         {/* 2) Loan Terms */}
         <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <Building2 className="h-5 w-5 text-indigo-600" />
             <h2 className="font-semibold text-lg">2) Loan Terms</h2>
           </div>
@@ -486,7 +489,7 @@ export default function LoanApplications() {
 
         {/* 3) Interest */}
         <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <Landmark className="h-5 w-5 text-indigo-600" />
             <h2 className="font-semibold text-lg">3) Interest</h2>
           </div>
@@ -510,7 +513,7 @@ export default function LoanApplications() {
 
         {/* 4) Repayments */}
         <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <Calendar className="h-5 w-5 text-indigo-600" />
             <h2 className="font-semibold text-lg">4) Repayments</h2>
           </div>
@@ -537,12 +540,16 @@ export default function LoanApplications() {
 
         {/* 5) Fees */}
         <section className={card}>
-          <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <div className="flex items-center gap-2">
               <FileUp className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">5) Loan Fees</h2>
             </div>
-            <button type="button" onClick={addFee} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800">
+            <button
+              type="button"
+              onClick={addFee}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}
+            >
               <PlusCircle className="h-4 w-4" /> Add Fee
             </button>
           </div>
@@ -552,7 +559,7 @@ export default function LoanApplications() {
           ) : (
             <div className={listShell}>
               {/* head */}
-              <div className={`${listHead} grid-cols-[2fr_1fr_1fr_40px]`}>
+              <div className={`${listHead} grid-cols-[2fr_1fr_1fr_40px] ${strongBorder}`}>
                 <div>Fee Name</div>
                 <div>Amount</div>
                 <div>Status</div>
@@ -602,12 +609,16 @@ export default function LoanApplications() {
 
         {/* 6) Guarantors */}
         <section className={card}>
-          <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">6) Guarantors</h2>
             </div>
-            <button type="button" onClick={addGuarantor} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800">
+            <button
+              type="button"
+              onClick={addGuarantor}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}
+            >
               <PlusCircle className="h-4 w-4" /> Add Guarantor
             </button>
           </div>
@@ -617,7 +628,7 @@ export default function LoanApplications() {
           ) : (
             <div className="space-y-4">
               {form.guarantors.map((g, i) => (
-                <div key={i} className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 md:p-4 space-y-3">
+                <div key={i} className={`rounded-xl p-3 md:p-4 space-y-3 ${strongBorder}`}>
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-medium">Guarantor #{i + 1}</div>
                     <button
@@ -702,7 +713,7 @@ export default function LoanApplications() {
 
         {/* 7) Attachments */}
         <section className={card}>
-          <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <div className="flex items-center gap-2">
               <Upload className="h-5 w-5 text-indigo-600" />
               <h2 className="font-semibold text-lg">7) Attachments</h2>
@@ -727,7 +738,7 @@ export default function LoanApplications() {
                   key={lbl}
                   type="button"
                   onClick={() => addAttachment(lbl)}
-                  className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800"
+                  className={`text-xs px-2 py-1 rounded hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}
                 >
                   + {lbl.replace(/Borrower: |Guarantor: |Spouse: /g, "")}
                 </button>
@@ -740,7 +751,7 @@ export default function LoanApplications() {
           ) : (
             <div className={listShell}>
               {/* head */}
-              <div className={`${listHead} grid-cols-[2fr_1fr_40px]`}>
+              <div className={`${listHead} grid-cols-[2fr_1fr_40px] ${strongBorder}`}>
                 <div>Type & Note</div>
                 <div>File</div>
                 <div className="text-right pr-1">—</div>
@@ -786,7 +797,7 @@ export default function LoanApplications() {
 
         {/* 8) Disbursement */}
         <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <Wallet className="h-5 w-5 text-indigo-600" />
             <h2 className="font-semibold text-lg">8) Disbursement</h2>
           </div>
@@ -827,10 +838,10 @@ export default function LoanApplications() {
                     <option value="">Select bank…</option>
                     {banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
-                  <Link to="/banks/add" target="_blank" className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 inline-flex items-center gap-2">
+                  <Link to="/banks/add" target="_blank" className={`px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 inline-flex items-center gap-2 ${strongBorder}`}>
                     <PlusCircle className="h-4 w-4" /> Add
                   </Link>
-                  <Link to="/banks" target="_blank" className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800">
+                  <Link to="/banks" target="_blank" className={`px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}>
                     Manage
                   </Link>
                 </div>
@@ -880,7 +891,7 @@ export default function LoanApplications() {
 
         {/* 9) Marital status & Spouse */}
         <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
             <User className="h-5 w-5 text-indigo-600" />
             <h2 className="font-semibold text-lg">9) Marital Status & Spouse</h2>
           </div>
@@ -899,13 +910,13 @@ export default function LoanApplications() {
                 <input className={clsInput} placeholder="Spouse ID Number" value={form.spouseIdNumber} onChange={(e) => setForm({ ...form, spouseIdNumber: e.target.value })} />
                 <input className={clsInput} placeholder="Spouse Phone" value={form.spousePhone} onChange={(e) => setForm({ ...form, spousePhone: e.target.value })} />
 
-                <div className="md:col-span-2 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
+                <div className={`md:col-span-2 rounded-xl p-3 ${strongBorder}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm font-medium">Spouse Consent Declaration (signed)</div>
                     <button
                       type="button"
                       onClick={ensureSpouseConsentAttachment}
-                      className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800"
+                      className={`text-xs px-2 py-1 rounded hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}
                     >
                       + Add consent upload
                     </button>
@@ -956,9 +967,9 @@ export default function LoanApplications() {
         </section>
 
         {/* sticky bottom actions */}
-        <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-t border-slate-200 dark:border-slate-800">
+        <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 dark:bg-slate-900/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-t-2 border-black/20 dark:border-white/30">
           <div className="max-w-6xl mx-auto px-4 py-3 flex justify-end gap-3">
-            <Link to="/loans" className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800">
+            <Link to="/loans" className={`px-4 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 ${strongBorder}`}>
               Cancel
             </Link>
             <button disabled={submitting} type="submit" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm">
