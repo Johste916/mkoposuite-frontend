@@ -38,10 +38,29 @@ const unformatMoney = (v) => (v ?? "").toString().replace(/[^\d.]/g, "");
 const formatMoney = (v) => {
   const s = unformatMoney(v);
   if (!s) return "";
-  // keep only one dot (if any); we mostly expect integers, but this is tolerant.
   const [int, dec] = s.split(".");
   const withCommas = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return dec ? `${withCommas}.${dec.slice(0, 2)}` : withCommas;
+};
+const currency = (n) =>
+  new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number(n || 0));
+
+/* try many possible shapes for principal bounds coming from products */
+const getPrincipalBounds = (p = {}) => {
+  const pick = (...keys) => keys.map((k) => k.split(".").reduce((o, kk) => (o ? o[kk] : undefined), p)).find((v) => v != null);
+  const min =
+    pick("minPrincipal", "minimumPrincipal", "minAmount", "minimumAmount", "rules.principal.min", "limits.principal.min") ??
+    pick("principalMin", "amountMin", "rules.amount.min");
+  const max =
+    pick("maxPrincipal", "maximumPrincipal", "maxAmount", "maximumAmount", "rules.principal.max", "limits.principal.max") ??
+    pick("principalMax", "amountMax", "rules.amount.max");
+  const toNum = (v) => (v == null || v === "" ? null : Number(v));
+  const minN = toNum(min);
+  const maxN = toNum(max);
+  return {
+    min: Number.isFinite(minN) ? minN : null,
+    max: Number.isFinite(maxN) ? maxN : null,
+  };
 };
 
 const INTEREST_METHODS = [
@@ -245,11 +264,7 @@ export default function LoanApplications() {
       ...f,
       fees: f.fees.map((x, i) =>
         i === idx
-          ? {
-              ...x,
-              ...patch,
-              ...(patch.amount !== undefined ? { amount: formatMoney(patch.amount) } : {}),
-            }
+          ? { ...x, ...patch, ...(patch.amount !== undefined ? { amount: formatMoney(patch.amount) } : {}) }
           : x
       ),
     }));
@@ -262,9 +277,9 @@ export default function LoanApplications() {
       guarantors: [
         ...f.guarantors,
         {
-          type: "existing",       // "existing" (select borrower) or "manual"
-          borrowerId: "",         // used when type === "existing"
-          name: "",               // used when type === "manual"
+          type: "existing",
+          borrowerId: "",
+          name: "",
           occupation: "",
           residence: "",
           contacts: "",
@@ -272,23 +287,50 @@ export default function LoanApplications() {
         },
       ],
     }));
-
   const updateGuarantor = (idx, patch) =>
-    setForm((f) => ({
-      ...f,
-      guarantors: f.guarantors.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
-    }));
-
+    setForm((f) => ({ ...f, guarantors: f.guarantors.map((g, i) => (i === idx ? { ...g, ...patch } : g)) }));
   const removeGuarantor = (idx) =>
     setForm((f) => ({ ...f, guarantors: f.guarantors.filter((_, i) => i !== idx) }));
+
+  /* ----------- selected product + bounds ----------- */
+  const selectedProduct = useMemo(
+    () => productList.find((p) => String(p.id) === String(form.productId)),
+    [productList, form.productId]
+  );
+  const principalBounds = useMemo(() => getPrincipalBounds(selectedProduct), [selectedProduct]);
+
+  // When product changes: auto-pick interest method & rate.
+  const onSelectProduct = (id) => {
+    const prod = productList.find((p) => String(p.id) === String(id));
+    setForm((prev) => ({
+      ...prev,
+      productId: id,
+      interestMethod: prod?.interestMethod || prev.interestMethod,
+      interestRate: prod?.interestRate ?? "",
+    }));
+  };
+
+  const ensureSpouseConsentAttachment = () => {
+    const idx = findSpouseConsentMetaIndex();
+    if (idx === -1) addAttachment("Spouse: Consent declaration");
+  };
 
   /* ----------- submit ----------- */
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!form.borrowerId) return alert("Select a borrower");
     if (!form.productId) return alert("Select a loan product");
-    if (!unformatMoney(form.principal) || Number(unformatMoney(form.principal)) <= 0)
-      return alert("Enter a principal amount");
+
+    const principalNum = Number(unformatMoney(form.principal));
+    if (!principalNum || principalNum <= 0) return alert("Enter a principal amount");
+    // NEW: principal bounds validation
+    if (principalBounds.min != null && principalNum < principalBounds.min) {
+      return alert(`Principal below minimum (min TZS ${currency(principalBounds.min)}).`);
+    }
+    if (principalBounds.max != null && principalNum > principalBounds.max) {
+      return alert(`Principal above maximum (max TZS ${currency(principalBounds.max)}).`);
+    }
+
     if (!form.durationMonths) return alert("Enter loan duration (months)");
 
     if (form.collateralType === "Other" && !form.collateralOther.trim()) {
@@ -394,27 +436,6 @@ export default function LoanApplications() {
     }
   };
 
-  const selectedProduct = useMemo(
-    () => productList.find((p) => String(p.id) === String(form.productId)),
-    [productList, form.productId]
-  );
-
-  // When product changes: auto-pick interest method & rate; make rate readOnly if provided by product.
-  const onSelectProduct = (id) => {
-    const prod = productList.find((p) => String(p.id) === String(id));
-    setForm((prev) => ({
-      ...prev,
-      productId: id,
-      interestMethod: prod?.interestMethod || prev.interestMethod,
-      interestRate: prod?.interestRate ?? "", // auto-pick; blank if none
-    }));
-  };
-
-  const ensureSpouseConsentAttachment = () => {
-    const idx = findSpouseConsentMetaIndex();
-    if (idx === -1) addAttachment("Spouse: Consent declaration");
-  };
-
   return (
     <div className="p-4 md:p-6 lg:p-8 text-black dark:text-white">
       {/* header */}
@@ -474,8 +495,7 @@ export default function LoanApplications() {
                 <option value="">Select product…</option>
                 {productList.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.code ? ` (${p.code})` : ""}
+                    {p.name}{p.code ? ` (${p.code})` : ""}
                   </option>
                 ))}
               </select>
@@ -506,6 +526,14 @@ export default function LoanApplications() {
                 placeholder="e.g. 1,000,000"
                 required
               />
+              {/* Bounds hint */}
+              {selectedProduct && (principalBounds.min != null || principalBounds.max != null) && (
+                <p className="text-[11px] mt-1">
+                  {principalBounds.min != null && <>Min: TZS {currency(principalBounds.min)}</>}
+                  {principalBounds.min != null && principalBounds.max != null && " • "}
+                  {principalBounds.max != null && <>Max: TZS {currency(principalBounds.max)}</>}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs font-semibold flex items-center gap-1">
@@ -528,9 +556,7 @@ export default function LoanApplications() {
               >
                 <option value="">Select…</option>
                 {COLLATERAL_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
+                  <option key={t} value={t}>{t}</option>
                 ))}
               </select>
               {form.collateralType === "Other" && (
@@ -585,9 +611,7 @@ export default function LoanApplications() {
                 onChange={(e) => setForm({ ...form, interestMethod: e.target.value })}
               >
                 {INTEREST_METHODS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
+                  <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>
             </div>
@@ -636,9 +660,7 @@ export default function LoanApplications() {
                 onChange={(e) => setForm({ ...form, repaymentCycle: e.target.value })}
               >
                 {REPAYMENT_CYCLES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
+                  <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </select>
             </div>
@@ -660,9 +682,7 @@ export default function LoanApplications() {
                 onChange={(e) => setForm({ ...form, statusLabel: e.target.value })}
               >
                 {STATUS_LABELS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
               <p className="text-[11px] mt-1">DB status stays “pending” on create.</p>
@@ -690,14 +710,12 @@ export default function LoanApplications() {
             <p className="text-sm">No fees added.</p>
           ) : (
             <div className={listShell}>
-              {/* head */}
               <div className={`${listHead} grid-cols-[2fr_1fr_1fr_40px] ${strongBorder}`}>
                 <div>Fee Name</div>
                 <div>Amount</div>
                 <div>Status</div>
                 <div className="text-right pr-1">—</div>
               </div>
-              {/* body */}
               <div className={listBody}>
                 {form.fees.map((fee, i) => (
                   <div key={i} className={`${rowShell} grid-cols-[2fr_1fr_1fr_40px]`}>
@@ -723,12 +741,7 @@ export default function LoanApplications() {
                       <option value="paid">Paid</option>
                       <option value="not_paid">Not paid</option>
                     </select>
-                    <button
-                      type="button"
-                      onClick={() => removeFee(i)}
-                      className="p-2 rounded hover:bg-gray-50"
-                      aria-label="Remove fee"
-                    >
+                    <button type="button" onClick={() => removeFee(i)} className="p-2 rounded hover:bg-gray-50" aria-label="Remove fee">
                       <X className="h-4 w-4" />
                     </button>
                   </div>
@@ -763,12 +776,7 @@ export default function LoanApplications() {
                 <div key={i} className={`rounded-xl p-3 md:p-4 space-y-3 ${strongBorder}`}>
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-bold">Guarantor #{i + 1}</div>
-                    <button
-                      type="button"
-                      onClick={() => removeGuarantor(i)}
-                      className="p-1 rounded hover:bg-gray-50"
-                      aria-label="Remove guarantor"
-                    >
+                    <button type="button" onClick={() => removeGuarantor(i)} className="p-1 rounded hover:bg-gray-50" aria-label="Remove guarantor">
                       <X className="h-4 w-4" />
                     </button>
                   </div>
@@ -776,11 +784,7 @@ export default function LoanApplications() {
                   <div className="grid gap-3">
                     <div>
                       <label className="text-xs font-semibold">Source</label>
-                      <select
-                        className={clsInput}
-                        value={g.type}
-                        onChange={(e) => updateGuarantor(i, { type: e.target.value })}
-                      >
+                      <select className={clsInput} value={g.type} onChange={(e) => updateGuarantor(i, { type: e.target.value })}>
                         <option value="existing">Select from borrowers</option>
                         <option value="manual">Enter manually</option>
                       </select>
@@ -804,36 +808,11 @@ export default function LoanApplications() {
                       </div>
                     ) : (
                       <div className="grid md:grid-cols-2 gap-3">
-                        <input
-                          className={clsInput}
-                          placeholder="Full name"
-                          value={g.name}
-                          onChange={(e) => updateGuarantor(i, { name: e.target.value })}
-                        />
-                        <input
-                          className={clsInput}
-                          placeholder="Occupation"
-                          value={g.occupation}
-                          onChange={(e) => updateGuarantor(i, { occupation: e.target.value })}
-                        />
-                        <input
-                          className={clsInput}
-                          placeholder="Residence"
-                          value={g.residence}
-                          onChange={(e) => updateGuarantor(i, { residence: e.target.value })}
-                        />
-                        <input
-                          className={clsInput}
-                          placeholder="Contacts"
-                          value={g.contacts}
-                          onChange={(e) => updateGuarantor(i, { contacts: e.target.value })}
-                        />
-                        <input
-                          className={clsInput}
-                          placeholder="Verification (ID #, etc.)"
-                          value={g.verification}
-                          onChange={(e) => updateGuarantor(i, { verification: e.target.value })}
-                        />
+                        <input className={clsInput} placeholder="Full name" value={g.name} onChange={(e) => updateGuarantor(i, { name: e.target.value })} />
+                        <input className={clsInput} placeholder="Occupation" value={g.occupation} onChange={(e) => updateGuarantor(i, { occupation: e.target.value })} />
+                        <input className={clsInput} placeholder="Residence" value={g.residence} onChange={(e) => updateGuarantor(i, { residence: e.target.value })} />
+                        <input className={clsInput} placeholder="Contacts" value={g.contacts} onChange={(e) => updateGuarantor(i, { contacts: e.target.value })} />
+                        <input className={clsInput} placeholder="Verification (ID #, etc.)" value={g.verification} onChange={(e) => updateGuarantor(i, { verification: e.target.value })} />
                       </div>
                     )}
                   </div>
@@ -882,13 +861,11 @@ export default function LoanApplications() {
             <p className="text-sm">No files attached.</p>
           ) : (
             <div className={listShell}>
-              {/* head */}
               <div className={`${listHead} grid-cols-[2fr_1fr_40px] ${strongBorder}`}>
                 <div>Type & Note</div>
                 <div>File</div>
                 <div className="text-right pr-1">—</div>
               </div>
-              {/* body */}
               <div className={listBody}>
                 {form.attachmentsMeta.map((a, i) => (
                   <div key={a.fileKey} className={`${rowShell} grid-cols-[2fr_1fr_40px]`}>
@@ -925,12 +902,7 @@ export default function LoanApplications() {
                       className={clsInput}
                       onChange={(e) => setFile(a.fileKey, e.target.files?.[0])}
                     />
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(i)}
-                      className="p-2 rounded hover:bg-gray-50"
-                      aria-label="Remove attachment"
-                    >
+                    <button type="button" onClick={() => removeAttachment(i)} className="p-2 rounded hover:bg-gray-50" aria-label="Remove attachment">
                       <X className="h-4 w-4" />
                     </button>
                   </div>
@@ -968,9 +940,7 @@ export default function LoanApplications() {
                 }}
               >
                 {DISBURSE_METHODS.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
+                  <option key={d.value} value={d.value}>{d.label}</option>
                 ))}
               </select>
             </div>
@@ -996,9 +966,7 @@ export default function LoanApplications() {
                   >
                     <option value="">Select bank…</option>
                     {banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
+                      <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
                   <Link
@@ -1008,18 +976,12 @@ export default function LoanApplications() {
                   >
                     <PlusCircle className="h-4 w-4" /> Add
                   </Link>
-                  <Link
-                    to="/banks"
-                    target="_blank"
-                    className={`px-3 py-2 rounded-lg hover:bg-gray-50 ${strongBorder}`}
-                  >
+                  <Link to="/banks" target="_blank" className={`px-3 py-2 rounded-lg hover:bg-gray-50 ${strongBorder}`}>
                     Manage
                   </Link>
                 </div>
                 {banks.length === 0 && (
-                  <p className="text-[11px] mt-1">
-                    No banks found. Use “Add” to register banks; this list is tenant-scoped via your API.
-                  </p>
+                  <p className="text-[11px] mt-1">No banks found. Use “Add” to register banks; this list is tenant-scoped via your API.</p>
                 )}
               </div>
             )}
@@ -1035,9 +997,7 @@ export default function LoanApplications() {
                   >
                     <option value="">Select provider…</option>
                     {MOBILE_PROVIDERS.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
+                      <option key={p.value} value={p.value}>{p.label}</option>
                     ))}
                   </select>
                   {form.mobileProvider === "other" && (
@@ -1105,83 +1065,40 @@ export default function LoanApplications() {
                 onChange={(e) => setForm({ ...form, maritalStatus: e.target.value })}
               >
                 {MARITAL_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
             </div>
             <div className="hidden md:block" />
             {form.maritalStatus === "married" && (
               <>
-                <input
-                  className={clsInput}
-                  placeholder="Spouse Name"
-                  value={form.spouseName}
-                  onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
-                />
-                <input
-                  className={clsInput}
-                  placeholder="Spouse Occupation"
-                  value={form.spouseOccupation}
-                  onChange={(e) => setForm({ ...form, spouseOccupation: e.target.value })}
-                />
-                <input
-                  className={clsInput}
-                  placeholder="Spouse ID Number"
-                  value={form.spouseIdNumber}
-                  onChange={(e) => setForm({ ...form, spouseIdNumber: e.target.value })}
-                />
-                <input
-                  className={clsInput}
-                  placeholder="Spouse Phone"
-                  value={form.spousePhone}
-                  onChange={(e) => setForm({ ...form, spousePhone: e.target.value })}
-                />
+                <input className={clsInput} placeholder="Spouse Name" value={form.spouseName} onChange={(e) => setForm({ ...form, spouseName: e.target.value })} />
+                <input className={clsInput} placeholder="Spouse Occupation" value={form.spouseOccupation} onChange={(e) => setForm({ ...form, spouseOccupation: e.target.value })} />
+                <input className={clsInput} placeholder="Spouse ID Number" value={form.spouseIdNumber} onChange={(e) => setForm({ ...form, spouseIdNumber: e.target.value })} />
+                <input className={clsInput} placeholder="Spouse Phone" value={form.spousePhone} onChange={(e) => setForm({ ...form, spousePhone: e.target.value })} />
 
                 <div className={`md:col-span-2 rounded-xl p-3 ${strongBorder}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm font-bold">Spouse Consent Declaration (signed)</div>
-                    <button
-                      type="button"
-                      onClick={ensureSpouseConsentAttachment}
-                      className={`text-xs px-2 py-1 rounded hover:bg-gray-50 ${strongBorder}`}
-                    >
+                    <button type="button" onClick={ensureSpouseConsentAttachment} className={`text-xs px-2 py-1 rounded hover:bg-gray-50 ${strongBorder}`}>
                       + Add consent upload
                     </button>
                   </div>
                   {(() => {
                     const idx = findSpouseConsentMetaIndex();
-                    if (idx === -1) {
-                      return <p className="text-xs">Click “Add consent upload” to attach the signed declaration.</p>;
-                    }
+                    if (idx === -1) return <p className="text-xs">Click “Add consent upload” to attach the signed declaration.</p>;
                     const meta = form.attachmentsMeta[idx];
                     return (
                       <div className={`${rowShell} grid-cols-[2fr_1fr_40px] p-0`}>
                         <div className="grid gap-2 p-3">
                           <input className={clsInput} value={meta.type} readOnly />
-                          <input
-                            className={clsInput}
-                            placeholder="Note (optional)"
-                            value={meta.note}
-                            onChange={(e) => updateAttachment(idx, { note: e.target.value })}
-                          />
+                          <input className={clsInput} placeholder="Note (optional)" value={meta.note} onChange={(e) => updateAttachment(idx, { note: e.target.value })} />
                         </div>
                         <div className="p-3">
-                          <input
-                            type="file"
-                            accept="application/pdf,image/*"
-                            className={clsInput}
-                            onChange={(e) => setFile(meta.fileKey, e.target.files?.[0])}
-                          />
+                          <input type="file" accept="application/pdf,image/*" className={clsInput} onChange={(e) => setFile(meta.fileKey, e.target.files?.[0])} />
                         </div>
                         <div className="p-3">
-                          <button
-                            type="button"
-                            onClick={() => removeAttachment(idx)}
-                            className="p-2 rounded hover:bg-gray-50"
-                            aria-label="Remove spouse consent"
-                          >
+                          <button type="button" onClick={() => removeAttachment(idx)} className="p-2 rounded hover:bg-gray-50" aria-label="Remove spouse consent">
                             <X className="h-4 w-4" />
                           </button>
                         </div>
