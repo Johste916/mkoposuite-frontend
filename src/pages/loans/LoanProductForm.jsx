@@ -1,38 +1,78 @@
-// src/pages/loans/LoanProducts.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  FiEdit2,
-  FiLoader,
-  FiPlus,
-  FiSearch,
-  FiTrash2,
-  FiToggleLeft,
-  FiToggleRight,
-} from "react-icons/fi";
+// src/pages/loans/LoanProductForm.jsx
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api";
 
-const PAGINATION_KEYS = { page: "page", limit: "limit", search: "q" };
-
-export default function LoanProducts() {
-  const navigate = useNavigate();
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const debRef = useRef(null);
-
-  const readErr = (e) => {
-    const d = e?.response?.data;
-    if (typeof d === "string") return d;
-    if (d?.message) return d.message;
-    if (d?.error) return d.error;
-    return e?.response?.statusText || e?.message || "Server error";
+/* ---------- Inputs ---------- */
+function MoneyInput({ name, value, onChange, placeholder = "0", ...rest }) {
+  const reformat = (raw) => {
+    const digits = String(raw ?? "").replace(/[^\d.-]/g, "");
+    if (digits === "" || digits === "-") return digits;
+    const n = Number(digits);
+    if (!Number.isFinite(n)) return digits;
+    return new Intl.NumberFormat().format(n);
   };
+  const handle = (e) => {
+    const formatted = reformat(e.target.value);
+    onChange({ target: { name, value: formatted } });
+  };
+  return (
+    <input
+      name={name}
+      value={value}
+      onChange={handle}
+      inputMode="numeric"
+      placeholder={placeholder}
+      className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
+      {...rest}
+    />
+  );
+}
+const parseMoney = (s) => {
+  if (s === "" || s == null) return null;
+  const n = Number(String(s).replace(/[,\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
+};
 
+/* ---------- Page ---------- */
+const LOWER_UNITS = ["days", "weeks", "months", "years"];
+const normUnit = (v) => {
+  const s = String(v || "").toLowerCase();
+  if (LOWER_UNITS.includes(s)) return s;
+  if (s === "day") return "days";
+  if (s === "week") return "weeks";
+  if (s === "month") return "months";
+  if (s === "year") return "years";
+  return "months";
+};
+
+export default function LoanProductForm() {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
+
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(isEdit);
+  const [err, setErr] = useState("");
+  const [debug, setDebug] = useState(null);
+
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    interestRate: "",
+    interestPeriod: "monthly",
+    term: "",
+    termUnit: "months",
+    principalMin: "",
+    principalMax: "",
+    // fees
+    feeType: "amount", // amount | percent
+    fees: "", // when feeType=amount
+    feePercent: "", // when feeType=percent
+    active: true,
+  });
+
+  /* ---------- utils ---------- */
   const headers = () => {
     const token =
       localStorage.getItem("token") ||
@@ -48,387 +88,514 @@ export default function LoanProducts() {
     tenantId = tenantId || localStorage.getItem("tenantId") || "";
     const branchId = localStorage.getItem("activeBranchId") || "";
 
-    const h = { Accept: "application/json" };
+    const h = { "Content-Type": "application/json", Accept: "application/json" };
     if (token) h.Authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     if (tenantId) h["x-tenant-id"] = tenantId;
     if (branchId) h["x-branch-id"] = String(branchId);
     return h;
   };
 
-  const currency = (n) => {
-    if (n == null || n === "") return "-";
-    const num = Number(n);
-    if (!Number.isFinite(num)) return String(n);
-    return new Intl.NumberFormat().format(num);
+  const readErr = (e) => {
+    const d = e?.response?.data;
+    if (typeof d === "string") return d;
+    if (d?.message) return d.message;
+    if (d?.error) return d.error;
+    return e?.response?.statusText || e?.message || "Server error";
   };
 
-  const pick = (...vals) => {
-    for (const v of vals) if (v !== undefined && v !== null && v !== "") return v;
-    return undefined;
+  const toNumber = (v) => {
+    if (v === "" || v == null) return null;
+    const n = Number(String(v).replace(/,/g, ""));
+    return Number.isFinite(n) ? n : null;
   };
 
-  const cap = (v) => {
-    if (v == null || v === "" || v === "-") return "-";
-    const s = String(v).toLowerCase();
-    return s.charAt(0).toUpperCase() + s.slice(1);
+  const onChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
   };
 
-  const to2 = (v) => {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return v ?? "-";
-    return n.toFixed(2);
-  };
+  /* ---------- read existing ---------- */
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      if (!isEdit) return;
+      try {
+        setLoading(true);
+        const { data } = await api.get(`/loan-products/${id}`, { headers: headers() });
+        if (cancel) return;
 
-  const pluralUnit = (unit, termVal) => {
-    if (!unit) return "-";
-    const n = Number(termVal);
-    const u = String(unit).toLowerCase();
-    if (!Number.isFinite(n)) return cap(u);
-    const sing = { months: "Month", weeks: "Week", days: "Day", years: "Year" }[u] || cap(u.replace(/s$/, ""));
-    return n === 1 ? sing : cap(u.endsWith("s") ? u : `${u}s`);
-  };
+        const pick = (...keys) => {
+          for (const k of keys) {
+            const v = data?.[k];
+            if (v !== undefined && v !== null && v !== "") return v;
+          }
+          return undefined;
+        };
 
-  const params = (over = {}) => {
-    const p = {
-      page: over.page ?? page,
-      pageSize: over.pageSize ?? pageSize,
-      q: (over.q ?? q) || undefined,
-    };
-    const obj = { [PAGINATION_KEYS.page]: p.page, [PAGINATION_KEYS.limit]: p.pageSize };
-    if (p.q !== undefined) obj[PAGINATION_KEYS.search] = p.q;
-    return obj;
-  };
+        // term + unit (aliases + heuristics)
+        let termVal = pick(
+          "term",
+          "term_value",
+          "tenor",
+          "tenure",
+          "duration",
+          "period_count",
+          "loanTerm",
+          "repayment_term"
+        );
+        let unitVal = pick(
+          "termUnit",
+          "term_unit",
+          "termType",
+          "term_type",
+          "unit",
+          "duration_unit",
+          "tenor_unit",
+          "tenure_unit",
+          "period_unit",
+          "loanTermUnit",
+          "repayment_term_unit"
+        );
 
-  const load = async (over = {}) => {
-    setLoading(true);
-    setErr("");
-    try {
-      const { data } = await api.get("/loan-products", { params: params(over), headers: headers() });
-      if (Array.isArray(data)) {
-        setItems(data);
-        setTotal(data.length);
-      } else if (Array.isArray(data?.items)) {
-        setItems(data.items);
-        setTotal(Number(data.total ?? data.count ?? data.items.length));
-      } else if (Array.isArray(data?.data)) {
-        setItems(data.data);
-        setTotal(Number(data.total ?? data.count ?? data.data.length));
-      } else {
-        setItems([]);
-        setTotal(0);
+        if (termVal === undefined) {
+          for (const [k, v] of Object.entries(data)) {
+            if (
+              typeof v === "number" &&
+              Number.isInteger(v) &&
+              v >= 0 &&
+              v <= 480 &&
+              /(term|tenor|tenure|duration|period)/i.test(k)
+            ) {
+              termVal = v;
+              break;
+            }
+          }
+        }
+        if (unitVal === undefined) {
+          for (const [k, v] of Object.entries(data)) {
+            const sv = String(v || "").toLowerCase();
+            if (typeof v === "string" && (LOWER_UNITS.includes(sv) || /(day|week|month|year)/i.test(sv))) {
+              if (/(term|tenor|tenure|duration|period|unit|type)/i.test(k)) {
+                unitVal = sv;
+                break;
+              }
+            }
+          }
+        }
+
+        // fees
+        const feePercent = pick("feePercent", "fee_percent", "fees_percent", "feeRate", "rate_fee");
+        const feeAmount = pick("fees", "fees_total", "fee", "fee_amount");
+        const feeType = feePercent != null ? "percent" : "amount";
+
+        const act =
+          pick("active", "isActive", "enabled", "is_enabled") ??
+          (String(pick("status") || "").toLowerCase() === "active");
+
+        setForm({
+          name: String(pick("name") || ""),
+          code: String(pick("code") || ""),
+          interestRate: String(pick("interestRate", "interest_rate", "rate_percent", "") || ""),
+          interestPeriod: String(
+            pick("interestPeriod", "interest_period", "period", "periodicity", "monthly") || "monthly"
+          ).toLowerCase(),
+          term: termVal !== undefined ? String(termVal) : "",
+          termUnit: normUnit(unitVal),
+          principalMin: new Intl.NumberFormat().format(
+            Number(
+              pick("principalMin", "principal_min", "min_amount", "minimum_principal", "minPrincipal", 0)
+            )
+          ),
+          principalMax: new Intl.NumberFormat().format(
+            Number(
+              pick("principalMax", "principal_max", "max_amount", "maximum_principal", "maxPrincipal", 0)
+            )
+          ),
+          feeType,
+          fees: feeType === "amount" ? new Intl.NumberFormat().format(Number(feeAmount || 0)) : "",
+          feePercent: feeType === "percent" ? String(feePercent) : "",
+          active: Boolean(act),
+        });
+      } catch (e) {
+        setErr(readErr(e) || "Failed to load product");
+      } finally {
+        if (!cancel) setLoading(false);
       }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [id, isEdit]);
+
+  /* ---------- payload builders ---------- */
+  // Modern/extended (your original, with many aliases)
+  const buildModernPayload = (style = "lower") => {
+    const periodLower = String(form.interestPeriod || "monthly").toLowerCase();
+    const period =
+      style === "upper"
+        ? periodLower.toUpperCase()
+        : style === "capital"
+        ? periodLower.charAt(0).toUpperCase() + periodLower.slice(1)
+        : periodLower;
+
+    const unitLower = normUnit(form.termUnit);
+    const unit =
+      style === "upper"
+        ? unitLower.toUpperCase()
+        : style === "capital"
+        ? unitLower.charAt(0).toUpperCase() + unitLower.slice(1)
+        : unitLower;
+
+    const pMin = parseMoney(form.principalMin) ?? 0;
+    const pMax = parseMoney(form.principalMax) ?? 0;
+
+    const isPct = form.feeType === "percent";
+    const feeAmount = parseMoney(form.fees) ?? 0;
+    const feePercent = Number(form.feePercent || 0);
+
+    const common = {
+      name: (form.name || "").trim(),
+      code: (form.code || "").trim() || null,
+      interestRate: toNumber(form.interestRate) ?? 0,
+      interest_rate: toNumber(form.interestRate) ?? 0,
+      interestPeriod: period,
+      interest_period: period,
+      period,
+      periodicity: period,
+      term: toNumber(form.term) ?? 0,
+      term_value: toNumber(form.term) ?? 0,
+      duration: toNumber(form.term) ?? 0,
+      tenor: toNumber(form.term) ?? 0,
+      tenure: toNumber(form.term) ?? 0,
+      termUnit: unit,
+      term_unit: unit,
+      termType: unit,
+      term_type: unit,
+      duration_unit: unit,
+      tenor_unit: unit,
+      tenure_unit: unit,
+      period_unit: unit,
+      principalMin: pMin,
+      principal_min: pMin,
+      min_amount: pMin,
+      minimum_principal: pMin,
+      minPrincipal: pMin,
+      principalMax: pMax,
+      principal_max: pMax,
+      max_amount: pMax,
+      maximum_principal: pMax,
+      maxPrincipal: pMax,
+      active: !!form.active,
+      isActive: !!form.active,
+      status: form.active ? "active" : "inactive",
+    };
+
+    if (isPct) {
+      return {
+        ...common,
+        feePercent,
+        fee_percent: feePercent,
+        fees_percent: feePercent,
+        feeRate: feePercent,
+        rate_fee: feePercent,
+        fees: 0,
+        fees_total: 0,
+        fee: 0,
+        fee_amount: 0,
+      };
+    }
+    return {
+      ...common,
+      fees: feeAmount,
+      fees_total: feeAmount,
+      fee: feeAmount,
+      fee_amount: feeAmount,
+      feePercent: 0,
+      fee_percent: 0,
+      fees_percent: 0,
+      feeRate: 0,
+      rate_fee: 0,
+    };
+  };
+
+  // Legacy schema (matches the columns you posted)
+  const buildLegacyPayload = () => {
+    const pMin = parseMoney(form.principalMin) ?? 0;
+    const pMax = parseMoney(form.principalMax) ?? 0;
+    const termMonths = toNumber(form.term) ?? 0;
+
+    const isPct = form.feeType === "percent";
+    const feeAmount = parseMoney(form.fees) ?? 0;
+    const feePercent = Number(form.feePercent || 0);
+
+    return {
+      name: (form.name || "").trim(),
+      code: (form.code || "").trim() || null,
+      interest_rate: toNumber(form.interestRate) ?? 0,
+      // legacy table uses months fields
+      min_term_months: termMonths || 0,
+      max_term_months: termMonths || 0,
+      min_principal: pMin,
+      max_principal: pMax,
+      // fees: prefer numeric amount, but if % chosen, send 0 and keep penalty+method sensible defaults
+      fees: isPct ? 0 : feeAmount,
+      // reasonable defaults the table hints at
+      penalty_rate: 0,
+      interest_method: "flat", // or "reducing" if your backend expects that
+      status: form.active ? "active" : "inactive",
+      // keep percent available in case backend reads it:
+      fee_percent: isPct ? feePercent : 0,
+      eligibility: null,
+    };
+  };
+
+  const tryPost = async (payload, label) => {
+    try {
+      const res = await api.post(`/loan-products`, payload, { headers: headers() });
+      return { ok: true, res, label, payload };
     } catch (e) {
-      setErr(readErr(e));
-      setItems([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
+      return {
+        ok: false,
+        label,
+        payload,
+        error: readErr(e),
+        status: e?.response?.status,
+        response: e?.response?.data,
+      };
     }
   };
 
-  useEffect(() => {
-    load(); // eslint-disable-next-line
-  }, [page, pageSize]);
-  useEffect(() => {
-    clearTimeout(debRef.current);
-    debRef.current = setTimeout(() => {
-      setPage(1);
-      load({ page: 1 });
-    }, 300);
-    return () => clearTimeout(debRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
-
-  const toggleActive = async (row) => {
-    try {
-      setLoading(true);
-      const id = row.id || row.uuid || row._id;
-      const next =
-        !Boolean(row.active ?? row.isActive ?? (String(row.status || "").toLowerCase() === "active"));
-
-      // 1) Prefer dedicated toggle endpoint if available
-      try {
-        await api.patch(`/loan-products/${id}/toggle`, {}, { headers: headers() });
-      } catch {
-        // 2) Fallback to PATCH body update
+  const save = async () => {
+    if (isEdit) {
+      // keep PUT for edit (modern payload with aliases)
+      const variants = ["lower", "upper", "capital"];
+      const attempts = [];
+      for (const v of variants) {
         try {
-          await api.patch(
-            `/loan-products/${id}`,
-            { active: next, isActive: next, status: next ? "active" : "inactive" },
-            { headers: headers() }
-          );
-        } catch {
-          // 3) Final fallback to PUT
-          await api.put(
-            `/loan-products/${id}`,
-            { active: next, isActive: next, status: next ? "active" : "inactive" },
-            { headers: headers() }
-          );
+          const payload = buildModernPayload(v);
+          const res = await api.put(`/loan-products/${id}`, payload, { headers: headers() });
+          return res;
+        } catch (e) {
+          attempts.push({
+            v,
+            status: e?.response?.status,
+            error: readErr(e),
+            response: e?.response?.data,
+          });
         }
       }
-      await load();
-    } catch (e) {
-      setErr(readErr(e));
+      throw attempts;
+    }
+
+    // CREATE:
+    // 1) Legacy schema first (matches the DB columns you showed)
+    const legacy = await tryPost(buildLegacyPayload(), "legacy");
+    if (legacy.ok) return legacy.res;
+
+    // 2) Modern/extended schema (three case variants)
+    const modernAttempts = [];
+    for (const v of ["lower", "upper", "capital"]) {
+      const r = await tryPost(buildModernPayload(v), `modern-${v}`);
+      if (r.ok) return r.res;
+      modernAttempts.push(r);
+    }
+
+    throw [legacy, ...modernAttempts];
+  };
+
+  /* ---------- submit ---------- */
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setErr("");
+    setDebug(null);
+
+    const pMin = parseMoney(form.principalMin) ?? 0;
+    const pMax = parseMoney(form.principalMax) ?? 0;
+    if (!form.name?.trim()) return setErr("Name is required");
+    if (pMax && pMin && pMax < pMin) return setErr("Principal Max cannot be less than Principal Min");
+    if (form.feeType === "percent" && (Number(form.feePercent) < 0 || Number(form.feePercent) > 100)) {
+      return setErr("Fee % must be between 0 and 100");
+    }
+
+    setSaving(true);
+    try {
+      await save();
+      navigate("/loans/products", { replace: true });
+    } catch (attempts) {
+      // attempts may be an array of our structured results
+      setErr("Failed to save product");
+      setDebug(attempts);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const pages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
-
+  /* ---------- UI ---------- */
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold">Loan Products</h1>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search products…"
-              className="w-56 pl-9 pr-3 py-2 rounded-md text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
-            />
-          </div>
-          <Link
-            to="/loans/products/new"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
-          >
-            <FiPlus /> Add Product
-          </Link>
-        </div>
-      </div>
+    <div className="max-w-5xl">
+      <h1 className="text-xl font-semibold mb-4">{isEdit ? "Edit Loan Product" : "New Loan Product"}</h1>
 
       {err && (
-        <div className="rounded-md border border-rose-300 bg-rose-50 text-rose-700 px-3 py-2 text-sm">
+        <div className="mb-3 rounded-md border border-rose-300 bg-rose-50 text-rose-700 px-3 py-2 text-sm">
           {err}
         </div>
       )}
+      {debug && (
+        <details
+          open
+          className="mb-3 rounded-md border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2 text-xs"
+        >
+          <summary className="cursor-pointer select-none">Show attempts</summary>
+          <pre className="overflow-auto whitespace-pre-wrap">
+            {JSON.stringify(debug, null, 2)}
+          </pre>
+        </details>
+      )}
 
-      <div className="rounded-2xl border border-slate-300 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm border-separate border-spacing-0">
-            <thead className="bg-slate-100 dark:bg-slate-800/70 text-slate-700 dark:text-slate-200">
-              <tr>
-                {[
-                  "Name",
-                  "Code",
-                  "Rate %",
-                  "Period",
-                  "Term",
-                  "Unit",
-                  "Principal Min",
-                  "Principal Max",
-                  "Fees",
-                  "Active",
-                  "Actions",
-                ].map((h, i) => (
-                  <th
-                    key={h}
-                    className={`px-3 py-2 font-semibold text-left border-b border-slate-300 dark:border-slate-700 ${
-                      i === 2 || i === 4 || i === 6 || i === 7 || i === 8 ? "text-right" : ""
-                    } ${i === 9 ? "text-center" : ""} ${i ? "border-l border-slate-200 dark:border-slate-800" : ""}`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading && items.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
-                    <span className="inline-flex items-center gap-2">
-                      <FiLoader className="animate-spin" /> Loading…
-                    </span>
-                  </td>
-                </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
-                    No products found.
-                  </td>
-                </tr>
-              ) : (
-                items.map((r, rowIdx) => {
-                  const id = r.id || r.uuid || r._id;
-
-                  const rate = pick(r.interestRate, r.interest_rate, r.rate_percent);
-                  const period = pick(r.interestPeriod, r.interest_period, r.period, r.periodicity);
-
-                  const termVal = pick(
-                    r.term,
-                    r.term_value,
-                    r.tenor,
-                    r.tenure,
-                    r.duration,
-                    r.period_count,
-                    r.loanTerm,
-                    r.repayment_term
-                  );
-
-                  const unit = pick(
-                    r.termUnit,
-                    r.term_unit,
-                    r.termType,
-                    r.term_type,
-                    r.unit,
-                    r.duration_unit,
-                    r.tenor_unit,
-                    r.tenure_unit,
-                    r.period_unit,
-                    r.loanTermUnit,
-                    r.repayment_term_unit
-                  );
-
-                  // fees: prefer % if present
-                  const feePercent = pick(
-                    r.feePercent,
-                    r.fee_percent,
-                    r.fees_percent,
-                    r.feeRate,
-                    r.rate_fee
-                  );
-                  const feeAmount = pick(r.fees, r.fees_total, r.fee, r.fee_amount);
-                  const feeDisplay = feePercent != null ? `${to2(feePercent)}%` : currency(feeAmount);
-
-                  const active =
-                    r.active ?? r.isActive ?? (String(r.status || "").toLowerCase() === "active");
-
-                  const cellBase =
-                    "px-3 py-2 border-t border-slate-200 dark:border-slate-800 " +
-                    "border-l first:border-l-0 border-slate-200 dark:border-slate-800";
-
-                  return (
-                    <tr
-                      key={id}
-                      className={rowIdx % 2 ? "bg-slate-50/40 dark:bg-slate-800/20" : ""}
-                    >
-                      <td className={`${cellBase} font-medium`}>{r.name || "-"}</td>
-                      <td className={cellBase}>{r.code || "-"}</td>
-                      <td className={`${cellBase} text-right`}>{to2(rate)}</td>
-                      <td className={cellBase}>{cap(period ?? "-")}</td>
-                      <td className={`${cellBase} text-right`}>{termVal ?? "-"}</td>
-                      <td className={cellBase}>{pluralUnit(unit ?? "-", termVal)}</td>
-                      <td className={`${cellBase} text-right`}>
-                        {currency(
-                          pick(
-                            r.principalMin,
-                            r.principal_min,
-                            r.min_amount,
-                            r.minimum_principal,
-                            r.minPrincipal
-                          )
-                        )}
-                      </td>
-                      <td className={`${cellBase} text-right`}>
-                        {currency(
-                          pick(
-                            r.principalMax,
-                            r.principal_max,
-                            r.max_amount,
-                            r.maximum_principal,
-                            r.maxPrincipal
-                          )
-                        )}
-                      </td>
-                      <td className={`${cellBase} text-right`}>{feeDisplay}</td>
-                      <td className={`${cellBase} text-center`}>
-                        <button
-                          onClick={() => toggleActive(r)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full ring-1 transition
-                                      ${active
-                                        ? "bg-emerald-50 ring-emerald-300 text-emerald-700 hover:bg-emerald-100"
-                                        : "bg-slate-50 ring-slate-300 text-slate-600 hover:bg-slate-100"}`}
-                          title={active ? "Deactivate" : "Activate"}
-                        >
-                          {active ? <FiToggleRight size={18} /> : <FiToggleLeft size={18} />}
-                          <span className="text-xs font-medium">
-                            {active ? "Active" : "Inactive"}
-                          </span>
-                        </button>
-                      </td>
-                      <td className={`${cellBase} text-right`}>
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            onClick={() => navigate(`/loans/products/${id}/edit`)}
-                            className="p-2 rounded-md border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                            title="Edit"
-                          >
-                            <FiEdit2 />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (!window.confirm(`Delete product "${r.name}"?`)) return;
-                              try {
-                                setLoading(true);
-                                await api.delete(`/loan-products/${id}`, { headers: headers() });
-                                await load();
-                              } catch (e) {
-                                setErr(readErr(e));
-                              } finally {
-                                setLoading(false);
-                              }
-                            }}
-                            className="p-2 rounded-md border border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-900/40 dark:hover:bg-rose-900/20"
-                            title="Delete"
-                          >
-                            <FiTrash2 />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 py-3 bg-slate-100 dark:bg-slate-800/40 border-t border-slate-300 dark:border-slate-800">
-          <div className="text-xs text-slate-700 dark:text-slate-300">
-            {total
-              ? `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} of ${total}`
-              : "—"}
+      <form
+        onSubmit={onSubmit}
+        className="space-y-4 rounded-2xl border border-slate-300 dark:border-slate-800 p-5 bg-white dark:bg-slate-900 shadow-sm"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label className="block text-sm mb-1">Name</label>
+            <input
+              name="name"
+              value={form.name}
+              onChange={onChange}
+              required
+              className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
+              placeholder="e.g. Express Loan"
+            />
           </div>
-          <div className="flex items-center gap-2">
+          <div>
+            <label className="block text-sm mb-1">Code</label>
+            <input
+              name="code"
+              value={form.code}
+              onChange={onChange}
+              className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
+              placeholder="e.g. 001"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1">Interest Rate (%)</label>
+            <input
+              name="interestRate"
+              value={form.interestRate}
+              onChange={onChange}
+              type="number"
+              step="0.01"
+              min="0"
+              className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
+              placeholder="e.g. 10"
+            />
+            <p className="mt-1 text-xs text-slate-500">Will display with 2 decimals (e.g. 10.00)</p>
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Interest Period</label>
             <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              className="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm"
-              aria-label="Rows per page"
+              name="interestPeriod"
+              value={form.interestPeriod}
+              onChange={onChange}
+              className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 capitalize"
             >
-              {[10, 20, 50].map((n) => (
-                <option key={n} value={n}>
-                  {n} / page
-                </option>
-              ))}
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
             </select>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="px-2 py-1 rounded-md border border-slate-300 dark:border-slate-700 disabled:opacity-50"
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1">Term</label>
+            <input
+              name="term"
+              value={form.term}
+              onChange={onChange}
+              type="number"
+              min="0"
+              className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
+              placeholder="e.g. 12"
+            />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Term Unit</label>
+            <select
+              name="termUnit"
+              value={form.termUnit}
+              onChange={onChange}
+              className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 capitalize"
+            >
+              <option value="days">Days</option>
+              <option value="weeks">Weeks</option>
+              <option value="months">Months</option>
+              <option value="years">Years</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1">Principal Min</label>
+            <MoneyInput name="principalMin" value={form.principalMin} onChange={onChange} placeholder="0" />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Principal Max</label>
+            <MoneyInput name="principalMax" value={form.principalMax} onChange={onChange} placeholder="0" />
+          </div>
+
+          {/* FEES */}
+          <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4 items-end">
+            <div>
+              <label className="block text-sm mb-1">Fee Type</label>
+              <select
+                name="feeType"
+                value={form.feeType}
+                onChange={onChange}
+                className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
               >
-                Prev
-              </button>
-              <span className="px-2 text-sm tabular-nums">
-                {page} / {pages}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(pages, p + 1))}
-                disabled={page >= pages}
-                className="px-2 py-1 rounded-md border border-slate-300 dark:border-slate-700 disabled:opacity-50"
-              >
-                Next
-              </button>
+                <option value="amount">Amount (TZS)</option>
+                <option value="percent">Percentage (%)</option>
+              </select>
             </div>
+
+            {form.feeType === "percent" ? (
+              <div>
+                <label className="block text-sm mb-1">Fee (%)</label>
+                <input
+                  name="feePercent"
+                  value={form.feePercent}
+                  onChange={onChange}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  placeholder="e.g. 2.5"
+                  className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm mb-1">Fee (Amount)</label>
+                <MoneyInput name="fees" value={form.fees} onChange={onChange} placeholder="0" />
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 mt-1">
+            <input id="active" name="active" type="checkbox" checked={!!form.active} onChange={onChange} className="h-5 w-5" />
+            <label htmlFor="active" className="text-sm">Active</label>
           </div>
         </div>
-      </div>
+
+        <div className="flex items-center gap-2 pt-2">
+          <button type="submit" disabled={saving || loading} className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60">
+            {saving ? "Saving..." : isEdit ? "Update Product" : "Create Product"}
+          </button>
+          <button type="button" onClick={() => navigate(-1)} className="px-3 py-2 rounded-md border border-slate-300 dark:border-slate-700">
+            Cancel
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
