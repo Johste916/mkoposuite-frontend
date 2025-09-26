@@ -6,6 +6,40 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { CSVLink } from "react-csv";
 
+/* ---------------- helpers ---------------- */
+const toArray = (data) =>
+  Array.isArray(data)
+    ? data
+    : Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data?.rows)
+    ? data.rows
+    : Array.isArray(data?.data)
+    ? data.data
+    : [];
+
+const currency = (n) => {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return n ?? "—";
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
+    num
+  );
+};
+
+const pct2 = (n) => {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return n ?? "—";
+  return num.toFixed(2);
+};
+
+const fmtDate = (d) => {
+  if (!d) return "—";
+  const dt = new Date(d);
+  if (Number.isNaN(+dt)) return String(d).slice(0, 10);
+  return dt.toLocaleDateString();
+};
+
+/* ---------------- page ---------------- */
 const Loan = () => {
   const navigate = useNavigate();
 
@@ -23,29 +57,40 @@ const Loan = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // fetchers
+  // fetchers (tolerant to many backend shapes)
   const fetchLoans = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/loans");
-      setLoans(Array.isArray(res.data) ? res.data : res.data?.items || []);
+      const res = await api.get("/loans", {
+        params: { page: 1, pageSize: 500 },
+      });
+      setLoans(toArray(res.data));
     } catch {
       alert("Failed to load loans");
+      setLoans([]);
     } finally {
       setLoading(false);
     }
   };
   const fetchBranches = async () => {
     try {
-      const res = await api.get("/branches");
-      setBranches(Array.isArray(res.data) ? res.data : res.data?.items || []);
-    } catch {}
+      const res = await api.get("/branches", {
+        params: { page: 1, pageSize: 500 },
+      });
+      setBranches(toArray(res.data));
+    } catch {
+      setBranches([]);
+    }
   };
   const fetchProducts = async () => {
     try {
-      const res = await api.get("/loan-products");
-      setProducts(Array.isArray(res.data) ? res.data : res.data.items || []);
-    } catch {}
+      const res = await api.get("/loan-products", {
+        params: { page: 1, pageSize: 500 },
+      });
+      setProducts(toArray(res.data));
+    } catch {
+      setProducts([]);
+    }
   };
 
   useEffect(() => {
@@ -61,8 +106,13 @@ const Loan = () => {
   );
 
   const withinDate = (l) => {
-    // prefer startDate; fallback to createdAt
-    const raw = l.startDate || l.createdAt;
+    // prefer startDate/disbursementDate -> fallback to createdAt
+    const raw =
+      l.startDate ||
+      l.disbursementDate ||
+      l.releaseDate ||
+      l.createdAt ||
+      l.created_at;
     if (!raw || (!dateFrom && !dateTo)) return true;
     const d = new Date(raw);
     if (dateFrom && d < new Date(dateFrom)) return false;
@@ -76,44 +126,54 @@ const Loan = () => {
 
   // filtering
   const filteredLoans = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return (loans || []).filter((l) => {
-      const matchesStatus = statusFilter === "all" || l.status === statusFilter;
+      const status = (l.status || l.loanStatus || "").toLowerCase();
+      const matchesStatus = statusFilter === "all" || status === statusFilter;
+
+      const borrowerName =
+        l.Borrower?.name ||
+        l.borrowerName ||
+        l.borrower_name ||
+        l.borrower?.name ||
+        "";
       const matchesSearch =
-        (l.Borrower?.name || "")
+        borrowerName.toLowerCase().includes(q) ||
+        String(l.id || l.loanId || "")
           .toLowerCase()
-          .includes(search.toLowerCase()) ||
-        String(l.id || "").includes(search.trim());
-      const matchesBranch =
-        !branchFilter ||
-        String(l.branchId || l.branch?.id) === String(branchFilter);
+          .includes(q);
+
+      const bId = String(l.branchId || l.branch?.id || l.branch_id || "");
+      const matchesBranch = !branchFilter || bId === String(branchFilter);
+
       const matchesProduct =
         !productFilter || String(l.productId) === String(productFilter);
+
       return (
-        matchesStatus &&
-        matchesSearch &&
-        matchesBranch &&
-        matchesProduct &&
-        withinDate(l)
+        matchesStatus && matchesSearch && matchesBranch && matchesProduct && withinDate(l)
       );
     });
   }, [loans, statusFilter, search, branchFilter, productFilter, dateFrom, dateTo]);
 
-  // KPIs (based on filtered list so they react to filters)
+  // KPIs (react to filters)
   const kpis = useMemo(() => {
     const totalPrincipal = filteredLoans.reduce(
-      (s, l) => s + Number(l.amount || 0),
+      (s, l) => s + Number(l.amount || l.principal || 0),
       0
     );
-    const countBy = (s) => filteredLoans.filter((l) => l.status === s).length;
+    const statusOf = (s) =>
+      filteredLoans.filter(
+        (l) => (l.status || l.loanStatus || "").toLowerCase() === s
+      ).length;
     return {
       total: filteredLoans.length,
       totalPrincipal,
-      pending: countBy("pending"),
-      approved: countBy("approved"),
-      disbursed: countBy("disbursed"),
-      active: countBy("active"),
-      closed: countBy("closed"),
-      rejected: countBy("rejected"),
+      pending: statusOf("pending"),
+      approved: statusOf("approved"),
+      disbursed: statusOf("disbursed"),
+      active: statusOf("active"),
+      closed: statusOf("closed"),
+      rejected: statusOf("rejected"),
     };
   }, [filteredLoans]);
 
@@ -132,14 +192,25 @@ const Loan = () => {
     () =>
       filteredLoans.map((l) => ({
         id: l.id,
-        borrower: l.Borrower?.name || "",
+        borrower:
+          l.Borrower?.name ||
+          l.borrowerName ||
+          l.borrower_name ||
+          l.borrower?.name ||
+          "",
         product: productsById[String(l.productId)]?.name || "",
-        amount: l.amount,
-        rate: l.interestRate,
-        termMonths: l.termMonths,
+        amount: l.amount ?? l.principal ?? "",
+        rate: l.interestRate ?? l.rate ?? "",
+        termMonths: l.termMonths ?? l.durationMonths ?? l.term_months ?? "",
         branch: l.branch?.name || "",
-        status: l.status,
-        startDate: l.startDate,
+        status: l.status || l.loanStatus || "",
+        startDate:
+          l.startDate ||
+          l.disbursementDate ||
+          l.releaseDate ||
+          l.createdAt ||
+          l.created_at ||
+          "",
       })),
     [filteredLoans, productsById]
   );
@@ -162,7 +233,7 @@ const Loan = () => {
     doc.autoTable({
       startY: 20,
       head: [
-        ["ID", "Borrower", "Product", "Amount", "Rate", "Term", "Branch", "Status"],
+        ["ID", "Borrower", "Product", "Amount", "Rate (%)", "Term", "Branch", "Status"],
       ],
       body: exportRows.map((r) => [
         r.id,
@@ -178,8 +249,9 @@ const Loan = () => {
     doc.save("loans.pdf");
   };
 
-  // UI helpers (dark-mode aware using soft backgrounds)
-  const statusBadge = (status) => {
+  // UI helpers
+  const statusBadge = (statusRaw) => {
+    const status = (statusRaw || "").toLowerCase();
     const base = "px-2 py-1 rounded text-xs font-semibold";
     switch (status) {
       case "pending":
@@ -198,42 +270,40 @@ const Loan = () => {
     }
   };
 
+  /* ---------------- render ---------------- */
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">All Loans</h2>
-        <Link
-          className="text-indigo-600 hover:underline text-sm"
-          to="/loans/applications"
-        >
+        <h2 className="text-2xl md:text-3xl font-bold tracking-tight">All Loans</h2>
+        <Link className="text-indigo-600 hover:underline text-sm" to="/loans/applications">
           New Application
         </Link>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div className="card p-3">
+        <div className="card p-4">
           <p className="text-xs muted">Total</p>
           <p className="text-lg font-semibold">{kpis.total}</p>
         </div>
-        <div className="card p-3">
+        <div className="card p-4">
           <p className="text-xs muted">Principal</p>
-          <p className="text-lg font-semibold">{kpis.totalPrincipal}</p>
+          <p className="text-lg font-semibold">{currency(kpis.totalPrincipal)}</p>
         </div>
-        <div className="card p-3">
+        <div className="card p-4">
           <p className="text-xs muted">Pending</p>
           <p className="text-lg font-semibold">{kpis.pending}</p>
         </div>
-        <div className="card p-3">
+        <div className="card p-4">
           <p className="text-xs muted">Approved</p>
           <p className="text-lg font-semibold">{kpis.approved}</p>
         </div>
-        <div className="card p-3">
+        <div className="card p-4">
           <p className="text-xs muted">Disbursed</p>
           <p className="text-lg font-semibold">{kpis.disbursed}</p>
         </div>
-        <div className="card p-3">
+        <div className="card p-4">
           <p className="text-xs muted">Active</p>
           <p className="text-lg font-semibold">{kpis.active}</p>
         </div>
@@ -322,8 +392,8 @@ const Loan = () => {
         ) : filteredLoans.length === 0 ? (
           <p className="p-4 muted">No loans found.</p>
         ) : (
-          <table className="min-w-full text-sm">
-            <thead className="text-[var(--fg)]">
+          <table className="min-w-full text-sm border border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 text-[var(--fg)]">
               <tr>
                 {[
                   "ID",
@@ -339,7 +409,7 @@ const Loan = () => {
                 ].map((h) => (
                   <th
                     key={h}
-                    className="p-2 border-b border-[var(--border)] text-left"
+                    className="p-2 border-b border-l border-slate-200 dark:border-slate-800 text-left first:border-l-0"
                   >
                     {h}
                   </th>
@@ -347,58 +417,100 @@ const Loan = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredLoans.map((l) => (
-                <tr
-                  key={l.id}
-                  className="border-b border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
-                >
-                  <td className="px-2 py-2">{l.id}</td>
-                  <td className="px-2 py-2">{l.Borrower?.name || "N/A"}</td>
-                  <td className="px-2 py-2">
-                    {productsById[String(l.productId)]?.name || "—"}
-                  </td>
-                  <td className="px-2 py-2">{l.amount}</td>
-                  <td className="px-2 py-2">{l.interestRate}</td>
-                  <td className="px-2 py-2">{l.termMonths}</td>
-                  <td className="px-2 py-2">{l.branch?.name || "—"}</td>
-                  <td className="px-2 py-2">{l.startDate || "—"}</td>
-                  <td className="px-2 py-2">
-                    <span className={statusBadge(l.status)}>{l.status}</span>
-                  </td>
-                  <td className="px-2 py-2 space-x-2">
-                    <button
-                      onClick={() => navigate(`/loans/${l.id}`)}
-                      className="text-indigo-600 hover:underline"
-                    >
-                      View
-                    </button>
-                    {l.status === "pending" && (
-                      <>
+              {filteredLoans.map((l) => {
+                const status = l.status || l.loanStatus;
+                const borrowerName =
+                  l.Borrower?.name ||
+                  l.borrowerName ||
+                  l.borrower_name ||
+                  l.borrower?.name ||
+                  "N/A";
+                const productName =
+                  productsById[String(l.productId)]?.name || "—";
+                const amount = currency(l.amount ?? l.principal);
+                const rate = pct2(l.interestRate ?? l.rate);
+                const term = l.termMonths ?? l.durationMonths ?? l.term_months ?? "—";
+                const branchName = l.branch?.name || "—";
+                const start =
+                  fmtDate(
+                    l.startDate ||
+                      l.disbursementDate ||
+                      l.releaseDate ||
+                      l.createdAt ||
+                      l.created_at
+                  );
+
+                return (
+                  <tr
+                    key={l.id}
+                    className="hover:bg-gray-50 dark:hover:bg-slate-800"
+                  >
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      {l.id}
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      {borrowerName}
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      {productName}
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      {amount}
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      {rate}
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      {term}
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      {branchName}
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      {start}
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-slate-200 dark:border-slate-800">
+                      <span className={statusBadge(status)}>{status}</span>
+                    </td>
+                    <td className="px-2 py-2 border-t border-l border-r border-slate-200 dark:border-slate-800">
+                      <div className="space-x-2">
                         <button
-                          onClick={() => handleStatusUpdate(l.id, "approve")}
-                          className="text-emerald-600 hover:underline"
+                          onClick={() => navigate(`/loans/${l.id}`)}
+                          className="text-indigo-600 hover:underline"
                         >
-                          Approve
+                          View
                         </button>
-                        <button
-                          onClick={() => handleStatusUpdate(l.id, "reject")}
-                          className="text-rose-600 hover:underline"
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
-                    {l.status === "approved" && (
-                      <button
-                        onClick={() => handleStatusUpdate(l.id, "disburse")}
-                        className="text-indigo-600 hover:underline"
-                      >
-                        Disburse
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                        {(status || "").toLowerCase() === "pending" && (
+                          <>
+                            <button
+                              onClick={() => handleStatusUpdate(l.id, "approve")}
+                              className="text-emerald-600 hover:underline"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleStatusUpdate(l.id, "reject")}
+                              className="text-rose-600 hover:underline"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {(status || "").toLowerCase() === "approved" && (
+                          <button
+                            onClick={() =>
+                              handleStatusUpdate(l.id, "disburse")
+                            }
+                            className="text-indigo-600 hover:underline"
+                          >
+                            Disburse
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
