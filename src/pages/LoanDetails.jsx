@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api";
 
@@ -40,6 +40,40 @@ function deriveStageFromStatus(status) {
   if (s === "pending") return "submitted";
   if (s === "approved") return "accounting";
   return "";
+}
+
+/* ------- paid breakdown allocator (fallback if server doesn't provide) ----- */
+function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
+  let remain = Number(totalPaid || 0);
+  let paidP = 0, paidI = 0, paidPN = 0, paidF = 0;
+
+  for (const row of schedule) {
+    const fee = Number(row.fee ?? row.fees ?? 0);
+    const pen = Number(row.penalty ?? 0);
+    const int = Number(row.interest ?? 0);
+    const pri = Number(row.principal ?? 0);
+
+    // fees
+    if (remain <= 0) break;
+    const f = Math.min(remain, fee);
+    paidF += f; remain -= f;
+
+    // penalty
+    if (remain <= 0) break;
+    const p = Math.min(remain, pen);
+    paidPN += p; remain -= p;
+
+    // interest
+    if (remain <= 0) break;
+    const i = Math.min(remain, int);
+    paidI += i; remain -= i;
+
+    // principal
+    if (remain <= 0) break;
+    const pr = Math.min(remain, pri);
+    paidP += pr; remain -= pr;
+  }
+  return { paidPrincipal: paidP, paidInterest: paidI, paidPenalty: paidPN, paidFees: paidF };
 }
 
 export default function LoanDetails() {
@@ -130,7 +164,6 @@ export default function LoanDetails() {
           .get(`/comments/loan/${id}`)
           .then((r) => setComments(Array.isArray(r.data) ? r.data : []))
           .catch((e) => {
-            // Graceful handling for 500s so UI stays clean
             console.warn("Comments fetch failed:", e?.response?.data || e?.message);
             setComments([]);
           })
@@ -174,6 +207,22 @@ export default function LoanDetails() {
     setLoadingComments(true);
     loadLoan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // refresh when window regains focus
+  useEffect(() => {
+    const onFocus = () => loadLoan();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  // listen for cross-page updates (schedule page, etc.)
+  useEffect(() => {
+    const onUpdated = (e) => {
+      if (String(e?.detail?.id) === String(id)) loadLoan();
+    };
+    window.addEventListener("loan:updated", onUpdated);
+    return () => window.removeEventListener("loan:updated", onUpdated);
   }, [id]);
 
   /* ---------- comments ---------- */
@@ -291,7 +340,15 @@ export default function LoanDetails() {
     setPostLoading(true);
     try {
       await api.post(`/repayments`, { loanId: id, ...repForm, amount: amt });
-      await loadLoan();
+
+      // Set to active after first repayment (if allowed)
+      if (loan?.status && !["active", "closed"].includes(String(loan.status).toLowerCase())) {
+        try {
+          await api.patch(`/loans/${id}/status`, { status: "active" });
+        } catch { /* ignore */ }
+      }
+
+      await loadLoan(); // reload loan, schedule, repayments
       setOpenRepay(false);
       setRepForm({
         amount: "",
@@ -299,6 +356,10 @@ export default function LoanDetails() {
         method: "cash",
         notes: "",
       });
+
+      // let other pages pick up changes immediately
+      window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id } }));
+
       alert("Repayment posted.");
     } catch (e) {
       console.error(e);
@@ -308,12 +369,54 @@ export default function LoanDetails() {
     }
   };
 
-  /* ---------- quick stats ---------- */
-  const outstanding = loan?.outstanding ?? null;
-  const nextDue =
-    Array.isArray(schedule) && schedule.length
-      ? schedule.find((r) => !r.paid && !r.settled) || schedule[0]
-      : null;
+  /* ---------- quick stats & aggregates (consistent with Schedule page) ---------- */
+  const scheduled = useMemo(() => {
+    const arr = Array.isArray(schedule) ? schedule : [];
+    const sum = (k) => arr.reduce((a, b) => a + Number(b?.[k] || 0), 0);
+    const principal = sum("principal");
+    const interest  = sum("interest");
+    const penalty   = sum("penalty");
+    const fees      = sum("fee") + sum("fees");
+    const total     = sum("total") || principal + interest + penalty + fees;
+
+    const totalPaid = repayments.reduce((a, b) => a + Number(b.amount || 0), 0);
+
+    // Prefer explicit paid breakdown fields
+    const paidPrincipalExplicit = sum("paidPrincipal") || 0;
+    const paidInterestExplicit  = sum("paidInterest")  || 0;
+    const paidPenaltyExplicit   = sum("paidPenalty")   || 0;
+    const paidFeesExplicit      = sum("paidFees") + sum("paidFee") || 0;
+    const explicitSum = paidPrincipalExplicit + paidInterestExplicit + paidPenaltyExplicit + paidFeesExplicit;
+
+    const breakdown = explicitSum > 0
+      ? {
+          paidPrincipal: paidPrincipalExplicit,
+          paidInterest:  paidInterestExplicit,
+          paidPenalty:   paidPenaltyExplicit,
+          paidFees:      paidFeesExplicit,
+        }
+      : allocatePaidAcrossSchedule(arr, totalPaid);
+
+    const outstanding = Math.max(total - totalPaid, 0);
+
+    // Next due row
+    const next =
+      arr.find(r => (r.paid || r.settled) ? false :
+                    (Number(r.balance ?? (Number(r.total||0))) > 0)) || null;
+
+    return {
+      principal, interest, penalty, fees, total, totalPaid, outstanding,
+      ...breakdown,
+      nextDue: next ? {
+        idx: next.installment ?? next.period ?? (arr.indexOf(next) + 1),
+        date: next.dueDate || next.date || null,
+        amount: Number(next.total ?? 0),
+      } : null,
+    };
+  }, [schedule, repayments]);
+
+  const outstanding = loan?.outstanding ?? scheduled.outstanding ?? null;
+  const nextDue = scheduled.nextDue;
 
   /* ---------- render ---------- */
   if (loading) return <div className="max-w-7xl mx-auto px-6 py-6">Loading loan…</div>;
@@ -388,8 +491,8 @@ export default function LoanDetails() {
             <div className="text-base">
               {nextDue ? (
                 <>
-                  {fmtDate(nextDue.dueDate)} ·{" "}
-                  <span className="font-medium">{fmtTZS(nextDue.total, currency)}</span>
+                  {fmtDate(nextDue.date)} ·{" "}
+                  <span className="font-medium">{fmtTZS(nextDue.amount, currency)}</span>
                 </>
               ) : (
                 "—"
@@ -415,6 +518,34 @@ export default function LoanDetails() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Consistent insights with LoanSchedulePage */}
+        <div className="mt-6 grid sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
+          <div>
+            <div className="text-gray-500 text-xs">Paid Principal</div>
+            <div className="font-semibold">{fmtTZS(scheduled.paidPrincipal, currency)}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 text-xs">Paid Interest</div>
+            <div className="font-semibold">{fmtTZS(scheduled.paidInterest, currency)}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 text-xs">Paid Penalties</div>
+            <div className="font-semibold">{fmtTZS(scheduled.paidPenalty, currency)}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 text-xs">Paid Fees</div>
+            <div className="font-semibold">{fmtTZS(scheduled.paidFees, currency)}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 text-xs">Total Paid</div>
+            <div className="font-semibold">{fmtTZS(scheduled.totalPaid, currency)}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 text-xs">Total Scheduled</div>
+            <div className="font-semibold">{fmtTZS(scheduled.total, currency)}</div>
+          </div>
         </div>
       </div>
 
@@ -724,49 +855,72 @@ export default function LoanDetails() {
             </div>
             {loadingSchedule ? (
               <p>Loading schedule…</p>
-            ) : !schedule || schedule.length === 0 ? (
+            ) : !Array.isArray(schedule) || schedule.length === 0 ? (
               <p>No schedule available.</p>
             ) : (
-              <div className="max-h-[70vh] overflow-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
-                    <tr className="text-left">
-                      <th className="px-3 py-2 border-b">#</th>
-                      <th className="px-3 py-2 border-b">Due Date</th>
-                      <th className="px-3 py-2 border-b">Principal</th>
-                      <th className="px-3 py-2 border-b">Interest</th>
-                      <th className="px-3 py-2 border-b">Penalty</th>
-                      <th className="px-3 py-2 border-b">Total</th>
-                      <th className="px-3 py-2 border-b">Balance</th>
-                      <th className="px-3 py-2 border-b">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {schedule.map((row, idx) => (
-                      <tr key={row.id || idx} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 whitespace-nowrap">{idx + 1}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{fmtDate(row.dueDate)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.principal, currency)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.interest, currency)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.penalty || 0, currency)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.total, currency)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.balance, currency)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {row.paid || row.settled ? (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
-                              Settled
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-amber-200">
-                              Pending
-                            </span>
-                          )}
-                        </td>
+              <>
+                <div className="mb-3 text-sm text-gray-600">
+                  Next installment:&nbsp;
+                  {nextDue ? (
+                    <>
+                      <b>#{nextDue.idx}</b> on {fmtDate(nextDue.date)} — <b>{fmtTZS(nextDue.amount, currency)}</b>
+                    </>
+                  ) : '—'}
+                </div>
+                <div className="max-h-[70vh] overflow-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
+                      <tr className="text-left">
+                        <th className="px-3 py-2 border-b">#</th>
+                        <th className="px-3 py-2 border-b">Due Date</th>
+                        <th className="px-3 py-2 border-b">Principal</th>
+                        <th className="px-3 py-2 border-b">Interest</th>
+                        <th className="px-3 py-2 border-b">Penalty</th>
+                        <th className="px-3 py-2 border-b">Fees</th>
+                        <th className="px-3 py-2 border-b">Total</th>
+                        <th className="px-3 py-2 border-b">Balance</th>
+                        <th className="px-3 py-2 border-b">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {schedule.map((row, idx) => {
+                        const total =
+                          row.total ??
+                          (Number(row.principal || 0) +
+                            Number(row.interest || 0) +
+                            Number(row.penalty || 0) +
+                            Number(row.fee ?? row.fees ?? 0));
+                        const settled = row.paid || row.settled;
+                        return (
+                          <tr key={row.id || idx} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 whitespace-nowrap">{idx + 1}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{fmtDate(row.dueDate)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.principal, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.interest, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.penalty || 0, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.fee ?? row.fees ?? 0, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(total, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {fmtTZS(row.balance ?? (settled ? 0 : total), currency)}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {settled ? (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                                  Settled
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+                                  Pending
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
             <div className="mt-4 flex justify-end">
               <button onClick={() => setOpenSchedule(false)} className="px-4 py-2 rounded-lg border">
