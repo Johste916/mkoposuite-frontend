@@ -9,16 +9,16 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "N/A");
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "");
 
 const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800",
-  approved: "bg-blue-100 text-blue-800",
-  rejected: "bg-gray-200 text-gray-700",
-  disbursed: "bg-indigo-100 text-indigo-800",
-  active: "bg-emerald-100 text-emerald-800",
-  closed: "bg-slate-200 text-slate-700",
+  pending: "bg-yellow-100 text-yellow-800 ring-yellow-200",
+  approved: "bg-blue-100 text-blue-800 ring-blue-200",
+  rejected: "bg-gray-200 text-gray-700 ring-gray-300",
+  disbursed: "bg-indigo-100 text-indigo-800 ring-indigo-200",
+  active: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+  closed: "bg-slate-200 text-slate-700 ring-slate-300",
 };
 
 const chip =
-  "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold";
+  "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ring-inset";
 
 const roleOf = () => {
   try {
@@ -29,14 +29,10 @@ const roleOf = () => {
   }
 };
 const isAdmin = (r) => r === "admin" || r === "director" || r === "superadmin";
-const isBM = (r) =>
-  ["branch_manager", "manager", "bm"].includes(r) || isAdmin(r);
-const isCompliance = (r) =>
-  ["compliance", "compliance_officer", "legal"].includes(r) || isAdmin(r);
-const isAccountant = (r) =>
-  ["accountant", "finance"].includes(r) || isAdmin(r);
-const isOfficer = (r) =>
-  ["loan_officer", "officer"].includes(r) && !isAdmin(r); // admins already have all bars
+const isBM = (r) => ["branch_manager", "manager", "bm"].includes(r) || isAdmin(r);
+const isCompliance = (r) => ["compliance", "compliance_officer", "legal"].includes(r) || isAdmin(r);
+const isAccountant = (r) => ["accountant", "finance"].includes(r) || isAdmin(r);
+const isOfficer = (r) => ["loan_officer", "officer"].includes(r) && !isAdmin(r);
 
 /* If backend has no stage, derive a sensible label off status. */
 function deriveStageFromStatus(status) {
@@ -87,7 +83,7 @@ export default function LoanDetails() {
   const [openSchedule, setOpenSchedule] = useState(false);
 
   const currency = loan?.currency || "TZS";
-  const statusBadge = statusColors[loan?.status] || "bg-slate-100 text-slate-800";
+  const statusBadge = statusColors[loan?.status] || "bg-slate-100 text-slate-800 ring-slate-200";
 
   const role = roleOf();
   const canBM = isBM(role);
@@ -95,27 +91,25 @@ export default function LoanDetails() {
   const canACC = isAccountant(role);
   const canOFF = isOfficer(role);
 
-  const workflowStage =
-    loan?.workflowStage || deriveStageFromStatus(loan?.status);
+  const workflowStage = loan?.workflowStage || deriveStageFromStatus(loan?.status);
 
   // Show bars depending on stage
-  const showLOTB = canOFF && [
-    "changes_requested",
-    "bm_changes_requested",
-    "compliance_changes_requested",
-    "returned_to_officer",
-    "request_changes",
-  ].includes(workflowStage);
+  const showLOTB =
+    canOFF &&
+    [
+      "changes_requested",
+      "bm_changes_requested",
+      "compliance_changes_requested",
+      "returned_to_officer",
+      "request_changes",
+    ].includes(workflowStage);
 
   const showBMToolbar =
-    canBM &&
-    ["submitted", "bm_review", "changes_resubmitted"].includes(workflowStage);
+    canBM && ["submitted", "bm_review", "changes_resubmitted"].includes(workflowStage);
 
-  const showCOToolbar =
-    canCO && ["compliance", "compliance_review"].includes(workflowStage);
+  const showCOToolbar = canCO && ["compliance", "compliance_review"].includes(workflowStage);
 
-  const showDisburse =
-    canACC && (loan?.status === "approved" || workflowStage === "accounting");
+  const showDisburse = canACC && (loan?.status === "approved" || workflowStage === "accounting");
 
   /* ---------- load ---------- */
   const loadLoan = async () => {
@@ -146,6 +140,14 @@ export default function LoanDetails() {
             .catch(() => setProduct(null))
         );
       }
+      // Try to prefetch schedule for at-a-glance stats (non-blocking)
+      tasks.push(
+        api
+          .get(`/loans/${id}/schedule`)
+          .then((r) => setSchedule(r.data || null))
+          .catch(() => setSchedule(null))
+      );
+
       await Promise.all(tasks);
     } catch (e) {
       console.error(e);
@@ -194,17 +196,13 @@ export default function LoanDetails() {
       try {
         if (action === "bm_approve" || action === "compliance_approve") {
           await api.patch(`/loans/${id}/status`, { status: "approved" });
-          if (reviewComment.trim())
-            await postCommentInline(reviewComment.trim());
+          if (reviewComment.trim()) await postCommentInline(reviewComment.trim());
         } else if (action === "reject") {
           await api.patch(`/loans/${id}/status`, { status: "rejected" });
-          if (reviewComment.trim())
-            await postCommentInline(reviewComment.trim());
+          if (reviewComment.trim()) await postCommentInline(reviewComment.trim());
         } else if (action === "request_changes") {
           if (reviewComment.trim())
-            await postCommentInline(
-              `Changes requested: ${reviewComment.trim()}`
-            );
+            await postCommentInline(`Changes requested: ${reviewComment.trim()}`);
         } else if (action === "resubmit") {
           await api.patch(`/loans/${id}/status`, { status: "pending" });
           if (reviewComment.trim())
@@ -232,10 +230,7 @@ export default function LoanDetails() {
       await api.patch(`/loans/${id}`, { amount: Number(suggestedAmount) });
       if (reviewComment.trim())
         await postCommentInline(
-          `Suggested amount: ${fmtTZS(
-            suggestedAmount,
-            currency
-          )} — ${reviewComment.trim()}`
+          `Suggested amount: ${fmtTZS(suggestedAmount, currency)} — ${reviewComment.trim()}`
         );
       await loadLoan();
       alert("Suggestion saved.");
@@ -250,8 +245,7 @@ export default function LoanDetails() {
   // Close loan (legacy)
   const closeLoan = async () => {
     const outstanding = loan?.outstanding ?? 0;
-    if (outstanding > 0 && !window.confirm("Outstanding > 0. Close anyway?"))
-      return;
+    if (outstanding > 0 && !window.confirm("Outstanding > 0. Close anyway?")) return;
     try {
       await api.patch(`/loans/${id}/status`, {
         status: "closed",
@@ -272,7 +266,7 @@ export default function LoanDetails() {
         loanId: id,
         content: newComment,
       });
-    setComments((prev) => [res.data, ...prev]);
+      setComments((prev) => [res.data, ...prev]);
       setNewComment("");
     } catch (e) {
       console.error(e);
@@ -296,199 +290,180 @@ export default function LoanDetails() {
     }
   };
 
-  /* ---------- repayments ---------- */
-  const postRepayment = async () => {
-    const amt = Number(repForm.amount);
-    if (!amt || amt <= 0) return alert("Enter a valid amount.");
-    setPostLoading(true);
-    try {
-      await api.post(`/repayments`, { loanId: id, ...repForm, amount: amt });
-      await loadLoan();
-      setOpenRepay(false);
-      setRepForm({
-        amount: "",
-        date: new Date().toISOString().slice(0, 10),
-        method: "cash",
-        notes: "",
-      });
-      alert("Repayment posted.");
-    } catch (e) {
-      console.error(e);
-      alert("Failed to post repayment.");
-    } finally {
-      setPostLoading(false);
-    }
-  };
+  /* ---------- derive quick stats ---------- */
+  const outstanding = loan?.outstanding ?? null;
+  const nextDue =
+    Array.isArray(schedule) && schedule.length
+      ? schedule.find((r) => !r.paid && !r.settled) || schedule[0]
+      : null;
 
   /* ---------- render ---------- */
-  if (loading) return <div className="p-4">Loading loan…</div>;
-  if (errs) return <div className="p-4 text-red-600">{errs}</div>;
-  if (!loan) return <div className="p-4">Loan not found.</div>;
-
-  const outstanding = loan?.outstanding ?? null;
+  if (loading) return <div className="max-w-7xl mx-auto px-6 py-6">Loading loan…</div>;
+  if (errs) return <div className="max-w-7xl mx-auto px-6 py-6 text-red-600">{errs}</div>;
+  if (!loan) return <div className="max-w-7xl mx-auto px-6 py-6">Loan not found.</div>;
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="max-w-screen-2xl mx-auto px-6 py-6 space-y-6">
       {/* HEADER */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-2xl font-bold">Loan Details</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Loan Details</h2>
           <span className={`${chip} ${statusBadge}`}>{loan.status}</span>
           {workflowStage && (
-            <span
-              className={`${chip} bg-indigo-50 text-indigo-700 border border-indigo-200`}
-            >
+            <span className={`${chip} bg-indigo-50 text-indigo-700 ring-indigo-200`}>
               Stage: {workflowStage.replaceAll("_", " ")}
             </span>
           )}
         </div>
-        <button
-          onClick={() => navigate(-1)}
-          className="text-blue-600 hover:underline"
-        >
+        <button onClick={() => navigate(-1)} className="text-blue-600 hover:underline">
           &larr; Back
         </button>
       </div>
 
-      {/* SUMMARY CARD */}
-      <div className="bg-white p-4 rounded shadow space-y-2">
-        <div className="flex flex-wrap gap-6">
-          <div>
-            <div className="text-gray-500 text-xs">Borrower</div>
+      {/* TOP SUMMARY / KEY FACTS */}
+      <div className="bg-white border rounded-xl shadow-sm p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+          <div className="col-span-2">
+            <div className="text-[11px] uppercase tracking-wider text-gray-500">Borrower</div>
             <Link
-              className="text-blue-600 hover:underline"
+              className="text-lg font-semibold text-blue-700 hover:underline"
               to={`/borrowers/${loan.borrowerId}`}
             >
               {loan.Borrower?.name || loan.borrowerName || "N/A"}
             </Link>
           </div>
+
           <div>
-            <div className="text-gray-500 text-xs">Amount</div>
-            <div className="font-semibold">
-              {fmtTZS(loan.amount, currency)}
+            <div className="text-[11px] uppercase tracking-wider text-gray-500">Amount</div>
+            <div className="text-xl font-semibold">{fmtTZS(loan.amount, currency)}</div>
+          </div>
+
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-gray-500">Interest</div>
+            <div className="text-base">
+              <span className="font-medium">{loan.interestRate}%</span>{" "}
+              <span className="text-gray-600">· {loan.interestMethod}</span>
             </div>
           </div>
+
           <div>
-            <div className="text-gray-500 text-xs">Interest</div>
-            <div>
-              {loan.interestRate}% · {loan.interestMethod}
+            <div className="text-[11px] uppercase tracking-wider text-gray-500">Term</div>
+            <div className="text-base">{loan.termMonths || loan.durationMonths} months</div>
+          </div>
+
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-gray-500">
+              Start / Release
             </div>
+            <div className="text-base">{fmtDate(loan.startDate || loan.releaseDate)}</div>
           </div>
+
           <div>
-            <div className="text-gray-500 text-xs">Term</div>
-            <div>{loan.termMonths || loan.durationMonths} months</div>
-          </div>
-          <div>
-            <div className="text-gray-500 text-xs">Start / Release</div>
-            <div>{fmtDate(loan.startDate || loan.releaseDate)}</div>
-          </div>
-          <div>
-            <div className="text-gray-500 text-xs">Outstanding</div>
-            <div className="font-semibold">
+            <div className="text-[11px] uppercase tracking-wider text-gray-500">Outstanding</div>
+            <div className="text-xl font-semibold">
               {outstanding == null ? "—" : fmtTZS(outstanding, currency)}
             </div>
           </div>
-        </div>
 
-        {product && (
-          <div className="mt-4 text-sm text-gray-700">
-            <div className="font-semibold">
-              Product: {product.name}
-              {product.code ? ` (${product.code})` : ""}
-            </div>
-            <div>
-              Defaults: {product.interestMethod} @{" "}
-              {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
-              {fmtTZS(product.minPrincipal, currency)} –{" "}
-              {fmtTZS(product.maxPrincipal, currency)},{" "}
-              {product.minTermMonths}-{product.maxTermMonths} months
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-gray-500">Next Due</div>
+            <div className="text-base">
+              {nextDue ? (
+                <>
+                  {fmtDate(nextDue.dueDate)} ·{" "}
+                  <span className="font-medium">{fmtTZS(nextDue.total, currency)}</span>
+                </>
+              ) : (
+                "—"
+              )}
             </div>
           </div>
-        )}
+
+          {product && (
+            <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
+              <div className="text-[11px] uppercase tracking-wider text-gray-500">Product</div>
+              <div className="text-base">
+                <span className="font-semibold">
+                  {product.name}
+                  {product.code ? ` (${product.code})` : ""}
+                </span>
+                <div className="text-gray-600 text-sm">
+                  Defaults: {product.interestMethod} @{" "}
+                  {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
+                  {fmtTZS(product.minPrincipal, currency)} –{" "}
+                  {fmtTZS(product.maxPrincipal, currency)},{" "}
+                  {product.minTermMonths}-{product.maxTermMonths} months
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* LOAN OFFICER RESUBMIT BAR */}
-      {showLOTB && (
-        <div className="bg-white p-4 rounded shadow border space-y-3">
-          <h3 className="text-lg font-semibold">Changes Requested</h3>
-            <p className="text-sm text-gray-600">
-              Your Branch Manager / Compliance requested changes. Update the
-              application and attach missing documents, then{" "}
-              <strong>Resubmit</strong>. Add a short note if helpful.
-            </p>
-          <div>
-            <label className="block text-xs text-gray-600">Comment (optional)</label>
-            <textarea
-              value={reviewComment}
-              onChange={(e) => setReviewComment(e.target.value)}
-              className="border rounded px-3 py-2 w-full min-h-[44px]"
-              placeholder="What did you fix / add?"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => workflowAction("resubmit")}
-              disabled={acting}
-              className="bg-indigo-600 text-white px-3 py-2 rounded hover:bg-indigo-700 disabled:opacity-60"
-              title="Send for review again"
-            >
-              {acting ? "Submitting…" : "Resubmit for Review"}
-            </button>
-            <Link
-              to="/loans/applications"
-              className="px-3 py-2 rounded border hover:bg-gray-50"
-              title="Open applications to edit details/attachments"
-            >
-              Edit Application
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* REVIEW TOOLBAR (BM / COMPLIANCE / ACCOUNTING) */}
-      {(showBMToolbar || showCOToolbar || showDisburse) && (
-        <div className="bg-white p-4 rounded shadow space-y-3 border">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-semibold">
-              {showBMToolbar
-                ? "Branch Manager Review"
-                : showCOToolbar
-                ? "Compliance Review"
-                : "Accounting / Disbursement"}
-            </h3>
-            {showDisburse && (
-              <Link
-                to={`/loans/${id}/disburse`}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
-              >
-                Disburse
-              </Link>
-            )}
-          </div>
+      {/* REVIEW / DISBURSE TOOLBARS */}
+      {(showLOTB || showBMToolbar || showCOToolbar || showDisburse) && (
+        <div className="bg-white border rounded-xl shadow-sm p-6 space-y-4">
+          {showLOTB && (
+            <>
+              <h3 className="text-lg font-semibold">Changes Requested</h3>
+              <p className="text-sm text-gray-600">
+                Update the application and attach missing documents, then{" "}
+                <strong>Resubmit</strong>. Add a short note if helpful.
+              </p>
+              <label className="block text-xs text-gray-600">Comment (optional)</label>
+              <textarea
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                className="border rounded-lg px-3 py-2 w-full min-h-[44px]"
+                placeholder="What did you fix / add?"
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => workflowAction("resubmit")}
+                  disabled={acting}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60"
+                  title="Send for review again"
+                >
+                  {acting ? "Submitting…" : "Resubmit for Review"}
+                </button>
+                <Link
+                  to="/loans/applications"
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+                  title="Open applications to edit details/attachments"
+                >
+                  Edit Application
+                </Link>
+              </div>
+            </>
+          )}
 
           {(showBMToolbar || showCOToolbar) && (
             <>
-              <div className="grid sm:grid-cols-2 gap-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">
+                  {showBMToolbar ? "Branch Manager Review" : "Compliance Review"}
+                </h3>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-gray-600">
-                    Suggested Principal Amount
-                  </label>
+                  <label className="block text-xs text-gray-600">Suggested Principal</label>
                   <input
                     type="number"
-                    className="border rounded px-3 py-2 w-full"
+                    className="border rounded-lg px-3 py-2 w-full"
                     value={suggestedAmount}
                     onChange={(e) => setSuggestedAmount(e.target.value)}
                     min="0"
                     step="0.01"
                   />
-                  <p className="text-[11px] text-gray-500 mt-0.5">
+                  <p className="text-[11px] text-gray-500 mt-1">
                     Save a suggestion or approve with a different amount.
                   </p>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-600">Comment</label>
                   <textarea
-                    className="border rounded px-3 py-2 w-full min-h-[44px]"
+                    className="border rounded-lg px-3 py-2 w-full min-h-[44px]"
                     placeholder="Why approving / changes / rejection?"
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
@@ -499,20 +474,19 @@ export default function LoanDetails() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() =>
-                    workflowAction(
-                      showBMToolbar ? "bm_approve" : "compliance_approve",
-                      { suggestedAmount }
-                    )
+                    workflowAction(showBMToolbar ? "bm_approve" : "compliance_approve", {
+                      suggestedAmount,
+                    })
                   }
                   disabled={acting}
-                  className="bg-emerald-600 text-white px-3 py-2 rounded hover:bg-emerald-700 disabled:opacity-60"
+                  className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60"
                 >
                   {acting ? "Working…" : "Approve"}
                 </button>
                 <button
                   onClick={() => workflowAction("request_changes")}
                   disabled={acting}
-                  className="bg-amber-600 text-white px-3 py-2 rounded hover:bg-amber-700 disabled:opacity-60"
+                  className="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-60"
                   title="Send back to Loan Officer with requested changes"
                 >
                   {acting ? "Working…" : "Request Changes"}
@@ -520,14 +494,14 @@ export default function LoanDetails() {
                 <button
                   onClick={() => workflowAction("reject")}
                   disabled={acting}
-                  className="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-800 disabled:opacity-60"
+                  className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-60"
                 >
                   {acting ? "Working…" : "Reject"}
                 </button>
                 <button
                   onClick={saveSuggestion}
                   disabled={acting}
-                  className="px-3 py-2 rounded border hover:bg-gray-50 disabled:opacity-60"
+                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 disabled:opacity-60"
                 >
                   {acting ? "Saving…" : "Save Suggestion"}
                 </button>
@@ -536,34 +510,42 @@ export default function LoanDetails() {
           )}
 
           {showDisburse && (
-            <p className="text-sm text-gray-600">
-              This loan is approved. Proceed to disbursement to finalize payout.
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                This loan is approved. Proceed to disbursement to finalize payout.
+              </p>
+              <Link
+                to={`/loans/${id}/disburse`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                Disburse
+              </Link>
+            </div>
           )}
         </div>
       )}
 
       {/* QUICK ACTIONS */}
       <div className="flex flex-wrap gap-3">
-        <Link to={`/loans`} className="px-3 py-2 rounded border">
+        <Link to={`/loans`} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
           Back to Loans
         </Link>
         <button
           onClick={openScheduleModal}
-          className="px-3 py-2 rounded border hover:bg-gray-50"
+          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
         >
           View Schedule
         </button>
         <button
           onClick={() => setOpenRepay(true)}
-          className="px-3 py-2 rounded border hover:bg-gray-50"
+          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
         >
           Post Repayment
         </button>
         {loan.status !== "closed" && (
           <button
             onClick={closeLoan}
-            className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700"
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
           >
             Close Loan
           </button>
@@ -571,84 +553,99 @@ export default function LoanDetails() {
       </div>
 
       {/* REPAYMENTS */}
-      <div className="bg-white p-4 rounded shadow">
-        <h3 className="text-lg font-semibold mb-2">Repayments</h3>
-        {loadingRepayments ? (
-          <p>Loading repayments…</p>
-        ) : repayments.length === 0 ? (
-          <p>No repayments found.</p>
-        ) : (
-          <table className="min-w-full text-sm border">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="border px-2 py-1">Date</th>
-                <th className="border px-2 py-1">Amount</th>
-                <th className="border px-2 py-1">Method</th>
-                <th className="border px-2 py-1">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {repayments.map((r, i) => (
-                <tr key={r.id || i}>
-                  <td className="border px-2 py-1">{fmtDate(r.date)}</td>
-                  <td className="border px-2 py-1">
-                    {fmtTZS(r.amount, currency)}
-                  </td>
-                  <td className="border px-2 py-1">{r.method || "—"}</td>
-                  <td className="border px-2 py-1">{r.notes || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <div className="bg-white border rounded-xl shadow-sm">
+        <div className="px-6 py-4 border-b">
+          <h3 className="text-lg font-semibold">Repayments</h3>
+        </div>
+        <div className="px-6 py-4">
+          {loadingRepayments ? (
+            <p>Loading repayments…</p>
+          ) : repayments.length === 0 ? (
+            <div className="text-sm text-gray-600">No repayments found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0 z-10">
+                  <tr className="text-left">
+                    <th className="px-3 py-2 border-b">Date</th>
+                    <th className="px-3 py-2 border-b">Amount</th>
+                    <th className="px-3 py-2 border-b">Method</th>
+                    <th className="px-3 py-2 border-b">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {repayments.map((r, i) => (
+                    <tr key={r.id || i} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 whitespace-nowrap">{fmtDate(r.date)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(r.amount, currency)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.method || "—"}</td>
+                      <td className="px-3 py-2">{r.notes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* COMMENTS */}
-      <div className="bg-white p-4 rounded shadow">
-        <h3 className="text-lg font-semibold mb-2">Comments</h3>
-        {loadingComments ? (
-          <p>Loading comments…</p>
-        ) : comments.length === 0 ? (
-          <p>No comments yet.</p>
-        ) : (
-          <div className="space-y-2 mb-3 max-h-64 overflow-auto pr-1">
-            {comments.map((c, i) => (
-              <div key={c.id || i} className="text-sm border-b pb-1">
-                <p>{c.content}</p>
-                <span className="text-gray-400 text-xs">
-                  {fmtDateTime(c.createdAt)}
-                </span>
-              </div>
-            ))}
+      <div className="bg-white border rounded-xl shadow-sm">
+        <div className="px-6 py-4 border-b">
+          <h3 className="text-lg font-semibold">Comments</h3>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          {loadingComments ? (
+            <p>Loading comments…</p>
+          ) : comments.length === 0 ? (
+            <div className="text-sm text-gray-600">No comments yet.</div>
+          ) : (
+            <div className="space-y-3 max-h-72 overflow-auto pr-1">
+              {comments.map((c, i) => (
+                <div key={c.id || i} className="flex gap-3">
+                  {/* simple avatar using initial */}
+                  <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold select-none">
+                    {(c.author?.name || "U").slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="flex-1 border-b pb-2">
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span className="font-medium text-gray-700">
+                        {c.author?.name || "User"}
+                      </span>
+                      <span>{fmtDateTime(c.createdAt)}</span>
+                    </div>
+                    <p className="text-sm mt-0.5">{c.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-start gap-2">
+            <textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              className="border rounded-lg px-3 py-2 w-full min-h-[44px]"
+              placeholder="Add a comment"
+            />
+            <button
+              onClick={addComment}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              Post
+            </button>
           </div>
-        )}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            className="border rounded px-2 py-1 w-full"
-            placeholder="Add a comment"
-          />
-          <button
-            onClick={addComment}
-            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
-          >
-            Post
-          </button>
         </div>
       </div>
 
       {/* REPAYMENT MODAL */}
       {openRepay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Post Repayment</h4>
-              <button
-                onClick={() => setOpenRepay(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
+              <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">
                 ✕
               </button>
             </div>
@@ -658,10 +655,8 @@ export default function LoanDetails() {
                 <input
                   type="number"
                   value={repForm.amount}
-                  onChange={(e) =>
-                    setRepForm((s) => ({ ...s, amount: e.target.value }))
-                  }
-                  className="border rounded px-2 py-1 w-full"
+                  onChange={(e) => setRepForm((s) => ({ ...s, amount: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
                   min="0"
                   step="0.01"
                 />
@@ -671,20 +666,16 @@ export default function LoanDetails() {
                 <input
                   type="date"
                   value={repForm.date}
-                  onChange={(e) =>
-                    setRepForm((s) => ({ ...s, date: e.target.value }))
-                  }
-                  className="border rounded px-2 py-1 w-full"
+                  onChange={(e) => setRepForm((s) => ({ ...s, date: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
                 />
               </div>
               <div>
                 <label className="block text-sm text-gray-600">Method</label>
                 <select
                   value={repForm.method}
-                  onChange={(e) =>
-                    setRepForm((s) => ({ ...s, method: e.target.value }))
-                  }
-                  className="border rounded px-2 py-1 w-full"
+                  onChange={(e) => setRepForm((s) => ({ ...s, method: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
                 >
                   <option value="cash">Cash</option>
                   <option value="mobile">Mobile Money</option>
@@ -692,31 +683,24 @@ export default function LoanDetails() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-600">
-                  Notes (optional)
-                </label>
+                <label className="block text-sm text-gray-600">Notes (optional)</label>
                 <input
                   type="text"
                   value={repForm.notes}
-                  onChange={(e) =>
-                    setRepForm((s) => ({ ...s, notes: e.target.value }))
-                  }
-                  className="border rounded px-2 py-1 w-full"
+                  onChange={(e) => setRepForm((s) => ({ ...s, notes: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
                   placeholder="Receipt no., reference, etc."
                 />
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setOpenRepay(false)}
-                className="px-3 py-2 rounded border"
-              >
+              <button onClick={() => setOpenRepay(false)} className="px-4 py-2 rounded-lg border">
                 Cancel
               </button>
               <button
                 onClick={postRepayment}
                 disabled={postLoading}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
               >
                 {postLoading ? "Posting…" : "Post"}
               </button>
@@ -728,13 +712,10 @@ export default function LoanDetails() {
       {/* SCHEDULE MODAL */}
       {openSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Repayment Schedule</h4>
-              <button
-                onClick={() => setOpenSchedule(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
+              <button onClick={() => setOpenSchedule(false)} className="text-gray-500 hover:text-gray-700">
                 ✕
               </button>
             </div>
@@ -743,40 +724,40 @@ export default function LoanDetails() {
             ) : !schedule || schedule.length === 0 ? (
               <p>No schedule available.</p>
             ) : (
-              <div className="max-h-[60vh] overflow-auto">
-                <table className="min-w-full text-sm border">
-                  <thead className="bg-gray-100 sticky top-0">
-                    <tr>
-                      <th className="border px-2 py-1">#</th>
-                      <th className="border px-2 py-1">Due Date</th>
-                      <th className="border px-2 py-1">Principal</th>
-                      <th className="border px-2 py-1">Interest</th>
-                      <th className="border px-2 py-1">Penalty</th>
-                      <th className="border px-2 py-1">Total</th>
-                      <th className="border px-2 py-1">Balance</th>
+              <div className="max-h-[70vh] overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr className="text-left">
+                      <th className="px-3 py-2 border-b">#</th>
+                      <th className="px-3 py-2 border-b">Due Date</th>
+                      <th className="px-3 py-2 border-b">Principal</th>
+                      <th className="px-3 py-2 border-b">Interest</th>
+                      <th className="px-3 py-2 border-b">Penalty</th>
+                      <th className="px-3 py-2 border-b">Total</th>
+                      <th className="px-3 py-2 border-b">Balance</th>
+                      <th className="px-3 py-2 border-b">Status</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-100">
                     {schedule.map((row, idx) => (
-                      <tr key={row.id || idx}>
-                        <td className="border px-2 py-1">{idx + 1}</td>
-                        <td className="border px-2 py-1">
-                          {fmtDate(row.dueDate)}
-                        </td>
-                        <td className="border px-2 py-1">
-                          {fmtTZS(row.principal, currency)}
-                        </td>
-                        <td className="border px-2 py-1">
-                          {fmtTZS(row.interest, currency)}
-                        </td>
-                        <td className="border px-2 py-1">
-                          {fmtTZS(row.penalty || 0, currency)}
-                        </td>
-                        <td className="border px-2 py-1">
-                          {fmtTZS(row.total, currency)}
-                        </td>
-                        <td className="border px-2 py-1">
-                          {fmtTZS(row.balance, currency)}
+                      <tr key={row.id || idx} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 whitespace-nowrap">{idx + 1}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{fmtDate(row.dueDate)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.principal, currency)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.interest, currency)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.penalty || 0, currency)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.total, currency)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.balance, currency)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {row.paid || row.settled ? (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                              Settled
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+                              Pending
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -784,11 +765,8 @@ export default function LoanDetails() {
                 </table>
               </div>
             )}
-            <div className="mt-3 flex justify-end">
-              <button
-                onClick={() => setOpenSchedule(false)}
-                className="px-3 py-2 rounded border"
-              >
+            <div className="mt-4 flex justify-end">
+              <button onClick={() => setOpenSchedule(false)} className="px-4 py-2 rounded-lg border">
                 Close
               </button>
             </div>

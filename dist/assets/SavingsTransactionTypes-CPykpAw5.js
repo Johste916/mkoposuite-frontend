@@ -1,0 +1,1 @@
+import{j as t}from"./index-B1RC7Rfk.js";import{T as s}from"./TypesEditor-CJonVEft.js";import"./admin-BCz00vDH.js";import"./index-85vZ0W9j.js";function n(){return t.jsx(s,{title:"Savings Transaction Types",category:"savings-transaction-types"})}export{n as default};
