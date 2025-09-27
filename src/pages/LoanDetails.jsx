@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api";
 
@@ -16,7 +16,6 @@ const statusColors = {
   active: "bg-emerald-100 text-emerald-800 ring-emerald-200",
   closed: "bg-slate-200 text-slate-700 ring-slate-300",
 };
-
 const chip =
   "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ring-inset";
 
@@ -43,7 +42,6 @@ function deriveStageFromStatus(status) {
   return "";
 }
 
-/* ---------- component ---------- */
 export default function LoanDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -61,7 +59,7 @@ export default function LoanDetails() {
 
   const [errs, setErrs] = useState(null);
 
-  // review state (BM/Compliance + Officer resubmit uses comment too)
+  // review state
   const [reviewComment, setReviewComment] = useState("");
   const [suggestedAmount, setSuggestedAmount] = useState("");
   const [acting, setActing] = useState(false);
@@ -93,7 +91,6 @@ export default function LoanDetails() {
 
   const workflowStage = loan?.workflowStage || deriveStageFromStatus(loan?.status);
 
-  // Show bars depending on stage
   const showLOTB =
     canOFF &&
     [
@@ -112,6 +109,8 @@ export default function LoanDetails() {
   const showDisburse = canACC && (loan?.status === "approved" || workflowStage === "accounting");
 
   /* ---------- load ---------- */
+  const lastLoadedId = useRef(null); // avoids duplicate loads in React 18 StrictMode
+
   const loadLoan = async () => {
     setLoading(true);
     setErrs(null);
@@ -126,12 +125,18 @@ export default function LoanDetails() {
           .then((r) => setRepayments(r.data || []))
           .catch(() => setRepayments([]))
           .finally(() => setLoadingRepayments(false)),
+
         api
           .get(`/comments/loan/${id}`)
-          .then((r) => setComments(r.data || []))
-          .catch(() => setComments([]))
+          .then((r) => setComments(Array.isArray(r.data) ? r.data : []))
+          .catch((e) => {
+            // Graceful handling for 500s so UI stays clean
+            console.warn("Comments fetch failed:", e?.response?.data || e?.message);
+            setComments([]);
+          })
           .finally(() => setLoadingComments(false)),
       ];
+
       if (l?.productId) {
         tasks.push(
           api
@@ -140,7 +145,8 @@ export default function LoanDetails() {
             .catch(() => setProduct(null))
         );
       }
-      // Try to prefetch schedule for at-a-glance stats (non-blocking)
+
+      // prefetch schedule (non-blocking)
       tasks.push(
         api
           .get(`/loans/${id}/schedule`)
@@ -158,9 +164,14 @@ export default function LoanDetails() {
   };
 
   useEffect(() => {
+    if (lastLoadedId.current === id) return;
+    lastLoadedId.current = id;
+
     setSchedule(null);
     setReviewComment("");
     setNewComment("");
+    setLoadingRepayments(true);
+    setLoadingComments(true);
     loadLoan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -170,7 +181,7 @@ export default function LoanDetails() {
     try {
       await api.post(`/comments`, { loanId: id, content });
       const r = await api.get(`/comments/loan/${id}`);
-      setComments(r.data || []);
+      setComments(Array.isArray(r.data) ? r.data : []);
     } catch {
       /* ignore */
     }
@@ -192,7 +203,6 @@ export default function LoanDetails() {
       setReviewComment("");
       alert("Action applied.");
     } catch (e) {
-      // Fallbacks to legacy endpoints if /workflow is not available
       try {
         if (action === "bm_approve" || action === "compliance_approve") {
           await api.patch(`/loans/${id}/status`, { status: "approved" });
@@ -274,23 +284,31 @@ export default function LoanDetails() {
     }
   };
 
-  /* ---------- schedule ---------- */
-  const openScheduleModal = async () => {
-    setOpenSchedule(true);
-    if (schedule) return;
-    setLoadingSchedule(true);
+  /* ---------- repayments ---------- */
+  const handlePostRepayment = async () => {
+    const amt = Number(repForm.amount);
+    if (!amt || amt <= 0) return alert("Enter a valid amount.");
+    setPostLoading(true);
     try {
-      const res = await api.get(`/loans/${id}/schedule`);
-      setSchedule(res.data || []);
+      await api.post(`/repayments`, { loanId: id, ...repForm, amount: amt });
+      await loadLoan();
+      setOpenRepay(false);
+      setRepForm({
+        amount: "",
+        date: new Date().toISOString().slice(0, 10),
+        method: "cash",
+        notes: "",
+      });
+      alert("Repayment posted.");
     } catch (e) {
       console.error(e);
-      setSchedule(null);
+      alert("Failed to post repayment.");
     } finally {
-      setLoadingSchedule(false);
+      setPostLoading(false);
     }
   };
 
-  /* ---------- derive quick stats ---------- */
+  /* ---------- quick stats ---------- */
   const outstanding = loan?.outstanding ?? null;
   const nextDue =
     Array.isArray(schedule) && schedule.length
@@ -320,7 +338,7 @@ export default function LoanDetails() {
         </button>
       </div>
 
-      {/* TOP SUMMARY / KEY FACTS */}
+      {/* SUMMARY */}
       <div className="bg-white border rounded-xl shadow-sm p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
           <div className="col-span-2">
@@ -530,16 +548,10 @@ export default function LoanDetails() {
         <Link to={`/loans`} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
           Back to Loans
         </Link>
-        <button
-          onClick={openScheduleModal}
-          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
-        >
+        <button onClick={() => setOpenSchedule(true)} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
           View Schedule
         </button>
-        <button
-          onClick={() => setOpenRepay(true)}
-          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
-        >
+        <button onClick={() => setOpenRepay(true)} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
           Post Repayment
         </button>
         {loan.status !== "closed" && (
@@ -604,15 +616,12 @@ export default function LoanDetails() {
             <div className="space-y-3 max-h-72 overflow-auto pr-1">
               {comments.map((c, i) => (
                 <div key={c.id || i} className="flex gap-3">
-                  {/* simple avatar using initial */}
                   <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold select-none">
                     {(c.author?.name || "U").slice(0, 1).toUpperCase()}
                   </div>
                   <div className="flex-1 border-b pb-2">
                     <div className="flex justify-between text-xs text-gray-500">
-                      <span className="font-medium text-gray-700">
-                        {c.author?.name || "User"}
-                      </span>
+                      <span className="font-medium text-gray-700">{c.author?.name || "User"}</span>
                       <span>{fmtDateTime(c.createdAt)}</span>
                     </div>
                     <p className="text-sm mt-0.5">{c.content}</p>
@@ -645,9 +654,7 @@ export default function LoanDetails() {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Post Repayment</h4>
-              <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">
-                ✕
-              </button>
+              <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <div className="space-y-3">
               <div>
@@ -694,11 +701,9 @@ export default function LoanDetails() {
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenRepay(false)} className="px-4 py-2 rounded-lg border">
-                Cancel
-              </button>
+              <button onClick={() => setOpenRepay(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
               <button
-                onClick={postRepayment}
+                onClick={handlePostRepayment}
                 disabled={postLoading}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
               >
@@ -715,9 +720,7 @@ export default function LoanDetails() {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Repayment Schedule</h4>
-              <button onClick={() => setOpenSchedule(false)} className="text-gray-500 hover:text-gray-700">
-                ✕
-              </button>
+              <button onClick={() => setOpenSchedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             {loadingSchedule ? (
               <p>Loading schedule…</p>
