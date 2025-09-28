@@ -61,6 +61,9 @@ const Loan = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // per-row action loading state: { [loanId]: 'approve'|'reject'|'disburse'|'close'|'delete'|'reissue'|'schedule'|null }
+  const [rowBusy, setRowBusy] = useState({});
+
   // filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -77,8 +80,9 @@ const Loan = () => {
         params: { page: 1, pageSize: 500, include: "aggregates" },
       });
       setLoans(toArray(res.data));
-    } catch {
-      alert("Failed to load loans");
+    } catch (e) {
+      console.error(e);
+      alert(`Failed to load loans${e?.response?.data?.error ? `: ${e.response.data.error}` : ""}`);
       setLoans([]);
     } finally {
       setLoading(false);
@@ -168,55 +172,101 @@ const Loan = () => {
       pending: statusOf("pending"),
       approved: statusOf("approved"),
       disbursed: statusOf("disbursed"),
-      active: statusOf("active"),
+      active: statusOf("active"), // UI-only; backend treats "active" as disbursed & not closed
       closed: statusOf("closed"),
       rejected: statusOf("rejected"),
     };
   }, [filteredLoans]);
 
-  // actions
-  const handleStatusUpdate = async (id, action) => {
+  /* ---------------- actions ---------------- */
+
+  // unified status update -> current backend route PATCH /loans/:id/status with body { status }
+  const patchStatus = async (id, next, options = {}) => {
+    setRowBusy((s) => ({ ...s, [id]: next }));
     try {
-      await api.patch(`/loans/${id}/${action}`);
-      fetchLoans();
+      await api.patch(`/loans/${id}/status`, { status: next, ...options });
+      await fetchLoans();
     } catch (e) {
       console.error(e);
-      alert(`Failed to ${action} loan`);
+      const msg = e?.response?.data?.error || e?.message || "Unknown error";
+      alert(`Failed to set status to "${next}": ${msg}`);
+    } finally {
+      setRowBusy((s) => ({ ...s, [id]: null }));
+    }
+  };
+
+  const handleApprove = async (id) => {
+    if (!window.confirm("Approve this loan?")) return;
+    await patchStatus(id, "approved");
+  };
+
+  const handleReject = async (id) => {
+    if (!window.confirm("Reject this loan application?")) return;
+    await patchStatus(id, "rejected");
+  };
+
+  const handleDisburse = async (id) => {
+    if (!window.confirm("Disburse this loan now?")) return;
+    await patchStatus(id, "disbursed");
+  };
+
+  const handleClose = async (id, outstanding) => {
+    if (Number(outstanding) > 0) {
+      const ok = window.confirm(
+        `This loan shows outstanding ${currency(outstanding)}.\n\nClose anyway (sets override)?`
+      );
+      if (!ok) return;
+      await patchStatus(id, "closed", { override: true });
+    } else {
+      if (!window.confirm("Close this loan?")) return;
+      await patchStatus(id, "closed");
     }
   };
 
   const handleEdit = (id) => navigate(`/loans/${id}/edit`);
+
   const handleSchedule = async (id) => {
-    // warm the schedule endpoint (surfacing backend errors right away)
+    setRowBusy((s) => ({ ...s, [id]: "schedule" }));
     try {
+      // warm the schedule endpoint (surfacing backend errors right away)
       await api.get(`/loans/${id}/schedule`);
     } catch (e) {
       console.warn("Schedule endpoint returned an error:", e?.response?.data || e?.message);
       // still navigate – details page can show more context
+    } finally {
+      setRowBusy((s) => ({ ...s, [id]: null }));
     }
     navigate(`/loans/${id}`);
   };
+
   const handleRepay = (id) => navigate(`/loans/${id}`); // repay modal is on details page
   const handleReschedule = (id) => navigate(`/loans/${id}/reschedule`);
 
   const handleDeleteLoan = async (id) => {
     if (!window.confirm("Delete this loan permanently? This cannot be undone.")) return;
+    setRowBusy((s) => ({ ...s, [id]: "delete" }));
     try {
       await api.delete(`/loans/${id}`);
-      fetchLoans();
-    } catch {
-      alert("Failed to delete loan.");
+      await fetchLoans();
+    } catch (e) {
+      console.error(e);
+      alert(`Failed to delete loan${e?.response?.data?.error ? `: ${e.response.data.error}` : ""}`);
+    } finally {
+      setRowBusy((s) => ({ ...s, [id]: null }));
     }
   };
 
   const handleReissueLoan = async (id) => {
-    if (!window.confirm("Reissue this loan (create a new pending copy with same terms)?")) return;
+    if (!window.confirm("Reissue this loan (re-adjust dates and regenerate schedule)?")) return;
+    setRowBusy((s) => ({ ...s, [id]: "reissue" }));
     try {
       await api.post(`/loans/${id}/reissue`);
-      fetchLoans();
+      await fetchLoans();
     } catch (e) {
       console.error(e);
-      alert("Failed to reissue loan.");
+      alert(`Failed to reissue loan${e?.response?.data?.error ? `: ${e.response.data.error}` : ""}`);
+    } finally {
+      setRowBusy((s) => ({ ...s, [id]: null }));
     }
   };
 
@@ -339,6 +389,8 @@ const Loan = () => {
         return `${base} bg-gray-200 text-gray-900`;
     }
   };
+
+  const isBusy = (id, actionName) => rowBusy[id] === actionName;
 
   /* ---------------- render ---------------- */
   return (
@@ -467,7 +519,7 @@ const Loan = () => {
             </thead>
             <tbody>
               {filteredLoans.map((l) => {
-                const status = l.status || l.loanStatus;
+                const status = (l.status || l.loanStatus || "").toLowerCase();
                 const borrowerName =
                   l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "N/A";
                 const productName = productsById[String(l.productId)]?.name || "—";
@@ -495,6 +547,9 @@ const Loan = () => {
                   paidGuess = currency(Math.max(0, base - Number(outstandingRaw)));
                 }
 
+                const busy = (name) => isBusy(l.id, name);
+                const btnClass = "text-black underline disabled:opacity-40 disabled:cursor-not-allowed";
+
                 return (
                   <tr key={l.id} className="hover:bg-gray-50">
                     <td className="px-2 py-2 border-2 border-black/20">{l.id}</td>
@@ -512,43 +567,61 @@ const Loan = () => {
                       <span className={statusBadge(status)}>{status}</span>
                     </td>
                     <td className="px-2 py-2 border-2 border-black/20">
-                      <div className="space-x-3">
-                        <button onClick={() => navigate(`/loans/${l.id}`)} className="text-black underline">
+                      <div className="flex flex-wrap gap-3">
+                        <button onClick={() => navigate(`/loans/${l.id}`)} className={btnClass}>
                           View
                         </button>
-                        <button onClick={() => handleEdit(l.id)} className="text-black underline">
+                        <button onClick={() => handleEdit(l.id)} className={btnClass}>
                           Edit
                         </button>
-                        <button onClick={() => handleSchedule(l.id)} className="text-black underline">
-                          Schedule
+                        <button onClick={() => handleSchedule(l.id)} className={btnClass} disabled={busy("schedule")}>
+                          {busy("schedule") ? "Scheduling…" : "Schedule"}
                         </button>
-                        <button onClick={() => handleRepay(l.id)} className="text-black underline">
+                        <a
+                          href={`/api/loans/${l.id}/schedule/export.csv`}
+                          className={btnClass}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Export Schedule
+                        </a>
+                        <button onClick={() => handleRepay(l.id)} className={btnClass}>
                           Repay
                         </button>
-                        <button onClick={() => handleReschedule(l.id)} className="text-black underline">
+                        <button onClick={() => handleReschedule(l.id)} className={btnClass}>
                           Reschedule
                         </button>
-                        <button onClick={() => handleReissueLoan(l.id)} className="text-black underline">
-                          Reissue
-                        </button>
-                        <button onClick={() => handleDeleteLoan(l.id)} className="text-black underline">
-                          Delete
-                        </button>
-                        {(status || "").toLowerCase() === "pending" && (
+                        {/* Status-driven actions */}
+                        {status === "pending" && (
                           <>
-                            <button onClick={() => handleStatusUpdate(l.id, "approve")} className="text-black underline">
-                              Approve
+                            <button onClick={() => handleApprove(l.id)} className={btnClass} disabled={busy("approved")}>
+                              {busy("approved") ? "Approving…" : "Approve"}
                             </button>
-                            <button onClick={() => handleStatusUpdate(l.id, "reject")} className="text-black underline">
-                              Reject
+                            <button onClick={() => handleReject(l.id)} className={btnClass} disabled={busy("rejected")}>
+                              {busy("rejected") ? "Rejecting…" : "Reject"}
                             </button>
                           </>
                         )}
-                        {(status || "").toLowerCase() === "approved" && (
-                          <button onClick={() => handleStatusUpdate(l.id, "disburse")} className="text-black underline">
-                            Disburse
+                        {status === "approved" && (
+                          <button onClick={() => handleDisburse(l.id)} className={btnClass} disabled={busy("disbursed")}>
+                            {busy("disbursed") ? "Disbursing…" : "Disburse"}
                           </button>
                         )}
+                        {(status === "disbursed" || status === "active") && (
+                          <button
+                            onClick={() => handleClose(l.id, outstandingRaw)}
+                            className={btnClass}
+                            disabled={busy("closed")}
+                          >
+                            {busy("closed") ? "Closing…" : "Close"}
+                          </button>
+                        )}
+                        <button onClick={() => handleReissueLoan(l.id)} className={btnClass} disabled={busy("reissue")}>
+                          {busy("reissue") ? "Reissuing…" : "Reissue"}
+                        </button>
+                        <button onClick={() => handleDeleteLoan(l.id)} className={btnClass} disabled={busy("delete")}>
+                          {busy("delete") ? "Deleting…" : "Delete"}
+                        </button>
                       </div>
                     </td>
                   </tr>
