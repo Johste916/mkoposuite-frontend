@@ -37,6 +37,20 @@ const fmtDate = (d) => {
   return dt.toLocaleDateString();
 };
 
+// same logic as backend helper
+function addMonthsDateOnly(dateStr, months) {
+  if (!dateStr) return "";
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  if (!y || !m || !d) return dateStr;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const targetMonthIndex = dt.getUTCMonth() + Number(months || 0);
+  const target = new Date(Date.UTC(dt.getUTCFullYear(), targetMonthIndex, dt.getUTCDate()));
+  if (target.getUTCMonth() !== ((m - 1 + Number(months || 0)) % 12 + 12) % 12) {
+    target.setUTCDate(0);
+  }
+  return target.toISOString().slice(0, 10);
+}
+
 /* ---------------- page ---------------- */
 const Loan = () => {
   const navigate = useNavigate();
@@ -55,11 +69,10 @@ const Loan = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // fetchers (tolerant to many backend shapes)
+  // fetchers
   const fetchLoans = async () => {
     setLoading(true);
     try {
-      // ask for aggregates if backend supports it (harmless if ignored)
       const res = await api.get("/loans", {
         params: { page: 1, pageSize: 500, include: "aggregates" },
       });
@@ -98,6 +111,10 @@ const Loan = () => {
   const productsById = useMemo(
     () => Object.fromEntries((products || []).map((p) => [String(p.id), p])),
     [products]
+  );
+  const branchesById = useMemo(
+    () => Object.fromEntries((branches || []).map((b) => [String(b.id), b])),
+    [branches]
   );
 
   const withinDate = (l) => {
@@ -162,13 +179,23 @@ const Loan = () => {
     try {
       await api.patch(`/loans/${id}/${action}`);
       fetchLoans();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert(`Failed to ${action} loan`);
     }
   };
 
   const handleEdit = (id) => navigate(`/loans/${id}/edit`);
-  const handleSchedule = (id) => navigate(`/loans/${id}`);
+  const handleSchedule = async (id) => {
+    // warm the schedule endpoint (surfacing backend errors right away)
+    try {
+      await api.get(`/loans/${id}/schedule`);
+    } catch (e) {
+      console.warn("Schedule endpoint returned an error:", e?.response?.data || e?.message);
+      // still navigate – details page can show more context
+    }
+    navigate(`/loans/${id}`);
+  };
   const handleRepay = (id) => navigate(`/loans/${id}`); // repay modal is on details page
   const handleReschedule = (id) => navigate(`/loans/${id}/reschedule`);
 
@@ -183,11 +210,12 @@ const Loan = () => {
   };
 
   const handleReissueLoan = async (id) => {
-    if (!window.confirm("Reissue this loan (create a new copy with same terms)?")) return;
+    if (!window.confirm("Reissue this loan (create a new pending copy with same terms)?")) return;
     try {
       await api.post(`/loans/${id}/reissue`);
       fetchLoans();
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("Failed to reissue loan.");
     }
   };
@@ -195,45 +223,61 @@ const Loan = () => {
   // exports
   const exportRows = useMemo(
     () =>
-      filteredLoans.map((l) => ({
-        id: l.id,
-        borrower:
-          l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "",
-        product: productsById[String(l.productId)]?.name || "",
-        amount: l.amount ?? l.principal ?? "",
-        rate: l.interestRate ?? l.rate ?? "",
-        termMonths: l.termMonths ?? l.durationMonths ?? l.term_months ?? "",
-        branch: l.branch?.name || "",
-        status: l.status || l.loanStatus || "",
-        startDate:
+      filteredLoans.map((l) => {
+        const amount = Number(l.amount ?? l.principal ?? 0);
+        const totalInterest = Number(l.totalInterest ?? 0);
+        const outstanding =
+          l.outstanding ?? l.outstandingAmount ?? l.remainingAmount ?? undefined;
+
+        // Try to derive paid amount when we can
+        let paidAmount = "";
+        if (Number.isFinite(outstanding)) {
+          const base = Number.isFinite(totalInterest) ? amount + totalInterest : amount;
+          paidAmount = Math.max(0, base - Number(outstanding));
+        }
+
+        const start =
           l.startDate ||
           l.disbursementDate ||
           l.releaseDate ||
           l.createdAt ||
           l.created_at ||
-          "",
-        outstandingPrincipal:
-          l.outstandingPrincipal ?? l.remainingPrincipal ?? "",
-        outstandingInterest:
-          l.outstandingInterest ?? l.remainingInterest ?? "",
-        closedDate: l.closedAt || l.closedDate || l.closeDate || "",
-      })),
-    [filteredLoans, productsById]
+          "";
+
+        const term = l.termMonths ?? l.durationMonths ?? l.term_months ?? null;
+        const endDate = l.endDate || (start && term ? addMonthsDateOnly(String(start).slice(0, 10), term) : "");
+
+        return {
+          id: l.id,
+          borrower: l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "",
+          branch: l.branch?.name || branchesById[String(l.branchId || "")]?.name || "",
+          product: productsById[String(l.productId)]?.name || "",
+          amount,
+          rate: l.interestRate ?? l.rate ?? "",
+          termMonths: term ?? "",
+          startDate: start,
+          endDate,
+          paidAmount,
+          outstanding: Number.isFinite(outstanding) ? Number(outstanding) : "",
+          status: l.status || l.loanStatus || "",
+        };
+      }),
+    [filteredLoans, productsById, branchesById]
   );
 
   const exportHeaders = [
     { label: "Loan ID", key: "id" },
     { label: "Borrower", key: "borrower" },
+    { label: "Branch", key: "branch" },
     { label: "Product", key: "product" },
     { label: "Principal", key: "amount" },
     { label: "Rate (%)", key: "rate" },
     { label: "Term (months)", key: "termMonths" },
-    { label: "Branch", key: "branch" },
-    { label: "Status", key: "status" },
     { label: "Start Date", key: "startDate" },
-    { label: "Outstanding Principal", key: "outstandingPrincipal" },
-    { label: "Outstanding Interest", key: "outstandingInterest" },
-    { label: "Closing Date", key: "closedDate" },
+    { label: "End Date", key: "endDate" },
+    { label: "Paid Amount", key: "paidAmount" },
+    { label: "Outstanding Amount", key: "outstanding" },
+    { label: "Status", key: "status" },
   ];
 
   const exportPDF = () => {
@@ -241,19 +285,35 @@ const Loan = () => {
     doc.text("Loans Report", 14, 16);
     doc.autoTable({
       startY: 20,
-      head: [["ID", "Borrower", "Product", "Principal", "Rate (%)", "Term", "Branch", "Status", "Out P", "Out I", "Closing"]],
+      head: [
+        [
+          "ID",
+          "Borrower",
+          "Branch",
+          "Product",
+          "Principal",
+          "Rate (%)",
+          "Term",
+          "Start Date",
+          "End Date",
+          "Paid",
+          "Outstanding",
+          "Status",
+        ],
+      ],
       body: exportRows.map((r) => [
         r.id,
         r.borrower,
-        r.product,
-        r.amount,
-        r.rate,
-        r.termMonths,
         r.branch,
+        r.product,
+        currency(r.amount),
+        pct2(r.rate),
+        r.termMonths,
+        fmtDate(r.startDate),
+        fmtDate(r.endDate),
+        currency(r.paidAmount),
+        currency(r.outstanding),
         r.status,
-        r.outstandingPrincipal,
-        r.outstandingInterest,
-        fmtDate(r.closedDate),
       ]),
     });
     doc.save("loans.pdf");
@@ -387,15 +447,15 @@ const Loan = () => {
                 {[
                   "ID",
                   "Borrower",
+                  "Branch",
                   "Product",
                   "Principal",
-                  "Rate (%)",
-                  "Term",
-                  "Branch",
+                  "Interest Rate (%)",
+                  "Loan term",
                   "Start Date",
-                  "Out P",
-                  "Out I",
-                  "Closing",
+                  "End Date",
+                  "Paid Amount",
+                  "Outstanding Amount",
                   "Status",
                   "Actions",
                 ].map((h) => (
@@ -411,30 +471,43 @@ const Loan = () => {
                 const borrowerName =
                   l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "N/A";
                 const productName = productsById[String(l.productId)]?.name || "—";
-                const amount = currency(l.amount ?? l.principal);
+                const branchName = l.branch?.name || branchesById[String(l.branchId || "")]?.name || "—";
+
+                const amountNum = Number(l.amount ?? l.principal ?? 0);
+                const amount = currency(amountNum);
                 const rate = pct2(l.interestRate ?? l.rate);
                 const term = l.termMonths ?? l.durationMonths ?? l.term_months ?? "—";
-                const branchName = l.branch?.name || "—";
-                const start = fmtDate(
-                  l.startDate || l.disbursementDate || l.releaseDate || l.createdAt || l.created_at
-                );
-                const outP = l.outstandingPrincipal ?? l.remainingPrincipal ?? null;
-                const outI = l.outstandingInterest ?? l.remainingInterest ?? null;
-                const closed = l.closedAt || l.closedDate || l.closeDate || null;
+
+                const startRaw =
+                  l.startDate || l.disbursementDate || l.releaseDate || l.createdAt || l.created_at;
+                const start = fmtDate(startRaw);
+                const endRaw = l.endDate || (startRaw && term ? addMonthsDateOnly(String(startRaw).slice(0, 10), term) : "");
+                const end = fmtDate(endRaw);
+
+                const outstandingRaw =
+                  l.outstanding ?? l.outstandingAmount ?? l.remainingAmount ?? null;
+                const outstanding = outstandingRaw == null ? "—" : currency(outstandingRaw);
+
+                const totalInterest = Number(l.totalInterest ?? NaN);
+                let paidGuess = "—";
+                if (Number.isFinite(Number(outstandingRaw))) {
+                  const base = Number.isFinite(totalInterest) ? amountNum + totalInterest : amountNum;
+                  paidGuess = currency(Math.max(0, base - Number(outstandingRaw)));
+                }
 
                 return (
                   <tr key={l.id} className="hover:bg-gray-50">
                     <td className="px-2 py-2 border-2 border-black/20">{l.id}</td>
                     <td className="px-2 py-2 border-2 border-black/20">{borrowerName}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{branchName}</td>
                     <td className="px-2 py-2 border-2 border-black/20">{productName}</td>
                     <td className="px-2 py-2 border-2 border-black/20">{amount}</td>
                     <td className="px-2 py-2 border-2 border-black/20">{rate}</td>
                     <td className="px-2 py-2 border-2 border-black/20">{term}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{branchName}</td>
                     <td className="px-2 py-2 border-2 border-black/20">{start}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{outP == null ? "—" : currency(outP)}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{outI == null ? "—" : currency(outI)}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{fmtDate(closed)}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{end}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{paidGuess}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{outstanding}</td>
                     <td className="px-2 py-2 border-2 border-black/20">
                       <span className={statusBadge(status)}>{status}</span>
                     </td>

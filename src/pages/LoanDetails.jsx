@@ -7,6 +7,12 @@ const fmtTZS = (n, currency = "TZS") =>
   `\u200e${currency} ${Number(n || 0).toLocaleString()}`;
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "N/A");
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "");
+const fmtDateISO = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return String(d).slice(0, 10);
+  return dt.toISOString().slice(0, 10);
+};
 
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-800 ring-yellow-200",
@@ -114,6 +120,25 @@ export default function LoanDetails() {
   // schedule modal
   const [openSchedule, setOpenSchedule] = useState(false);
 
+  // edit modal
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    amount: "",
+    interestRate: "",
+    termMonths: "",
+    startDate: "",
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // reschedule modal
+  const [openReschedule, setOpenReschedule] = useState(false);
+  const [rescheduleForm, setRescheduleForm] = useState({
+    termMonths: "",
+    startDate: "",
+    previewOnly: false,
+  });
+  const [savingReschedule, setSavingReschedule] = useState(false);
+
   const currency = loan?.currency || "TZS";
   const statusBadge = statusColors[loan?.status] || "bg-slate-100 text-slate-800 ring-slate-200";
 
@@ -122,6 +147,8 @@ export default function LoanDetails() {
   const canCO = isCompliance(role);
   const canACC = isAccountant(role);
   const canOFF = isOfficer(role);
+  const canEdit = isAdmin(role) || canBM || canCO; // conservative editable permission
+  const canDelete = isAdmin(role) || canBM;        // conservative deletable permission
 
   const workflowStage = loan?.workflowStage || deriveStageFromStatus(loan?.status);
 
@@ -180,11 +207,13 @@ export default function LoanDetails() {
       }
 
       // prefetch schedule (non-blocking)
+      setLoadingSchedule(true);
       tasks.push(
         api
           .get(`/loans/${id}/schedule`)
           .then((r) => setSchedule(r.data || null))
           .catch(() => setSchedule(null))
+          .finally(() => setLoadingSchedule(false))
       );
 
       await Promise.all(tasks);
@@ -366,6 +395,102 @@ export default function LoanDetails() {
       alert("Failed to post repayment.");
     } finally {
       setPostLoading(false);
+    }
+  };
+
+  /* ---------- Edit / Delete / Reissue / Reschedule ---------- */
+  const openEditModal = () => {
+    setEditForm({
+      amount: loan?.amount ?? "",
+      interestRate: loan?.interestRate ?? "",
+      termMonths: loan?.termMonths ?? loan?.durationMonths ?? "",
+      startDate: fmtDateISO(loan?.startDate || loan?.releaseDate),
+    });
+    setOpenEdit(true);
+  };
+
+  const saveEdit = async () => {
+    const body = {
+      amount: editForm.amount === "" ? undefined : Number(editForm.amount),
+      interestRate: editForm.interestRate === "" ? undefined : Number(editForm.interestRate),
+      termMonths: editForm.termMonths === "" ? undefined : Number(editForm.termMonths),
+      startDate: editForm.startDate || undefined,
+    };
+    if (Number.isFinite(body.amount) && body.amount <= 0) return alert("Amount must be > 0");
+    if (Number.isFinite(body.termMonths) && body.termMonths <= 0) return alert("Term must be > 0");
+
+    setSavingEdit(true);
+    try {
+      await api.patch(`/loans/${id}`, body);
+      setOpenEdit(false);
+      await loadLoan();
+      alert("Loan updated.");
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || "Failed to update loan.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteLoan = async () => {
+    if (!window.confirm("This will permanently delete this loan. Continue?")) return;
+    try {
+      await api.delete(`/loans/${id}`);
+      alert("Loan deleted.");
+      navigate("/loans");
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || "Failed to delete loan.");
+    }
+  };
+
+  const openRescheduleModal = () => {
+    setRescheduleForm({
+      termMonths: loan?.termMonths ?? "",
+      startDate: fmtDateISO(loan?.startDate || loan?.releaseDate),
+      previewOnly: false,
+    });
+    setOpenReschedule(true);
+  };
+
+  const submitReschedule = async () => {
+    const body = {
+      termMonths:
+        rescheduleForm.termMonths === "" ? undefined : Number(rescheduleForm.termMonths),
+      startDate: rescheduleForm.startDate || undefined,
+      previewOnly: !!rescheduleForm.previewOnly,
+    };
+    if (Number.isFinite(body.termMonths) && body.termMonths <= 0) {
+      return alert("Term must be > 0");
+    }
+    setSavingReschedule(true);
+    try {
+      const { data } = await api.post(`/loans/${id}/reschedule`, body);
+      if (Array.isArray(data?.schedule)) {
+        setSchedule(data.schedule);
+      }
+      setOpenReschedule(false);
+      await loadLoan();
+      alert(data?.message || "Schedule updated.");
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || "Failed to reschedule.");
+    } finally {
+      setSavingReschedule(false);
+    }
+  };
+
+  const reissueLoan = async () => {
+    if (!window.confirm("Reissue creates a new pending loan cloned from this one. Continue?")) return;
+    try {
+      const { data } = await api.post(`/loans/${id}/reissue`);
+      const newId = data?.loan?.id || data?.id;
+      alert("New loan created.");
+      if (newId) navigate(`/loans/${newId}`);
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || "Failed to reissue loan.");
     }
   };
 
@@ -679,16 +804,58 @@ export default function LoanDetails() {
         <Link to={`/loans`} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
           Back to Loans
         </Link>
+
         <button onClick={() => setOpenSchedule(true)} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
           View Schedule
         </button>
+
+        <a
+          href={`/api/loans/${id}/schedule/export.csv`}
+          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+          target="_blank" rel="noreferrer"
+        >
+          Export CSV
+        </a>
+        <a
+          href={`/api/loans/${id}/schedule/export.pdf`}
+          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+          target="_blank" rel="noreferrer"
+        >
+          Export PDF
+        </a>
+
         <button onClick={() => setOpenRepay(true)} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
           Post Repayment
         </button>
+
+        {canEdit && (
+          <>
+            <button onClick={openEditModal} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+              Edit Loan
+            </button>
+            <button onClick={openRescheduleModal} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+              Reschedule
+            </button>
+          </>
+        )}
+
+        <button onClick={reissueLoan} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+          Reissue
+        </button>
+
+        {canDelete && (
+          <button
+            onClick={deleteLoan}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+          >
+            Delete
+          </button>
+        )}
+
         {loan.status !== "closed" && (
           <button
             onClick={closeLoan}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+            className="bg-red-50 text-red-700 px-4 py-2 rounded-lg border border-red-200 hover:bg-red-100"
           >
             Close Loan
           </button>
@@ -925,6 +1092,120 @@ export default function LoanDetails() {
             <div className="mt-4 flex justify-end">
               <button onClick={() => setOpenSchedule(false)} className="px-4 py-2 rounded-lg border">
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {openEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-lg font-semibold">Edit Loan</h4>
+              <button onClick={() => setOpenEdit(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+            </div>
+            <div className="grid gap-3">
+              <div>
+                <label className="block text-sm text-gray-600">Amount</label>
+                <input
+                  type="number"
+                  value={editForm.amount}
+                  onChange={(e) => setEditForm((s) => ({ ...s, amount: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600">Interest Rate (%)</label>
+                <input
+                  type="number"
+                  value={editForm.interestRate}
+                  onChange={(e) => setEditForm((s) => ({ ...s, interestRate: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600">Term (months)</label>
+                <input
+                  type="number"
+                  value={editForm.termMonths}
+                  onChange={(e) => setEditForm((s) => ({ ...s, termMonths: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600">Start Date</label>
+                <input
+                  type="date"
+                  value={editForm.startDate}
+                  onChange={(e) => setEditForm((s) => ({ ...s, startDate: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setOpenEdit(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
+              <button
+                onClick={saveEdit}
+                disabled={savingEdit}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {savingEdit ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RESCHEDULE MODAL */}
+      {openReschedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-lg font-semibold">Reschedule Loan</h4>
+              <button onClick={() => setOpenReschedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+            </div>
+            <div className="grid gap-3">
+              <div>
+                <label className="block text-sm text-gray-600">New Term (months)</label>
+                <input
+                  type="number"
+                  value={rescheduleForm.termMonths}
+                  onChange={(e) => setRescheduleForm((s) => ({ ...s, termMonths: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
+                  min="1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600">New Start Date</label>
+                <input
+                  type="date"
+                  value={rescheduleForm.startDate}
+                  onChange={(e) => setRescheduleForm((s) => ({ ...s, startDate: e.target.value }))}
+                  className="border rounded-lg px-3 py-2 w-full"
+                />
+              </div>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={rescheduleForm.previewOnly}
+                  onChange={(e) => setRescheduleForm((s) => ({ ...s, previewOnly: e.target.checked }))}
+                />
+                Preview only (don’t save)
+              </label>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setOpenReschedule(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
+              <button
+                onClick={submitReschedule}
+                disabled={savingReschedule}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {savingReschedule ? "Working…" : rescheduleForm.previewOnly ? "Preview" : "Reschedule"}
               </button>
             </div>
           </div>
