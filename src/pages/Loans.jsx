@@ -59,7 +59,10 @@ const Loan = () => {
   const fetchLoans = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/loans", { params: { page: 1, pageSize: 500 } });
+      // ask for aggregates if backend supports it (harmless if ignored)
+      const res = await api.get("/loans", {
+        params: { page: 1, pageSize: 500, include: "aggregates" },
+      });
       setLoans(toArray(res.data));
     } catch {
       alert("Failed to load loans");
@@ -164,6 +167,31 @@ const Loan = () => {
     }
   };
 
+  const handleEdit = (id) => navigate(`/loans/${id}/edit`);
+  const handleSchedule = (id) => navigate(`/loans/${id}`);
+  const handleRepay = (id) => navigate(`/loans/${id}`); // repay modal is on details page
+  const handleReschedule = (id) => navigate(`/loans/${id}/reschedule`);
+
+  const handleDeleteLoan = async (id) => {
+    if (!window.confirm("Delete this loan permanently? This cannot be undone.")) return;
+    try {
+      await api.delete(`/loans/${id}`);
+      fetchLoans();
+    } catch {
+      alert("Failed to delete loan.");
+    }
+  };
+
+  const handleReissueLoan = async (id) => {
+    if (!window.confirm("Reissue this loan (create a new copy with same terms)?")) return;
+    try {
+      await api.post(`/loans/${id}/reissue`);
+      fetchLoans();
+    } catch {
+      alert("Failed to reissue loan.");
+    }
+  };
+
   // exports
   const exportRows = useMemo(
     () =>
@@ -184,6 +212,11 @@ const Loan = () => {
           l.createdAt ||
           l.created_at ||
           "",
+        outstandingPrincipal:
+          l.outstandingPrincipal ?? l.remainingPrincipal ?? "",
+        outstandingInterest:
+          l.outstandingInterest ?? l.remainingInterest ?? "",
+        closedDate: l.closedAt || l.closedDate || l.closeDate || "",
       })),
     [filteredLoans, productsById]
   );
@@ -192,12 +225,15 @@ const Loan = () => {
     { label: "Loan ID", key: "id" },
     { label: "Borrower", key: "borrower" },
     { label: "Product", key: "product" },
-    { label: "Amount", key: "amount" },
+    { label: "Principal", key: "amount" },
     { label: "Rate (%)", key: "rate" },
     { label: "Term (months)", key: "termMonths" },
     { label: "Branch", key: "branch" },
     { label: "Status", key: "status" },
     { label: "Start Date", key: "startDate" },
+    { label: "Outstanding Principal", key: "outstandingPrincipal" },
+    { label: "Outstanding Interest", key: "outstandingInterest" },
+    { label: "Closing Date", key: "closedDate" },
   ];
 
   const exportPDF = () => {
@@ -205,7 +241,7 @@ const Loan = () => {
     doc.text("Loans Report", 14, 16);
     doc.autoTable({
       startY: 20,
-      head: [["ID", "Borrower", "Product", "Amount", "Rate (%)", "Term", "Branch", "Status"]],
+      head: [["ID", "Borrower", "Product", "Principal", "Rate (%)", "Term", "Branch", "Status", "Out P", "Out I", "Closing"]],
       body: exportRows.map((r) => [
         r.id,
         r.borrower,
@@ -215,6 +251,9 @@ const Loan = () => {
         r.termMonths,
         r.branch,
         r.status,
+        r.outstandingPrincipal,
+        r.outstandingInterest,
+        fmtDate(r.closedDate),
       ]),
     });
     doc.save("loans.pdf");
@@ -349,11 +388,14 @@ const Loan = () => {
                   "ID",
                   "Borrower",
                   "Product",
-                  "Amount",
+                  "Principal",
                   "Rate (%)",
                   "Term",
                   "Branch",
                   "Start Date",
+                  "Out P",
+                  "Out I",
+                  "Closing",
                   "Status",
                   "Actions",
                 ].map((h) => (
@@ -376,6 +418,9 @@ const Loan = () => {
                 const start = fmtDate(
                   l.startDate || l.disbursementDate || l.releaseDate || l.createdAt || l.created_at
                 );
+                const outP = l.outstandingPrincipal ?? l.remainingPrincipal ?? null;
+                const outI = l.outstandingInterest ?? l.remainingInterest ?? null;
+                const closed = l.closedAt || l.closedDate || l.closeDate || null;
 
                 return (
                   <tr key={l.id} className="hover:bg-gray-50">
@@ -387,6 +432,9 @@ const Loan = () => {
                     <td className="px-2 py-2 border-2 border-black/20">{term}</td>
                     <td className="px-2 py-2 border-2 border-black/20">{branchName}</td>
                     <td className="px-2 py-2 border-2 border-black/20">{start}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{outP == null ? "—" : currency(outP)}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{outI == null ? "—" : currency(outI)}</td>
+                    <td className="px-2 py-2 border-2 border-black/20">{fmtDate(closed)}</td>
                     <td className="px-2 py-2 border-2 border-black/20">
                       <span className={statusBadge(status)}>{status}</span>
                     </td>
@@ -394,6 +442,24 @@ const Loan = () => {
                       <div className="space-x-3">
                         <button onClick={() => navigate(`/loans/${l.id}`)} className="text-black underline">
                           View
+                        </button>
+                        <button onClick={() => handleEdit(l.id)} className="text-black underline">
+                          Edit
+                        </button>
+                        <button onClick={() => handleSchedule(l.id)} className="text-black underline">
+                          Schedule
+                        </button>
+                        <button onClick={() => handleRepay(l.id)} className="text-black underline">
+                          Repay
+                        </button>
+                        <button onClick={() => handleReschedule(l.id)} className="text-black underline">
+                          Reschedule
+                        </button>
+                        <button onClick={() => handleReissueLoan(l.id)} className="text-black underline">
+                          Reissue
+                        </button>
+                        <button onClick={() => handleDeleteLoan(l.id)} className="text-black underline">
+                          Delete
                         </button>
                         {(status || "").toLowerCase() === "pending" && (
                           <>

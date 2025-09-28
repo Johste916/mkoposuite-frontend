@@ -202,6 +202,13 @@ const BorrowerDetails = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // auto-refresh this page when any other page broadcasts a loan update
+  useEffect(() => {
+    const onUpdated = () => fetchBorrowerBundle();
+    window.addEventListener("loan:updated", onUpdated);
+    return () => window.removeEventListener("loan:updated", onUpdated);
+  }, [id]);
+
   useEffect(() => {
     if (filterType === "all") setFilteredSavings(savings);
     else setFilteredSavings(savings.filter((tx) => tx.type === filterType));
@@ -238,6 +245,10 @@ const BorrowerDetails = () => {
       ]);
       setRepayments(Array.isArray(repay) ? repay : repay?.items || []);
     } catch {}
+    // refresh borrower + loans so totals/statuses align immediately
+    await fetchBorrowerBundle();
+    // let other pages refresh too
+    window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id: selectedLoanForRepayment?.id } }));
   };
 
   // Admin actions
@@ -525,39 +536,50 @@ const BorrowerDetails = () => {
                     />
                   ) : (
                     <Table
-                      head={["Loan", "Reference", "Status", "Amount", "Actions"]}
-                      rows={loans.map((l) => [
-                        <Link
-                          to={`/loans/${encodeURIComponent(l.id)}${
-                            borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-                          }`}
-                          className="link"
-                        >
-                          {l.id}
-                        </Link>,
-                        l.reference || `L-${l.id}`,
-                        <span className={chip(l.status)}>{String(l.status || "—")}</span>,
-                        <div className="text-right tabular-nums">{money(l.amount)}</div>,
-                        <div className="flex gap-2">
-                          <button
-                            className="btn-ghost"
-                            onClick={() => handleViewSchedule(l.id)}
+                      head={["Loan", "Reference", "Status", "Amount", "Outstanding", "Next Due", "Actions"]}
+                      rows={loans.map((l) => {
+                        const outTotal =
+                          l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
+                        const nextDate = l.nextDueDate || l.nextInstallmentDate || null;
+                        const nextAmt = l.nextDueAmount || l.nextInstallmentAmount || null;
+
+                        return [
+                          <Link
+                            to={`/loans/${encodeURIComponent(l.id)}${
+                              borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                            }`}
+                            className="link"
                           >
-                            Schedule
-                          </button>
-                          {String(userRole || "").toLowerCase() === "admin" && (
-                            <button
-                              className="btn-ghost"
-                              onClick={() => {
-                                setSelectedLoanForRepayment(l);
-                                setShowRepaymentModal(true);
-                              }}
-                            >
-                              Repay
-                            </button>
-                          )}
-                        </div>,
-                      ])}
+                            {l.id}
+                          </Link>,
+                          l.reference || `L-${l.id}`,
+                          <span className={chip(l.status)}>{String(l.status || "—")}</span>,
+                          <div className="text-right tabular-nums">{money(l.amount)}</div>,
+                          <div className="text-right tabular-nums">{outTotal == null ? "—" : money(outTotal)}</div>,
+                          nextDate ? (
+                            <div className="text-right">
+                              {new Date(nextDate).toLocaleDateString()}
+                              {nextAmt ? <span className="ml-1 font-medium">{money(nextAmt)}</span> : null}
+                            </div>
+                          ) : (
+                            "—"
+                          ),
+                          <div className="flex gap-2 justify-end">
+                            <button className="btn-ghost" onClick={() => handleViewSchedule(l.id)}>Schedule</button>
+                            {String(userRole || "").toLowerCase() === "admin" && (
+                              <button
+                                className="btn-ghost"
+                                onClick={() => {
+                                  setSelectedLoanForRepayment(l);
+                                  setShowRepaymentModal(true);
+                                }}
+                              >
+                                Repay
+                              </button>
+                            )}
+                          </div>,
+                        ];
+                      })}
                     />
                   )}
                 </>
