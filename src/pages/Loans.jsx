@@ -61,9 +61,6 @@ const Loan = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // per-row action loading state: { [loanId]: 'approve'|'reject'|'disburse'|'close'|'delete'|'reissue'|'schedule'|null }
-  const [rowBusy, setRowBusy] = useState({});
-
   // filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -178,98 +175,6 @@ const Loan = () => {
     };
   }, [filteredLoans]);
 
-  /* ---------------- actions ---------------- */
-
-  // unified status update -> current backend route PATCH /loans/:id/status with body { status }
-  const patchStatus = async (id, next, options = {}) => {
-    setRowBusy((s) => ({ ...s, [id]: next }));
-    try {
-      await api.patch(`/loans/${id}/status`, { status: next, ...options });
-      await fetchLoans();
-    } catch (e) {
-      console.error(e);
-      const msg = e?.response?.data?.error || e?.message || "Unknown error";
-      alert(`Failed to set status to "${next}": ${msg}`);
-    } finally {
-      setRowBusy((s) => ({ ...s, [id]: null }));
-    }
-  };
-
-  const handleApprove = async (id) => {
-    if (!window.confirm("Approve this loan?")) return;
-    await patchStatus(id, "approved");
-  };
-
-  const handleReject = async (id) => {
-    if (!window.confirm("Reject this loan application?")) return;
-    await patchStatus(id, "rejected");
-  };
-
-  const handleDisburse = async (id) => {
-    if (!window.confirm("Disburse this loan now?")) return;
-    await patchStatus(id, "disbursed");
-  };
-
-  const handleClose = async (id, outstanding) => {
-    if (Number(outstanding) > 0) {
-      const ok = window.confirm(
-        `This loan shows outstanding ${currency(outstanding)}.\n\nClose anyway (sets override)?`
-      );
-      if (!ok) return;
-      await patchStatus(id, "closed", { override: true });
-    } else {
-      if (!window.confirm("Close this loan?")) return;
-      await patchStatus(id, "closed");
-    }
-  };
-
-  const handleEdit = (id) => navigate(`/loans/${id}/edit`);
-
-  const handleSchedule = async (id) => {
-    setRowBusy((s) => ({ ...s, [id]: "schedule" }));
-    try {
-      // warm the schedule endpoint (surfacing backend errors right away)
-      await api.get(`/loans/${id}/schedule`);
-    } catch (e) {
-      console.warn("Schedule endpoint returned an error:", e?.response?.data || e?.message);
-      // still navigate – details page can show more context
-    } finally {
-      setRowBusy((s) => ({ ...s, [id]: null }));
-    }
-    navigate(`/loans/${id}`);
-  };
-
-  const handleRepay = (id) => navigate(`/loans/${id}`); // repay modal is on details page
-  const handleReschedule = (id) => navigate(`/loans/${id}/reschedule`);
-
-  const handleDeleteLoan = async (id) => {
-    if (!window.confirm("Delete this loan permanently? This cannot be undone.")) return;
-    setRowBusy((s) => ({ ...s, [id]: "delete" }));
-    try {
-      await api.delete(`/loans/${id}`);
-      await fetchLoans();
-    } catch (e) {
-      console.error(e);
-      alert(`Failed to delete loan${e?.response?.data?.error ? `: ${e.response.data.error}` : ""}`);
-    } finally {
-      setRowBusy((s) => ({ ...s, [id]: null }));
-    }
-  };
-
-  const handleReissueLoan = async (id) => {
-    if (!window.confirm("Reissue this loan (re-adjust dates and regenerate schedule)?")) return;
-    setRowBusy((s) => ({ ...s, [id]: "reissue" }));
-    try {
-      await api.post(`/loans/${id}/reissue`);
-      await fetchLoans();
-    } catch (e) {
-      console.error(e);
-      alert(`Failed to reissue loan${e?.response?.data?.error ? `: ${e.response.data.error}` : ""}`);
-    } finally {
-      setRowBusy((s) => ({ ...s, [id]: null }));
-    }
-  };
-
   // exports
   const exportRows = useMemo(
     () =>
@@ -295,11 +200,17 @@ const Loan = () => {
           "";
 
         const term = l.termMonths ?? l.durationMonths ?? l.term_months ?? null;
-        const endDate = l.endDate || (start && term ? addMonthsDateOnly(String(start).slice(0, 10), term) : "");
+        const endDate =
+          l.endDate || (start && term ? addMonthsDateOnly(String(start).slice(0, 10), term) : "");
 
         return {
           id: l.id,
-          borrower: l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "",
+          borrower:
+            l.Borrower?.name ||
+            l.borrowerName ||
+            l.borrower_name ||
+            l.borrower?.name ||
+            "",
           branch: l.branch?.name || branchesById[String(l.branchId || "")]?.name || "",
           product: productsById[String(l.productId)]?.name || "",
           amount,
@@ -390,8 +301,6 @@ const Loan = () => {
     }
   };
 
-  const isBusy = (id, actionName) => rowBusy[id] === actionName;
-
   /* ---------------- render ---------------- */
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 text-black dark:text-white">
@@ -406,12 +315,12 @@ const Loan = () => {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
-          { label: "Total", value: kpis.total },
-          { label: "Principal", value: currency(kpis.totalPrincipal) },
-          { label: "Pending", value: kpis.pending },
-          { label: "Approved", value: kpis.approved },
-          { label: "Disbursed", value: kpis.disbursed },
-          { label: "Active", value: kpis.active },
+          { label: "Total", value: filteredLoans.length },
+          { label: "Principal", value: currency(filteredLoans.reduce((s, l) => s + Number(l.amount || l.principal || 0), 0)) },
+          { label: "Pending", value: filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === "pending").length },
+          { label: "Approved", value: filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === "approved").length },
+          { label: "Disbursed", value: filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === "disbursed").length },
+          { label: "Active", value: filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === "active").length },
         ].map((k, i) => (
           <div
             key={i}
@@ -469,8 +378,18 @@ const Loan = () => {
             </option>
           ))}
         </select>
-        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input text-black" />
-        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input text-black" />
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="input text-black"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="input text-black"
+        />
         <div className="md:col-span-6 flex justify-end gap-2">
           <CSVLink
             data={exportRows}
@@ -509,7 +428,7 @@ const Loan = () => {
                   "Paid Amount",
                   "Outstanding Amount",
                   "Status",
-                  "Actions",
+                  "Action",
                 ].map((h) => (
                   <th key={h} className="p-2 border-2 border-black/30 text-left">
                     {h}
@@ -533,7 +452,9 @@ const Loan = () => {
                 const startRaw =
                   l.startDate || l.disbursementDate || l.releaseDate || l.createdAt || l.created_at;
                 const start = fmtDate(startRaw);
-                const endRaw = l.endDate || (startRaw && term ? addMonthsDateOnly(String(startRaw).slice(0, 10), term) : "");
+                const endRaw =
+                  l.endDate ||
+                  (startRaw && term ? addMonthsDateOnly(String(startRaw).slice(0, 10), term) : "");
                 const end = fmtDate(endRaw);
 
                 const outstandingRaw =
@@ -546,9 +467,6 @@ const Loan = () => {
                   const base = Number.isFinite(totalInterest) ? amountNum + totalInterest : amountNum;
                   paidGuess = currency(Math.max(0, base - Number(outstandingRaw)));
                 }
-
-                const busy = (name) => isBusy(l.id, name);
-                const btnClass = "text-black underline disabled:opacity-40 disabled:cursor-not-allowed";
 
                 return (
                   <tr key={l.id} className="hover:bg-gray-50">
@@ -567,62 +485,12 @@ const Loan = () => {
                       <span className={statusBadge(status)}>{status}</span>
                     </td>
                     <td className="px-2 py-2 border-2 border-black/20">
-                      <div className="flex flex-wrap gap-3">
-                        <button onClick={() => navigate(`/loans/${l.id}`)} className={btnClass}>
-                          View
-                        </button>
-                        <button onClick={() => handleEdit(l.id)} className={btnClass}>
-                          Edit
-                        </button>
-                        <button onClick={() => handleSchedule(l.id)} className={btnClass} disabled={busy("schedule")}>
-                          {busy("schedule") ? "Scheduling…" : "Schedule"}
-                        </button>
-                        <a
-                          href={`/api/loans/${l.id}/schedule/export.csv`}
-                          className={btnClass}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Export Schedule
-                        </a>
-                        <button onClick={() => handleRepay(l.id)} className={btnClass}>
-                          Repay
-                        </button>
-                        <button onClick={() => handleReschedule(l.id)} className={btnClass}>
-                          Reschedule
-                        </button>
-                        {/* Status-driven actions */}
-                        {status === "pending" && (
-                          <>
-                            <button onClick={() => handleApprove(l.id)} className={btnClass} disabled={busy("approved")}>
-                              {busy("approved") ? "Approving…" : "Approve"}
-                            </button>
-                            <button onClick={() => handleReject(l.id)} className={btnClass} disabled={busy("rejected")}>
-                              {busy("rejected") ? "Rejecting…" : "Reject"}
-                            </button>
-                          </>
-                        )}
-                        {status === "approved" && (
-                          <button onClick={() => handleDisburse(l.id)} className={btnClass} disabled={busy("disbursed")}>
-                            {busy("disbursed") ? "Disbursing…" : "Disburse"}
-                          </button>
-                        )}
-                        {(status === "disbursed" || status === "active") && (
-                          <button
-                            onClick={() => handleClose(l.id, outstandingRaw)}
-                            className={btnClass}
-                            disabled={busy("closed")}
-                          >
-                            {busy("closed") ? "Closing…" : "Close"}
-                          </button>
-                        )}
-                        <button onClick={() => handleReissueLoan(l.id)} className={btnClass} disabled={busy("reissue")}>
-                          {busy("reissue") ? "Reissuing…" : "Reissue"}
-                        </button>
-                        <button onClick={() => handleDeleteLoan(l.id)} className={btnClass} disabled={busy("delete")}>
-                          {busy("delete") ? "Deleting…" : "Delete"}
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => navigate(`/loans/${l.id}`)}
+                        className="text-black underline"
+                      >
+                        View loan
+                      </button>
                     </td>
                   </tr>
                 );
