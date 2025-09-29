@@ -58,7 +58,7 @@ const chip = (status) => {
   }
 };
 
-/* GET with graceful fallbacks (prefers backend's canonical routes) */
+/* GET with graceful fallbacks (prefers ?borrowerId=, matching your API) */
 const tryGET = async (paths = [], opts = {}) => {
   let lastErr;
   for (const p of paths) {
@@ -100,8 +100,7 @@ const Field = ({ label, children }) => (
 
 // Tailwind-safe responsive columns (no dynamic class that gets purged)
 const DlGrid = ({ items, cols = 3 }) => {
-  const colCls =
-    cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
+  const colCls = cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
   return (
     <div className={`grid gap-4 sm:grid-cols-2 ${colCls}`}>
       {items.map((it, i) => (
@@ -165,6 +164,7 @@ function isEmpty(v) {
 // Format a date-like value
 const dmy = (v) => (v ? new Date(v).toLocaleDateString() : "—");
 
+/* ---------- Component ---------- */
 const BorrowerDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -174,6 +174,11 @@ const BorrowerDetails = () => {
   const [loans, setLoans] = useState([]);
   const [repayments, setRepayments] = useState([]);
   const [comments, setComments] = useState([]);
+
+  // Inline edit state
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const [showRepaymentModal, setShowRepaymentModal] = useState(false);
   const [selectedLoanForRepayment, setSelectedLoanForRepayment] = useState(null);
@@ -196,6 +201,31 @@ const BorrowerDetails = () => {
     try {
       const b = await tryGET([`/borrowers/${id}`]);
       setBorrower(b);
+      // preload form with canonical keys for editing
+      setForm({
+        id: b?.id,
+        name: firstFilled(b?.name, b?.fullName),
+        phone: firstFilled(b?.phone, b?.msisdn, b?.mobile, b?.primaryPhone),
+        email: firstFilled(b?.email, b?.mail),
+        addressLine: firstFilled(
+          b?.addressLine,
+          [b?.street, b?.houseNumber, b?.ward, b?.district, b?.city].filter(Boolean).join(", "),
+          [b?.address, b?.town, b?.region, b?.country].filter(Boolean).join(", ")
+        ),
+        gender: firstFilled(b?.gender, b?.sex),
+        birthDate: firstFilled(b?.birthDate, b?.dateOfBirth, b?.dob),
+        employmentStatus: firstFilled(b?.employmentStatus, b?.employment, b?.employmentType),
+        occupation: firstFilled(b?.occupation, b?.businessType, b?.jobTitle, b?.sector),
+        idType: firstFilled(b?.idType, b?.identificationType),
+        nationalId: firstFilled(b?.nationalId, b?.nid, b?.idNumber),
+        idIssuedDate: firstFilled(b?.idIssuedDate, b?.idIssueDate, b?.idDateIssued),
+        idExpiryDate: firstFilled(b?.idExpiryDate, b?.idExpireDate, b?.idDateExpiry),
+        nextKinName: firstFilled(b?.nextKinName, b?.nextOfKinName, b?.kinName, b?.emergencyContactName),
+        nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone),
+        nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship),
+        branchId: b?.branchId ?? b?.Branch?.id ?? b?.branch?.id ?? "",
+        status: b?.status ?? "active",
+      });
 
       const qTenant = b?.tenantId ? `&tenantId=${encodeURIComponent(b.tenantId)}` : "";
 
@@ -210,14 +240,11 @@ const BorrowerDetails = () => {
           `/repayments/borrower/${id}`,
         ]).catch(() => []),
         tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
-
-        // Prefer canonical route first
-        tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`, `/savings?borrowerId=${id}${qTenant}`]).catch(
-          () => {
-            setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
-            return {};
-          }
-        ),
+        // savings fallback to your backend route that exists: /borrowers/:id/savings
+        tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`]).catch(() => {
+          setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
+          return {};
+        }),
       ]);
 
       setLoans(Array.isArray(loanData) ? loanData : loanData?.items || []);
@@ -288,7 +315,46 @@ const BorrowerDetails = () => {
     window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id: selectedLoanForRepayment?.id } }));
   };
 
-  // Admin actions
+  // Inline edit handlers
+  const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const saveUpdates = async () => {
+    if (!form?.id) return;
+    setSaving(true);
+    try {
+      // Submit only keys your backend safely accepts (aligns with updateBorrower controller)
+      const payload = {
+        name: form.name,
+        phone: form.phone,
+        email: form.email,
+        address: form.addressLine, // backend expects "address"
+        status: form.status,
+        // optional fields your controller already supports:
+        nationalId: form.nationalId,
+        branchId: form.branchId,
+        // keep extras if your model supports them:
+        idType: form.idType,
+        idIssuedDate: form.idIssuedDate,
+        idExpiryDate: form.idExpiryDate,
+        nextKinName: form.nextKinName,
+        nextKinPhone: form.nextKinPhone,
+        employmentStatus: form.employmentStatus,
+        birthDate: form.birthDate,
+        gender: form.gender,
+      };
+
+      const res = await api.patch(`/borrowers/${form.id}`, payload, withTenant(borrower?.tenantId));
+      setBorrower(res.data ?? { ...borrower, ...payload });
+      setIsEditing(false);
+    } catch (e) {
+      alert("Couldn’t update borrower.");
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Admin actions (kept)
   const handleDisable = async () => {
     if (!window.confirm("Disable this borrower? They will not be able to apply or receive disbursements.")) return;
     try {
@@ -339,7 +405,7 @@ const BorrowerDetails = () => {
     }).length;
   }, [repayments]);
 
-  if (!borrower) {
+  if (!borrower || !form) {
     return <div className="p-4 min-h-screen bg-white text-black">Loading...</div>;
   }
 
@@ -358,12 +424,10 @@ const BorrowerDetails = () => {
   const charges = savings.reduce((s, t) => (t.type === "charge" ? s + safeNum(t.amount) : s), 0);
   const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
 
-  /* ---------- Normalized “Add Borrower” fields (many possible API keys) ---------- */
+  /* ---------- Normalized “Add Borrower” fields ---------- */
   const addr = firstFilled(
     borrower.addressLine,
-    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city]
-      .filter(Boolean)
-      .join(", "),
+    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city].filter(Boolean).join(", "),
     [borrower.address, borrower.town, borrower.region, borrower.country].filter(Boolean).join(", "),
     borrower.location
   );
@@ -396,37 +460,61 @@ const BorrowerDetails = () => {
           <Link to={`/borrowers${tenantQuery}`} className={strongLink}>
             Borrowers
           </Link>{" "}
-        <span className="text-gray-700">/</span>{" "}
+          <span className="text-gray-700">/</span>{" "}
           <span className="font-medium">{bName}</span>
         </div>
         <div className="flex gap-2">
-          {/* 🔗 EDIT now points to Add Borrower with borrowerId & tenantId */}
-          <Link
-            to={`/borrowers/add?borrowerId=${encodeURIComponent(borrower.id)}${
-              borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-            }`}
-            className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            Edit
-          </Link>
-          <button
-            onClick={handleDisable}
-            className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            Disable
-          </button>
-          <button
-            onClick={handleBlacklist}
-            className="bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-          >
-            Blacklist
-          </button>
-          <button
-            onClick={handleDelete}
-            className="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-          >
-            Delete
-          </button>
+          {!isEditing ? (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              Update info
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  // reset unsaved changes
+                  setForm((f) => ({ ...f, ...borrower }));
+                  fetchBorrowerBundle();
+                }}
+                className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveUpdates}
+                disabled={saving}
+                className="bg-indigo-600 disabled:opacity-60 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </>
+          )}
+          {!isEditing && (
+            <>
+              <button
+                onClick={handleDisable}
+                className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                Disable
+              </button>
+              <button
+                onClick={handleBlacklist}
+                className="bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+              >
+                Blacklist
+              </button>
+              <button
+                onClick={handleDelete}
+                className="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+              >
+                Delete
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -458,37 +546,75 @@ const BorrowerDetails = () => {
               {/* Name + quick contact */}
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <h1 className="text-2xl font-bold tracking-tight">{bName}</h1>
+                  {isEditing ? (
+                    <input
+                      value={form.name ?? ""}
+                      onChange={(e) => onChange("name", e.target.value)}
+                      className="text-2xl font-bold tracking-tight border border-gray-300 rounded-md px-2 py-1"
+                      placeholder="Full name"
+                    />
+                  ) : (
+                    <h1 className="text-2xl font-bold tracking-tight">{bName}</h1>
+                  )}
                   <span className="text-xs text-gray-700">ID: {borrower.id}</span>
                   <span className="text-xs text-gray-700">Tenant: {borrower.tenantId || "—"}</span>
                 </div>
 
                 <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <Field label="Phone">
-                    <div className="flex items-center gap-2">
-                      <span>{firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) || "—"}</span>
-                      {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) && (
-                        <>
-                          <a className={strongLink} href={tel(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>Call</a>
-                          <a className={strongLink} href={sms(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>SMS</a>
-                          <a className={strongLink} href={wa(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)} target="_blank" rel="noreferrer">
-                            WhatsApp
-                          </a>
-                        </>
-                      )}
-                    </div>
+                    {isEditing ? (
+                      <input
+                        value={form.phone ?? ""}
+                        onChange={(e) => onChange("phone", e.target.value)}
+                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2"
+                        placeholder="e.g., 2557xxxxxxx"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span>{firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) || "—"}</span>
+                        {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) && (
+                          <>
+                            <a className={strongLink} href={tel(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>Call</a>
+                            <a className={strongLink} href={sms(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>SMS</a>
+                            <a className={strongLink} href={wa(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)} target="_blank" rel="noreferrer">
+                              WhatsApp
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </Field>
 
                   <Field label="Email">
-                    <div className="flex items-center gap-2">
-                      <span>{firstFilled(borrower.email, borrower.mail) || "—"}</span>
-                      {firstFilled(borrower.email, borrower.mail) && (
-                        <a className={strongLink} href={mail(borrower.email || borrower.mail)}>Email</a>
-                      )}
-                    </div>
+                    {isEditing ? (
+                      <input
+                        value={form.email ?? ""}
+                        onChange={(e) => onChange("email", e.target.value)}
+                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2"
+                        placeholder="e.g., user@email.com"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span>{firstFilled(borrower.email, borrower.mail) || "—"}</span>
+                        {firstFilled(borrower.email, borrower.mail) && (
+                          <a className={strongLink} href={mail(borrower.email || borrower.mail)}>Email</a>
+                        )}
+                      </div>
+                    )}
                   </Field>
 
-                  <Field label="Address">{addr || "—"}</Field>
+                  <Field label="Address">
+                    {isEditing ? (
+                      <input
+                        value={form.addressLine ?? ""}
+                        onChange={(e) => onChange("addressLine", e.target.value)}
+                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2"
+                        placeholder="Street, ward, district, city"
+                      />
+                    ) : (
+                      addr || "—"
+                    )}
+                  </Field>
                 </div>
               </div>
             </div>
@@ -501,16 +627,86 @@ const BorrowerDetails = () => {
               <DlGrid
                 cols={3}
                 items={[
-                  { label: "Gender", value: firstFilled(borrower.gender, borrower.sex) },
-                  { label: "Birth Date", value: dmy(dob) },
-                  { label: "Business / Occupation", value: firstFilled(occupation, businessName) },
-                  { label: "Employment Status", value: employmentStatus },
-                  { label: "Secondary Phone", value: firstFilled(borrower.secondaryPhone, borrower.altPhone, borrower.phone2) },
-                  { label: "Customer No.", value: customerNumber },
-                  { label: "Marital Status", value: maritalStatus },
-                  { label: "Education Level", value: educationLevel },
-                  { label: "Nationality", value: nationality },
-                  { label: "Tax ID (TIN)", value: tin },
+                  {
+                    label: "Gender",
+                    value: isEditing ? (
+                      <select
+                        value={form.gender ?? ""}
+                        onChange={(e) => onChange("gender", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      >
+                        <option value="">—</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    ) : (
+                      firstFilled(borrower.gender, borrower.sex)
+                    ),
+                  },
+                  {
+                    label: "Birth Date",
+                    value: isEditing ? (
+                      <input
+                        type="date"
+                        value={form.birthDate ? isoDateOnly(form.birthDate) : ""}
+                        onChange={(e) => onChange("birthDate", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      />
+                    ) : (
+                      dmy(dob)
+                    ),
+                  },
+                  {
+                    label: "Business / Occupation",
+                    value: isEditing ? (
+                      <input
+                        value={form.occupation ?? ""}
+                        onChange={(e) => onChange("occupation", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      />
+                    ) : (
+                      firstFilled(occupation, businessName)
+                    ),
+                  },
+                  {
+                    label: "Employment Status",
+                    value: isEditing ? (
+                      <input
+                        value={form.employmentStatus ?? ""}
+                        onChange={(e) => onChange("employmentStatus", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      />
+                    ) : (
+                      employmentStatus
+                    ),
+                  },
+                  {
+                    label: "Customer No.",
+                    value: customerNumber,
+                  },
+                  {
+                    label: "Nationality",
+                    value: nationality,
+                  },
+                  {
+                    label: "Status",
+                    value: isEditing ? (
+                      <select
+                        value={form.status ?? "active"}
+                        onChange={(e) => onChange("status", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      >
+                        <option value="active">Active</option>
+                        <option value="pending_kyc">Pending KYC</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="blacklisted">Blacklisted</option>
+                        <option value="disabled">Disabled</option>
+                      </select>
+                    ) : (
+                      <span className={chip(borrower.status)}>{borrower.status || "—"}</span>
+                    ),
+                  },
                 ]}
               />
 
@@ -519,10 +715,56 @@ const BorrowerDetails = () => {
                   <DlGrid
                     cols={2}
                     items={[
-                      { label: "ID Type", value: idType },
-                      { label: "ID Number", value: nationalId || borrower.idNumber },
-                      { label: "Issued On", value: dmy(idIssued) },
-                      { label: "Expiry Date", value: dmy(idExpiry) },
+                      {
+                        label: "ID Type",
+                        value: isEditing ? (
+                          <input
+                            value={form.idType ?? ""}
+                            onChange={(e) => onChange("idType", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        ) : (
+                          idType
+                        ),
+                      },
+                      {
+                        label: "ID Number",
+                        value: isEditing ? (
+                          <input
+                            value={form.nationalId ?? ""}
+                            onChange={(e) => onChange("nationalId", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        ) : (
+                          nationalId || borrower.idNumber
+                        ),
+                      },
+                      {
+                        label: "Issued On",
+                        value: isEditing ? (
+                          <input
+                            type="date"
+                            value={form.idIssuedDate ? isoDateOnly(form.idIssuedDate) : ""}
+                            onChange={(e) => onChange("idIssuedDate", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        ) : (
+                          dmy(idIssued)
+                        ),
+                      },
+                      {
+                        label: "Expiry Date",
+                        value: isEditing ? (
+                          <input
+                            type="date"
+                            value={form.idExpiryDate ? isoDateOnly(form.idExpiryDate) : ""}
+                            onChange={(e) => onChange("idExpiryDate", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        ) : (
+                          dmy(idExpiry)
+                        ),
+                      },
                     ]}
                   />
                 </Card>
@@ -531,7 +773,19 @@ const BorrowerDetails = () => {
                   <DlGrid
                     cols={2}
                     items={[
-                      { label: "Branch", value: displayBranch(borrower) },
+                      {
+                        label: "Branch",
+                        value: isEditing ? (
+                          <input
+                            value={form.branchId ?? ""}
+                            onChange={(e) => onChange("branchId", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            placeholder="Branch ID"
+                          />
+                        ) : (
+                          displayBranch(borrower)
+                        ),
+                      },
                       { label: "Loan Officer", value: displayOfficer(borrower) },
                       { label: "Loan Type", value: firstFilled(borrower.loanType, borrower.productType, "individual") },
                       { label: "Group ID", value: firstFilled(borrower.groupId, borrower.group, borrower.groupCode) },
@@ -545,9 +799,42 @@ const BorrowerDetails = () => {
                 <DlGrid
                   cols={3}
                   items={[
-                    { label: "Full Name", value: nextKinName },
-                    { label: "Phone", value: nextKinPhone },
-                    { label: "Relationship", value: nextKinRel },
+                    {
+                      label: "Full Name",
+                      value: isEditing ? (
+                        <input
+                          value={form.nextKinName ?? ""}
+                          onChange={(e) => onChange("nextKinName", e.target.value)}
+                          className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        />
+                      ) : (
+                        nextKinName
+                      ),
+                    },
+                    {
+                      label: "Phone",
+                      value: isEditing ? (
+                        <input
+                          value={form.nextKinPhone ?? ""}
+                          onChange={(e) => onChange("nextKinPhone", e.target.value)}
+                          className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        />
+                      ) : (
+                        nextKinPhone
+                      ),
+                    },
+                    {
+                      label: "Relationship",
+                      value: isEditing ? (
+                        <input
+                          value={form.nextOfKinRelationship ?? ""}
+                          onChange={(e) => onChange("nextOfKinRelationship", e.target.value)}
+                          className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        />
+                      ) : (
+                        nextKinRel
+                      ),
+                    },
                   ]}
                 />
               </Card>
@@ -613,8 +900,7 @@ const BorrowerDetails = () => {
                     <Table
                       head={["Loan", "Reference", "Status", "Amount", "Outstanding", "Next Due", "Actions"]}
                       rows={loans.map((l) => {
-                        const outTotal =
-                          l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
+                        const outTotal = l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
                         const nextDate = l.nextDueDate || l.nextInstallmentDate || null;
                         const nextAmt = l.nextDueAmount || l.nextInstallmentAmount || null;
 
@@ -953,5 +1239,18 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
     </div>
   );
 };
+
+function isoDateOnly(v) {
+  try {
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return "";
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  } catch {
+    return "";
+  }
+}
 
 export default BorrowerDetails;
