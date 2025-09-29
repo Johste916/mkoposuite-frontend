@@ -25,6 +25,11 @@ const statusColors = {
 const chip =
   "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ring-inset";
 
+/* unified link style for high visibility & accessibility */
+const actionLink =
+  "inline-flex items-center gap-1 text-blue-700 font-semibold underline underline-offset-4 decoration-2 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded";
+
+/* role helpers */
 const roleOf = () => {
   try {
     const r = (JSON.parse(localStorage.getItem("user") || "{}").role || "").toLowerCase();
@@ -59,22 +64,18 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
     const int = Number(row.interest ?? 0);
     const pri = Number(row.principal ?? 0);
 
-    // fees
     if (remain <= 0) break;
     const f = Math.min(remain, fee);
     paidF += f; remain -= f;
 
-    // penalty
     if (remain <= 0) break;
     const p = Math.min(remain, pen);
     paidPN += p; remain -= p;
 
-    // interest
     if (remain <= 0) break;
     const i = Math.min(remain, int);
     paidI += i; remain -= i;
 
-    // principal
     if (remain <= 0) break;
     const pr = Math.min(remain, pri);
     paidP += pr; remain -= pr;
@@ -84,20 +85,20 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
 
 /* -------------- light UI helpers (no external deps) -------------- */
 const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
-  <div className="bg-white border rounded-2xl shadow-sm">
-    <div className={`px-6 ${dense ? "py-3" : "py-4"} border-b flex items-center justify-between`}>
+  <div className="bg-white border-2 border-slate-300 rounded-2xl shadow-md">
+    <div className={`px-6 ${dense ? "py-3" : "py-4"} border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between`}>
       <div>
-        {title && <h3 className="text-base md:text-lg font-semibold tracking-tight">{title}</h3>}
+        {title && <h3 className="text-lg md:text-xl font-semibold tracking-tight">{title}</h3>}
         {subtitle && <p className="text-xs text-gray-600 mt-0.5">{subtitle}</p>}
       </div>
       {right}
     </div>
-    <div className={`px-6 ${dense ? "py-4" : "py-6"}`}>{children}</div>
+    <div className={`px-6 ${dense ? "py-4" : "py-6"} text-[15px]`}>{children}</div>
   </div>
 );
 
 const Label = ({ children }) => (
-  <div className="text-[11px] uppercase tracking-wide text-gray-500">{children}</div>
+  <div className="text-[12px] uppercase tracking-wide text-gray-600">{children}</div>
 );
 
 /* --------------------------- component --------------------------- */
@@ -166,8 +167,8 @@ export default function LoanDetails() {
   const canCO = isCompliance(role);
   const canACC = isAccountant(role);
   const canOFF = isOfficer(role);
-  const canEdit = isAdmin(role) || canBM || canCO; // conservative editable permission
-  const canDelete = isAdmin(role) || canBM;        // conservative deletable permission
+  const canEdit = isAdmin(role) || canBM || canCO;
+  const canDelete = isAdmin(role) || canBM;
 
   const workflowStage = loan?.workflowStage || deriveStageFromStatus(loan?.status);
 
@@ -189,7 +190,7 @@ export default function LoanDetails() {
   const showDisburse = canACC && (loan?.status === "approved" || workflowStage === "accounting");
 
   /* ---------- load ---------- */
-  const lastLoadedId = useRef(null); // avoids duplicate loads in React 18 StrictMode
+  const lastLoadedId = useRef(null);
 
   const loadLoan = async () => {
     setLoading(true);
@@ -225,7 +226,6 @@ export default function LoanDetails() {
         );
       }
 
-      // prefetch schedule (non-blocking)
       setLoadingSchedule(true);
       tasks.push(
         api
@@ -257,14 +257,12 @@ export default function LoanDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // refresh when window regains focus
   useEffect(() => {
     const onFocus = () => loadLoan();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  // listen for cross-page updates (schedule page, etc.)
   useEffect(() => {
     const onUpdated = (e) => {
       if (String(e?.detail?.id) === String(id)) loadLoan();
@@ -389,14 +387,13 @@ export default function LoanDetails() {
     try {
       await api.post(`/repayments`, { loanId: id, ...repForm, amount: amt });
 
-      // Set to active after first repayment (if allowed)
       if (loan?.status && !["active", "closed"].includes(String(loan.status).toLowerCase())) {
         try {
           await api.patch(`/loans/${id}/status`, { status: "active" });
         } catch { /* ignore */ }
       }
 
-      await loadLoan(); // reload loan, schedule, repayments
+      await loadLoan();
       setOpenRepay(false);
       setRepForm({
         amount: "",
@@ -405,7 +402,6 @@ export default function LoanDetails() {
         notes: "",
       });
 
-      // let other pages pick up changes immediately
       window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id } }));
 
       alert("Repayment posted.");
@@ -513,7 +509,7 @@ export default function LoanDetails() {
     }
   };
 
-  /* ---------- quick stats & aggregates (consistent with Schedule page) ---------- */
+  /* ---------- quick stats & aggregates ---------- */
   const scheduled = useMemo(() => {
     const arr = Array.isArray(schedule) ? schedule : [];
     const sum = (k) => arr.reduce((a, b) => a + Number(b?.[k] || 0), 0);
@@ -525,7 +521,6 @@ export default function LoanDetails() {
 
     const totalPaid = repayments.reduce((a, b) => a + Number(b.amount || 0), 0);
 
-    // Prefer explicit paid breakdown fields
     const paidPrincipalExplicit = sum("paidPrincipal") || 0;
     const paidInterestExplicit  = sum("paidInterest")  || 0;
     const paidPenaltyExplicit   = sum("paidPenalty")   || 0;
@@ -543,7 +538,6 @@ export default function LoanDetails() {
 
     const outstanding = Math.max(total - totalPaid, 0);
 
-    // Next due row
     const next =
       arr.find(r => (r.paid || r.settled) ? false :
                     (Number(r.balance ?? (Number(r.total||0))) > 0)) || null;
@@ -578,7 +572,7 @@ export default function LoanDetails() {
       {/* HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Loan Details</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Loan Details</h2>
           <span className={`${chip} ${statusBadge}`}>{loan.status}</span>
           {workflowStage && (
             <span className={`${chip} bg-indigo-50 text-indigo-700 ring-indigo-200`}>
@@ -586,7 +580,7 @@ export default function LoanDetails() {
             </span>
           )}
         </div>
-        <button onClick={() => navigate(-1)} className="text-blue-600 hover:underline">
+        <button onClick={() => navigate(-1)} className={actionLink}>
           &larr; Back
         </button>
       </div>
@@ -596,17 +590,14 @@ export default function LoanDetails() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
           <div className="col-span-2">
             <Label>Borrower</Label>
-            <Link
-              className="text-lg md:text-xl font-semibold text-blue-700 hover:underline"
-              to={`/borrowers/${loan.borrowerId}`}
-            >
-              {loan.Borrower?.name || loan.borrowerName || "N/A"}
+            <Link className={`${actionLink} text-lg md:text-xl`} to={`/borrowers/${loan.borrowerId}`}>
+              {loan.Borrower?.name || loan.borrowerName || "N/A"} <span>›</span>
             </Link>
           </div>
 
           <div>
             <Label>Amount</Label>
-            <div className="text-xl font-semibold">{fmtTZS(loan.amount, currency)}</div>
+            <div className="text-2xl font-semibold">{fmtTZS(loan.amount, currency)}</div>
           </div>
 
           <div>
@@ -629,7 +620,7 @@ export default function LoanDetails() {
 
           <div>
             <Label>Outstanding</Label>
-            <div className="text-xl font-semibold">
+            <div className="text-2xl font-semibold">
               {outstanding == null ? "—" : fmtTZS(outstanding, currency)}
             </div>
           </div>
@@ -670,30 +661,19 @@ export default function LoanDetails() {
 
         {/* At a glance */}
         <div className="mt-6 grid sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
-          <div className="rounded-xl border p-3">
-            <div className="text-gray-500 text-[11px]">Paid Principal</div>
-            <div className="font-semibold">{fmtTZS(scheduled.paidPrincipal, currency)}</div>
-          </div>
-          <div className="rounded-xl border p-3">
-            <div className="text-gray-500 text-[11px]">Paid Interest</div>
-            <div className="font-semibold">{fmtTZS(scheduled.paidInterest, currency)}</div>
-          </div>
-          <div className="rounded-xl border p-3">
-            <div className="text-gray-500 text-[11px]">Paid Penalties</div>
-            <div className="font-semibold">{fmtTZS(scheduled.paidPenalty, currency)}</div>
-          </div>
-          <div className="rounded-xl border p-3">
-            <div className="text-gray-500 text-[11px]">Paid Fees</div>
-            <div className="font-semibold">{fmtTZS(scheduled.paidFees, currency)}</div>
-          </div>
-          <div className="rounded-xl border p-3">
-            <div className="text-gray-500 text-[11px]">Total Paid</div>
-            <div className="font-semibold">{fmtTZS(scheduled.totalPaid, currency)}</div>
-          </div>
-          <div className="rounded-xl border p-3">
-            <div className="text-gray-500 text-[11px]">Total Scheduled</div>
-            <div className="font-semibold">{fmtTZS(scheduled.total, currency)}</div>
-          </div>
+          {[
+            ["Paid Principal", scheduled.paidPrincipal],
+            ["Paid Interest", scheduled.paidInterest],
+            ["Paid Penalties", scheduled.paidPenalty],
+            ["Paid Fees", scheduled.paidFees],
+            ["Total Paid", scheduled.totalPaid],
+            ["Total Scheduled", scheduled.total],
+          ].map(([label, val]) => (
+            <div key={label} className="rounded-xl border-2 border-slate-200 p-3">
+              <div className="text-gray-500 text-[12px]">{label}</div>
+              <div className="font-semibold text-base">{fmtTZS(val, currency)}</div>
+            </div>
+          ))}
         </div>
       </SectionCard>
 
@@ -702,7 +682,7 @@ export default function LoanDetails() {
         <SectionCard dense>
           {showLOTB && (
             <>
-              <h3 className="text-base md:text-lg font-semibold">Changes Requested</h3>
+              <h3 className="text-lg font-semibold">Changes Requested</h3>
               <p className="text-sm text-gray-600">
                 Update the application and attach missing documents, then <strong>Resubmit</strong>.
                 Add a short note if helpful.
@@ -725,7 +705,7 @@ export default function LoanDetails() {
                 </button>
                 <Link
                   to="/loans/applications"
-                  className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+                  className="px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
                   title="Open applications to edit details/attachments"
                 >
                   Edit Application
@@ -737,7 +717,7 @@ export default function LoanDetails() {
           {(showBMToolbar || showCOToolbar) && (
             <>
               <div className="flex items-center justify-between">
-                <h3 className="text-base md:text-lg font-semibold">
+                <h3 className="text-lg font-semibold">
                   {showBMToolbar ? "Branch Manager Review" : "Compliance Review"}
                 </h3>
               </div>
@@ -798,7 +778,7 @@ export default function LoanDetails() {
                 <button
                   onClick={saveSuggestion}
                   disabled={acting}
-                  className="px-4 py-2 rounded-lg border hover:bg-gray-50 disabled:opacity-60"
+                  className="px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50 disabled:opacity-60"
                 >
                   {acting ? "Saving…" : "Save Suggestion"}
                 </button>
@@ -824,45 +804,45 @@ export default function LoanDetails() {
 
       {/* QUICK ACTIONS */}
       <div className="flex flex-wrap gap-2 md:gap-3">
-        <Link to={`/loans`} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
+        <Link to={`/loans`} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
           Back to Loans
         </Link>
 
-        <button onClick={() => setOpenSchedule(true)} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
+        <button onClick={() => setOpenSchedule(true)} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
           View Schedule
         </button>
 
         <a
           href={`/api/loans/${id}/schedule/export.csv`}
-          className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
           target="_blank" rel="noreferrer"
         >
           Export CSV
         </a>
         <a
           href={`/api/loans/${id}/schedule/export.pdf`}
-          className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
           target="_blank" rel="noreferrer"
         >
           Export PDF
         </a>
 
-        <button onClick={() => setOpenRepay(true)} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
+        <button onClick={() => setOpenRepay(true)} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
           Post Repayment
         </button>
 
         {canEdit && (
           <>
-            <button onClick={openEditModal} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
+            <button onClick={openEditModal} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
               Edit Loan
             </button>
-            <button onClick={openRescheduleModal} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
+            <button onClick={openRescheduleModal} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
               Reschedule
             </button>
           </>
         )}
 
-        <button onClick={reissueLoan} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
+        <button onClick={reissueLoan} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
           Reissue
         </button>
 
@@ -878,7 +858,7 @@ export default function LoanDetails() {
         {loan.status !== "closed" && (
           <button
             onClick={closeLoan}
-            className="bg-red-50 text-red-700 px-3 md:px-4 py-2 rounded-lg border border-red-200 hover:bg-red-100"
+            className="bg-red-50 text-red-700 px-3 md:px-4 py-2 rounded-lg border-2 border-red-200 hover:bg-red-100"
           >
             Close Loan
           </button>
@@ -901,17 +881,17 @@ export default function LoanDetails() {
           <div className="text-sm text-gray-600">No repayments found.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 sticky top-0 z-10">
+            <table className="min-w-full text-base">
+              <thead className="bg-slate-100 sticky top-0 z-10">
                 <tr className="text-left">
-                  <th className="px-3 py-2 border-b">#</th>
-                  <th className="px-3 py-2 border-b">Date</th>
-                  <th className="px-3 py-2 border-b text-right">Amount</th>
-                  <th className="px-3 py-2 border-b">Method</th>
-                  <th className="px-3 py-2 border-b">Notes</th>
+                  <th className="px-3 py-3 border-b-2 border-slate-200">#</th>
+                  <th className="px-3 py-3 border-b-2 border-slate-200">Date</th>
+                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Amount</th>
+                  <th className="px-3 py-3 border-b-2 border-slate-200">Method</th>
+                  <th className="px-3 py-3 border-b-2 border-slate-200">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100">
                 {repayments.map((r, i) => (
                   <tr key={r.id || i} className="hover:bg-gray-50">
                     <td className="px-3 py-2 whitespace-nowrap">{i + 1}</td>
@@ -927,12 +907,12 @@ export default function LoanDetails() {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-gray-50">
-                  <td className="px-3 py-2 border-t text-sm font-medium" colSpan={2}>Total</td>
-                  <td className="px-3 py-2 border-t text-right text-sm font-semibold">
+                <tr className="bg-slate-50">
+                  <td className="px-3 py-3 border-t-2 border-slate-200 text-sm font-medium" colSpan={2}>Total</td>
+                  <td className="px-3 py-3 border-t-2 border-slate-200 text-right text-base font-semibold">
                     {fmtTZS(repayTotals.sum, currency)}
                   </td>
-                  <td className="px-3 py-2 border-t" colSpan={2}></td>
+                  <td className="px-3 py-3 border-t-2 border-slate-200" colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>
@@ -986,7 +966,7 @@ export default function LoanDetails() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-lg font-semibold">Post Repayment</h4>
+              <h4 className="text-xl font-semibold">Post Repayment</h4>
               <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <div className="space-y-3">
@@ -1034,7 +1014,7 @@ export default function LoanDetails() {
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenRepay(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
+              <button onClick={() => setOpenRepay(false)} className="px-4 py-2 rounded-lg border-2 border-slate-300">Cancel</button>
               <button
                 onClick={handlePostRepayment}
                 disabled={postLoading}
@@ -1052,7 +1032,7 @@ export default function LoanDetails() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-lg font-semibold">Repayment Schedule</h4>
+              <h4 className="text-xl font-semibold">Repayment Schedule</h4>
               <button onClick={() => setOpenSchedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             {loadingSchedule ? (
@@ -1070,21 +1050,21 @@ export default function LoanDetails() {
                   ) : '—'}
                 </div>
                 <div className="max-h-[70vh] overflow-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+                  <table className="min-w-full text-base">
+                    <thead className="bg-slate-100 sticky top-0 z-10">
                       <tr className="text-left">
-                        <th className="px-3 py-2 border-b">#</th>
-                        <th className="px-3 py-2 border-b">Due Date</th>
-                        <th className="px-3 py-2 border-b text-right">Principal</th>
-                        <th className="px-3 py-2 border-b text-right">Interest</th>
-                        <th className="px-3 py-2 border-b text-right">Penalty</th>
-                        <th className="px-3 py-2 border-b text-right">Fees</th>
-                        <th className="px-3 py-2 border-b text-right">Total</th>
-                        <th className="px-3 py-2 border-b text-right">Balance</th>
-                        <th className="px-3 py-2 border-b">Status</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200">#</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200">Due Date</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Principal</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Interest</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Penalty</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Fees</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Total</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Balance</th>
+                        <th className="px-3 py-3 border-b-2 border-slate-200">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-slate-100">
                       {schedule.map((row, idx) => {
                         const total =
                           row.total ??
@@ -1125,7 +1105,7 @@ export default function LoanDetails() {
               </>
             )}
             <div className="mt-4 flex justify-end">
-              <button onClick={() => setOpenSchedule(false)} className="px-4 py-2 rounded-lg border">
+              <button onClick={() => setOpenSchedule(false)} className="px-4 py-2 rounded-lg border-2 border-slate-300">
                 Close
               </button>
             </div>
@@ -1138,7 +1118,7 @@ export default function LoanDetails() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-lg font-semibold">Edit Loan</h4>
+              <h4 className="text-xl font-semibold">Edit Loan</h4>
               <button onClick={() => setOpenEdit(false)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <div className="grid gap-3">
@@ -1183,7 +1163,7 @@ export default function LoanDetails() {
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenEdit(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
+              <button onClick={() => setOpenEdit(false)} className="px-4 py-2 rounded-lg border-2 border-slate-300">Cancel</button>
               <button
                 onClick={saveEdit}
                 disabled={savingEdit}
@@ -1201,7 +1181,7 @@ export default function LoanDetails() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-lg font-semibold">Reschedule Loan</h4>
+              <h4 className="text-xl font-semibold">Reschedule Loan</h4>
               <button onClick={() => setOpenReschedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <div className="grid gap-3">
@@ -1234,7 +1214,7 @@ export default function LoanDetails() {
               </label>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenReschedule(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
+              <button onClick={() => setOpenReschedule(false)} className="px-4 py-2 rounded-lg border-2 border-slate-300">Cancel</button>
               <button
                 onClick={submitReschedule}
                 disabled={savingReschedule}
