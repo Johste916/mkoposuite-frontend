@@ -10,7 +10,6 @@ import api from "../api";
 const safeNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const money = (v) => `TZS ${safeNum(v).toLocaleString()}`;
 
-// Prefer filled name; try many common shapes from "Add Borrower"
 const displayName = (b) =>
   firstFilled(
     b?.name,
@@ -24,7 +23,12 @@ const displayBranch = (b) =>
   firstFilled(b?.branchName, b?.Branch?.name, b?.branch?.name, b?.branch) || "—";
 
 const displayOfficer = (b) =>
-  firstFilled(b?.officerName, b?.officer?.name, b?.loanOfficer?.name, b?.loanOfficer) || "—";
+  firstFilled(
+    b?.officerName,
+    b?.officer?.name,
+    b?.loanOfficer?.name,
+    b?.loanOfficer
+  ) || "—";
 
 const initials = (nameLike) => {
   const s = String(nameLike || "").trim();
@@ -33,7 +37,6 @@ const initials = (nameLike) => {
   return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || s[0].toUpperCase();
 };
 
-// High-contrast chip (no theme vars)
 const chip = (status) => {
   const base = "px-2 py-0.5 text-xs font-semibold rounded-full border shadow-sm";
   const s = String(status || "").toLowerCase();
@@ -58,7 +61,7 @@ const chip = (status) => {
   }
 };
 
-/* GET with graceful fallbacks (prefers ?borrowerId=, matching your API) */
+/* GET with graceful fallbacks */
 const tryGET = async (paths = [], opts = {}) => {
   let lastErr;
   for (const p of paths) {
@@ -72,7 +75,8 @@ const tryGET = async (paths = [], opts = {}) => {
   throw lastErr || new Error(`All endpoints failed: ${paths.join(", ")}`);
 };
 
-const withTenant = (tenantId) => (tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {});
+const withTenant = (tenantId) =>
+  tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {};
 
 /* Small visual helpers */
 const strongLink =
@@ -90,17 +94,18 @@ const Card = ({ title, icon, children, className = "" }) => (
   </section>
 );
 
-// Label/body text are now solid black/clear gray (no faded opacity)
 const Field = ({ label, children }) => (
   <div>
-    <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">{label}</div>
+    <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">
+      {label}
+    </div>
     <div className="mt-1 text-[15px] text-black">{isEmpty(children) ? "—" : children}</div>
   </div>
 );
 
-// Tailwind-safe responsive columns (no dynamic class that gets purged)
 const DlGrid = ({ items, cols = 3 }) => {
-  const colCls = cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
+  const colCls =
+    cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
   return (
     <div className={`grid gap-4 sm:grid-cols-2 ${colCls}`}>
       {items.map((it, i) => (
@@ -142,7 +147,7 @@ const PillTabs = ({ tabs, active, onChange }) => (
   </div>
 );
 
-/* ---------- Value normalization helpers (show all fields you filled on Add Borrower) ---------- */
+/* ---------- Value normalization helpers ---------- */
 function firstFilled(...vals) {
   for (const v of vals.flat()) {
     if (v === 0) return 0;
@@ -161,8 +166,19 @@ function isEmpty(v) {
   const val = firstFilled(v);
   return val === "" || (Array.isArray(val) && val.length === 0);
 }
-// Format a date-like value
 const dmy = (v) => (v ? new Date(v).toLocaleDateString() : "—");
+function isoDateOnly(v) {
+  try {
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return "";
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  } catch {
+    return "";
+  }
+}
 
 /* ---------- Component ---------- */
 const BorrowerDetails = () => {
@@ -180,6 +196,10 @@ const BorrowerDetails = () => {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Option lists (dropdowns)
+  const [branches, setBranches] = useState([]);
+  const [officers, setOfficers] = useState([]);
+
   const [showRepaymentModal, setShowRepaymentModal] = useState(false);
   const [selectedLoanForRepayment, setSelectedLoanForRepayment] = useState(null);
 
@@ -196,36 +216,38 @@ const BorrowerDetails = () => {
 
   const [showAllComments, setShowAllComments] = useState(false);
 
+  const mapBorrowerToForm = (b) => ({
+    id: b?.id,
+    name: firstFilled(b?.name, b?.fullName),
+    phone: firstFilled(b?.phone, b?.msisdn, b?.mobile, b?.primaryPhone),
+    email: firstFilled(b?.email, b?.mail),
+    addressLine: firstFilled(
+      b?.addressLine,
+      [b?.street, b?.houseNumber, b?.ward, b?.district, b?.city].filter(Boolean).join(", "),
+      [b?.address, b?.town, b?.region, b?.country].filter(Boolean).join(", ")
+    ),
+    gender: firstFilled(b?.gender, b?.sex),
+    birthDate: firstFilled(b?.birthDate, b?.dateOfBirth, b?.dob),
+    employmentStatus: firstFilled(b?.employmentStatus, b?.employment, b?.employmentType),
+    occupation: firstFilled(b?.occupation, b?.businessType, b?.jobTitle, b?.sector),
+    idType: firstFilled(b?.idType, b?.identificationType),
+    nationalId: firstFilled(b?.nationalId, b?.nid, b?.idNumber),
+    idIssuedDate: firstFilled(b?.idIssuedDate, b?.idIssueDate, b?.idDateIssued),
+    idExpiryDate: firstFilled(b?.idExpiryDate, b?.idExpireDate, b?.idDateExpiry),
+    nextKinName: firstFilled(b?.nextKinName, b?.nextOfKinName, b?.kinName, b?.emergencyContactName),
+    nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone),
+    nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship),
+    branchId: b?.branchId ?? b?.Branch?.id ?? b?.branch?.id ?? "",
+    officerId: b?.officerId ?? b?.officer?.id ?? b?.loanOfficer?.id ?? "",
+    status: b?.status ?? "active",
+  });
+
   const fetchBorrowerBundle = async () => {
     setErrors({ loans: null, savings: null });
     try {
       const b = await tryGET([`/borrowers/${id}`]);
       setBorrower(b);
-      // preload form with canonical keys for editing
-      setForm({
-        id: b?.id,
-        name: firstFilled(b?.name, b?.fullName),
-        phone: firstFilled(b?.phone, b?.msisdn, b?.mobile, b?.primaryPhone),
-        email: firstFilled(b?.email, b?.mail),
-        addressLine: firstFilled(
-          b?.addressLine,
-          [b?.street, b?.houseNumber, b?.ward, b?.district, b?.city].filter(Boolean).join(", "),
-          [b?.address, b?.town, b?.region, b?.country].filter(Boolean).join(", ")
-        ),
-        gender: firstFilled(b?.gender, b?.sex),
-        birthDate: firstFilled(b?.birthDate, b?.dateOfBirth, b?.dob),
-        employmentStatus: firstFilled(b?.employmentStatus, b?.employment, b?.employmentType),
-        occupation: firstFilled(b?.occupation, b?.businessType, b?.jobTitle, b?.sector),
-        idType: firstFilled(b?.idType, b?.identificationType),
-        nationalId: firstFilled(b?.nationalId, b?.nid, b?.idNumber),
-        idIssuedDate: firstFilled(b?.idIssuedDate, b?.idIssueDate, b?.idDateIssued),
-        idExpiryDate: firstFilled(b?.idExpiryDate, b?.idExpireDate, b?.idDateExpiry),
-        nextKinName: firstFilled(b?.nextKinName, b?.nextOfKinName, b?.kinName, b?.emergencyContactName),
-        nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone),
-        nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship),
-        branchId: b?.branchId ?? b?.Branch?.id ?? b?.branch?.id ?? "",
-        status: b?.status ?? "active",
-      });
+      setForm(mapBorrowerToForm(b));
 
       const qTenant = b?.tenantId ? `&tenantId=${encodeURIComponent(b.tenantId)}` : "";
 
@@ -234,13 +256,11 @@ const BorrowerDetails = () => {
           setErrors((x) => ({ ...x, loans: "Couldn’t load loans." }));
           return [];
         }),
-        tryGET([
-          `/repayments?borrowerId=${id}${qTenant}`,
-          `/borrowers/${id}/repayments`,
-          `/repayments/borrower/${id}`,
-        ]).catch(() => []),
+        tryGET([`/repayments?borrowerId=${id}${qTenant}`, `/borrowers/${id}/repayments`, `/repayments/borrower/${id}`]).catch(
+          () => []
+        ),
         tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
-        // savings fallback to your backend route that exists: /borrowers/:id/savings
+        // prefer borrower route to avoid 404
         tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`]).catch(() => {
           setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
           return {};
@@ -263,16 +283,66 @@ const BorrowerDetails = () => {
     }
   };
 
+  // load dropdown options (branches, officers)
+  const fetchOptionLists = async (tenantId) => {
+    try {
+      const opt = withTenant(tenantId);
+      const [branchRes, officerRes] = await Promise.all([
+        tryGET(
+          ["/branches", "/org/branches", "/branch"],
+          opt
+        ).catch(() => []),
+        tryGET(
+          ["/users?role=officer", "/officers", "/users/loan-officers"],
+          opt
+        ).catch(() => []),
+      ]);
+
+      const brs = Array.isArray(branchRes?.items) ? branchRes.items : Array.isArray(branchRes) ? branchRes : [];
+      const ofs = Array.isArray(officerRes?.items) ? officerRes.items : Array.isArray(officerRes) ? officerRes : [];
+
+      setBranches(
+        brs.map((b) => ({
+          id: b.id ?? b._id ?? b.code ?? b.uuid,
+          name: b.name ?? b.title ?? b.code ?? "—",
+        }))
+      );
+      setOfficers(
+  (Array.isArray(ofs) ? ofs : []).map((u) => ({
+    id: firstFilled(u.id, u._id, u.userId),
+    name:
+      firstFilled(
+        u.name,
+        [u.firstName, u.lastName].filter(Boolean).join(" "),
+        u.email
+      ) || "—",
+  }))
+);
+    } catch (e) {
+      // leave empty; selects will degrade to text
+      console.warn("Option list fetch failed", e?.message || e);
+    }
+  };
+
   useEffect(() => {
     fetchBorrowerBundle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // refresh option lists when borrower (tenant) known
+  useEffect(() => {
+    if (borrower?.tenantId !== undefined) {
+      fetchOptionLists(borrower?.tenantId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [borrower?.tenantId]);
 
   // auto-refresh this page when any other page broadcasts a loan update
   useEffect(() => {
     const onUpdated = () => fetchBorrowerBundle();
     window.addEventListener("loan:updated", onUpdated);
     return () => window.removeEventListener("loan:updated", onUpdated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -322,29 +392,31 @@ const BorrowerDetails = () => {
     if (!form?.id) return;
     setSaving(true);
     try {
-      // Submit only keys your backend safely accepts (aligns with updateBorrower controller)
       const payload = {
         name: form.name,
         phone: form.phone,
         email: form.email,
-        address: form.addressLine, // backend expects "address"
+        address: form.addressLine,
         status: form.status,
-        // optional fields your controller already supports:
         nationalId: form.nationalId,
-        branchId: form.branchId,
-        // keep extras if your model supports them:
+        branchId: form.branchId || null,
+        officerId: form.officerId || null,
         idType: form.idType,
-        idIssuedDate: form.idIssuedDate,
-        idExpiryDate: form.idExpiryDate,
+        idIssuedDate: form.idIssuedDate || null,
+        idExpiryDate: form.idExpiryDate || null,
         nextKinName: form.nextKinName,
         nextKinPhone: form.nextKinPhone,
+        nextOfKinRelationship: form.nextOfKinRelationship,
         employmentStatus: form.employmentStatus,
-        birthDate: form.birthDate,
+        occupation: form.occupation,
+        birthDate: form.birthDate || null,
         gender: form.gender,
       };
 
-      const res = await api.patch(`/borrowers/${form.id}`, payload, withTenant(borrower?.tenantId));
-      setBorrower(res.data ?? { ...borrower, ...payload });
+      await api.patch(`/borrowers/${form.id}`, payload, withTenant(borrower?.tenantId));
+
+      // IMPORTANT: Re-fetch canonical borrower to reflect formatting/mirrors from backend
+      await fetchBorrowerBundle();
       setIsEditing(false);
     } catch (e) {
       alert("Couldn’t update borrower.");
@@ -354,7 +426,7 @@ const BorrowerDetails = () => {
     }
   };
 
-  // Admin actions (kept)
+  // Admin actions
   const handleDisable = async () => {
     if (!window.confirm("Disable this borrower? They will not be able to apply or receive disbursements.")) return;
     try {
@@ -424,10 +496,11 @@ const BorrowerDetails = () => {
   const charges = savings.reduce((s, t) => (t.type === "charge" ? s + safeNum(t.amount) : s), 0);
   const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
 
-  /* ---------- Normalized “Add Borrower” fields ---------- */
   const addr = firstFilled(
     borrower.addressLine,
-    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city].filter(Boolean).join(", "),
+    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city]
+      .filter(Boolean)
+      .join(", "),
     [borrower.address, borrower.town, borrower.region, borrower.country].filter(Boolean).join(", "),
     borrower.location
   );
@@ -451,6 +524,36 @@ const BorrowerDetails = () => {
   const nextKinRel = firstFilled(borrower.nextOfKinRelationship, borrower.kinRelationship, borrower.relationship);
 
   const registrationDate = firstFilled(borrower.regDate, borrower.registrationDate, borrower.createdAt);
+
+  // options for static selects
+  const GENDER_OPTS = [
+    { v: "", t: "—" },
+    { v: "male", t: "Male" },
+    { v: "female", t: "Female" },
+    { v: "other", t: "Other" },
+  ];
+  const STATUS_OPTS = [
+    { v: "active", t: "Active" },
+    { v: "pending_kyc", t: "Pending KYC" },
+    { v: "inactive", t: "Inactive" },
+    { v: "blacklisted", t: "Blacklisted" },
+    { v: "disabled", t: "Disabled" },
+  ];
+  const EMPLOYMENT_OPTS = [
+    { v: "", t: "—" },
+    { v: "employed", t: "Employed" },
+    { v: "self_employed", t: "Self-employed" },
+    { v: "unemployed", t: "Unemployed" },
+    { v: "student", t: "Student" },
+    { v: "retired", t: "Retired" },
+  ];
+  const IDTYPE_OPTS = [
+    { v: "", t: "—" },
+    { v: "national_id", t: "National ID" },
+    { v: "passport", t: "Passport" },
+    { v: "driver_license", t: "Driver’s License" },
+    { v: "voter_id", t: "Voter ID" },
+  ];
 
   return (
     <div className="p-4 md:p-6 min-h-screen bg-white text-black">
@@ -476,9 +579,7 @@ const BorrowerDetails = () => {
               <button
                 onClick={() => {
                   setIsEditing(false);
-                  // reset unsaved changes
-                  setForm((f) => ({ ...f, ...borrower }));
-                  fetchBorrowerBundle();
+                  setForm(mapBorrowerToForm(borrower)); // reset
                 }}
                 className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
@@ -571,14 +672,15 @@ const BorrowerDetails = () => {
                       />
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span>{firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) || "—"}</span>
+                        <span>
+                          {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) ||
+                            "—"}
+                        </span>
                         {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) && (
                           <>
                             <a className={strongLink} href={tel(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>Call</a>
                             <a className={strongLink} href={sms(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>SMS</a>
-                            <a className={strongLink} href={wa(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)} target="_blank" rel="noreferrer">
-                              WhatsApp
-                            </a>
+                            <a className={strongLink} href={wa(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)} target="_blank" rel="noreferrer">WhatsApp</a>
                           </>
                         )}
                       </div>
@@ -635,10 +737,9 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("gender", e.target.value)}
                         className="text-sm border border-gray-300 rounded-md px-2 py-1"
                       >
-                        <option value="">—</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
+                        {GENDER_OPTS.map((o) => (
+                          <option key={o.v} value={o.v}>{o.t}</option>
+                        ))}
                       </select>
                     ) : (
                       firstFilled(borrower.gender, borrower.sex)
@@ -672,23 +773,21 @@ const BorrowerDetails = () => {
                   {
                     label: "Employment Status",
                     value: isEditing ? (
-                      <input
+                      <select
                         value={form.employmentStatus ?? ""}
                         onChange={(e) => onChange("employmentStatus", e.target.value)}
                         className="text-sm border border-gray-300 rounded-md px-2 py-1"
-                      />
+                      >
+                        {EMPLOYMENT_OPTS.map((o) => (
+                          <option key={o.v} value={o.v}>{o.t}</option>
+                        ))}
+                      </select>
                     ) : (
                       employmentStatus
                     ),
                   },
-                  {
-                    label: "Customer No.",
-                    value: customerNumber,
-                  },
-                  {
-                    label: "Nationality",
-                    value: nationality,
-                  },
+                  { label: "Customer No.", value: customerNumber },
+                  { label: "Nationality", value: nationality },
                   {
                     label: "Status",
                     value: isEditing ? (
@@ -697,11 +796,9 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("status", e.target.value)}
                         className="text-sm border border-gray-300 rounded-md px-2 py-1"
                       >
-                        <option value="active">Active</option>
-                        <option value="pending_kyc">Pending KYC</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="blacklisted">Blacklisted</option>
-                        <option value="disabled">Disabled</option>
+                        {STATUS_OPTS.map((o) => (
+                          <option key={o.v} value={o.v}>{o.t}</option>
+                        ))}
                       </select>
                     ) : (
                       <span className={chip(borrower.status)}>{borrower.status || "—"}</span>
@@ -718,11 +815,15 @@ const BorrowerDetails = () => {
                       {
                         label: "ID Type",
                         value: isEditing ? (
-                          <input
+                          <select
                             value={form.idType ?? ""}
                             onChange={(e) => onChange("idType", e.target.value)}
                             className="text-sm border border-gray-300 rounded-md px-2 py-1"
-                          />
+                          >
+                            {IDTYPE_OPTS.map((o) => (
+                              <option key={o.v} value={o.v}>{o.t}</option>
+                            ))}
+                          </select>
                         ) : (
                           idType
                         ),
@@ -776,17 +877,59 @@ const BorrowerDetails = () => {
                       {
                         label: "Branch",
                         value: isEditing ? (
-                          <input
-                            value={form.branchId ?? ""}
-                            onChange={(e) => onChange("branchId", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
-                            placeholder="Branch ID"
-                          />
+                          branches.length ? (
+                            <select
+                              value={form.branchId ?? ""}
+                              onChange={(e) => onChange("branchId", e.target.value)}
+                              className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            >
+                              <option value="">—</option>
+                              {branches.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                  {b.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              value={form.branchId ?? ""}
+                              onChange={(e) => onChange("branchId", e.target.value)}
+                              className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                              placeholder="Branch ID"
+                            />
+                          )
                         ) : (
                           displayBranch(borrower)
                         ),
                       },
-                      { label: "Loan Officer", value: displayOfficer(borrower) },
+                      {
+                        label: "Loan Officer",
+                        value: isEditing ? (
+                          officers.length ? (
+                            <select
+                              value={form.officerId ?? ""}
+                              onChange={(e) => onChange("officerId", e.target.value)}
+                              className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            >
+                              <option value="">—</option>
+                              {officers.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              value={form.officerId ?? ""}
+                              onChange={(e) => onChange("officerId", e.target.value)}
+                              className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                              placeholder="Officer ID"
+                            />
+                          )
+                        ) : (
+                          displayOfficer(borrower)
+                        ),
+                      },
                       { label: "Loan Type", value: firstFilled(borrower.loanType, borrower.productType, "individual") },
                       { label: "Group ID", value: firstFilled(borrower.groupId, borrower.group, borrower.groupCode) },
                       { label: "Registration Date", value: dmy(registrationDate) },
@@ -1239,18 +1382,5 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
     </div>
   );
 };
-
-function isoDateOnly(v) {
-  try {
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return "";
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  } catch {
-    return "";
-  }
-}
 
 export default BorrowerDetails;
