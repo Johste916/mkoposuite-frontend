@@ -180,7 +180,7 @@ const BorrowerDetails = () => {
 
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState([]);
-  the [selectedLoan, setSelectedLoan] = useState(null);
+  const [selectedLoan, setSelectedLoan] = useState(null);
 
   const [savings, setSavings] = useState([]);
   const [filteredSavings, setFilteredSavings] = useState([]);
