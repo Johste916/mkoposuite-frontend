@@ -95,11 +95,11 @@ const Card = ({ title, icon, children, className = "" }) => (
 );
 
 const Field = ({ label, children }) => (
-  <div>
+  <div className="min-w-0">
     <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">
       {label}
     </div>
-    <div className="mt-1 text-[15px] text-black">{isEmpty(children) ? "—" : children}</div>
+    <div className="mt-1 text-[15px] text-black break-words">{isEmpty(children) ? "—" : children}</div>
   </div>
 );
 
@@ -238,8 +238,17 @@ const BorrowerDetails = () => {
     nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone),
     nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship),
     branchId: b?.branchId ?? b?.Branch?.id ?? b?.branch?.id ?? "",
-    officerId: b?.officerId ?? b?.officer?.id ?? b?.loanOfficer?.id ?? "",
+    // accept both officerId and loanOfficerId from BE
+    officerId: b?.officerId ?? b?.loanOfficerId ?? b?.officer?.id ?? b?.loanOfficer?.id ?? "",
     status: b?.status ?? "active",
+    maritalStatus: firstFilled(b?.maritalStatus, b?.marriageStatus),
+    educationLevel: firstFilled(b?.educationLevel, b?.education, b?.educationStatus),
+    customerNumber: firstFilled(b?.customerNumber, b?.accountNumber, b?.clientNumber),
+    tin: firstFilled(b?.tin, b?.TIN, b?.taxId),
+    nationality: firstFilled(b?.nationality, b?.country),
+    groupId: firstFilled(b?.groupId, b?.group, b?.groupCode),
+    loanType: firstFilled(b?.loanType, b?.productType, "individual"),
+    regDate: firstFilled(b?.regDate, b?.registrationDate),
   });
 
   const fetchBorrowerBundle = async () => {
@@ -288,14 +297,8 @@ const BorrowerDetails = () => {
     try {
       const opt = withTenant(tenantId);
       const [branchRes, officerRes] = await Promise.all([
-        tryGET(
-          ["/branches", "/org/branches", "/branch"],
-          opt
-        ).catch(() => []),
-        tryGET(
-          ["/users?role=officer", "/officers", "/users/loan-officers"],
-          opt
-        ).catch(() => []),
+        tryGET(["/branches", "/org/branches", "/branch"], opt).catch(() => []),
+        tryGET(["/users?role=officer", "/officers", "/users/loan-officers"], opt).catch(() => []),
       ]);
 
       const brs = Array.isArray(branchRes?.items) ? branchRes.items : Array.isArray(branchRes) ? branchRes : [];
@@ -308,18 +311,12 @@ const BorrowerDetails = () => {
         }))
       );
       setOfficers(
-  (Array.isArray(ofs) ? ofs : []).map((u) => ({
-    id: firstFilled(u.id, u._id, u.userId),
-    name:
-      firstFilled(
-        u.name,
-        [u.firstName, u.lastName].filter(Boolean).join(" "),
-        u.email
-      ) || "—",
-  }))
-);
+        (Array.isArray(ofs) ? ofs : []).map((u) => ({
+          id: firstFilled(u.id, u._id, u.userId),
+          name: firstFilled(u.name, [u.firstName, u.lastName].filter(Boolean).join(" "), u.email) || "—",
+        }))
+      );
     } catch (e) {
-      // leave empty; selects will degrade to text
       console.warn("Option list fetch failed", e?.message || e);
     }
   };
@@ -337,11 +334,15 @@ const BorrowerDetails = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [borrower?.tenantId]);
 
-  // auto-refresh this page when any other page broadcasts a loan update
+  // auto-refresh this page when any other page broadcasts a loan/borrower update
   useEffect(() => {
     const onUpdated = () => fetchBorrowerBundle();
     window.addEventListener("loan:updated", onUpdated);
-    return () => window.removeEventListener("loan:updated", onUpdated);
+    window.addEventListener("borrower:updated", onUpdated);
+    return () => {
+      window.removeEventListener("loan:updated", onUpdated);
+      window.removeEventListener("borrower:updated", onUpdated);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -383,6 +384,7 @@ const BorrowerDetails = () => {
     } catch {}
     await fetchBorrowerBundle();
     window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id: selectedLoanForRepayment?.id } }));
+    window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
   };
 
   // Inline edit handlers
@@ -400,7 +402,9 @@ const BorrowerDetails = () => {
         status: form.status,
         nationalId: form.nationalId,
         branchId: form.branchId || null,
+        // send both keys to be compatible with BE variants
         officerId: form.officerId || null,
+        loanOfficerId: form.officerId || null,
         idType: form.idType,
         idIssuedDate: form.idIssuedDate || null,
         idExpiryDate: form.idExpiryDate || null,
@@ -411,6 +415,14 @@ const BorrowerDetails = () => {
         occupation: form.occupation,
         birthDate: form.birthDate || null,
         gender: form.gender,
+        maritalStatus: form.maritalStatus || null,
+        educationLevel: form.educationLevel || null,
+        customerNumber: form.customerNumber || null,
+        tin: form.tin || null,
+        nationality: form.nationality || null,
+        groupId: form.groupId || null,
+        loanType: form.loanType || null,
+        regDate: form.regDate || null,
       };
 
       await api.patch(`/borrowers/${form.id}`, payload, withTenant(borrower?.tenantId));
@@ -418,6 +430,9 @@ const BorrowerDetails = () => {
       // IMPORTANT: Re-fetch canonical borrower to reflect formatting/mirrors from backend
       await fetchBorrowerBundle();
       setIsEditing(false);
+
+      // broadcast for other modules
+      window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id: form.id } }));
     } catch (e) {
       alert("Couldn’t update borrower.");
       console.error(e);
@@ -432,10 +447,12 @@ const BorrowerDetails = () => {
     try {
       await api.post(`/borrowers/${id}/disable`, {}, withTenant(borrower?.tenantId));
       setBorrower((b) => ({ ...b, status: "disabled" }));
+      window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
     } catch {
       try {
         await api.patch(`/borrowers/${id}`, { status: "disabled" }, withTenant(borrower?.tenantId));
         setBorrower((b) => ({ ...b, status: "disabled" }));
+        window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
       } catch {
         alert("Could not disable borrower.");
       }
@@ -447,10 +464,12 @@ const BorrowerDetails = () => {
     try {
       await api.post(`/borrowers/${id}/blacklist`, {}, withTenant(borrower?.tenantId));
       setBorrower((b) => ({ ...b, status: "blacklisted" }));
+      window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
     } catch {
       try {
         await api.patch(`/borrowers/${id}`, { status: "blacklisted" }, withTenant(borrower?.tenantId));
         setBorrower((b) => ({ ...b, status: "blacklisted" }));
+        window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
       } catch {
         alert("Could not blacklist borrower.");
       }
@@ -462,6 +481,7 @@ const BorrowerDetails = () => {
     try {
       await api.delete(`/borrowers/${id}`, withTenant(borrower?.tenantId));
       navigate("/borrowers");
+      window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
     } catch {
       alert("Could not delete borrower.");
     }
@@ -786,8 +806,44 @@ const BorrowerDetails = () => {
                       employmentStatus
                     ),
                   },
-                  { label: "Customer No.", value: customerNumber },
-                  { label: "Nationality", value: nationality },
+                  { label: "Customer No.", value: isEditing ? (
+                      <input
+                        value={form.customerNumber ?? ""}
+                        onChange={(e) => onChange("customerNumber", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      />
+                    ) : customerNumber },
+                  { label: "Nationality", value: isEditing ? (
+                      <input
+                        value={form.nationality ?? ""}
+                        onChange={(e) => onChange("nationality", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      />
+                    ) : nationality },
+                  {
+                    label: "Marital Status",
+                    value: isEditing ? (
+                      <input
+                        value={form.maritalStatus ?? ""}
+                        onChange={(e) => onChange("maritalStatus", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      />
+                    ) : (
+                      maritalStatus
+                    ),
+                  },
+                  {
+                    label: "Education Level",
+                    value: isEditing ? (
+                      <input
+                        value={form.educationLevel ?? ""}
+                        onChange={(e) => onChange("educationLevel", e.target.value)}
+                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                      />
+                    ) : (
+                      educationLevel
+                    ),
+                  },
                   {
                     label: "Status",
                     value: isEditing ? (
@@ -866,6 +922,16 @@ const BorrowerDetails = () => {
                           dmy(idExpiry)
                         ),
                       },
+                      {
+                        label: "TIN",
+                        value: isEditing ? (
+                          <input
+                            value={form.tin ?? ""}
+                            onChange={(e) => onChange("tin", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        ) : tin,
+                      },
                     ]}
                   />
                 </Card>
@@ -930,9 +996,31 @@ const BorrowerDetails = () => {
                           displayOfficer(borrower)
                         ),
                       },
-                      { label: "Loan Type", value: firstFilled(borrower.loanType, borrower.productType, "individual") },
-                      { label: "Group ID", value: firstFilled(borrower.groupId, borrower.group, borrower.groupCode) },
-                      { label: "Registration Date", value: dmy(registrationDate) },
+                      { label: "Loan Type", value: isEditing ? (
+                          <input
+                            value={form.loanType ?? ""}
+                            onChange={(e) => onChange("loanType", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        ) : firstFilled(borrower.loanType, borrower.productType, "individual") },
+                      { label: "Group ID", value: isEditing ? (
+                          <input
+                            value={form.groupId ?? ""}
+                            onChange={(e) => onChange("groupId", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        ) : firstFilled(borrower.groupId, borrower.group, borrower.groupCode) },
+                      {
+                        label: "Registration Date",
+                        value: isEditing ? (
+                          <input
+                            type="date"
+                            value={form.regDate ? isoDateOnly(form.regDate) : ""}
+                            onChange={(e) => onChange("regDate", e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        ) : dmy(registrationDate),
+                      },
                     ]}
                   />
                 </Card>
@@ -1285,11 +1373,14 @@ const Empty = ({ text }) => (
 
 const Table = ({ head = [], rows = [] }) => (
   <div className="overflow-auto rounded-xl border border-gray-300 bg-white">
-    <table className="min-w-full text-[15px]">
-      <thead className="bg-gray-100 text-black">
+    <table className="min-w-full text-[15px] border-collapse">
+      <thead className="bg-gray-100 text-black border-b border-gray-300">
         <tr className="text-left">
           {head.map((h, i) => (
-            <th key={i} className={`px-3 py-2 font-semibold ${i === head.length - 1 ? "text-right" : ""}`}>
+            <th
+              key={i}
+              className={`px-3 py-2 font-semibold ${i === head.length - 1 ? "text-right" : ""} border-b border-gray-300`}
+            >
               {h}
             </th>
           ))}
@@ -1299,7 +1390,10 @@ const Table = ({ head = [], rows = [] }) => (
         {rows.map((r, i) => (
           <tr key={i} className="odd:bg-white even:bg-gray-50 hover:bg-gray-100/70">
             {r.map((c, j) => (
-              <td key={j} className={`px-3 py-2 align-top ${j === head.length - 1 ? "text-right" : ""}`}>
+              <td
+                key={j}
+                className={`px-3 py-2 align-top ${j === head.length - 1 ? "text-right" : ""} border-b border-gray-200`}
+              >
                 {c}
               </td>
             ))}
