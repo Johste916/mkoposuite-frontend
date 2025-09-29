@@ -137,7 +137,6 @@ export default function LoanDetails() {
   });
 
   // schedule modal
-  the
   const [openSchedule, setOpenSchedule] = useState(false);
 
   // edit modal
