@@ -82,6 +82,25 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
   return { paidPrincipal: paidP, paidInterest: paidI, paidPenalty: paidPN, paidFees: paidF };
 }
 
+/* -------------- light UI helpers (no external deps) -------------- */
+const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
+  <div className="bg-white border rounded-2xl shadow-sm">
+    <div className={`px-6 ${dense ? "py-3" : "py-4"} border-b flex items-center justify-between`}>
+      <div>
+        {title && <h3 className="text-base md:text-lg font-semibold tracking-tight">{title}</h3>}
+        {subtitle && <p className="text-xs text-gray-600 mt-0.5">{subtitle}</p>}
+      </div>
+      {right}
+    </div>
+    <div className={`px-6 ${dense ? "py-4" : "py-6"}`}>{children}</div>
+  </div>
+);
+
+const Label = ({ children }) => (
+  <div className="text-[11px] uppercase tracking-wide text-gray-500">{children}</div>
+);
+
+/* --------------------------- component --------------------------- */
 export default function LoanDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -118,6 +137,7 @@ export default function LoanDetails() {
   });
 
   // schedule modal
+  the
   const [openSchedule, setOpenSchedule] = useState(false);
 
   // edit modal
@@ -543,6 +563,12 @@ export default function LoanDetails() {
   const outstanding = loan?.outstanding ?? scheduled.outstanding ?? null;
   const nextDue = scheduled.nextDue;
 
+  const repayTotals = useMemo(() => {
+    const count = repayments.length || 0;
+    const sum = repayments.reduce((a, r) => a + Number(r.amount || 0), 0);
+    return { count, sum };
+  }, [repayments]);
+
   /* ---------- render ---------- */
   if (loading) return <div className="max-w-7xl mx-auto px-6 py-6">Loading loan…</div>;
   if (errs) return <div className="max-w-7xl mx-auto px-6 py-6 text-red-600">{errs}</div>;
@@ -553,7 +579,7 @@ export default function LoanDetails() {
       {/* HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-3xl font-bold tracking-tight">Loan Details</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Loan Details</h2>
           <span className={`${chip} ${statusBadge}`}>{loan.status}</span>
           {workflowStage && (
             <span className={`${chip} bg-indigo-50 text-indigo-700 ring-indigo-200`}>
@@ -567,12 +593,12 @@ export default function LoanDetails() {
       </div>
 
       {/* SUMMARY */}
-      <div className="bg-white border rounded-xl shadow-sm p-6">
+      <SectionCard>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
           <div className="col-span-2">
-            <div className="text-[11px] uppercase tracking-wider text-gray-500">Borrower</div>
+            <Label>Borrower</Label>
             <Link
-              className="text-lg font-semibold text-blue-700 hover:underline"
+              className="text-lg md:text-xl font-semibold text-blue-700 hover:underline"
               to={`/borrowers/${loan.borrowerId}`}
             >
               {loan.Borrower?.name || loan.borrowerName || "N/A"}
@@ -580,12 +606,12 @@ export default function LoanDetails() {
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500">Amount</div>
+            <Label>Amount</Label>
             <div className="text-xl font-semibold">{fmtTZS(loan.amount, currency)}</div>
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500">Interest</div>
+            <Label>Interest</Label>
             <div className="text-base">
               <span className="font-medium">{loan.interestRate}%</span>{" "}
               <span className="text-gray-600">· {loan.interestMethod}</span>
@@ -593,26 +619,24 @@ export default function LoanDetails() {
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500">Term</div>
+            <Label>Term</Label>
             <div className="text-base">{loan.termMonths || loan.durationMonths} months</div>
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500">
-              Start / Release
-            </div>
+            <Label>Start / Release</Label>
             <div className="text-base">{fmtDate(loan.startDate || loan.releaseDate)}</div>
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500">Outstanding</div>
+            <Label>Outstanding</Label>
             <div className="text-xl font-semibold">
               {outstanding == null ? "—" : fmtTZS(outstanding, currency)}
             </div>
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-500">Next Due</div>
+            <Label>Next Due</Label>
             <div className="text-base">
               {nextDue ? (
                 <>
@@ -627,7 +651,7 @@ export default function LoanDetails() {
 
           {product && (
             <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
-              <div className="text-[11px] uppercase tracking-wider text-gray-500">Product</div>
+              <Label>Product</Label>
               <div className="text-base">
                 <span className="font-semibold">
                   {product.name}
@@ -645,44 +669,44 @@ export default function LoanDetails() {
           )}
         </div>
 
-        {/* Consistent insights with LoanSchedulePage */}
+        {/* At a glance */}
         <div className="mt-6 grid sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
-          <div>
-            <div className="text-gray-500 text-xs">Paid Principal</div>
+          <div className="rounded-xl border p-3">
+            <div className="text-gray-500 text-[11px]">Paid Principal</div>
             <div className="font-semibold">{fmtTZS(scheduled.paidPrincipal, currency)}</div>
           </div>
-          <div>
-            <div className="text-gray-500 text-xs">Paid Interest</div>
+          <div className="rounded-xl border p-3">
+            <div className="text-gray-500 text-[11px]">Paid Interest</div>
             <div className="font-semibold">{fmtTZS(scheduled.paidInterest, currency)}</div>
           </div>
-          <div>
-            <div className="text-gray-500 text-xs">Paid Penalties</div>
+          <div className="rounded-xl border p-3">
+            <div className="text-gray-500 text-[11px]">Paid Penalties</div>
             <div className="font-semibold">{fmtTZS(scheduled.paidPenalty, currency)}</div>
           </div>
-          <div>
-            <div className="text-gray-500 text-xs">Paid Fees</div>
+          <div className="rounded-xl border p-3">
+            <div className="text-gray-500 text-[11px]">Paid Fees</div>
             <div className="font-semibold">{fmtTZS(scheduled.paidFees, currency)}</div>
           </div>
-          <div>
-            <div className="text-gray-500 text-xs">Total Paid</div>
+          <div className="rounded-xl border p-3">
+            <div className="text-gray-500 text-[11px]">Total Paid</div>
             <div className="font-semibold">{fmtTZS(scheduled.totalPaid, currency)}</div>
           </div>
-          <div>
-            <div className="text-gray-500 text-xs">Total Scheduled</div>
+          <div className="rounded-xl border p-3">
+            <div className="text-gray-500 text-[11px]">Total Scheduled</div>
             <div className="font-semibold">{fmtTZS(scheduled.total, currency)}</div>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* REVIEW / DISBURSE TOOLBARS */}
       {(showLOTB || showBMToolbar || showCOToolbar || showDisburse) && (
-        <div className="bg-white border rounded-xl shadow-sm p-6 space-y-4">
+        <SectionCard dense>
           {showLOTB && (
             <>
-              <h3 className="text-lg font-semibold">Changes Requested</h3>
+              <h3 className="text-base md:text-lg font-semibold">Changes Requested</h3>
               <p className="text-sm text-gray-600">
-                Update the application and attach missing documents, then{" "}
-                <strong>Resubmit</strong>. Add a short note if helpful.
+                Update the application and attach missing documents, then <strong>Resubmit</strong>.
+                Add a short note if helpful.
               </p>
               <label className="block text-xs text-gray-600">Comment (optional)</label>
               <textarea
@@ -714,7 +738,7 @@ export default function LoanDetails() {
           {(showBMToolbar || showCOToolbar) && (
             <>
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">
+                <h3 className="text-base md:text-lg font-semibold">
                   {showBMToolbar ? "Branch Manager Review" : "Compliance Review"}
                 </h3>
               </div>
@@ -796,57 +820,57 @@ export default function LoanDetails() {
               </Link>
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
       {/* QUICK ACTIONS */}
-      <div className="flex flex-wrap gap-3">
-        <Link to={`/loans`} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+      <div className="flex flex-wrap gap-2 md:gap-3">
+        <Link to={`/loans`} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
           Back to Loans
         </Link>
 
-        <button onClick={() => setOpenSchedule(true)} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+        <button onClick={() => setOpenSchedule(true)} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
           View Schedule
         </button>
 
         <a
           href={`/api/loans/${id}/schedule/export.csv`}
-          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50"
           target="_blank" rel="noreferrer"
         >
           Export CSV
         </a>
         <a
           href={`/api/loans/${id}/schedule/export.pdf`}
-          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50"
           target="_blank" rel="noreferrer"
         >
           Export PDF
         </a>
 
-        <button onClick={() => setOpenRepay(true)} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+        <button onClick={() => setOpenRepay(true)} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
           Post Repayment
         </button>
 
         {canEdit && (
           <>
-            <button onClick={openEditModal} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+            <button onClick={openEditModal} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
               Edit Loan
             </button>
-            <button onClick={openRescheduleModal} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+            <button onClick={openRescheduleModal} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
               Reschedule
             </button>
           </>
         )}
 
-        <button onClick={reissueLoan} className="px-4 py-2 rounded-lg border hover:bg-gray-50">
+        <button onClick={reissueLoan} className="px-3 md:px-4 py-2 rounded-lg border hover:bg-gray-50">
           Reissue
         </button>
 
         {canDelete && (
           <button
             onClick={deleteLoan}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+            className="bg-red-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-red-700"
           >
             Delete
           </button>
@@ -855,7 +879,7 @@ export default function LoanDetails() {
         {loan.status !== "closed" && (
           <button
             onClick={closeLoan}
-            className="bg-red-50 text-red-700 px-4 py-2 rounded-lg border border-red-200 hover:bg-red-100"
+            className="bg-red-50 text-red-700 px-3 md:px-4 py-2 rounded-lg border border-red-200 hover:bg-red-100"
           >
             Close Loan
           </button>
@@ -863,93 +887,105 @@ export default function LoanDetails() {
       </div>
 
       {/* REPAYMENTS */}
-      <div className="bg-white border rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold">Repayments</h3>
-        </div>
-        <div className="px-6 py-4">
-          {loadingRepayments ? (
-            <p>Loading repayments…</p>
-          ) : repayments.length === 0 ? (
-            <div className="text-sm text-gray-600">No repayments found.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 sticky top-0 z-10">
-                  <tr className="text-left">
-                    <th className="px-3 py-2 border-b">Date</th>
-                    <th className="px-3 py-2 border-b">Amount</th>
-                    <th className="px-3 py-2 border-b">Method</th>
-                    <th className="px-3 py-2 border-b">Notes</th>
+      <SectionCard
+        title="Repayments"
+        right={
+          <div className="text-xs text-gray-500">
+            {repayTotals.count} record{repayTotals.count === 1 ? "" : "s"} · Total{" "}
+            <span className="font-semibold">{fmtTZS(repayTotals.sum, currency)}</span>
+          </div>
+        }
+      >
+        {loadingRepayments ? (
+          <p>Loading repayments…</p>
+        ) : repayments.length === 0 ? (
+          <div className="text-sm text-gray-600">No repayments found.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr className="text-left">
+                  <th className="px-3 py-2 border-b">#</th>
+                  <th className="px-3 py-2 border-b">Date</th>
+                  <th className="px-3 py-2 border-b text-right">Amount</th>
+                  <th className="px-3 py-2 border-b">Method</th>
+                  <th className="px-3 py-2 border-b">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {repayments.map((r, i) => (
+                  <tr key={r.id || i} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 whitespace-nowrap">{i + 1}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{fmtDate(r.date)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(r.amount, currency)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 ring-1 ring-slate-200">
+                        {r.method || "—"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">{r.notes || "—"}</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {repayments.map((r, i) => (
-                    <tr key={r.id || i} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 whitespace-nowrap">{fmtDate(r.date)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(r.amount, currency)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{r.method || "—"}</td>
-                      <td className="px-3 py-2">{r.notes || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-50">
+                  <td className="px-3 py-2 border-t text-sm font-medium" colSpan={2}>Total</td>
+                  <td className="px-3 py-2 border-t text-right text-sm font-semibold">
+                    {fmtTZS(repayTotals.sum, currency)}
+                  </td>
+                  <td className="px-3 py-2 border-t" colSpan={2}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </SectionCard>
 
       {/* COMMENTS */}
-      <div className="bg-white border rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold">Comments</h3>
-        </div>
-
-        <div className="px-6 py-4 space-y-4">
-          {loadingComments ? (
-            <p>Loading comments…</p>
-          ) : comments.length === 0 ? (
-            <div className="text-sm text-gray-600">No comments yet.</div>
-          ) : (
-            <div className="space-y-3 max-h-72 overflow-auto pr-1">
-              {comments.map((c, i) => (
-                <div key={c.id || i} className="flex gap-3">
-                  <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold select-none">
-                    {(c.author?.name || "U").slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="flex-1 border-b pb-2">
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span className="font-medium text-gray-700">{c.author?.name || "User"}</span>
-                      <span>{fmtDateTime(c.createdAt)}</span>
-                    </div>
-                    <p className="text-sm mt-0.5">{c.content}</p>
-                  </div>
+      <SectionCard title="Comments">
+        {loadingComments ? (
+          <p>Loading comments…</p>
+        ) : comments.length === 0 ? (
+          <div className="text-sm text-gray-600">No comments yet.</div>
+        ) : (
+          <div className="space-y-3 max-h-72 overflow-auto pr-1">
+            {comments.map((c, i) => (
+              <div key={c.id || i} className="flex gap-3">
+                <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold select-none">
+                  {(c.author?.name || "U").slice(0, 1).toUpperCase()}
                 </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-start gap-2">
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              className="border rounded-lg px-3 py-2 w-full min-h-[44px]"
-              placeholder="Add a comment"
-            />
-            <button
-              onClick={addComment}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-            >
-              Post
-            </button>
+                <div className="flex-1 border-b pb-2">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span className="font-medium text-gray-700">{c.author?.name || "User"}</span>
+                    <span>{fmtDateTime(c.createdAt)}</span>
+                  </div>
+                  <p className="text-sm mt-0.5">{c.content}</p>
+                </div>
+              </div>
+            ))}
           </div>
+        )}
+
+        <div className="mt-4 flex items-start gap-2">
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            className="border rounded-lg px-3 py-2 w-full min-h-[44px]"
+            placeholder="Add a comment"
+          />
+          <button
+            onClick={addComment}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Post
+          </button>
         </div>
-      </div>
+      </SectionCard>
 
       {/* REPAYMENT MODAL */}
       {openRepay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Post Repayment</h4>
               <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">✕</button>
@@ -1015,7 +1051,7 @@ export default function LoanDetails() {
       {/* SCHEDULE MODAL */}
       {openSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-5">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Repayment Schedule</h4>
               <button onClick={() => setOpenSchedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
@@ -1040,12 +1076,12 @@ export default function LoanDetails() {
                       <tr className="text-left">
                         <th className="px-3 py-2 border-b">#</th>
                         <th className="px-3 py-2 border-b">Due Date</th>
-                        <th className="px-3 py-2 border-b">Principal</th>
-                        <th className="px-3 py-2 border-b">Interest</th>
-                        <th className="px-3 py-2 border-b">Penalty</th>
-                        <th className="px-3 py-2 border-b">Fees</th>
-                        <th className="px-3 py-2 border-b">Total</th>
-                        <th className="px-3 py-2 border-b">Balance</th>
+                        <th className="px-3 py-2 border-b text-right">Principal</th>
+                        <th className="px-3 py-2 border-b text-right">Interest</th>
+                        <th className="px-3 py-2 border-b text-right">Penalty</th>
+                        <th className="px-3 py-2 border-b text-right">Fees</th>
+                        <th className="px-3 py-2 border-b text-right">Total</th>
+                        <th className="px-3 py-2 border-b text-right">Balance</th>
                         <th className="px-3 py-2 border-b">Status</th>
                       </tr>
                     </thead>
@@ -1062,12 +1098,12 @@ export default function LoanDetails() {
                           <tr key={row.id || idx} className="hover:bg-gray-50">
                             <td className="px-3 py-2 whitespace-nowrap">{idx + 1}</td>
                             <td className="px-3 py-2 whitespace-nowrap">{fmtDate(row.dueDate)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.principal, currency)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.interest, currency)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.penalty || 0, currency)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(row.fee ?? row.fees ?? 0, currency)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{fmtTZS(total, currency)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(row.principal, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(row.interest, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(row.penalty || 0, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(row.fee ?? row.fees ?? 0, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(total, currency)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right">
                               {fmtTZS(row.balance ?? (settled ? 0 : total), currency)}
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap">
@@ -1101,7 +1137,7 @@ export default function LoanDetails() {
       {/* EDIT MODAL */}
       {openEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Edit Loan</h4>
               <button onClick={() => setOpenEdit(false)} className="text-gray-500 hover:text-gray-700">✕</button>
@@ -1164,7 +1200,7 @@ export default function LoanDetails() {
       {/* RESCHEDULE MODAL */}
       {openReschedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Reschedule Loan</h4>
               <button onClick={() => setOpenReschedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
