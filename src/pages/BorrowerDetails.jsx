@@ -58,7 +58,7 @@ const chip = (status) => {
   }
 };
 
-/* GET with graceful fallbacks (prefers ?borrowerId=, matching your API) */
+/* GET with graceful fallbacks (prefers backend's canonical routes) */
 const tryGET = async (paths = [], opts = {}) => {
   let lastErr;
   for (const p of paths) {
@@ -210,7 +210,9 @@ const BorrowerDetails = () => {
           `/repayments/borrower/${id}`,
         ]).catch(() => []),
         tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
-        tryGET([`/savings?borrowerId=${id}${qTenant}`, `/borrowers/${id}/savings`, `/savings/borrower/${id}`]).catch(
+
+        // 🔧 FIX: Prefer canonical backend route first to avoid 404s
+        tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`, `/savings?borrowerId=${id}${qTenant}`]).catch(
           () => {
             setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
             return {};
