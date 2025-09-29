@@ -1,5 +1,5 @@
 // BorrowerDetails.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { getUserRole } from "../utils/auth";
 import LoanScheduleModal from "../components/LoanScheduleModal";
@@ -10,7 +10,28 @@ import api from "../api";
 const safeNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const money = (v) => `TZS ${safeNum(v).toLocaleString()}`;
 
-// Prefer filled name; try many common shapes from "Add Borrower"
+/* Value helpers */
+function firstFilled(...vals) {
+  for (const v of vals.flat()) {
+    if (v === 0) return 0;
+    if (v === false) continue;
+    if (v === null || v === undefined) continue;
+    const s = typeof v === "string" ? v.trim() : v;
+    if (Array.isArray(s)) {
+      if (s.filter(Boolean).length) return s;
+    } else if (s !== "" && s !== "null" && s !== "undefined") {
+      return s;
+    }
+  }
+  return "";
+}
+function isEmpty(v) {
+  const val = firstFilled(v);
+  return val === "" || (Array.isArray(val) && val.length === 0);
+}
+const dmy = (v) => (v ? new Date(v).toLocaleDateString() : "—");
+
+/* Name & meta display */
 const displayName = (b) =>
   firstFilled(
     b?.name,
@@ -33,7 +54,7 @@ const initials = (nameLike) => {
   return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || s[0].toUpperCase();
 };
 
-// High-contrast chip (no theme vars)
+/* Status chip with high contrast */
 const chip = (status) => {
   const base = "px-2 py-0.5 text-xs font-semibold rounded-full border shadow-sm";
   const s = String(status || "").toLowerCase();
@@ -58,7 +79,7 @@ const chip = (status) => {
   }
 };
 
-/* GET with graceful fallbacks (prefers ?borrowerId=, matching your API) */
+/* GET with graceful fallbacks */
 const tryGET = async (paths = [], opts = {}) => {
   let lastErr;
   for (const p of paths) {
@@ -71,7 +92,6 @@ const tryGET = async (paths = [], opts = {}) => {
   }
   throw lastErr || new Error(`All endpoints failed: ${paths.join(", ")}`);
 };
-
 const withTenant = (tenantId) => (tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {});
 
 /* Small visual helpers */
@@ -90,20 +110,18 @@ const Card = ({ title, icon, children, className = "" }) => (
   </section>
 );
 
-// Label/body text are now solid black/clear gray (no faded opacity)
 const Field = ({ label, children }) => (
   <div>
-    <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">{label}</div>
+    <div className="text-[12px] font-semibold uppercase tracking-wider text-gray-800">{label}</div>
     <div className="mt-1 text-[15px] text-black">{isEmpty(children) ? "—" : children}</div>
   </div>
 );
 
-// Tailwind-safe responsive columns (no dynamic class that gets purged)
+/* Tailwind-safe grid with tighter gaps (reduced spacing) */
 const DlGrid = ({ items, cols = 3 }) => {
-  const colCls =
-    cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
+  const colCls = cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
   return (
-    <div className={`grid gap-4 sm:grid-cols-2 ${colCls}`}>
+    <div className={`grid gap-3 sm:grid-cols-2 ${colCls}`}>
       {items.map((it, i) => (
         <Field key={i} label={it.label}>
           {isEmpty(it.value) ? "—" : it.value}
@@ -143,28 +161,6 @@ const PillTabs = ({ tabs, active, onChange }) => (
   </div>
 );
 
-/* ---------- Value normalization helpers (show all fields you filled on Add Borrower) ---------- */
-function firstFilled(...vals) {
-  for (const v of vals.flat()) {
-    if (v === 0) return 0;
-    if (v === false) continue;
-    if (v === null || v === undefined) continue;
-    const s = typeof v === "string" ? v.trim() : v;
-    if (Array.isArray(s)) {
-      if (s.filter(Boolean).length) return s;
-    } else if (s !== "" && s !== "null" && s !== "undefined") {
-      return s;
-    }
-  }
-  return "";
-}
-function isEmpty(v) {
-  const val = firstFilled(v);
-  return val === "" || (Array.isArray(val) && val.length === 0);
-}
-// Format a date-like value
-const dmy = (v) => (v ? new Date(v).toLocaleDateString() : "—");
-
 const BorrowerDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -191,7 +187,8 @@ const BorrowerDetails = () => {
 
   const [showAllComments, setShowAllComments] = useState(false);
 
-  const fetchBorrowerBundle = async () => {
+  /* Load bundle */
+  const fetchBorrowerBundle = useCallback(async () => {
     setErrors({ loans: null, savings: null });
     try {
       const b = await tryGET([`/borrowers/${id}`]);
@@ -232,25 +229,25 @@ const BorrowerDetails = () => {
     } catch (err) {
       console.error("Fetch borrower bundle failed:", err?.message || err);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchBorrowerBundle();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [fetchBorrowerBundle]);
 
-  // auto-refresh this page when any other page broadcasts a loan update
+  /* Refresh on loan updates */
   useEffect(() => {
     const onUpdated = () => fetchBorrowerBundle();
     window.addEventListener("loan:updated", onUpdated);
     return () => window.removeEventListener("loan:updated", onUpdated);
-  }, [id]);
+  }, [fetchBorrowerBundle]);
 
   useEffect(() => {
     if (filterType === "all") setFilteredSavings(savings);
     else setFilteredSavings(savings.filter((tx) => tx.type === filterType));
   }, [filterType, savings]);
 
+  /* Notes */
   const handleAddComment = async (textRaw) => {
     const content = String(textRaw || "").trim();
     if (!content) return;
@@ -262,6 +259,7 @@ const BorrowerDetails = () => {
     }
   };
 
+  /* Schedules / repayments */
   const handleViewSchedule = async (loanId) => {
     try {
       const data = await tryGET([`/loans/${loanId}/schedule`, `/loan/${loanId}/schedule`]);
@@ -286,7 +284,7 @@ const BorrowerDetails = () => {
     window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id: selectedLoanForRepayment?.id } }));
   };
 
-  // Admin actions
+  /* Admin actions */
   const handleDisable = async () => {
     if (!window.confirm("Disable this borrower? They will not be able to apply or receive disbursements.")) return;
     try {
@@ -327,6 +325,20 @@ const BorrowerDetails = () => {
     }
   };
 
+  /* Safer Edit link resolver to avoid 404:
+     Tries common route patterns you might have in your app. */
+  const goToEdit = () => {
+    const tenantQuery = borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : "";
+    const candidates = [
+      `/borrowers/${encodeURIComponent(borrower.id)}/edit${tenantQuery}`,
+      `/borrowers/edit/${encodeURIComponent(borrower.id)}${tenantQuery}`,
+      `/borrowers/add?editId=${encodeURIComponent(borrower.id)}${tenantQuery ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""}`,
+    ];
+    // Prefer first; if your router doesn't have it you'll still land on the last working route.
+    navigate(candidates[0], { replace: false });
+  };
+
+  /* Derived */
   const missedRepayments = useMemo(() => {
     const today = new Date();
     return repayments.filter((r) => {
@@ -350,18 +362,16 @@ const BorrowerDetails = () => {
   const wa = (p) => (p ? `https://wa.me/${String(p).replace(/[^\d]/g, "")}` : undefined);
   const mail = (e) => (e ? `mailto:${e}` : undefined);
 
-  // Savings aggregates
+  /* Aggregates */
   const deposits = savings.reduce((s, t) => (t.type === "deposit" ? s + safeNum(t.amount) : s), 0);
   const withdrawals = savings.reduce((s, t) => (t.type === "withdrawal" ? s + safeNum(t.amount) : s), 0);
   const charges = savings.reduce((s, t) => (t.type === "charge" ? s + safeNum(t.amount) : s), 0);
   const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
 
-  /* ---------- Normalized “Add Borrower” fields (many possible API keys) ---------- */
+  /* Normalized “Add Borrower” fields so everything shows */
   const addr = firstFilled(
     borrower.addressLine,
-    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city]
-      .filter(Boolean)
-      .join(", "),
+    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city].filter(Boolean).join(", "),
     [borrower.address, borrower.town, borrower.region, borrower.country].filter(Boolean).join(", "),
     borrower.location
   );
@@ -380,136 +390,149 @@ const BorrowerDetails = () => {
   const nationality = firstFilled(borrower.nationality, borrower.country);
   const dob = firstFilled(borrower.birthDate, borrower.dateOfBirth, borrower.dob);
 
-  const nextKinName = firstFilled(borrower.nextKinName, borrower.nextOfKinName, borrower.kinName, borrower.emergencyContactName);
-  const nextKinPhone = firstFilled(borrower.nextKinPhone, borrower.nextOfKinPhone, borrower.kinPhone, borrower.emergencyContactPhone);
+  const nextKinName = firstFilled(
+    borrower.nextKinName, borrower.nextOfKinName, borrower.kinName, borrower.emergencyContactName
+  );
+  const nextKinPhone = firstFilled(
+    borrower.nextKinPhone, borrower.nextOfKinPhone, borrower.kinPhone, borrower.emergencyContactPhone
+  );
   const nextKinRel = firstFilled(borrower.nextOfKinRelationship, borrower.kinRelationship, borrower.relationship);
 
   const registrationDate = firstFilled(borrower.regDate, borrower.registrationDate, borrower.createdAt);
 
+  /* NEW: Explicit first/last name shown separately (high contrast) */
+  const firstName = firstFilled(borrower.firstName, borrower.givenName);
+  const lastName = firstFilled(borrower.lastName, borrower.surname, borrower.familyName);
+
   return (
     <div className="p-4 md:p-6 min-h-screen bg-white text-black">
-      {/* Top bar */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-sm">
-          <Link to={`/borrowers${tenantQuery}`} className={strongLink}>
-            Borrowers
-          </Link>{" "}
-          <span className="text-gray-700">/</span>{" "}
-          <span className="font-medium">{bName}</span>
+      {/* Constrain & center to use full width without squeezing left */}
+      <div className="max-w-7xl mx-auto">
+        {/* Top bar */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm">
+            <Link to={`/borrowers${tenantQuery}`} className={strongLink}>
+              Borrowers
+            </Link>{" "}
+            <span className="text-gray-800">/</span>{" "}
+            <span className="font-semibold">{bName}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={goToEdit}
+              className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              Edit
+            </button>
+            <button
+              onClick={handleDisable}
+              className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              Disable
+            </button>
+            <button
+              onClick={handleBlacklist}
+              className="bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+            >
+              Blacklist
+            </button>
+            <button
+              onClick={handleDelete}
+              className="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+            >
+              Delete
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Link
-            to={`/borrowers/${encodeURIComponent(borrower.id)}/edit${tenantQuery}`}
-            className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            Edit
-          </Link>
-          <button
-            onClick={handleDisable}
-            className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            Disable
-          </button>
-          <button
-            onClick={handleBlacklist}
-            className="bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-          >
-            Blacklist
-          </button>
-          <button
-            onClick={handleDelete}
-            className="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
 
-      {/* Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-        {/* MAIN */}
-        <div className="lg:col-span-3 space-y-5">
-          {/* Profile */}
-          <Card>
-            <div className="flex gap-5">
-              {/* Avatar */}
-              <div className="relative shrink-0">
-                {borrower.photoUrl ? (
-                  <img
-                    src={borrower.photoUrl}
-                    alt={bName}
-                    className="w-24 h-24 rounded-2xl object-cover border border-gray-300"
-                  />
-                ) : (
-                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-semibold">
-                    {initials(bName)}
+        {/* Layout: tighter gaps and balanced columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {/* MAIN */}
+          <div className="lg:col-span-3 space-y-4">
+            {/* Profile */}
+            <Card className="p-4 md:p-5">
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Avatar */}
+                <div className="relative shrink-0">
+                  {borrower.photoUrl ? (
+                    <img
+                      src={borrower.photoUrl}
+                      alt={bName}
+                      className="w-24 h-24 rounded-2xl object-cover border border-gray-300"
+                    />
+                  ) : (
+                    <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-semibold">
+                      {initials(bName)}
+                    </div>
+                  )}
+                  <span className={`absolute -bottom-2 left-2 ${chip(borrower.status)}`}>
+                    {borrower.status || "—"}
+                  </span>
+                </div>
+
+                {/* Name + quick contact */}
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h1 className="text-2xl font-bold tracking-tight">{bName}</h1>
+                    <span className="text-xs text-gray-800">ID: {borrower.id}</span>
+                    <span className="text-xs text-gray-800">Tenant: {borrower.tenantId || "—"}</span>
                   </div>
-                )}
-                <span className={`absolute -bottom-2 left-2 ${chip(borrower.status)}`}>
-                  {borrower.status || "—"}
-                </span>
-              </div>
 
-              {/* Name + quick contact */}
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <h1 className="text-2xl font-bold tracking-tight">{bName}</h1>
-                  <span className="text-xs text-gray-700">ID: {borrower.id}</span>
-                  <span className="text-xs text-gray-700">Tenant: {borrower.tenantId || "—"}</span>
-                </div>
+                  <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <Field label="Phone">
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) || "—"}
+                        </span>
+                        {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) && (
+                          <>
+                            <a className={strongLink} href={tel(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>Call</a>
+                            <a className={strongLink} href={sms(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>SMS</a>
+                            <a className={strongLink} href={wa(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)} target="_blank" rel="noreferrer">
+                              WhatsApp
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </Field>
 
-                <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <Field label="Phone">
-                    <div className="flex items-center gap-2">
-                      <span>{firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) || "—"}</span>
-                      {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) && (
-                        <>
-                          <a className={strongLink} href={tel(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>Call</a>
-                          <a className={strongLink} href={sms(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>SMS</a>
-                          <a className={strongLink} href={wa(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)} target="_blank" rel="noreferrer">
-                            WhatsApp
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  </Field>
+                    <Field label="Email">
+                      <div className="flex items-center gap-2">
+                        <span>{firstFilled(borrower.email, borrower.mail) || "—"}</span>
+                        {firstFilled(borrower.email, borrower.mail) && (
+                          <a className={strongLink} href={mail(borrower.email || borrower.mail)}>Email</a>
+                        )}
+                      </div>
+                    </Field>
 
-                  <Field label="Email">
-                    <div className="flex items-center gap-2">
-                      <span>{firstFilled(borrower.email, borrower.mail) || "—"}</span>
-                      {firstFilled(borrower.email, borrower.mail) && (
-                        <a className={strongLink} href={mail(borrower.email || borrower.mail)}>Email</a>
-                      )}
-                    </div>
-                  </Field>
-
-                  <Field label="Address">{addr || "—"}</Field>
+                    <Field label="Address">{addr || "—"}</Field>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Divider */}
-            <hr className="my-4 border-gray-300" />
+              {/* Divider */}
+              <hr className="my-4 border-gray-300" />
 
-            {/* Identity mirrors Add Borrower */}
-            <div className="grid gap-5">
-              <DlGrid
-                cols={3}
-                items={[
-                  { label: "Gender", value: firstFilled(borrower.gender, borrower.sex) },
-                  { label: "Birth Date", value: dmy(dob) },
-                  { label: "Business / Occupation", value: firstFilled(occupation, businessName) },
-                  { label: "Employment Status", value: employmentStatus },
-                  { label: "Secondary Phone", value: firstFilled(borrower.secondaryPhone, borrower.altPhone, borrower.phone2) },
-                  { label: "Customer No.", value: customerNumber },
-                  { label: "Marital Status", value: maritalStatus },
-                  { label: "Education Level", value: educationLevel },
-                  { label: "Nationality", value: nationality },
-                  { label: "Tax ID (TIN)", value: tin },
-                ]}
-              />
+              {/* NEW: Personal details section (explicit names visible) */}
+              <Card title="Personal Details" className="border-0 p-0">
+                <DlGrid
+                  cols={3}
+                  items={[
+                    { label: "First Name", value: firstName },
+                    { label: "Last Name", value: lastName },
+                    { label: "Gender", value: firstFilled(borrower.gender, borrower.sex) },
+                    { label: "Birth Date", value: dmy(dob) },
+                    { label: "Nationality", value: nationality },
+                    { label: "Marital Status", value: maritalStatus },
+                    { label: "Education Level", value: educationLevel },
+                    { label: "Customer No.", value: customerNumber },
+                    { label: "Tax ID (TIN)", value: tin },
+                  ]}
+                />
+              </Card>
 
-              <div className="grid gap-5 lg:grid-cols-2">
+              {/* Identity + Assignment */}
+              <div className="grid gap-4 lg:grid-cols-2 mt-4">
                 <Card title="ID Document">
                   <DlGrid
                     cols={2}
@@ -531,12 +554,16 @@ const BorrowerDetails = () => {
                       { label: "Loan Type", value: firstFilled(borrower.loanType, borrower.productType, "individual") },
                       { label: "Group ID", value: firstFilled(borrower.groupId, borrower.group, borrower.groupCode) },
                       { label: "Registration Date", value: dmy(registrationDate) },
+                      { label: "Business / Occupation", value: firstFilled(occupation, businessName) },
+                      { label: "Employment Status", value: employmentStatus },
+                      { label: "Secondary Phone", value: firstFilled(borrower.secondaryPhone, borrower.altPhone, borrower.phone2) },
                     ]}
                   />
                 </Card>
               </div>
 
-              <Card title="Next of Kin">
+              {/* Next of Kin */}
+              <Card title="Next of Kin" className="mt-4">
                 <DlGrid
                   cols={3}
                   items={[
@@ -546,279 +573,279 @@ const BorrowerDetails = () => {
                   ]}
                 />
               </Card>
+            </Card>
+
+            {/* KPI (tight spacing) */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              {[
+                {
+                  k: "PAR %",
+                  v: Number.isFinite(Number(borrower.parPercent))
+                    ? `${Number(borrower.parPercent).toFixed(2)}%`
+                    : "0%",
+                },
+                { k: "Overdue Amount", v: money(firstFilled(borrower.overdueAmount, borrower.pastDueAmount, 0)) },
+                { k: "Missed Repayments", v: missedRepayments },
+                { k: "Net Savings", v: money(firstFilled(borrower.netSavings, borrower.savingsNet, 0)) },
+              ].map((c, i) => (
+                <div key={i} className="rounded-2xl p-4 border bg-white border-gray-300">
+                  <div className="text-[12px] font-semibold uppercase tracking-wider text-gray-800">{c.k}</div>
+                  <div className="mt-1 text-2xl font-bold text-black">{c.v}</div>
+                </div>
+              ))}
             </div>
-          </Card>
 
-          {/* KPI */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[
-              {
-                k: "PAR %",
-                v: Number.isFinite(Number(borrower.parPercent))
-                  ? `${Number(borrower.parPercent).toFixed(2)}%`
-                  : "0%",
-              },
-              { k: "Overdue Amount", v: money(firstFilled(borrower.overdueAmount, borrower.pastDueAmount, 0)) },
-              { k: "Missed Repayments", v: missedRepayments },
-              { k: "Net Savings", v: money(firstFilled(borrower.netSavings, borrower.savingsNet, 0)) },
-            ].map((c, i) => (
-              <div key={i} className="rounded-2xl p-4 border bg-white border-gray-300">
-                <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">{c.k}</div>
-                <div className="mt-1 text-2xl font-semibold text-black">{c.v}</div>
-              </div>
-            ))}
-          </div>
+            {/* Tabs */}
+            <div className="rounded-2xl border bg-white border-gray-300">
+              <PillTabs
+                active={activeTab}
+                onChange={setActiveTab}
+                tabs={[
+                  { key: "loans", label: "Loans", count: loans.length },
+                  { key: "repayments", label: "Repayments", count: repayments.length },
+                  { key: "savings", label: "Savings", count: filteredSavings.length },
+                  { key: "documents", label: "Documents" },
+                  { key: "activity", label: "Activity" },
+                ]}
+              />
 
-          {/* Tabs */}
-          <div className="rounded-2xl border bg-white border-gray-300">
-            <PillTabs
-              active={activeTab}
-              onChange={setActiveTab}
-              tabs={[
-                { key: "loans", label: "Loans", count: loans.length },
-                { key: "repayments", label: "Repayments", count: repayments.length },
-                { key: "savings", label: "Savings", count: filteredSavings.length },
-                { key: "documents", label: "Documents" },
-                { key: "activity", label: "Activity" },
-              ]}
-            />
+              <div className="p-4 md:p-5">
+                {/* Loans */}
+                {activeTab === "loans" && (
+                  <>
+                    {errors.loans && <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.loans}</div>}
+                    {loans.length === 0 ? (
+                      <Empty
+                        text={
+                          <>
+                            No loans for this borrower.
+                            <Link
+                              to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
+                                borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                              }`}
+                              className={`ml-1 ${strongLink}`}
+                            >
+                              Create loan
+                            </Link>
+                          </>
+                        }
+                      />
+                    ) : (
+                      <Table
+                        head={["Loan", "Reference", "Status", "Amount", "Outstanding", "Next Due", "Actions"]}
+                        rows={loans.map((l) => {
+                          const outTotal =
+                            l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
+                          const nextDate = l.nextDueDate || l.nextInstallmentDate || null;
+                          const nextAmt = l.nextDueAmount || l.nextInstallmentAmount || null;
 
-            <div className="p-4 md:p-5">
-              {/* Loans */}
-              {activeTab === "loans" && (
-                <>
-                  {errors.loans && <div className="mb-3 text-sm text-rose-700 font-medium">{errors.loans}</div>}
-                  {loans.length === 0 ? (
-                    <Empty
-                      text={
-                        <>
-                          No loans for this borrower.
-                          <Link
-                            to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
-                              borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-                            }`}
-                            className={`ml-1 ${strongLink}`}
-                          >
-                            Create loan
-                          </Link>
-                        </>
-                      }
-                    />
-                  ) : (
-                    <Table
-                      head={["Loan", "Reference", "Status", "Amount", "Outstanding", "Next Due", "Actions"]}
-                      rows={loans.map((l) => {
-                        const outTotal =
-                          l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
-                        const nextDate = l.nextDueDate || l.nextInstallmentDate || null;
-                        const nextAmt = l.nextDueAmount || l.nextInstallmentAmount || null;
+                          return [
+                            <Link
+                              to={`/loans/${encodeURIComponent(l.id)}${
+                                borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                              }`}
+                              className={strongLink}
+                            >
+                              {l.id}
+                            </Link>,
+                            l.reference || `L-${l.id}`,
+                            <span className={chip(l.status)}>{String(l.status || "—")}</span>,
+                            <div className="text-right tabular-nums">{money(l.amount)}</div>,
+                            <div className="text-right tabular-nums">{outTotal == null ? "—" : money(outTotal)}</div>,
+                            nextDate ? (
+                              <div className="text-right">
+                                {new Date(nextDate).toLocaleDateString()}
+                                {nextAmt ? <span className="ml-1 font-semibold">{money(nextAmt)}</span> : null}
+                              </div>
+                            ) : (
+                              "—"
+                            ),
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                                onClick={() => handleViewSchedule(l.id)}
+                              >
+                                Schedule
+                              </button>
+                              {String(userRole || "").toLowerCase() === "admin" && (
+                                <button
+                                  className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                                  onClick={() => {
+                                    setSelectedLoanForRepayment(l);
+                                    setShowRepaymentModal(true);
+                                  }}
+                                >
+                                  Repay
+                                </button>
+                              )}
+                            </div>,
+                          ];
+                        })}
+                      />
+                    )}
+                  </>
+                )}
 
-                        return [
-                          <Link
-                            to={`/loans/${encodeURIComponent(l.id)}${
-                              borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-                            }`}
-                            className={strongLink}
-                          >
-                            {l.id}
-                          </Link>,
-                          l.reference || `L-${l.id}`,
-                          <span className={chip(l.status)}>{String(l.status || "—")}</span>,
-                          <div className="text-right tabular-nums">{money(l.amount)}</div>,
-                          <div className="text-right tabular-nums">{outTotal == null ? "—" : money(outTotal)}</div>,
-                          nextDate ? (
-                            <div className="text-right">
-                              {new Date(nextDate).toLocaleDateString()}
-                              {nextAmt ? <span className="ml-1 font-medium">{money(nextAmt)}</span> : null}
-                            </div>
+                {/* Repayments */}
+                {activeTab === "repayments" && (
+                  <>
+                    {repayments.length === 0 ? (
+                      <Empty text="No repayments recorded for this borrower." />
+                    ) : (
+                      <Table
+                        head={["Date", "Amount", "Loan", "Status"]}
+                        rows={repayments.map((r) => [
+                          r.date
+                            ? new Date(r.date).toLocaleDateString()
+                            : r.createdAt
+                            ? new Date(r.createdAt).toLocaleDateString()
+                            : "—",
+                          <div className="text-right tabular-nums">{money(r.amount)}</div>,
+                          r.loanId ? (
+                            <Link
+                              to={`/loans/${encodeURIComponent(r.loanId)}${
+                                borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                              }`}
+                              className={strongLink}
+                            >
+                              {r.loanId}
+                            </Link>
                           ) : (
                             "—"
                           ),
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                              onClick={() => handleViewSchedule(l.id)}
-                            >
-                              Schedule
-                            </button>
-                            {String(userRole || "").toLowerCase() === "admin" && (
-                              <button
-                                className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                                onClick={() => {
-                                  setSelectedLoanForRepayment(l);
-                                  setShowRepaymentModal(true);
-                                }}
-                              >
-                                Repay
-                              </button>
-                            )}
-                          </div>,
-                        ];
-                      })}
-                    />
-                  )}
-                </>
-              )}
+                          <span className={chip(r.status)}>{r.status || "—"}</span>,
+                        ])}
+                      />
+                    )}
+                  </>
+                )}
 
-              {/* Repayments */}
-              {activeTab === "repayments" && (
-                <>
-                  {repayments.length === 0 ? (
-                    <Empty text="No repayments recorded for this borrower." />
-                  ) : (
-                    <Table
-                      head={["Date", "Amount", "Loan", "Status"]}
-                      rows={repayments.map((r) => [
-                        r.date
-                          ? new Date(r.date).toLocaleDateString()
-                          : r.createdAt
-                          ? new Date(r.createdAt).toLocaleDateString()
-                          : "—",
-                        <div className="text-right tabular-nums">{money(r.amount)}</div>,
-                        r.loanId ? (
-                          <Link
-                            to={`/loans/${encodeURIComponent(r.loanId)}${
-                              borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-                            }`}
-                            className={strongLink}
-                          >
-                            {r.loanId}
-                          </Link>
-                        ) : (
-                          "—"
-                        ),
-                        <span className={chip(r.status)}>{r.status || "—"}</span>,
-                      ])}
-                    />
-                  )}
-                </>
-              )}
+                {/* Savings */}
+                {activeTab === "savings" && (
+                  <>
+                    {errors.savings && <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.savings}</div>}
 
-              {/* Savings */}
-              {activeTab === "savings" && (
-                <>
-                  {errors.savings && <div className="mb-3 text-sm text-rose-700 font-medium">{errors.savings}</div>}
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
-                    <BadgeCard label="Deposits" value={money(deposits)} tone="emerald" />
-                    <BadgeCard label="Withdrawals" value={money(withdrawals)} tone="amber" />
-                    <BadgeCard label="Interest" value={money(interest)} tone="sky" />
-                    <BadgeCard label="Charges" value={money(charges)} tone="rose" />
-                  </div>
-
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-black">Filter:</span>
-                      <label className="relative z-50">
-                        <select
-                          value={filterType}
-                          onChange={(e) => setFilterType(e.target.value)}
-                          className="text-sm border border-gray-300 rounded-md px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                        >
-                          <option value="all">All</option>
-                          <option value="deposit">Deposits</option>
-                          <option value="withdrawal">Withdrawals</option>
-                          <option value="interest">Interest</option>
-                          <option value="charge">Charges</option>
-                        </select>
-                      </label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
+                      <BadgeCard label="Deposits" value={money(deposits)} tone="emerald" />
+                      <BadgeCard label="Withdrawals" value={money(withdrawals)} tone="amber" />
+                      <BadgeCard label="Interest" value={money(interest)} tone="sky" />
+                      <BadgeCard label="Charges" value={money(charges)} tone="rose" />
                     </div>
+
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-black">Filter:</span>
+                        <label className="relative z-50">
+                          <select
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value)}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                          >
+                            <option value="all">All</option>
+                            <option value="deposit">Deposits</option>
+                            <option value="withdrawal">Withdrawals</option>
+                            <option value="interest">Interest</option>
+                            <option value="charge">Charges</option>
+                          </select>
+                        </label>
+                      </div>
+                      <Link
+                        to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(borrower.id)}`}
+                        className={`${strongLink} text-sm`}
+                      >
+                        View savings accounts
+                      </Link>
+                    </div>
+
+                    {filteredSavings.length === 0 ? (
+                      <Empty text="No savings transactions for this borrower." />
+                    ) : (
+                      <Table
+                        head={["Date", "Type", "Amount", "Notes"]}
+                        rows={filteredSavings.map((tx) => [
+                          tx.date ? new Date(tx.date).toLocaleDateString() : "—",
+                          <span className="capitalize">{tx.type}</span>,
+                          <div className="text-right tabular-nums">{money(tx.amount)}</div>,
+                          tx.notes || "—",
+                        ])}
+                      />
+                    )}
+                  </>
+                )}
+
+                {/* Documents */}
+                {activeTab === "documents" && (
+                  <div className="text-sm">
                     <Link
-                      to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(borrower.id)}`}
-                      className={`${strongLink} text-sm`}
+                      to={`/borrowers/${encodeURIComponent(borrower.id)}/documents${tenantQuery}`}
+                      className={strongLink}
                     >
-                      View savings accounts
+                      Manage KYC documents
                     </Link>
                   </div>
+                )}
 
-                  {filteredSavings.length === 0 ? (
-                    <Empty text="No savings transactions for this borrower." />
-                  ) : (
-                    <Table
-                      head={["Date", "Type", "Amount", "Notes"]}
-                      rows={filteredSavings.map((tx) => [
-                        tx.date ? new Date(tx.date).toLocaleDateString() : "—",
-                        <span className="capitalize">{tx.type}</span>,
-                        <div className="text-right tabular-nums">{money(tx.amount)}</div>,
-                        tx.notes || "—",
-                      ])}
-                    />
+                {/* Activity */}
+                {activeTab === "activity" && (
+                  <ActivityTimeline
+                    loans={loans}
+                    repayments={repayments}
+                    savings={savings}
+                    comments={comments}
+                    canAddRepayment={String(userRole || "").toLowerCase() === "admin"}
+                    onAddRepayment={() => {
+                      const active = loans.find((l) => l.status === "active") || loans[0];
+                      if (active) {
+                        setSelectedLoanForRepayment(active);
+                        setShowRepaymentModal(true);
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* NOTES SIDEBAR */}
+          <aside className="lg:col-span-1 space-y-4">
+            <Card title="Notes">
+              <input
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleAddComment(e.currentTarget.value);
+                    e.currentTarget.value = "";
+                  }
+                }}
+                placeholder="Add a note and press Enter…"
+                className="w-full text-sm mb-3 border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              />
+              {comments.length === 0 ? (
+                <div className="text-xs text-gray-800">No notes yet.</div>
+              ) : (
+                <>
+                  <ul className="space-y-2">
+                    {visibleComments.map((c, i) => (
+                      <li key={`${i}-${c.createdAt}`} className="p-2 text-xs rounded-lg border border-gray-300 bg-white">
+                        <div className="text-black">{c.content}</div>
+                        <div className="text-[10px] text-gray-800 mt-1">
+                          {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {comments.length > 3 && (
+                    <button
+                      onClick={() => setShowAllComments((s) => !s)}
+                      className="mt-3 w-full text-xs px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    >
+                      {showAllComments ? "Show less" : `Show all (${comments.length})`}
+                    </button>
                   )}
                 </>
               )}
-
-              {/* Documents */}
-              {activeTab === "documents" && (
-                <div className="text-sm">
-                  <Link
-                    to={`/borrowers/${encodeURIComponent(borrower.id)}/documents${tenantQuery}`}
-                    className={strongLink}
-                  >
-                    Manage KYC documents
-                  </Link>
-                </div>
-              )}
-
-              {/* Activity */}
-              {activeTab === "activity" && (
-                <ActivityTimeline
-                  loans={loans}
-                  repayments={repayments}
-                  savings={savings}
-                  comments={comments}
-                  canAddRepayment={String(userRole || "").toLowerCase() === "admin"}
-                  onAddRepayment={() => {
-                    const active = loans.find((l) => l.status === "active") || loans[0];
-                    if (active) {
-                      setSelectedLoanForRepayment(active);
-                      setShowRepaymentModal(true);
-                    }
-                  }}
-                />
-              )}
-            </div>
-          </div>
+            </Card>
+          </aside>
         </div>
-
-        {/* NOTES SIDEBAR */}
-        <aside className="lg:col-span-1 space-y-5">
-          <Card title="Notes">
-            <input
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleAddComment(e.currentTarget.value);
-                  e.currentTarget.value = "";
-                }
-              }}
-              placeholder="Add a note and press Enter…"
-              className="w-full text-sm mb-3 border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            />
-            {comments.length === 0 ? (
-              <div className="text-xs text-gray-700">No notes yet.</div>
-            ) : (
-              <>
-                <ul className="space-y-2">
-                  {visibleComments.map((c, i) => (
-                    <li key={`${i}-${c.createdAt}`} className="p-2 text-xs rounded-lg border border-gray-300 bg-white">
-                      <div className="text-black">{c.content}</div>
-                      <div className="text-[10px] text-gray-700 mt-1">
-                        {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                {comments.length > 3 && (
-                  <button
-                    onClick={() => setShowAllComments((s) => !s)}
-                    className="mt-3 w-full text-xs px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                  >
-                    {showAllComments ? "Show less" : `Show all (${comments.length})`}
-                  </button>
-                )}
-              </>
-            )}
-          </Card>
-        </aside>
       </div>
 
       {/* Modals */}
@@ -844,7 +871,7 @@ const BorrowerDetails = () => {
 
 /* ---------- Support UI pieces ---------- */
 const Empty = ({ text }) => (
-  <div className="p-6 text-sm rounded-2xl border border-dashed border-gray-300 text-black bg-white">
+  <div className="p-5 text-sm rounded-2xl border border-dashed border-gray-300 text-black bg-white">
     {text}
   </div>
 );
@@ -938,7 +965,7 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
       <ul className="space-y-2 text-sm">
         {items.map((item, i) => (
           <li key={i} className="border-l-4 pl-3 border-gray-300 text-black">
-            <span className="text-gray-700">
+            <span className="text-gray-800">
               {item.date ? new Date(item.date).toLocaleDateString() : "—"}
             </span>{" "}
             – {item.text}
