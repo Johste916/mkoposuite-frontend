@@ -180,7 +180,7 @@ const BorrowerDetails = () => {
 
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState([]);
-  const [selectedLoan, setSelectedLoan] = useState(null);
+  the [selectedLoan, setSelectedLoan] = useState(null);
 
   const [savings, setSavings] = useState([]);
   const [filteredSavings, setFilteredSavings] = useState([]);
@@ -211,7 +211,7 @@ const BorrowerDetails = () => {
         ]).catch(() => []),
         tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
 
-        // 🔧 FIX: Prefer canonical backend route first to avoid 404s
+        // Prefer canonical route first
         tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`, `/savings?borrowerId=${id}${qTenant}`]).catch(
           () => {
             setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
@@ -396,12 +396,15 @@ const BorrowerDetails = () => {
           <Link to={`/borrowers${tenantQuery}`} className={strongLink}>
             Borrowers
           </Link>{" "}
-          <span className="text-gray-700">/</span>{" "}
+        <span className="text-gray-700">/</span>{" "}
           <span className="font-medium">{bName}</span>
         </div>
         <div className="flex gap-2">
+          {/* 🔗 EDIT now points to Add Borrower with borrowerId & tenantId */}
           <Link
-            to={`/borrowers/${encodeURIComponent(borrower.id)}/edit${tenantQuery}`}
+            to={`/borrowers/add?borrowerId=${encodeURIComponent(borrower.id)}${
+              borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+            }`}
             className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             Edit
