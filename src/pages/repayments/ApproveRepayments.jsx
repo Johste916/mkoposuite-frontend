@@ -2,6 +2,17 @@ import React, { useEffect, useState } from "react";
 import repaymentsApi from "../../api/repayments";
 import { Link } from "react-router-dom";
 
+// --- auto-sync events ---
+const REPAYMENT_EVENTS = {
+  posted: "repayment:posted",
+  approved: "repayment:approved",
+  rejected: "repayment:rejected",
+  bulk: "repayment:bulk-posted",
+};
+const emitRepaymentEvent = (type, detail) => {
+  try { window.dispatchEvent(new CustomEvent(type, { detail })); } catch {}
+};
+
 const money = (v) => Number(v || 0).toLocaleString();
 
 function PaymentInstructions({ loan }) {
@@ -55,14 +66,35 @@ export default function ApproveRepayments() {
 
   useEffect(() => {
     load();
+    // when others post/approve, re-check queue just in case
+    const refresh = () => load();
+    window.addEventListener(REPAYMENT_EVENTS.posted, refresh);
+    window.addEventListener(REPAYMENT_EVENTS.approved, refresh);
+    window.addEventListener(REPAYMENT_EVENTS.rejected, refresh);
+    window.addEventListener(REPAYMENT_EVENTS.bulk, refresh);
+    return () => {
+      window.removeEventListener(REPAYMENT_EVENTS.posted, refresh);
+      window.removeEventListener(REPAYMENT_EVENTS.approved, refresh);
+      window.removeEventListener(REPAYMENT_EVENTS.rejected, refresh);
+      window.removeEventListener(REPAYMENT_EVENTS.bulk, refresh);
+    };
   }, []);
 
   const doApprove = async (id) => {
     if (!confirm("Approve this repayment?")) return;
     setActingId(id);
     try {
+      const approved = rows.find(r => r.id === id);
       await repaymentsApi.approve(id);
       setRows((r) => r.filter((x) => x.id !== id));
+
+      // 🔔 broadcast with loanId (if available) so schedules, receipts, dashboards update
+      if (approved?.loanId || approved?.Loan?.id) {
+        const loanId = approved.loanId || approved.Loan.id;
+        emitRepaymentEvent(REPAYMENT_EVENTS.approved, { loanId, repaymentId: id });
+      } else {
+        emitRepaymentEvent(REPAYMENT_EVENTS.approved, { repaymentId: id });
+      }
     } catch (e) {
       alert(e?.response?.data?.error || "Approve failed");
     } finally {
@@ -76,6 +108,7 @@ export default function ApproveRepayments() {
     try {
       await repaymentsApi.reject(id, why);
       setRows((r) => r.filter((x) => x.id !== id));
+      emitRepaymentEvent(REPAYMENT_EVENTS.rejected, { repaymentId: id });
     } catch (e) {
       alert(e?.response?.data?.error || "Reject failed");
     } finally {

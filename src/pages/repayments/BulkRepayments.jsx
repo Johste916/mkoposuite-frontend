@@ -1,6 +1,17 @@
 import React, { useState } from "react";
 import repaymentsApi from "../../api/repayments";
 
+// --- auto-sync events ---
+const REPAYMENT_EVENTS = {
+  posted: "repayment:posted",
+  approved: "repayment:approved",
+  rejected: "repayment:rejected",
+  bulk: "repayment:bulk-posted",
+};
+const emitRepaymentEvent = (type, detail) => {
+  try { window.dispatchEvent(new CustomEvent(type, { detail })); } catch {}
+};
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 const newRow = () => ({
@@ -47,6 +58,11 @@ export default function BulkRepayments() {
       // controller expects a raw array body
       const { data } = await repaymentsApi.createBulk(items);
       setResult(data || { ok: true });
+
+      // 🔔 fire event so schedules/receipts refresh; include affected loanIds if available in response
+      const affectedLoanIds =
+        Array.isArray(data?.items) ? data.items.map(it => it.loanId).filter(Boolean) : [];
+      emitRepaymentEvent(REPAYMENT_EVENTS.bulk, { loanIds: affectedLoanIds });
     } catch (e) {
       setError(e?.response?.data?.error || "Bulk posting failed");
     } finally {

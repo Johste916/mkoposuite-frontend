@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 
@@ -62,6 +62,10 @@ export default function Repayments() {
   const [schedule, setSchedule] = useState([]);
   const [repayments, setRepayments] = useState([]);
   const [panelLoading, setPanelLoading] = useState(false);
+
+  // live refresh controls
+  const pollRef = useRef(null);
+  const POLL_MS = 15000; // 15s gentle polling while drawer is open
 
   const pages = useMemo(
     () => Math.max(1, Math.ceil(Number(total || 0) / Number(pageSize || 1))),
@@ -131,14 +135,13 @@ export default function Repayments() {
     }
   };
 
-  const openLoanPanel = async (loan) => {
-    setActiveLoan(loan);
-    setOpen(true);
+  const fetchPanelData = async (loanId) => {
+    if (!loanId) return;
     setPanelLoading(true);
     try {
       const [schedRes, payRes] = await Promise.all([
-        api.get(`/loans/${loan.id}/schedule`),
-        api.get(`/loans/${loan.id}/repayments`),
+        api.get(`/loans/${loanId}/schedule`),
+        api.get(`/loans/${loanId}/repayments`),
       ]);
       setSchedule(Array.isArray(schedRes.data) ? schedRes.data : []);
       setRepayments(Array.isArray(payRes.data) ? payRes.data : []);
@@ -149,6 +152,63 @@ export default function Repayments() {
       setPanelLoading(false);
     }
   };
+
+  const openLoanPanel = async (loan) => {
+    setActiveLoan(loan);
+    setOpen(true);
+    await fetchPanelData(loan.id);
+
+    // (Re)start lightweight polling while the panel is open
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => {
+      fetchPanelData(loan.id);
+    }, POLL_MS);
+  };
+
+  // Stop polling when panel closes or component unmounts
+  useEffect(() => {
+    if (!open && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [open]);
+
+  // Refresh on tab focus/visibility change (so webhook updates show quickly)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchLoans();
+        if (open && activeLoan?.id) fetchPanelData(activeLoan.id);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [open, activeLoan?.id]); // deps intentionally minimal
+
+  // Listen for global repayment events (manual, bank, mobile money)
+  useEffect(() => {
+    const onRepaymentPosted = (e) => {
+      const loanId = e?.detail?.loanId;
+      // Always refresh the grid
+      fetchLoans();
+      // If the drawer is open for this loan, refresh its data too
+      if (open && activeLoan?.id && loanId && Number(activeLoan.id) === Number(loanId)) {
+        fetchPanelData(loanId);
+      }
+    };
+    window.addEventListener("repayment:posted", onRepaymentPosted);
+    return () => window.removeEventListener("repayment:posted", onRepaymentPosted);
+  }, [open, activeLoan?.id]); // safe: handler uses latest state via deps
 
   useEffect(() => {
     fetchFilters();
@@ -323,7 +383,7 @@ export default function Repayments() {
       <div className="bg-white dark:bg-gray-800 border rounded-xl shadow p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Loans</h3>
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Page size</span>
             <select
               className="border rounded px-2 py-1 text-sm"
@@ -442,7 +502,10 @@ export default function Repayments() {
           <div className="absolute inset-y-0 right-0 w-full sm:max-w-3xl bg-white dark:bg-gray-900 shadow-xl">
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="text-lg font-semibold">Loan Schedule</h3>
-              <button className="px-3 py-1.5 rounded border hover:bg-gray-50" onClick={() => setOpen(false)}>
+              <button
+                className="px-3 py-1.5 rounded border hover:bg-gray-50"
+                onClick={() => setOpen(false)}
+              >
                 Close
               </button>
             </div>
@@ -452,10 +515,13 @@ export default function Repayments() {
             ) : (
               <div className="p-4 space-y-4">
                 <div className="space-y-1">
-                  <h4 className="text-lg font-semibold">{activeLoan.reference || `L-${activeLoan.id}`}</h4>
+                  <h4 className="text-lg font-semibold">
+                    {activeLoan.reference || `L-${activeLoan.id}`}
+                  </h4>
                   <p className="text-sm text-gray-600">
                     {activeLoan.borrowerName || activeLoan.Borrower?.name} •{" "}
-                    {activeLoan.currency || "TZS"} {money(activeLoan.principal || activeLoan.amount || 0)}
+                    {activeLoan.currency || "TZS"}{" "}
+                    {money(activeLoan.principal || activeLoan.amount || 0)}
                   </p>
                   <div className="flex gap-2 mt-2">
                     <button
@@ -512,13 +578,25 @@ export default function Repayments() {
                           <tr key={`${s.period}-${s.dueDate}`} className="border-t">
                             <td className="p-3">{s.period ?? idx + 1}</td>
                             <td className="p-3">{s.dueDate}</td>
-                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.principal)}</td>
-                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.interest)}</td>
-                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.fees)}</td>
-                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.total)}</td>
-                            <td className="p-3">{activeLoan.currency || "TZS"} {money(s.paid)}</td>
                             <td className="p-3">
-                              {s.penalty ? `${activeLoan.currency || "TZS"} ${money(s.penalty)}` : "—"}
+                              {activeLoan.currency || "TZS"} {money(s.principal)}
+                            </td>
+                            <td className="p-3">
+                              {activeLoan.currency || "TZS"} {money(s.interest)}
+                            </td>
+                            <td className="p-3">
+                              {activeLoan.currency || "TZS"} {money(s.fees)}
+                            </td>
+                            <td className="p-3">
+                              {activeLoan.currency || "TZS"} {money(s.total)}
+                            </td>
+                            <td className="p-3">
+                              {activeLoan.currency || "TZS"} {money(s.paid)}
+                            </td>
+                            <td className="p-3">
+                              {s.penalty
+                                ? `${activeLoan.currency || "TZS"} ${money(s.penalty)}`
+                                : "—"}
                             </td>
                             <td className="p-3">
                               <StatusBadge status={s.status || "upcoming"} />

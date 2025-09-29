@@ -3,6 +3,14 @@ import api from "../../api";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
+// --- auto-sync events ---
+const REPAYMENT_EVENTS = {
+  posted: "repayment:posted",
+  approved: "repayment:approved",
+  rejected: "repayment:rejected",
+  bulk: "repayment:bulk-posted",
+};
+
 const money = (v) => Number(v || 0).toLocaleString();
 const toISO = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0,10);
 const startDefault = () => {
@@ -82,6 +90,21 @@ export default function RepaymentReceipts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, dateFrom, dateTo, status]);
 
+  // 🔔 auto-refresh when repayments happen anywhere
+  useEffect(() => {
+    const refresh = () => fetchData();
+    window.addEventListener(REPAYMENT_EVENTS.posted, refresh);
+    window.addEventListener(REPAYMENT_EVENTS.approved, refresh);
+    window.addEventListener(REPAYMENT_EVENTS.rejected, refresh);
+    window.addEventListener(REPAYMENT_EVENTS.bulk, refresh);
+    return () => {
+      window.removeEventListener(REPAYMENT_EVENTS.posted, refresh);
+      window.removeEventListener(REPAYMENT_EVENTS.approved, refresh);
+      window.removeEventListener(REPAYMENT_EVENTS.rejected, refresh);
+      window.removeEventListener(REPAYMENT_EVENTS.bulk, refresh);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onSearch = (e) => {
     e?.preventDefault?.();
     setPage(1);
@@ -138,7 +161,6 @@ export default function RepaymentReceipts() {
     const imgW = pageW;
     const imgH = (canvas.height * imgW) / canvas.width;
 
-    let y = 0;
     if (imgH <= pageH) {
       pdf.addImage(imgData, "PNG", 0, 0, imgW, imgH);
     } else {

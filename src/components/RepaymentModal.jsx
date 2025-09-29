@@ -2,6 +2,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import client from "../api/client";
 import * as repaymentsApi from "../api/repayments";
 
+// --- lightweight global events for auto-sync ---
+const REPAYMENT_EVENTS = {
+  posted: "repayment:posted",
+  approved: "repayment:approved",
+  rejected: "repayment:rejected",
+  bulk: "repayment:bulk-posted",
+};
+const emitRepaymentEvent = (type, detail) => {
+  try { window.dispatchEvent(new CustomEvent(type, { detail })); } catch {}
+};
+
 const money = (v) => Number(v || 0).toLocaleString();
 
 const MethodBadge = ({ value }) => {
@@ -155,6 +166,10 @@ const RepaymentModal = ({ isOpen, onClose, loan: loanProp, loanId: loanIdProp, o
         waivePenalties: !!form.waivePenalties,
         issueReceipt: true,
       });
+
+      // 🔔 broadcast so other screens auto-refresh (schedules, lists, dashboards)
+      emitRepaymentEvent(REPAYMENT_EVENTS.posted, { loanId, amount: Number(form.amount) });
+
       onSaved?.();
       onClose?.();
     } catch (err) {

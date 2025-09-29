@@ -51,7 +51,7 @@ function localPreviewAllocation(
     return { period: s.period ?? idx + 1, remaining };
   });
 
-  let left = amt;
+  let left = Number(amt);
   const allocations = [];
   const totals = { principal: 0, interest: 0, fees: 0, penalties: 0 };
 
@@ -285,6 +285,17 @@ export default function ManualRepayment() {
         issueReceipt: !!form.issueReceipt,
       };
       const { data } = await api.post("/repayments/manual", payload);
+
+      // 🔔 Notify the whole app a repayment has been posted so lists/schedules refresh
+      try {
+        window.dispatchEvent(
+          new CustomEvent("repayment:posted", { detail: { loanId: form.loanId } })
+        );
+      } catch {
+        // ignore if CustomEvent not supported
+      }
+
+      // UX: go to receipts (or back to schedule) as you already had
       if (data?.repaymentId) {
         alert("Repayment posted");
         navigate("/repayments/receipts");
