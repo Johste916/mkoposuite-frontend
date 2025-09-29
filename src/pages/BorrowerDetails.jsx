@@ -10,42 +10,51 @@ import api from "../api";
 const safeNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const money = (v) => `TZS ${safeNum(v).toLocaleString()}`;
 
+// Prefer filled name; try many common shapes from "Add Borrower"
 const displayName = (b) =>
-  b?.name ||
-  `${b?.firstName || ""} ${b?.lastName || ""}`.trim() ||
-  b?.businessName ||
-  "—";
+  firstFilled(
+    b?.name,
+    [b?.firstName, b?.lastName].filter(Boolean).join(" "),
+    b?.fullName,
+    b?.customerName,
+    b?.businessName
+  ) || "—";
 
-const displayBranch = (b) => b?.branchName || b?.Branch?.name || b?.branch?.name || "—";
-const displayOfficer = (b) => b?.officerName || b?.officer?.name || b?.loanOfficer?.name || "—";
+const displayBranch = (b) =>
+  firstFilled(b?.branchName, b?.Branch?.name, b?.branch?.name, b?.branch) || "—";
+
+const displayOfficer = (b) =>
+  firstFilled(b?.officerName, b?.officer?.name, b?.loanOfficer?.name, b?.loanOfficer) || "—";
 
 const initials = (nameLike) => {
-  const s = (nameLike || "").trim();
+  const s = String(nameLike || "").trim();
   if (!s) return "U";
   const p = s.split(/\s+/).filter(Boolean);
   return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || s[0].toUpperCase();
 };
 
+// High-contrast chip (no theme vars)
 const chip = (status) => {
-  const base =
-    "px-2 py-0.5 text-xs font-semibold rounded-full border bg-[var(--chip-bg)] text-[var(--chip-fg)] border-[var(--chip-border)]";
-  switch (String(status || "").toLowerCase()) {
+  const base = "px-2 py-0.5 text-xs font-semibold rounded-full border shadow-sm";
+  const s = String(status || "").toLowerCase();
+  switch (s) {
     case "pending":
-      return `${base} chip-amber`;
+    case "pending_kyc":
+      return `${base} bg-amber-100 border-amber-300 text-amber-800`;
     case "approved":
-      return `${base} chip-emerald`;
+      return `${base} bg-emerald-100 border-emerald-300 text-emerald-800`;
     case "rejected":
-      return `${base} chip-rose`;
+      return `${base} bg-rose-100 border-rose-300 text-rose-800`;
     case "active":
-      return `${base} chip-blue`;
+      return `${base} bg-blue-100 border-blue-300 text-blue-800`;
     case "disabled":
-      return `${base} chip-slate`;
+      return `${base} bg-slate-100 border-slate-300 text-slate-800`;
     case "blacklisted":
-      return `${base} chip-red`;
+      return `${base} bg-red-100 border-red-300 text-red-800`;
     case "closed":
-      return `${base} chip-gray`;
+      return `${base} bg-gray-100 border-gray-300 text-gray-800`;
     default:
-      return `${base} chip-gray`;
+      return `${base} bg-gray-100 border-gray-300 text-gray-800`;
   }
 };
 
@@ -67,12 +76,10 @@ const withTenant = (tenantId) => (tenantId ? { headers: { "X-Tenant-Id": tenantI
 
 /* Small visual helpers */
 const strongLink =
-  "text-blue-700 font-semibold underline decoration-2 underline-offset-2 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm";
+  "text-indigo-700 font-semibold underline decoration-2 underline-offset-2 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-sm";
 
 const Card = ({ title, icon, children, className = "" }) => (
-  <section
-    className={`rounded-2xl border border-gray-300 bg-white shadow-sm p-4 md:p-5 ${className}`}
-  >
+  <section className={`rounded-2xl border border-gray-300 bg-white shadow-sm p-4 md:p-5 ${className}`}>
     {title && (
       <div className="flex items-center gap-2 mb-3">
         {icon}
@@ -83,24 +90,28 @@ const Card = ({ title, icon, children, className = "" }) => (
   </section>
 );
 
+// Label/body text are now solid black/clear gray (no faded opacity)
 const Field = ({ label, children }) => (
   <div>
-    <div className="text-[12px] font-medium uppercase tracking-wider text-gray-600">
-      {label}
-    </div>
-    <div className="mt-1 text-[15px] text-black">{children ?? "—"}</div>
+    <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">{label}</div>
+    <div className="mt-1 text-[15px] text-black">{isEmpty(children) ? "—" : children}</div>
   </div>
 );
 
-const DlGrid = ({ items, cols = 3 }) => (
-  <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-${cols}`}>
-    {items.map((it, i) => (
-      <Field key={i} label={it.label}>
-        {it.value ?? "—"}
-      </Field>
-    ))}
-  </div>
-);
+// Tailwind-safe responsive columns (no dynamic class that gets purged)
+const DlGrid = ({ items, cols = 3 }) => {
+  const colCls =
+    cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
+  return (
+    <div className={`grid gap-4 sm:grid-cols-2 ${colCls}`}>
+      {items.map((it, i) => (
+        <Field key={i} label={it.label}>
+          {isEmpty(it.value) ? "—" : it.value}
+        </Field>
+      ))}
+    </div>
+  );
+};
 
 const PillTabs = ({ tabs, active, onChange }) => (
   <div className="flex flex-wrap gap-2 border-b px-2 pt-2 border-gray-300">
@@ -131,6 +142,28 @@ const PillTabs = ({ tabs, active, onChange }) => (
     })}
   </div>
 );
+
+/* ---------- Value normalization helpers (show all fields you filled on Add Borrower) ---------- */
+function firstFilled(...vals) {
+  for (const v of vals.flat()) {
+    if (v === 0) return 0;
+    if (v === false) continue;
+    if (v === null || v === undefined) continue;
+    const s = typeof v === "string" ? v.trim() : v;
+    if (Array.isArray(s)) {
+      if (s.filter(Boolean).length) return s;
+    } else if (s !== "" && s !== "null" && s !== "undefined") {
+      return s;
+    }
+  }
+  return "";
+}
+function isEmpty(v) {
+  const val = firstFilled(v);
+  return val === "" || (Array.isArray(val) && val.length === 0);
+}
+// Format a date-like value
+const dmy = (v) => (v ? new Date(v).toLocaleDateString() : "—");
 
 const BorrowerDetails = () => {
   const { id } = useParams();
@@ -249,9 +282,7 @@ const BorrowerDetails = () => {
       ]);
       setRepayments(Array.isArray(repay) ? repay : repay?.items || []);
     } catch {}
-    // refresh borrower + loans so totals/statuses align immediately
     await fetchBorrowerBundle();
-    // let other pages refresh too
     window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id: selectedLoanForRepayment?.id } }));
   };
 
@@ -307,9 +338,7 @@ const BorrowerDetails = () => {
   }, [repayments]);
 
   if (!borrower) {
-    return (
-      <div className="p-4 min-h-screen bg-white text-black">Loading...</div>
-    );
+    return <div className="p-4 min-h-screen bg-white text-black">Loading...</div>;
   }
 
   const bName = displayName(borrower);
@@ -321,10 +350,41 @@ const BorrowerDetails = () => {
   const wa = (p) => (p ? `https://wa.me/${String(p).replace(/[^\d]/g, "")}` : undefined);
   const mail = (e) => (e ? `mailto:${e}` : undefined);
 
+  // Savings aggregates
   const deposits = savings.reduce((s, t) => (t.type === "deposit" ? s + safeNum(t.amount) : s), 0);
   const withdrawals = savings.reduce((s, t) => (t.type === "withdrawal" ? s + safeNum(t.amount) : s), 0);
   const charges = savings.reduce((s, t) => (t.type === "charge" ? s + safeNum(t.amount) : s), 0);
   const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
+
+  /* ---------- Normalized “Add Borrower” fields (many possible API keys) ---------- */
+  const addr = firstFilled(
+    borrower.addressLine,
+    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city]
+      .filter(Boolean)
+      .join(", "),
+    [borrower.address, borrower.town, borrower.region, borrower.country].filter(Boolean).join(", "),
+    borrower.location
+  );
+
+  const businessName = firstFilled(borrower.businessName, borrower.tradeName, borrower.shopName);
+  const occupation = firstFilled(borrower.occupation, borrower.businessType, borrower.jobTitle, borrower.sector);
+  const employmentStatus = firstFilled(borrower.employmentStatus, borrower.employment, borrower.employmentType);
+  const nationalId = firstFilled(borrower.nationalId, borrower.nid, borrower.idNumber);
+  const idType = firstFilled(borrower.idType, borrower.identificationType);
+  const idIssued = firstFilled(borrower.idIssuedDate, borrower.idIssueDate, borrower.idDateIssued);
+  const idExpiry = firstFilled(borrower.idExpiryDate, borrower.idExpireDate, borrower.idDateExpiry);
+  const maritalStatus = firstFilled(borrower.maritalStatus, borrower.marriageStatus);
+  const educationLevel = firstFilled(borrower.educationLevel, borrower.education, borrower.educationStatus);
+  const customerNumber = firstFilled(borrower.customerNumber, borrower.accountNumber, borrower.clientNumber);
+  const tin = firstFilled(borrower.tin, borrower.TIN, borrower.taxId);
+  const nationality = firstFilled(borrower.nationality, borrower.country);
+  const dob = firstFilled(borrower.birthDate, borrower.dateOfBirth, borrower.dob);
+
+  const nextKinName = firstFilled(borrower.nextKinName, borrower.nextOfKinName, borrower.kinName, borrower.emergencyContactName);
+  const nextKinPhone = firstFilled(borrower.nextKinPhone, borrower.nextOfKinPhone, borrower.kinPhone, borrower.emergencyContactPhone);
+  const nextKinRel = firstFilled(borrower.nextOfKinRelationship, borrower.kinRelationship, borrower.relationship);
+
+  const registrationDate = firstFilled(borrower.regDate, borrower.registrationDate, borrower.createdAt);
 
   return (
     <div className="p-4 md:p-6 min-h-screen bg-white text-black">
@@ -334,19 +394,34 @@ const BorrowerDetails = () => {
           <Link to={`/borrowers${tenantQuery}`} className={strongLink}>
             Borrowers
           </Link>{" "}
-          <span className="text-gray-600">/</span>{" "}
+          <span className="text-gray-700">/</span>{" "}
           <span className="font-medium">{bName}</span>
         </div>
         <div className="flex gap-2">
           <Link
             to={`/borrowers/${encodeURIComponent(borrower.id)}/edit${tenantQuery}`}
-            className="btn-ghost text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             Edit
           </Link>
-          <button onClick={handleDisable} className="btn-ghost text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">Disable</button>
-          <button onClick={handleBlacklist} className="btn-rose bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400">Blacklist</button>
-          <button onClick={handleDelete} className="btn-danger bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400">Delete</button>
+          <button
+            onClick={handleDisable}
+            className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          >
+            Disable
+          </button>
+          <button
+            onClick={handleBlacklist}
+            className="bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+          >
+            Blacklist
+          </button>
+          <button
+            onClick={handleDelete}
+            className="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+          >
+            Delete
+          </button>
         </div>
       </div>
 
@@ -370,7 +445,7 @@ const BorrowerDetails = () => {
                     {initials(bName)}
                   </div>
                 )}
-                <span className={`absolute -bottom-2 left-2 ${chip(borrower.status)} shadow-sm`}>
+                <span className={`absolute -bottom-2 left-2 ${chip(borrower.status)}`}>
                   {borrower.status || "—"}
                 </span>
               </div>
@@ -379,19 +454,19 @@ const BorrowerDetails = () => {
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <h1 className="text-2xl font-bold tracking-tight">{bName}</h1>
-                  <span className="text-xs text-gray-600">ID: {borrower.id}</span>
-                  <span className="text-xs text-gray-600">Tenant: {borrower.tenantId || "—"}</span>
+                  <span className="text-xs text-gray-700">ID: {borrower.id}</span>
+                  <span className="text-xs text-gray-700">Tenant: {borrower.tenantId || "—"}</span>
                 </div>
 
                 <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <Field label="Phone">
                     <div className="flex items-center gap-2">
-                      <span>{borrower.phone || "—"}</span>
-                      {borrower.phone && (
+                      <span>{firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) || "—"}</span>
+                      {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) && (
                         <>
-                          <a className={strongLink} href={tel(borrower.phone)}>Call</a>
-                          <a className={strongLink} href={sms(borrower.phone)}>SMS</a>
-                          <a className={strongLink} href={wa(borrower.phone)} target="_blank" rel="noreferrer">
+                          <a className={strongLink} href={tel(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>Call</a>
+                          <a className={strongLink} href={sms(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>SMS</a>
+                          <a className={strongLink} href={wa(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)} target="_blank" rel="noreferrer">
                             WhatsApp
                           </a>
                         </>
@@ -401,20 +476,14 @@ const BorrowerDetails = () => {
 
                   <Field label="Email">
                     <div className="flex items-center gap-2">
-                      <span>{borrower.email || "—"}</span>
-                      {borrower.email && (
-                        <a className={strongLink} href={mail(borrower.email)}>Email</a>
+                      <span>{firstFilled(borrower.email, borrower.mail) || "—"}</span>
+                      {firstFilled(borrower.email, borrower.mail) && (
+                        <a className={strongLink} href={mail(borrower.email || borrower.mail)}>Email</a>
                       )}
                     </div>
                   </Field>
 
-                  <Field label="Address">
-                    {borrower.addressLine ||
-                      [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city]
-                        .filter(Boolean)
-                        .join(", ") ||
-                      "—"}
-                  </Field>
+                  <Field label="Address">{addr || "—"}</Field>
                 </div>
               </div>
             </div>
@@ -427,15 +496,16 @@ const BorrowerDetails = () => {
               <DlGrid
                 cols={3}
                 items={[
-                  { label: "Gender", value: borrower.gender },
-                  {
-                    label: "Birth Date",
-                    value: borrower.birthDate ? new Date(borrower.birthDate).toLocaleDateString() : "—",
-                  },
-                  { label: "Occupation / Business", value: borrower.occupation },
-                  { label: "Employment Status", value: borrower.employmentStatus },
-                  { label: "Secondary Phone", value: borrower.secondaryPhone },
-                  { label: "Customer No.", value: borrower.customerNumber || borrower.accountNumber },
+                  { label: "Gender", value: firstFilled(borrower.gender, borrower.sex) },
+                  { label: "Birth Date", value: dmy(dob) },
+                  { label: "Business / Occupation", value: firstFilled(occupation, businessName) },
+                  { label: "Employment Status", value: employmentStatus },
+                  { label: "Secondary Phone", value: firstFilled(borrower.secondaryPhone, borrower.altPhone, borrower.phone2) },
+                  { label: "Customer No.", value: customerNumber },
+                  { label: "Marital Status", value: maritalStatus },
+                  { label: "Education Level", value: educationLevel },
+                  { label: "Nationality", value: nationality },
+                  { label: "Tax ID (TIN)", value: tin },
                 ]}
               />
 
@@ -444,16 +514,10 @@ const BorrowerDetails = () => {
                   <DlGrid
                     cols={2}
                     items={[
-                      { label: "ID Type", value: borrower.idType },
-                      { label: "ID Number", value: borrower.idNumber },
-                      {
-                        label: "Issued On",
-                        value: borrower.idIssuedDate ? new Date(borrower.idIssuedDate).toLocaleDateString() : "—",
-                      },
-                      {
-                        label: "Expiry Date",
-                        value: borrower.idExpiryDate ? new Date(borrower.idExpiryDate).toLocaleDateString() : "—",
-                      },
+                      { label: "ID Type", value: idType },
+                      { label: "ID Number", value: nationalId || borrower.idNumber },
+                      { label: "Issued On", value: dmy(idIssued) },
+                      { label: "Expiry Date", value: dmy(idExpiry) },
                     ]}
                   />
                 </Card>
@@ -464,12 +528,9 @@ const BorrowerDetails = () => {
                     items={[
                       { label: "Branch", value: displayBranch(borrower) },
                       { label: "Loan Officer", value: displayOfficer(borrower) },
-                      { label: "Loan Type", value: borrower.loanType || "individual" },
-                      { label: "Group ID", value: borrower.groupId },
-                      {
-                        label: "Registration Date",
-                        value: borrower.regDate ? new Date(borrower.regDate).toLocaleDateString() : "—",
-                      },
+                      { label: "Loan Type", value: firstFilled(borrower.loanType, borrower.productType, "individual") },
+                      { label: "Group ID", value: firstFilled(borrower.groupId, borrower.group, borrower.groupCode) },
+                      { label: "Registration Date", value: dmy(registrationDate) },
                     ]}
                   />
                 </Card>
@@ -479,9 +540,9 @@ const BorrowerDetails = () => {
                 <DlGrid
                   cols={3}
                   items={[
-                    { label: "Full Name", value: borrower.nextKinName || borrower.nextOfKinName },
-                    { label: "Phone", value: borrower.nextKinPhone || borrower.nextOfKinPhone },
-                    { label: "Relationship", value: borrower.nextOfKinRelationship || borrower.kinRelationship },
+                    { label: "Full Name", value: nextKinName },
+                    { label: "Phone", value: nextKinPhone },
+                    { label: "Relationship", value: nextKinRel },
                   ]}
                 />
               </Card>
@@ -491,13 +552,18 @@ const BorrowerDetails = () => {
           {/* KPI */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[
-              { k: "PAR %", v: Number.isFinite(Number(borrower.parPercent)) ? `${Number(borrower.parPercent).toFixed(2)}%` : "0%" },
-              { k: "Overdue Amount", v: money(borrower.overdueAmount) },
+              {
+                k: "PAR %",
+                v: Number.isFinite(Number(borrower.parPercent))
+                  ? `${Number(borrower.parPercent).toFixed(2)}%`
+                  : "0%",
+              },
+              { k: "Overdue Amount", v: money(firstFilled(borrower.overdueAmount, borrower.pastDueAmount, 0)) },
               { k: "Missed Repayments", v: missedRepayments },
-              { k: "Net Savings", v: money(borrower.netSavings) },
+              { k: "Net Savings", v: money(firstFilled(borrower.netSavings, borrower.savingsNet, 0)) },
             ].map((c, i) => (
               <div key={i} className="rounded-2xl p-4 border bg-white border-gray-300">
-                <div className="text-[12px] font-medium uppercase tracking-wider text-gray-600">{c.k}</div>
+                <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">{c.k}</div>
                 <div className="mt-1 text-2xl font-semibold text-black">{c.v}</div>
               </div>
             ))}
@@ -521,7 +587,7 @@ const BorrowerDetails = () => {
               {/* Loans */}
               {activeTab === "loans" && (
                 <>
-                  {errors.loans && <div className="mb-3 text-sm text-rose-600">{errors.loans}</div>}
+                  {errors.loans && <div className="mb-3 text-sm text-rose-700 font-medium">{errors.loans}</div>}
                   {loans.length === 0 ? (
                     <Empty
                       text={
@@ -569,7 +635,12 @@ const BorrowerDetails = () => {
                             "—"
                           ),
                           <div className="flex gap-2 justify-end">
-                            <button className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400" onClick={() => handleViewSchedule(l.id)}>Schedule</button>
+                            <button
+                              className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                              onClick={() => handleViewSchedule(l.id)}
+                            >
+                              Schedule
+                            </button>
                             {String(userRole || "").toLowerCase() === "admin" && (
                               <button
                                 className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
@@ -626,7 +697,7 @@ const BorrowerDetails = () => {
               {/* Savings */}
               {activeTab === "savings" && (
                 <>
-                  {errors.savings && <div className="mb-3 text-sm text-rose-600">{errors.savings}</div>}
+                  {errors.savings && <div className="mb-3 text-sm text-rose-700 font-medium">{errors.savings}</div>}
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
                     <BadgeCard label="Deposits" value={money(deposits)} tone="emerald" />
@@ -637,12 +708,12 @@ const BorrowerDetails = () => {
 
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-black/80">Filter:</span>
+                      <span className="text-sm text-black">Filter:</span>
                       <label className="relative z-50">
                         <select
                           value={filterType}
                           onChange={(e) => setFilterType(e.target.value)}
-                          className="input text-sm border border-gray-300 rounded-md px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                          className="text-sm border border-gray-300 rounded-md px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         >
                           <option value="all">All</option>
                           <option value="deposit">Deposits</option>
@@ -720,17 +791,17 @@ const BorrowerDetails = () => {
                 }
               }}
               placeholder="Add a note and press Enter…"
-              className="input w-full text-sm mb-3 border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="w-full text-sm mb-3 border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
             {comments.length === 0 ? (
-              <div className="text-xs text-gray-600">No notes yet.</div>
+              <div className="text-xs text-gray-700">No notes yet.</div>
             ) : (
               <>
                 <ul className="space-y-2">
                   {visibleComments.map((c, i) => (
                     <li key={`${i}-${c.createdAt}`} className="p-2 text-xs rounded-lg border border-gray-300 bg-white">
                       <div className="text-black">{c.content}</div>
-                      <div className="text-[10px] text-gray-600 mt-1">
+                      <div className="text-[10px] text-gray-700 mt-1">
                         {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
                       </div>
                     </li>
@@ -773,7 +844,7 @@ const BorrowerDetails = () => {
 
 /* ---------- Support UI pieces ---------- */
 const Empty = ({ text }) => (
-  <div className="p-6 text-sm rounded-2xl border border-dashed border-gray-300 text-gray-700 bg-white">
+  <div className="p-6 text-sm rounded-2xl border border-dashed border-gray-300 text-black bg-white">
     {text}
   </div>
 );
@@ -858,7 +929,7 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
         {canAddRepayment && (
           <button
             onClick={onAddRepayment}
-            className="btn-primary bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             Record Repayment
           </button>
@@ -867,7 +938,7 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
       <ul className="space-y-2 text-sm">
         {items.map((item, i) => (
           <li key={i} className="border-l-4 pl-3 border-gray-300 text-black">
-            <span className="text-gray-600">
+            <span className="text-gray-700">
               {item.date ? new Date(item.date).toLocaleDateString() : "—"}
             </span>{" "}
             – {item.text}
