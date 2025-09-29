@@ -30,6 +30,9 @@ function toArray(maybe) {
   return [];
 }
 
+const strongLink =
+  "text-indigo-700 font-semibold underline decoration-2 underline-offset-2 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-sm";
+
 const Borrowers = () => {
   const navigate = useNavigate();
 
@@ -246,18 +249,18 @@ const Borrowers = () => {
     const base = "text-[11px] px-2 py-0.5 rounded border";
     switch (s) {
       case "active":
-        return `${base} bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-600 dark:text-emerald-300`;
+        return `${base} bg-emerald-50 border-emerald-300 text-emerald-700`;
       case "pending_kyc":
-        return `${base} bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/20 dark:border-amber-600 dark:text-amber-300`;
+        return `${base} bg-amber-50 border-amber-300 text-amber-700`;
       case "blacklisted":
-        return `${base} bg-rose-50 border-rose-300 text-rose-700 dark:bg-rose-900/20 dark:border-rose-600 dark:text-rose-300`;
+        return `${base} bg-rose-50 border-rose-300 text-rose-700`;
       default:
-        return `${base} bg-gray-50 border-gray-300 text-gray-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300`;
+        return `${base} bg-gray-50 border-gray-300 text-gray-700`;
     }
   };
 
   return (
-    <div className="p-6 min-h-screen bg-[var(--bg)] text-[var(--fg)]">
+    <div className="p-6 min-h-screen bg-white text-black">
       {/* Toasts */}
       <div className="fixed right-4 top-4 z-50 space-y-2">
         {toasts.map((t) => (
@@ -277,13 +280,13 @@ const Borrowers = () => {
         <div className="flex gap-2">
           <button
             onClick={() => navigate("/borrowers/add")}
-            className="btn-primary inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-md hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <PlusCircle className="w-4 h-4" /> Add Borrower
           </button>
           <button
             onClick={() => pushToast("CSV import coming soon", "info")}
-            className="btn-ghost inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 border border-gray-300 text-black px-3 py-2 rounded-md hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Upload className="w-4 h-4" /> Import CSV
           </button>
@@ -291,10 +294,10 @@ const Borrowers = () => {
       </div>
 
       {/* Filters */}
-      <div className="card p-3 md:p-4 mb-4">
+      <div className="rounded-2xl border border-gray-300 bg-white shadow-sm p-3 md:p-4 mb-4">
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={q}
               onChange={(e) => {
@@ -302,19 +305,19 @@ const Borrowers = () => {
                 setPage(1);
               }}
               placeholder="Search by name, phone, national ID…"
-              className="input w-full pl-9"
+              className="w-full pl-9 border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            <div className="filter-field min-w-[200px]">
+            <div className="min-w-[200px]">
               <select
                 value={branchId}
                 onChange={(e) => {
                   setBranchId(e.target.value);
                   setPage(1);
                 }}
-                className="input"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 <option value="">All Branches</option>
                 {branches.map((b) => (
@@ -325,14 +328,14 @@ const Borrowers = () => {
               </select>
             </div>
 
-            <div className="filter-field min-w-[200px]">
+            <div className="min-w-[200px]">
               <select
                 value={officerId}
                 onChange={(e) => {
                   setOfficerId(e.target.value);
                   setPage(1);
                 }}
-                className="input"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 <option value="">All Officers</option>
                 {officers.map((o) => (
@@ -343,14 +346,14 @@ const Borrowers = () => {
               </select>
             </div>
 
-            <div className="filter-field min-w-[180px]">
+            <div className="min-w-[180px]">
               <select
                 value={status}
                 onChange={(e) => {
                   setStatus(e.target.value);
                   setPage(1);
                 }}
-                className="input"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 <option value="">All Statuses</option>
                 <option value="active">Active</option>
@@ -360,7 +363,7 @@ const Borrowers = () => {
               </select>
             </div>
 
-            <div className="hidden md:flex items-center text-sm px-2 text-[var(--muted)]">
+            <div className="hidden md:flex items-center text-sm px-2 text-gray-600">
               <Filter className="w-4 h-4 mr-1" /> Filters
             </div>
           </div>
@@ -368,11 +371,11 @@ const Borrowers = () => {
       </div>
 
       {/* Table / Cards */}
-      <div className="card">
+      <div className="rounded-2xl border border-gray-300 bg-white shadow-sm">
         <div className="overflow-x-auto">
           {/* Desktop table */}
-          <table className="min-w-full text-sm hidden md:table">
-            <thead className="bg-[var(--table-head-bg)] text-[var(--fg)]/80">
+          <table className="min-w-full text-[15px] hidden md:table">
+            <thead className="bg-gray-100 text-black">
               <tr>
                 <Th label="Name" sortKey="name" sort={sort} dir={dir} onSort={onSort} />
                 <Th label="Phone" sortKey="phone" sort={sort} dir={dir} onSort={onSort} />
@@ -380,23 +383,23 @@ const Borrowers = () => {
                 <Th label="Officer" sortKey="officerName" sort={sort} dir={dir} onSort={onSort} />
                 <Th label="Outstanding" sortKey="outstanding" sort={sort} dir={dir} onSort={onSort} />
                 <Th label="Status" sortKey="status" sort={sort} dir={dir} onSort={onSort} />
-                <th className="px-3 py-2 text-right pr-4">Actions</th>
+                <th className="px-3 py-2 text-right pr-4 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center muted">Loading…</td>
+                  <td colSpan={7} className="px-4 py-10 text-center text-gray-600">Loading…</td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center muted">No borrowers.</td>
+                  <td colSpan={7} className="px-4 py-10 text-center text-gray-600">No borrowers.</td>
                 </tr>
               ) : (
                 rows.map((b) => (
                   <tr
                     key={b.id}
-                    className="border-t border-[var(--border)] hover:bg-[var(--hover)]"
+                    className="border-t border-gray-300 hover:bg-gray-100/70"
                   >
                     <td className="px-4 py-2">{displayName(b)}</td>
                     <td className="px-4 py-2">{b.phone || "—"}</td>
@@ -410,13 +413,13 @@ const Borrowers = () => {
                       <div className="flex gap-3 justify-end">
                         <Link
                           to={`/borrowers/${encodeURIComponent(b.id)}`}
-                          className="link"
+                          className={strongLink}
                         >
                           View
                         </Link>
                         <Link
                           to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
-                          className="link-alt"
+                          className={strongLink}
                         >
                           New Loan
                         </Link>
@@ -431,14 +434,14 @@ const Borrowers = () => {
           {/* Mobile / small screens — cards */}
           <div className="md:hidden grid grid-cols-1 gap-3 p-3">
             {loading ? (
-              <div className="p-6 text-center muted">Loading…</div>
+              <div className="p-6 text-center text-gray-600">Loading…</div>
             ) : rows.length === 0 ? (
-              <div className="p-6 text-center muted">No borrowers.</div>
+              <div className="p-6 text-center text-gray-600">No borrowers.</div>
             ) : (
               rows.map((b) => {
                 const name = displayName(b);
                 return (
-                  <div key={b.id} className="card p-4 hover:shadow-sm transition-shadow">
+                  <div key={b.id} className="rounded-xl border border-gray-300 bg-white p-4 hover:shadow-md transition-shadow">
                     {/* Header */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -447,7 +450,7 @@ const Borrowers = () => {
                         </div>
                         <div>
                           <div className="text-base font-semibold">{name}</div>
-                          <div className="text-xs muted">ID: {b.id}</div>
+                          <div className="text-xs text-gray-600">ID: {b.id}</div>
                         </div>
                       </div>
                       <span className={statusChip(b.status)}>{b.status || "—"}</span>
@@ -456,15 +459,15 @@ const Borrowers = () => {
                     {/* Body */}
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                       <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-[var(--muted)]" />
+                        <Phone className="w-4 h-4 text-gray-600" />
                         <span>{b.phone || "—"}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-[var(--muted)]" />
+                        <Building2 className="w-4 h-4 text-gray-600" />
                         <span className="truncate">{displayBranch(b)}</span>
                       </div>
                       <div className="col-span-2">
-                        <span className="text-xs muted">Outstanding</span>
+                        <span className="text-xs text-gray-600">Outstanding</span>
                         <div className="text-sm font-medium">{fmtMoney(b.outstanding)}</div>
                       </div>
                     </div>
@@ -473,13 +476,13 @@ const Borrowers = () => {
                     <div className="mt-4 flex items-center justify-end gap-2">
                       <Link
                         to={`/borrowers/${encodeURIComponent(b.id)}`}
-                        className="btn-ghost"
+                        className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                       >
                         View
                       </Link>
                       <Link
                         to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
-                        className="btn-primary"
+                        className="px-3 py-1.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                       >
                         New Loan
                       </Link>
@@ -492,15 +495,15 @@ const Borrowers = () => {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-3 py-2 border-t text-sm rounded-b-xl bg-[var(--table-foot-bg)] border-[var(--border)]">
-          <div className="muted">
+        <div className="flex items-center justify-between px-3 py-2 border-t text-sm rounded-b-xl bg-gray-50 border-gray-300">
+          <div className="text-gray-700">
             {pageFrom}–{pageTo} of {total}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="btn-icon disabled:opacity-50"
+              className="p-2 rounded-md border border-gray-300 hover:bg-gray-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               aria-label="Previous page"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -508,7 +511,7 @@ const Borrowers = () => {
             <button
               onClick={() => setPage((p) => (p * PAGE_SIZE < total ? p + 1 : p))}
               disabled={page * PAGE_SIZE >= total}
-              className="btn-icon disabled:opacity-50"
+              className="p-2 rounded-md border border-gray-300 hover:bg-gray-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               aria-label="Next page"
             >
               <ChevronRight className="w-4 h-4" />
@@ -521,16 +524,16 @@ const Borrowers = () => {
       {drawerOpen && (
         <Drawer onClose={() => setDrawerOpen(false)} title="Borrower Details">
           {/* Tabs */}
-          <div className="flex gap-2 border-b mb-3 border-[var(--border)]">
+          <div className="flex gap-2 border-b mb-3 border-gray-300">
             {["overview", "loans", "savings", "documents"].map((t) => (
               <button
                 key={t}
                 onClick={() => setDrawerTab(t)}
                 className={`px-3 py-2 text-sm border-b-2 -mb-px ${
                   drawerTab === t
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent muted"
-                }`}
+                    ? "border-indigo-600 text-indigo-600 font-semibold"
+                    : "border-transparent text-gray-600"
+                } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
               >
                 {t[0].toUpperCase() + t.slice(1)}
               </button>
@@ -540,7 +543,7 @@ const Borrowers = () => {
           {/* Tab content */}
           <div>
             {drawerLoading ? (
-              <div className="muted text-sm">Loading…</div>
+              <div className="text-gray-600 text-sm">Loading…</div>
             ) : drawerTab === "overview" ? (
               <OverviewTab data={drawerData.overview} />
             ) : drawerTab === "loans" ? (
@@ -567,7 +570,7 @@ const Th = ({ label, sortKey, sort, dir, onSort }) => {
       onClick={() => onSort(sortKey)}
       title="Sort"
     >
-      <span className={`inline-flex items-center gap-1 ${active ? "text-indigo-600" : ""}`}>
+      <span className={`inline-flex items-center gap-1 ${active ? "text-indigo-700 font-semibold" : ""}`}>
         {label}
         {active ? (dir === "asc" ? "▲" : "▼") : ""}
       </span>
@@ -578,12 +581,12 @@ const Th = ({ label, sortKey, sort, dir, onSort }) => {
 const Drawer = ({ title, onClose, children }) => (
   <div className="fixed inset-0 z-[60]">
     <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-    <div className="absolute right-0 top-0 h-full w-full sm:w-[620px] bg-[var(--card)] text-[var(--fg)] shadow-2xl p-4 overflow-y-auto rounded-l-2xl border-l border-[var(--border)]">
+    <div className="absolute right-0 top-0 h-full w-full sm:w-[620px] bg-white text-black shadow-2xl p-4 overflow-y-auto rounded-l-2xl border-l border-gray-300">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold">{title}</h3>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-[var(--hover)]"
+          className="p-1 rounded hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           aria-label="Close drawer"
         >
           <X className="w-5 h-5" />
@@ -595,7 +598,7 @@ const Drawer = ({ title, onClose, children }) => (
 );
 
 const OverviewTab = ({ data }) => {
-  if (!data) return <p className="muted text-sm">No overview data.</p>;
+  if (!data) return <p className="text-gray-600 text-sm">No overview data.</p>;
   const name = data.name || `${data.firstName || ""} ${data.lastName || ""}`.trim() || "—";
   const branch = data.branchName || data.Branch?.name || data.branch?.name || "—";
   const officer = data.officerName || data.officer?.name || data.loanOfficer?.name || "—";
@@ -620,12 +623,12 @@ const OverviewTab = ({ data }) => {
 
 const LoansTab = ({ items }) => {
   if (!Array.isArray(items) || items.length === 0) {
-    return <p className="muted text-sm">No loans.</p>;
+    return <p className="text-gray-600 text-sm">No loans.</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-[var(--table-head-bg)] text-[var(--fg)]/80">
+        <thead className="bg-gray-100 text-black">
           <tr>
             <th className="px-3 py-2 text-left">Loan #</th>
             <th className="px-3 py-2 text-left">Product</th>
@@ -636,7 +639,7 @@ const LoansTab = ({ items }) => {
         </thead>
         <tbody>
           {items.map((l) => (
-            <tr key={l.id} className="border-t border-[var(--border)]">
+            <tr key={l.id} className="border-t border-gray-300">
               <td className="px-3 py-2">{l.id}</td>
               <td className="px-3 py-2">{l.product || "—"}</td>
               <td className="px-3 py-2">{money(l.disbursed)}</td>
@@ -652,12 +655,12 @@ const LoansTab = ({ items }) => {
 
 const SavingsTab = ({ items }) => {
   if (!Array.isArray(items) || items.length === 0) {
-    return <p className="muted text-sm">No savings accounts.</p>;
+    return <p className="text-gray-600 text-sm">No savings accounts.</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-[var(--table-head-bg)] text-[var(--fg)]/80">
+        <thead className="bg-gray-100 text-black">
           <tr>
             <th className="px-3 py-2 text-left">Account #</th>
             <th className="px-3 py-2 text-left">Balance</th>
@@ -666,7 +669,7 @@ const SavingsTab = ({ items }) => {
         </thead>
         <tbody>
           {items.map((s) => (
-            <tr key={s.id} className="border-t border-[var(--border)]">
+            <tr key={s.id} className="border-t border-gray-300">
               <td className="px-3 py-2">{s.id}</td>
               <td className="px-3 py-2">{money(s.balance)}</td>
               <td className="px-3 py-2">{s.status || "—"}</td>
@@ -684,29 +687,29 @@ const DocumentsTab = ({ items }) => {
       <div className="mb-3">
         <button
           onClick={() => alert("KYC upload coming soon")}
-          className="btn-ghost inline-flex items-center gap-2"
+          className="inline-flex items-center gap-2 border border-gray-300 px-3 py-2 rounded-md hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
           <FileUp className="w-4 h-4" /> Upload Document
         </button>
       </div>
       {!Array.isArray(items) || items.length === 0 ? (
-        <p className="muted text-sm">No documents.</p>
+        <p className="text-gray-600 text-sm">No documents.</p>
       ) : (
         <ul className="space-y-2">
           {items.map((d) => (
-            <li key={d.id} className="card p-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <IdCard className="w-4 h-4 text-[var(--muted)]" />
+            <li key={d.id} className="flex items-center justify-between border border-gray-300 rounded-md px-3 py-2">
+              <div className="flex items-center gap-2">
+                <IdCard className="w-4 h-4 text-gray-600" />
                 <div>
-                  <p className="text-sm font-medium">{d.fileName || "Document"}</p>
-                  <p className="text-xs muted">
-                    {d.type || "KYC"} • {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
+                  <p className="text-sm font-medium text-black">{d.fileName || d.name || "Document"}</p>
+                  <p className="text-xs text-gray-600">
+                    {(d.type || "KYC")}{d.createdAt ? ` • ${new Date(d.createdAt).toLocaleString()}` : ""}
                   </p>
                 </div>
               </div>
               {d.url && (
                 <a
-                  className="link text-sm"
+                  className={strongLink}
                   href={d.url}
                   target="_blank"
                   rel="noreferrer"
@@ -724,15 +727,16 @@ const DocumentsTab = ({ items }) => {
 
 /* Small UI helpers */
 const InfoCard = ({ label, value }) => (
-  <div className="card p-4 shadow-sm">
-    <p className="text-[11px] uppercase tracking-wide muted">{label}</p>
-    <p className="text-base font-semibold mt-1">{value}</p>
+  <div className="border border-gray-300 rounded-lg p-3 bg-gray-50">
+    <p className="text-xs text-gray-600">{label}</p>
+    <p className="text-base font-semibold mt-1 text-black">{value}</p>
   </div>
 );
+
 const Stat = ({ label, value }) => (
-  <div className="rounded-2xl p-4 border bg-[var(--kpi-bg)] border-[var(--border)]">
-    <p className="text-[11px] uppercase tracking-wide muted">{label}</p>
-    <p className="text-xl font-semibold mt-1">{value}</p>
+  <div className="rounded-2xl p-4 border bg-white border-gray-300 shadow-sm">
+    <p className="text-xs text-gray-600">{label}</p>
+    <p className="text-xl font-semibold mt-1 text-black">{value}</p>
   </div>
 );
 
