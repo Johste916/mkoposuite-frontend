@@ -199,8 +199,8 @@ const Borrowers = () => {
           const res = await api.get(`/borrowers/${borrowerId}/savings`, { signal });
           setDrawerData((d) => ({ ...d, savings: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         } else if (tab === "documents") {
-          const res = await api.get(`/borrowers/${borrowerId}/documents`, { signal });
-          setDrawerData((d) => ({ ...d, documents: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
+          const res = await api.get(`/borrowers/${borrowerId}/documents`, { signal }).catch(() => ({ data: [] }));
+          setDrawerData((d) => ({ ...d, documents: Array.isArray(res?.data) ? res.data : res?.data?.items || [] }));
         }
       } catch (e) {
         pushToast("Failed to load borrower details", "error");
@@ -613,13 +613,15 @@ const OverviewTab = ({ data }) => {
         <InfoCard label="National ID" value={data.nationalId || "—"} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Stat label="Outstanding Loan" value={money(data.outstandingLoan)} />
-        <Stat label="Outstanding Interest" value={money(data.outstandingInterest)} />
-        <Stat label="Net Savings" value={money(data.netSavings)} />
+        <Stat label="Outstanding Loan" value={fmt("outstandingLoan", data)} />
+        <Stat label="Outstanding Interest" value={fmt("outstandingInterest", data)} />
+        <Stat label="Net Savings" value={fmt("netSavings", data)} />
       </div>
     </div>
   );
 };
+
+const fmt = (k, data) => `TZS ${Number(data?.[k] || 0).toLocaleString()}`;
 
 const LoansTab = ({ items }) => {
   if (!Array.isArray(items) || items.length === 0) {
@@ -642,8 +644,8 @@ const LoansTab = ({ items }) => {
             <tr key={l.id} className="border-t border-gray-300">
               <td className="px-3 py-2">{l.id}</td>
               <td className="px-3 py-2">{l.product || "—"}</td>
-              <td className="px-3 py-2">{money(l.disbursed)}</td>
-              <td className="px-3 py-2">{money(l.outstanding)}</td>
+              <td className="px-3 py-2">{`TZS ${Number(l.disbursed || 0).toLocaleString()}`}</td>
+              <td className="px-3 py-2">{`TZS ${Number(l.outstanding || 0).toLocaleString()}`}</td>
               <td className="px-3 py-2">{l.status || "—"}</td>
             </tr>
           ))}
@@ -671,7 +673,7 @@ const SavingsTab = ({ items }) => {
           {items.map((s) => (
             <tr key={s.id} className="border-t border-gray-300">
               <td className="px-3 py-2">{s.id}</td>
-              <td className="px-3 py-2">{money(s.balance)}</td>
+              <td className="px-3 py-2">{`TZS ${Number(s.balance || 0).toLocaleString()}`}</td>
               <td className="px-3 py-2">{s.status || "—"}</td>
             </tr>
           ))}
@@ -739,7 +741,5 @@ const Stat = ({ label, value }) => (
     <p className="text-xl font-semibold mt-1 text-black">{value}</p>
   </div>
 );
-
-const money = (v) => `TZS ${Number(v || 0).toLocaleString()}`;
 
 export default Borrowers;
