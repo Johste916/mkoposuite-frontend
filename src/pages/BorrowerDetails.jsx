@@ -1,3 +1,4 @@
+// BorrowerDetails.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { getUserRole } from "../utils/auth";
@@ -65,14 +66,17 @@ const tryGET = async (paths = [], opts = {}) => {
 const withTenant = (tenantId) => (tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {});
 
 /* Small visual helpers */
+const strongLink =
+  "text-blue-700 font-semibold underline decoration-2 underline-offset-2 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-sm";
+
 const Card = ({ title, icon, children, className = "" }) => (
   <section
-    className={`rounded-2xl border p-4 md:p-5 bg-[var(--card)] border-[var(--border)] ${className}`}
+    className={`rounded-2xl border border-gray-300 bg-white shadow-sm p-4 md:p-5 ${className}`}
   >
     {title && (
       <div className="flex items-center gap-2 mb-3">
         {icon}
-        <h2 className="text-base md:text-lg font-semibold text-[var(--fg)]">{title}</h2>
+        <h2 className="text-base md:text-lg font-semibold text-black">{title}</h2>
       </div>
     )}
     {children}
@@ -81,10 +85,10 @@ const Card = ({ title, icon, children, className = "" }) => (
 
 const Field = ({ label, children }) => (
   <div>
-    <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">
+    <div className="text-[12px] font-medium uppercase tracking-wider text-gray-600">
       {label}
     </div>
-    <div className="mt-1 text-sm text-[var(--fg)]">{children ?? "—"}</div>
+    <div className="mt-1 text-[15px] text-black">{children ?? "—"}</div>
   </div>
 );
 
@@ -99,24 +103,24 @@ const DlGrid = ({ items, cols = 3 }) => (
 );
 
 const PillTabs = ({ tabs, active, onChange }) => (
-  <div className="flex flex-wrap gap-2 border-b px-2 pt-2 border-[var(--border)]">
+  <div className="flex flex-wrap gap-2 border-b px-2 pt-2 border-gray-300">
     {tabs.map((t) => {
       const is = active === t.key;
       return (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`px-3 py-1.5 text-sm rounded-full border ${
+          className={`px-3 py-1.5 text-sm rounded-full border transition ${
             is
               ? "bg-indigo-600 text-white border-indigo-600"
-              : "bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--hover)] border-[var(--border)]"
-          }`}
+              : "bg-white text-black hover:bg-gray-50 border-gray-300"
+          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
         >
           {t.label}
           {typeof t.count === "number" && (
             <span
               className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full text-xs ${
-                is ? "bg-white/20 text-white" : "bg-[var(--badge-bg)] text-[var(--badge-fg)]"
+                is ? "bg-white/20 text-white" : "bg-gray-100 text-gray-800"
               } px-1.5`}
             >
               {t.count}
@@ -304,7 +308,7 @@ const BorrowerDetails = () => {
 
   if (!borrower) {
     return (
-      <div className="p-4 min-h-screen bg-[var(--bg)] text-[var(--fg)]">Loading...</div>
+      <div className="p-4 min-h-screen bg-white text-black">Loading...</div>
     );
   }
 
@@ -323,26 +327,26 @@ const BorrowerDetails = () => {
   const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
 
   return (
-    <div className="p-4 md:p-6 min-h-screen bg-[var(--bg)] text-[var(--fg)]">
+    <div className="p-4 md:p-6 min-h-screen bg-white text-black">
       {/* Top bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-sm">
-          <Link to={`/borrowers${tenantQuery}`} className="link">
+          <Link to={`/borrowers${tenantQuery}`} className={strongLink}>
             Borrowers
           </Link>{" "}
-          <span className="text-[var(--muted)]">/</span>{" "}
+          <span className="text-gray-600">/</span>{" "}
           <span className="font-medium">{bName}</span>
         </div>
         <div className="flex gap-2">
           <Link
             to={`/borrowers/${encodeURIComponent(borrower.id)}/edit${tenantQuery}`}
-            className="btn-ghost"
+            className="btn-ghost text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             Edit
           </Link>
-          <button onClick={handleDisable} className="btn-ghost">Disable</button>
-          <button onClick={handleBlacklist} className="btn-rose">Blacklist</button>
-          <button onClick={handleDelete} className="btn-danger">Delete</button>
+          <button onClick={handleDisable} className="btn-ghost text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">Disable</button>
+          <button onClick={handleBlacklist} className="btn-rose bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400">Blacklist</button>
+          <button onClick={handleDelete} className="btn-danger bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400">Delete</button>
         </div>
       </div>
 
@@ -359,7 +363,7 @@ const BorrowerDetails = () => {
                   <img
                     src={borrower.photoUrl}
                     alt={bName}
-                    className="w-24 h-24 rounded-2xl object-cover border border-[var(--border)]"
+                    className="w-24 h-24 rounded-2xl object-cover border border-gray-300"
                   />
                 ) : (
                   <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-semibold">
@@ -375,8 +379,8 @@ const BorrowerDetails = () => {
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <h1 className="text-2xl font-bold tracking-tight">{bName}</h1>
-                  <span className="text-xs text-[var(--muted)]">ID: {borrower.id}</span>
-                  <span className="text-xs text-[var(--muted)]">Tenant: {borrower.tenantId || "—"}</span>
+                  <span className="text-xs text-gray-600">ID: {borrower.id}</span>
+                  <span className="text-xs text-gray-600">Tenant: {borrower.tenantId || "—"}</span>
                 </div>
 
                 <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -385,9 +389,9 @@ const BorrowerDetails = () => {
                       <span>{borrower.phone || "—"}</span>
                       {borrower.phone && (
                         <>
-                          <a className="link" href={tel(borrower.phone)}>Call</a>
-                          <a className="link" href={sms(borrower.phone)}>SMS</a>
-                          <a className="link" href={wa(borrower.phone)} target="_blank" rel="noreferrer">
+                          <a className={strongLink} href={tel(borrower.phone)}>Call</a>
+                          <a className={strongLink} href={sms(borrower.phone)}>SMS</a>
+                          <a className={strongLink} href={wa(borrower.phone)} target="_blank" rel="noreferrer">
                             WhatsApp
                           </a>
                         </>
@@ -399,7 +403,7 @@ const BorrowerDetails = () => {
                     <div className="flex items-center gap-2">
                       <span>{borrower.email || "—"}</span>
                       {borrower.email && (
-                        <a className="link" href={mail(borrower.email)}>Email</a>
+                        <a className={strongLink} href={mail(borrower.email)}>Email</a>
                       )}
                     </div>
                   </Field>
@@ -416,7 +420,7 @@ const BorrowerDetails = () => {
             </div>
 
             {/* Divider */}
-            <hr className="my-4 border-[var(--border)]" />
+            <hr className="my-4 border-gray-300" />
 
             {/* Identity mirrors Add Borrower */}
             <div className="grid gap-5">
@@ -492,15 +496,15 @@ const BorrowerDetails = () => {
               { k: "Missed Repayments", v: missedRepayments },
               { k: "Net Savings", v: money(borrower.netSavings) },
             ].map((c, i) => (
-              <div key={i} className="rounded-2xl p-4 border bg-[var(--kpi-bg)] border-[var(--border)]">
-                <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">{c.k}</div>
-                <div className="mt-1 text-2xl font-semibold text-[var(--fg)]">{c.v}</div>
+              <div key={i} className="rounded-2xl p-4 border bg-white border-gray-300">
+                <div className="text-[12px] font-medium uppercase tracking-wider text-gray-600">{c.k}</div>
+                <div className="mt-1 text-2xl font-semibold text-black">{c.v}</div>
               </div>
             ))}
           </div>
 
           {/* Tabs */}
-          <div className="rounded-2xl border bg-[var(--card)] border-[var(--border)]">
+          <div className="rounded-2xl border bg-white border-gray-300">
             <PillTabs
               active={activeTab}
               onChange={setActiveTab}
@@ -527,7 +531,7 @@ const BorrowerDetails = () => {
                             to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
                               borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                             }`}
-                            className="ml-1 link"
+                            className={`ml-1 ${strongLink}`}
                           >
                             Create loan
                           </Link>
@@ -548,7 +552,7 @@ const BorrowerDetails = () => {
                             to={`/loans/${encodeURIComponent(l.id)}${
                               borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                             }`}
-                            className="link"
+                            className={strongLink}
                           >
                             {l.id}
                           </Link>,
@@ -565,10 +569,10 @@ const BorrowerDetails = () => {
                             "—"
                           ),
                           <div className="flex gap-2 justify-end">
-                            <button className="btn-ghost" onClick={() => handleViewSchedule(l.id)}>Schedule</button>
+                            <button className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400" onClick={() => handleViewSchedule(l.id)}>Schedule</button>
                             {String(userRole || "").toLowerCase() === "admin" && (
                               <button
-                                className="btn-ghost"
+                                className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                                 onClick={() => {
                                   setSelectedLoanForRepayment(l);
                                   setShowRepaymentModal(true);
@@ -605,7 +609,7 @@ const BorrowerDetails = () => {
                             to={`/loans/${encodeURIComponent(r.loanId)}${
                               borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                             }`}
-                            className="link"
+                            className={strongLink}
                           >
                             {r.loanId}
                           </Link>
@@ -633,12 +637,12 @@ const BorrowerDetails = () => {
 
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-[var(--fg)]/80">Filter:</span>
+                      <span className="text-sm text-black/80">Filter:</span>
                       <label className="relative z-50">
                         <select
                           value={filterType}
                           onChange={(e) => setFilterType(e.target.value)}
-                          className="input text-sm"
+                          className="input text-sm border border-gray-300 rounded-md px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         >
                           <option value="all">All</option>
                           <option value="deposit">Deposits</option>
@@ -650,7 +654,7 @@ const BorrowerDetails = () => {
                     </div>
                     <Link
                       to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(borrower.id)}`}
-                      className="link text-sm"
+                      className={`${strongLink} text-sm`}
                     >
                       View savings accounts
                     </Link>
@@ -677,7 +681,7 @@ const BorrowerDetails = () => {
                 <div className="text-sm">
                   <Link
                     to={`/borrowers/${encodeURIComponent(borrower.id)}/documents${tenantQuery}`}
-                    className="link"
+                    className={strongLink}
                   >
                     Manage KYC documents
                   </Link>
@@ -716,17 +720,17 @@ const BorrowerDetails = () => {
                 }
               }}
               placeholder="Add a note and press Enter…"
-              className="input w-full text-sm mb-3"
+              className="input w-full text-sm mb-3 border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
             {comments.length === 0 ? (
-              <div className="text-xs text-[var(--muted)]">No notes yet.</div>
+              <div className="text-xs text-gray-600">No notes yet.</div>
             ) : (
               <>
                 <ul className="space-y-2">
                   {visibleComments.map((c, i) => (
-                    <li key={`${i}-${c.createdAt}`} className="p-2 text-xs rounded-lg border border-[var(--border)] bg-[var(--card)]">
-                      <div className="text-[var(--fg)]">{c.content}</div>
-                      <div className="text-[10px] text-[var(--muted)] mt-1">
+                    <li key={`${i}-${c.createdAt}`} className="p-2 text-xs rounded-lg border border-gray-300 bg-white">
+                      <div className="text-black">{c.content}</div>
+                      <div className="text-[10px] text-gray-600 mt-1">
                         {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
                       </div>
                     </li>
@@ -735,7 +739,7 @@ const BorrowerDetails = () => {
                 {comments.length > 3 && (
                   <button
                     onClick={() => setShowAllComments((s) => !s)}
-                    className="mt-3 w-full text-xs btn-ghost"
+                    className="mt-3 w-full text-xs px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   >
                     {showAllComments ? "Show less" : `Show all (${comments.length})`}
                   </button>
@@ -769,18 +773,18 @@ const BorrowerDetails = () => {
 
 /* ---------- Support UI pieces ---------- */
 const Empty = ({ text }) => (
-  <div className="p-6 text-sm rounded-2xl border border-dashed border-[var(--border)] text-[var(--muted)] bg-[var(--card)]">
+  <div className="p-6 text-sm rounded-2xl border border-dashed border-gray-300 text-gray-700 bg-white">
     {text}
   </div>
 );
 
 const Table = ({ head = [], rows = [] }) => (
-  <div className="overflow-auto rounded-xl border border-[var(--border)] bg-[var(--card)]">
-    <table className="min-w-full text-sm">
-      <thead className="bg-[var(--table-head-bg)] text-[var(--fg)]/80">
+  <div className="overflow-auto rounded-xl border border-gray-300 bg-white">
+    <table className="min-w-full text-[15px]">
+      <thead className="bg-gray-100 text-black">
         <tr className="text-left">
           {head.map((h, i) => (
-            <th key={i} className={`px-3 py-2 ${i === head.length - 1 ? "text-right" : ""}`}>
+            <th key={i} className={`px-3 py-2 font-semibold ${i === head.length - 1 ? "text-right" : ""}`}>
               {h}
             </th>
           ))}
@@ -788,7 +792,7 @@ const Table = ({ head = [], rows = [] }) => (
       </thead>
       <tbody>
         {rows.map((r, i) => (
-          <tr key={i} className="odd:bg-[var(--table-row-odd)] even:bg-[var(--table-row-even)]">
+          <tr key={i} className="odd:bg-white even:bg-gray-50 hover:bg-gray-100/70">
             {r.map((c, j) => (
               <td key={j} className={`px-3 py-2 align-top ${j === head.length - 1 ? "text-right" : ""}`}>
                 {c}
@@ -803,10 +807,10 @@ const Table = ({ head = [], rows = [] }) => (
 
 const BadgeCard = ({ label, value, tone = "emerald" }) => {
   const toneMap = {
-    emerald: "badge-emerald",
-    amber: "badge-amber",
-    sky: "badge-sky",
-    rose: "badge-rose",
+    emerald: "bg-emerald-50 text-emerald-800 border border-emerald-200",
+    amber: "bg-amber-50 text-amber-800 border border-amber-200",
+    sky: "bg-sky-50 text-sky-800 border border-sky-200",
+    rose: "bg-rose-50 text-rose-800 border border-rose-200",
   };
   return (
     <div className={`p-3 rounded-xl text-sm ${toneMap[tone]}`}>
@@ -850,17 +854,20 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h4 className="font-semibold">📜 Activity Timeline</h4>
+        <h4 className="font-semibold text-black">📜 Activity Timeline</h4>
         {canAddRepayment && (
-          <button onClick={onAddRepayment} className="btn-primary">
+          <button
+            onClick={onAddRepayment}
+            className="btn-primary bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          >
             Record Repayment
           </button>
         )}
       </div>
       <ul className="space-y-2 text-sm">
         {items.map((item, i) => (
-          <li key={i} className="border-l-4 pl-3 border-[var(--border)] text-[var(--fg)]">
-            <span className="text-[var(--muted)]">
+          <li key={i} className="border-l-4 pl-3 border-gray-300 text-black">
+            <span className="text-gray-600">
               {item.date ? new Date(item.date).toLocaleDateString() : "—"}
             </span>{" "}
             – {item.text}
