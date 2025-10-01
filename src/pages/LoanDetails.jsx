@@ -14,6 +14,16 @@ const fmtDateISO = (d) => {
   return dt.toISOString().slice(0, 10);
 };
 
+/* Normalize schedule payloads from different API shapes */
+function normalizeSchedule(payload) {
+  if (!payload) return null;
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.schedule)) return payload.schedule;
+  if (Array.isArray(payload.rows)) return payload.rows;
+  if (Array.isArray(payload.data)) return payload.data;
+  return null;
+}
+
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-800 ring-yellow-200",
   approved: "bg-blue-100 text-blue-800 ring-blue-200",
@@ -230,7 +240,7 @@ export default function LoanDetails() {
       tasks.push(
         api
           .get(`/loans/${id}/schedule`)
-          .then((r) => setSchedule(r.data || null))
+          .then((r) => setSchedule(normalizeSchedule(r.data)))
           .catch(() => setSchedule(null))
           .finally(() => setLoadingSchedule(false))
       );
@@ -349,7 +359,7 @@ export default function LoanDetails() {
 
   // Close loan (legacy)
   const closeLoan = async () => {
-    const outstanding = loan?.outstanding ?? 0;
+    const outstanding = scheduledOutstanding; // use computed outstanding
     if (outstanding > 0 && !window.confirm("Outstanding > 0. Close anyway?")) return;
     try {
       await api.patch(`/loans/${id}/status`, {
@@ -510,7 +520,7 @@ export default function LoanDetails() {
   };
 
   /* ---------- quick stats & aggregates ---------- */
-  const scheduled = useMemo(() => {
+  const scheduledAgg = useMemo(() => {
     const arr = Array.isArray(schedule) ? schedule : [];
     const sum = (k) => arr.reduce((a, b) => a + Number(b?.[k] || 0), 0);
     const principal = sum("principal");
@@ -553,14 +563,21 @@ export default function LoanDetails() {
     };
   }, [schedule, repayments]);
 
-  const outstanding = loan?.outstanding ?? scheduled.outstanding ?? null;
-  const nextDue = scheduled.nextDue;
+  // Prefer computed outstanding from schedule/repayments to avoid misleading backend default 0s
+  const scheduledOutstanding = scheduledAgg.outstanding ?? null;
+  const outstanding = (loan?.status === "closed")
+    ? 0
+    : (scheduledOutstanding ?? (loan?.outstanding ?? null));
+
+  const nextDue = scheduledAgg.nextDue;
 
   const repayTotals = useMemo(() => {
     const count = repayments.length || 0;
     const sum = repayments.reduce((a, r) => a + Number(r.amount || 0), 0);
     return { count, sum };
   }, [repayments]);
+
+  const canPostRepayment = loan?.status !== "closed" && Number(outstanding || 0) > 0;
 
   /* ---------- render ---------- */
   if (loading) return <div className="max-w-7xl mx-auto px-6 py-6">Loading loan…</div>;
@@ -604,7 +621,7 @@ export default function LoanDetails() {
             <Label>Interest</Label>
             <div className="text-base">
               <span className="font-medium">{loan.interestRate}%</span>{" "}
-              <span className="text-gray-600">· {loan.interestMethod}</span>
+              <span className="text-gray-600">· {loan.interestMethod || "—"}</span>
             </div>
           </div>
 
@@ -662,12 +679,12 @@ export default function LoanDetails() {
         {/* At a glance */}
         <div className="mt-6 grid sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
           {[
-            ["Paid Principal", scheduled.paidPrincipal],
-            ["Paid Interest", scheduled.paidInterest],
-            ["Paid Penalties", scheduled.paidPenalty],
-            ["Paid Fees", scheduled.paidFees],
-            ["Total Paid", scheduled.totalPaid],
-            ["Total Scheduled", scheduled.total],
+            ["Paid Principal", scheduledAgg.paidPrincipal],
+            ["Paid Interest", scheduledAgg.paidInterest],
+            ["Paid Penalties", scheduledAgg.paidPenalty],
+            ["Paid Fees", scheduledAgg.paidFees],
+            ["Total Paid", scheduledAgg.totalPaid],
+            ["Total Scheduled", scheduledAgg.total],
           ].map(([label, val]) => (
             <div key={label} className="rounded-xl border-2 border-slate-200 p-3">
               <div className="text-gray-500 text-[12px]">{label}</div>
@@ -827,9 +844,11 @@ export default function LoanDetails() {
           Export PDF
         </a>
 
-        <button onClick={() => setOpenRepay(true)} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
-          Post Repayment
-        </button>
+        {canPostRepayment && (
+          <button onClick={() => setOpenRepay(true)} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
+            Post Repayment
+          </button>
+        )}
 
         {canEdit && (
           <>
@@ -1076,7 +1095,7 @@ export default function LoanDetails() {
                         return (
                           <tr key={row.id || idx} className="hover:bg-gray-50">
                             <td className="px-3 py-2 whitespace-nowrap">{idx + 1}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{fmtDate(row.dueDate)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{fmtDate(row.dueDate || row.date)}</td>
                             <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(row.principal, currency)}</td>
                             <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(row.interest, currency)}</td>
                             <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(row.penalty || 0, currency)}</td>
