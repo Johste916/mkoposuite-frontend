@@ -20,22 +20,18 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
     const int = Number(row.interest ?? 0);
     const pri = Number(row.principal ?? 0);
 
-    // fees
     if (remain <= 0) break;
     const f = Math.min(remain, fee);
     paidF += f; remain -= f;
 
-    // penalty
     if (remain <= 0) break;
     const p = Math.min(remain, pen);
     paidPN += p; remain -= p;
 
-    // interest
     if (remain <= 0) break;
     const i = Math.min(remain, int);
     paidI += i; remain -= i;
 
-    // principal
     if (remain <= 0) break;
     const pr = Math.min(remain, pri);
     paidP += pr; remain -= pr;
@@ -45,7 +41,6 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
 
 /** Try multiple endpoints to get company/org details */
 async function fetchCompanyDetails() {
-  // Defaults if API doesn’t provide anything
   let company = {
     name: 'MkopoSuite',
     address: '',
@@ -54,8 +49,6 @@ async function fetchCompanyDetails() {
     website: '',
     logoUrl: '',
   };
-
-  // Try /api/settings (common)
   try {
     const r = await api.get('/settings');
     const s = r.data || {};
@@ -69,8 +62,6 @@ async function fetchCompanyDetails() {
     };
     return company;
   } catch {}
-
-  // Try /api/account (fallback per your backend)
   try {
     const r = await api.get('/account');
     const s = r.data?.settings || {};
@@ -84,16 +75,29 @@ async function fetchCompanyDetails() {
     };
     return company;
   } catch {}
-
-  // As a last resort, try a public sidebar (some backends expose pieces here)
   try {
     const r = await api.get('/settings/sidebar');
     const app = r.data?.app || {};
     company.name = app.name || company.name;
     company.logoUrl = app.logoUrl || company.logoUrl;
   } catch {}
-
   return company;
+}
+
+/* Detect if due dates are monthly-ish (+/- a day) */
+function inferFrequency(schedule = []) {
+  const dates = schedule
+    .map(r => new Date(r.dueDate || r.date))
+    .filter(d => !Number.isNaN(d.getTime()));
+  if (dates.length < 2) return '';
+  let monthly = 0;
+  for (let i = 1; i < dates.length; i++) {
+    const prev = dates[i-1], curr = dates[i];
+    const diffMonths = (curr.getFullYear() - prev.getFullYear()) * 12 + (curr.getMonth() - prev.getMonth());
+    const sameDayish = Math.abs(curr.getDate() - prev.getDate()) <= 2;
+    if (diffMonths === 1 && sameDayish) monthly++;
+  }
+  return monthly >= Math.max(1, dates.length - 2) ? 'Monthly' : '';
 }
 
 export default function LoanSchedulePage() {
@@ -117,7 +121,6 @@ export default function LoanSchedulePage() {
   const pollRef = useRef(null);
 
   useEffect(() => {
-    // Load company info once
     fetchCompanyDetails().then(setCompany).catch(() => {});
   }, []);
 
@@ -146,7 +149,6 @@ export default function LoanSchedulePage() {
         .catch(() => []);
       setRepayments(rp);
 
-      // Update loan to "active" once payments start (if not active/closed already)
       const hasPaid = (rp?.length || 0) > 0;
       const status = (lr.data?.status || '').toLowerCase();
       if (hasPaid && status && !['active', 'closed'].includes(status)) {
@@ -154,12 +156,9 @@ export default function LoanSchedulePage() {
           await api.patch(`/loans/${id}/status`, { status: 'active' });
           const lr2 = await api.get(`/loans/${id}`);
           setLoan(lr2.data || lr.data || null);
-        } catch {
-          // ignore if forbidden by backend
-        }
+        } catch {}
       }
 
-      // Broadcast so Borrower/Loan pages can refresh
       window.dispatchEvent(new CustomEvent('loan:updated', { detail: { id } }));
     } catch (e) {
       setSchedule([]);
@@ -242,10 +241,13 @@ export default function LoanSchedulePage() {
     };
   }, [schedule, repayments]);
 
+  const frequency = useMemo(() => inferFrequency(schedule), [schedule]);
+
   /* ----------- export CSV ----------- */
   const downloadCSV = () => {
     if (!schedule.length) return;
-    // Top meta lines with company + loan details
+    const disbursed = loan?.releaseDate || loan?.startDate || '';
+
     const meta = [
       ['Company', company.name],
       ['Address', company.address],
@@ -258,6 +260,7 @@ export default function LoanSchedulePage() {
       ['Status', loan?.status || ''],
       ['Currency', currency],
       ['Interest Method', method],
+      ['Disbursed', asISO(disbursed)],
       ['Generated At', new Date().toLocaleString()],
       [],
     ];
@@ -267,52 +270,45 @@ export default function LoanSchedulePage() {
       'Due Date',
       'Principal',
       'Interest',
+      'Total P&I',
       'Penalty',
       'Fees',
-      'Total',
-      'Balance',
+      'Paid Principal',
+      'Paid Interest',
+      'Outstanding',
       'Settled',
     ];
-    const rows = schedule.map((r, i) => [
-      r.installment ?? r.period ?? i + 1,
-      asISO(r.dueDate ?? r.date ?? ''),
-      Number(r.principal ?? 0),
-      Number(r.interest ?? 0),
-      Number(r.penalty ?? 0),
-      Number(r.fee ?? r.fees ?? 0),
-      Number(
-        r.total ??
-          (Number(r.principal || 0) +
-            Number(r.interest || 0) +
-            Number(r.penalty || 0) +
-            Number(r.fee ?? r.fees ?? 0))
-      ),
-      r.balance ?? '',
-      r.paid || r.settled ? 'YES' : 'NO',
-    ]);
+    const rows = schedule.map((r, i) => {
+      const pi = Number(r.principal || 0) + Number(r.interest || 0);
+      const outstanding = r.balance ?? '';
+      return [
+        r.installment ?? r.period ?? i + 1,
+        asISO(r.dueDate ?? r.date ?? ''),
+        Number(r.principal ?? 0),
+        Number(r.interest ?? 0),
+        Number(pi),
+        Number(r.penalty ?? 0),
+        Number(r.fee ?? r.fees ?? 0),
+        r.paidPrincipal != null ? Number(r.paidPrincipal) : '',
+        r.paidInterest  != null ? Number(r.paidInterest)  : '',
+        outstanding,
+        r.paid || r.settled ? 'YES' : 'NO',
+      ];
+    });
 
     const footer = [
       [],
-      ['Totals', '', totals.scheduledPrincipal, totals.scheduledInterest, totals.scheduledPenalty, totals.scheduledFees, totals.scheduledTotal, '', ''],
-      ['Paid (alloc.)', '', totals.paidPrincipal, totals.paidInterest, totals.paidPenalty, totals.paidFees, totals.totalPaid, '', ''],
-      ['Outstanding', '', '', '', '', '', totals.outstandingTotal, '', ''],
+      ['Totals', '', totals.scheduledPrincipal, totals.scheduledInterest,
+        totals.scheduledPrincipal + totals.scheduledInterest,
+        totals.scheduledPenalty, totals.scheduledFees,
+        totals.paidPrincipal, totals.paidInterest, totals.outstandingTotal, ''],
+      ['Total Paid', '', '', '', '', '', '', '', '', totals.totalPaid, ''],
     ];
 
-    const all = [
-      ...meta,
-      headers,
-      ...rows,
-      ...footer,
-    ];
+    const all = [...meta, headers, ...rows, ...footer];
 
     const csv =
-      all
-        .map((r) =>
-          r
-            .map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`)
-            .join(',')
-        )
-        .join('\n');
+      all.map((r) => r.map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -332,14 +328,12 @@ export default function LoanSchedulePage() {
       jsPDF = (await import('jspdf')).default;
       autoTable = (await import('jspdf-autotable')).default;
     } catch {
-      // Fallback to print-to-PDF if libs not available
       return printFallback();
     }
 
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Header: company info
     const leftX = 40;
     let y = 40;
 
@@ -374,6 +368,7 @@ export default function LoanSchedulePage() {
       `Status: ${loan?.status || ''}`,
       `Currency: ${currency}`,
       `Interest Method: ${method || ''}`,
+      `Disbursed: ${asISO(loan?.releaseDate || loan?.startDate || '')}`,
       `Generated: ${new Date().toLocaleString()}`,
     ];
     meta.forEach((m, i) =>
@@ -385,28 +380,27 @@ export default function LoanSchedulePage() {
       { header: 'Due Date', dataKey: 'dueDate' },
       { header: 'Principal', dataKey: 'principal' },
       { header: 'Interest', dataKey: 'interest' },
+      { header: 'Total P&I', dataKey: 'pi' },
       { header: 'Penalty', dataKey: 'penalty' },
       { header: 'Fees', dataKey: 'fees' },
-      { header: 'Total', dataKey: 'total' },
-      { header: 'Balance', dataKey: 'balance' },
+      { header: 'Paid Principal', dataKey: 'paidP' },
+      { header: 'Paid Interest', dataKey: 'paidI' },
+      { header: 'Outstanding', dataKey: 'outstanding' },
       { header: 'Settled', dataKey: 'settled' },
     ];
     const rows = schedule.map((r, i) => {
-      const total =
-        r.total ??
-        (Number(r.principal || 0) +
-          Number(r.interest || 0) +
-          Number(r.penalty || 0) +
-          Number(r.fee ?? r.fees ?? 0));
+      const pi = Number(r.principal || 0) + Number(r.interest || 0);
       return {
         idx: r.installment ?? r.period ?? i + 1,
         dueDate: asISO(r.dueDate ?? r.date ?? ''),
         principal: fmtMoney(r.principal, currency),
         interest: fmtMoney(r.interest, currency),
+        pi: fmtMoney(pi, currency),
         penalty: fmtMoney(r.penalty || 0, currency),
         fees: fmtMoney(r.fee ?? r.fees ?? 0, currency),
-        total: fmtMoney(total, currency),
-        balance: r.balance != null ? fmtMoney(r.balance, currency) : '—',
+        paidP: r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : '—',
+        paidI: r.paidInterest  != null ? fmtMoney(r.paidInterest,  currency) : '—',
+        outstanding: r.balance != null ? fmtMoney(r.balance, currency) : '—',
         settled: r.paid || r.settled ? 'YES' : 'NO',
       };
     });
@@ -422,9 +416,7 @@ export default function LoanSchedulePage() {
       didDrawPage: () => {
         const str = `Page ${doc.internal.getNumberOfPages()}`;
         doc.setFontSize(9);
-        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, {
-          align: 'right',
-        });
+        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, { align: 'right' });
       },
     });
 
@@ -438,13 +430,12 @@ export default function LoanSchedulePage() {
     const sumLines = [
       ['Principal (Sched.)', fmtMoney(totals.scheduledPrincipal, currency)],
       ['Interest (Sched.)', fmtMoney(totals.scheduledInterest, currency)],
+      ['Total P&I (Sched.)', fmtMoney(totals.scheduledPrincipal + totals.scheduledInterest, currency)],
       ['Penalty (Sched.)', fmtMoney(totals.scheduledPenalty, currency)],
       ['Fees (Sched.)', fmtMoney(totals.scheduledFees, currency)],
       ['Total Payable', fmtMoney(totals.scheduledTotal, currency)],
       ['Paid Principal', fmtMoney(totals.paidPrincipal, currency)],
       ['Paid Interest', fmtMoney(totals.paidInterest, currency)],
-      ['Paid Penalties', fmtMoney(totals.paidPenalty, currency)],
-      ['Paid Fees', fmtMoney(totals.paidFees, currency)],
       ['Total Paid', fmtMoney(totals.totalPaid, currency)],
       ['Outstanding', fmtMoney(totals.outstandingTotal, currency)],
     ];
@@ -460,21 +451,18 @@ export default function LoanSchedulePage() {
   const printFallback = () => {
     const rowsHtml = schedule
       .map((r, i) => {
-        const total =
-          r.total ??
-          (Number(r.principal || 0) +
-            Number(r.interest || 0) +
-            Number(r.penalty || 0) +
-            Number(r.fee ?? r.fees ?? 0));
+        const pi = Number(r.principal || 0) + Number(r.interest || 0);
         return `
           <tr>
             <td>${r.installment ?? r.period ?? i + 1}</td>
             <td>${asISO(r.dueDate ?? r.date ?? '')}</td>
             <td>${fmtMoney(r.principal, currency)}</td>
             <td>${fmtMoney(r.interest, currency)}</td>
+            <td>${fmtMoney(pi, currency)}</td>
             <td>${fmtMoney(r.penalty || 0, currency)}</td>
             <td>${fmtMoney(r.fee ?? r.fees ?? 0, currency)}</td>
-            <td>${fmtMoney(total, currency)}</td>
+            <td>${r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : '—'}</td>
+            <td>${r.paidInterest  != null ? fmtMoney(r.paidInterest,  currency) : '—'}</td>
             <td>${r.balance != null ? fmtMoney(r.balance, currency) : '—'}</td>
             <td>${r.paid || r.settled ? 'YES' : 'NO'}</td>
           </tr>
@@ -492,8 +480,8 @@ export default function LoanSchedulePage() {
           <meta charset="utf-8" />
           <title>Loan ${loan?.id ?? loanId} Schedule</title>
           <style>
-            body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Noto Sans', 'Helvetica Neue', Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; color:#111827; }
-            .container { max-width: 960px; margin: 24px auto; }
+            body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Noto Sans', 'Helvetica Neue', Arial; color:#111827; }
+            .container { max-width: 1024px; margin: 24px auto; }
             .header { display:flex; align-items:center; justify-content:space-between; }
             .company { display:flex; align-items:center; }
             .company h1 { margin:0; font-size:18px; }
@@ -503,6 +491,8 @@ export default function LoanSchedulePage() {
             thead { background:#F3F4F6; }
             .summary { margin-top:16px; display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:8px; }
             .card { border:1px solid #E5E7EB; padding:8px 10px; border-radius:8px; }
+            .cal { margin-top:10px; display:flex; flex-wrap: wrap; gap:6px; font-size:12px; }
+            .pill { border:1px solid #E5E7EB; border-radius:9999px; padding:3px 8px; background:#fff; }
             @media print { .no-print { display:none; } }
           </style>
         </head>
@@ -531,6 +521,11 @@ export default function LoanSchedulePage() {
               <div><b>Borrower:</b> ${loan?.Borrower?.name || loan?.borrowerName || ''}</div>
               <div><b>Status:</b> ${loan?.status || ''}</div>
               <div><b>Currency:</b> ${currency} &nbsp; • &nbsp; <b>Interest Method:</b> ${method || ''}</div>
+              <div><b>Disbursed:</b> ${asISO(loan?.releaseDate || loan?.startDate || '')}</div>
+            </div>
+
+            <div class="cal">
+              ${schedule.map((r, i) => `<span class="pill">#${r.installment ?? r.period ?? i+1}: ${asISO(r.dueDate || r.date || '')}</span>`).join('')}
             </div>
 
             <table>
@@ -540,10 +535,12 @@ export default function LoanSchedulePage() {
                   <th>Due Date</th>
                   <th>Principal</th>
                   <th>Interest</th>
+                  <th>Total P&I</th>
                   <th>Penalty</th>
                   <th>Fees</th>
-                  <th>Total</th>
-                  <th>Balance</th>
+                  <th>Paid Principal</th>
+                  <th>Paid Interest</th>
+                  <th>Outstanding</th>
                   <th>Settled</th>
                 </tr>
               </thead>
@@ -559,6 +556,9 @@ export default function LoanSchedulePage() {
               <div class="card"><div class="muted">Interest (Sched.)</div><div><b>${fmtMoney(
                 totals.scheduledInterest, currency
               )}</b></div></div>
+              <div class="card"><div class="muted">Total P&I (Sched.)</div><div><b>${fmtMoney(
+                totals.scheduledPrincipal + totals.scheduledInterest, currency
+              )}</b></div></div>
               <div class="card"><div class="muted">Penalty (Sched.)</div><div><b>${fmtMoney(
                 totals.scheduledPenalty, currency
               )}</b></div></div>
@@ -573,12 +573,6 @@ export default function LoanSchedulePage() {
               )}</b></div></div>
               <div class="card"><div class="muted">Paid Interest</div><div><b>${fmtMoney(
                 totals.paidInterest, currency
-              )}</b></div></div>
-              <div class="card"><div class="muted">Paid Penalties</div><div><b>${fmtMoney(
-                totals.paidPenalty, currency
-              )}</b></div></div>
-              <div class="card"><div class="muted">Paid Fees</div><div><b>${fmtMoney(
-                totals.paidFees, currency
               )}</b></div></div>
               <div class="card"><div class="muted">Total Paid</div><div><b>${fmtMoney(
                 totals.totalPaid, currency
@@ -617,13 +611,17 @@ export default function LoanSchedulePage() {
               </span>
             </p>
           )}
-          {/* Company line for quick context */}
           <p className="text-xs text-gray-500 mt-1">
             {company.name}
             {company.address ? ` • ${company.address}` : ''}
             {company.phone ? ` • ${company.phone}` : ''}
             {company.email ? ` • ${company.email}` : ''}
           </p>
+          {loan && (
+            <p className="text-xs text-gray-700 mt-1">
+              <b>Disbursed:</b> {asDate(loan.releaseDate || loan.startDate)}{frequency ? ` • <b>Frequency:</b> ${frequency}` : ''}
+            </p>
+          )}
           {totals?.nextDue && (
             <p className="text-xs text-gray-700 mt-1">
               Next Installment #{totals.nextDue.idx} on {asDate(totals.nextDue.date)} — <b>{fmtMoney(totals.nextDue.amount, currency)}</b>
@@ -695,6 +693,10 @@ export default function LoanSchedulePage() {
               <div className="font-semibold">{fmtMoney(totals.scheduledInterest, currency)}</div>
             </div>
             <div>
+              <div className="text-gray-500 text-xs">Total P&I (Sched.)</div>
+              <div className="font-semibold">{fmtMoney(totals.scheduledPrincipal + totals.scheduledInterest, currency)}</div>
+            </div>
+            <div>
               <div className="text-gray-500 text-xs">Penalty (Sched.)</div>
               <div className="font-semibold">{fmtMoney(totals.scheduledPenalty, currency)}</div>
             </div>
@@ -707,10 +709,6 @@ export default function LoanSchedulePage() {
               <div className="font-semibold">{fmtMoney(totals.scheduledTotal, currency)}</div>
             </div>
             <div>
-              <div className="text-gray-500 text-xs">Total Paid</div>
-              <div className="font-semibold">{fmtMoney(totals.totalPaid, currency)}</div>
-            </div>
-            <div>
               <div className="text-gray-500 text-xs">Paid Principal</div>
               <div className="font-semibold">{fmtMoney(totals.paidPrincipal, currency)}</div>
             </div>
@@ -719,17 +717,22 @@ export default function LoanSchedulePage() {
               <div className="font-semibold">{fmtMoney(totals.paidInterest, currency)}</div>
             </div>
             <div>
-              <div className="text-gray-500 text-xs">Paid Penalties</div>
-              <div className="font-semibold">{fmtMoney(totals.paidPenalty, currency)}</div>
-            </div>
-            <div>
-              <div className="text-gray-500 text-xs">Paid Fees</div>
-              <div className="font-semibold">{fmtMoney(totals.paidFees, currency)}</div>
+              <div className="text-gray-500 text-xs">Total Paid</div>
+              <div className="font-semibold">{fmtMoney(totals.totalPaid, currency)}</div>
             </div>
             <div>
               <div className="text-gray-500 text-xs">Outstanding</div>
               <div className="font-semibold">{fmtMoney(totals.outstandingTotal, currency)}</div>
             </div>
+          </div>
+
+          {/* Installment calendar (monthly) */}
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {schedule.map((r, i) => (
+              <span key={i} className="px-2 py-1 rounded-full border bg-white">
+                #{r.installment ?? r.period ?? i + 1}: {asDate(r.dueDate || r.date)}
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -744,22 +747,19 @@ export default function LoanSchedulePage() {
                 <th className="p-2 border">Due Date</th>
                 <th className="p-2 border">Principal</th>
                 <th className="p-2 border">Interest</th>
+                <th className="p-2 border">Total P&I</th>
                 <th className="p-2 border">Penalty</th>
                 <th className="p-2 border">Fees</th>
-                <th className="p-2 border">Total</th>
-                <th className="p-2 border">Balance</th>
+                <th className="p-2 border">Paid Principal</th>
+                <th className="p-2 border">Paid Interest</th>
+                <th className="p-2 border">Outstanding</th>
                 <th className="p-2 border">Status</th>
               </tr>
             </thead>
             <tbody className="text-sm">
               {schedule.map((r, i) => {
                 const idx = r.installment ?? r.period ?? i + 1;
-                const total =
-                  r.total ??
-                  (Number(r.principal || 0) +
-                    Number(r.interest || 0) +
-                    Number(r.penalty || 0) +
-                    Number(r.fee ?? r.fees ?? 0));
+                const pi = Number(r.principal || 0) + Number(r.interest || 0);
                 const status = r.paid || r.settled ? 'Settled' : 'Pending';
                 return (
                   <tr key={i} className={i % 2 ? 'bg-gray-50' : ''}>
@@ -767,9 +767,15 @@ export default function LoanSchedulePage() {
                     <td className="border px-2 py-1 whitespace-nowrap">{asDate(r.dueDate || r.date)}</td>
                     <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(r.principal, currency)}</td>
                     <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(r.interest, currency)}</td>
+                    <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(pi, currency)}</td>
                     <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(r.penalty || 0, currency)}</td>
                     <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(r.fee ?? r.fees ?? 0, currency)}</td>
-                    <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(total, currency)}</td>
+                    <td className="border px-2 py-1 whitespace-nowrap">
+                      {r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : '—'}
+                    </td>
+                    <td className="border px-2 py-1 whitespace-nowrap">
+                      {r.paidInterest != null ? fmtMoney(r.paidInterest, currency) : '—'}
+                    </td>
                     <td className="border px-2 py-1 whitespace-nowrap">
                       {r.balance != null ? fmtMoney(r.balance, currency) : '—'}
                     </td>
