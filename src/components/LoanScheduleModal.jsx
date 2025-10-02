@@ -5,40 +5,80 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
-const LoanScheduleModal = ({ loan, schedule, onClose }) => {
-  if (!loan || !schedule || !Array.isArray(schedule)) return null;
+import {
+  SCHEDULE_COLUMNS,
+  rowsForPDF,
+  rowsForExcel,
+  computeScheduleTotals,
+  fmtMoney,
+} from '../utils/loanSchedule';
+import ScheduleTable from './ScheduleTable';
 
-  // 👉 Export to PDF
+const LoanScheduleModal = ({ loan, schedule, onClose }) => {
+  if (!loan || !Array.isArray(schedule)) return null;
+  const currency = loan?.currency || 'TZS';
+  const totals = computeScheduleTotals(schedule, []); // we don't have repayments here; page using this already shows/fetches them elsewhere
+
+  /* PDF export (aligned columns everywhere) */
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    doc.text(`Loan Schedule for TZS ${Number(loan.amount || 0).toLocaleString()}`, 14, 14);
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(16);
+    doc.text('Loan Repayment Schedule', 40, 40);
+
+    doc.setFontSize(10);
+    const meta = [
+      `Loan ID: ${loan.id}`,
+      `Borrower: ${loan?.Borrower?.name || loan?.borrowerName || ''}`,
+      `Amount: ${fmtMoney(loan.amount, currency)}`,
+      `Currency: ${currency}`,
+      `Generated: ${new Date().toLocaleString()}`,
+    ];
+    meta.forEach((m, i) => doc.text(m, 40, 60 + i * 14));
+
     autoTable(doc, {
-      startY: 20,
-      head: [['#', 'Due Date', 'Principal', 'Interest', 'Total', 'Balance']],
-      body: schedule.map((row) => [
-        row.installment,
-        row.dueDate,
-        `TZS ${parseFloat(row.principal).toLocaleString()}`,
-        `TZS ${parseFloat(row.interest).toLocaleString()}`,
-        `TZS ${parseFloat(row.total).toLocaleString()}`,
-        `TZS ${parseFloat(row.balance).toLocaleString()}`,
-      ]),
+      head: [SCHEDULE_COLUMNS],
+      body: rowsForPDF(schedule, currency),
+      startY: 140,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [243, 244, 246], textColor: 20 },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      margin: { left: 40, right: 40 },
+      didDrawPage: () => {
+        const str = `Page ${doc.internal.getNumberOfPages()}`;
+        doc.setFontSize(9);
+        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, { align: 'right' });
+      },
     });
+
+    let y = (doc.lastAutoTable?.finalY || 140) + 18;
+    doc.setFontSize(11);
+    doc.text('Summary', 40, y);
+    y += 10; doc.setFontSize(10);
+
+    const lines = [
+      ['Principal (Sched.)', fmtMoney(totals.scheduledPrincipal, currency)],
+      ['Interest (Sched.)',  fmtMoney(totals.scheduledInterest,  currency)],
+      ['Penalty (Sched.)',   fmtMoney(totals.scheduledPenalty,   currency)],
+      ['Fees (Sched.)',      fmtMoney(totals.scheduledFees,      currency)],
+      ['Total Payable',      fmtMoney(totals.scheduledTotal,     currency)],
+      ['Paid Principal',     fmtMoney(totals.paidPrincipal,      currency)],
+      ['Paid Interest',      fmtMoney(totals.paidInterest,       currency)],
+      ['Total Paid',         fmtMoney(totals.totalPaid,          currency)],
+      ['Outstanding',        fmtMoney(totals.outstandingTotal,   currency)],
+    ];
+    lines.forEach((row, i) => {
+      doc.text(row[0], 40, y + 16 + i * 14);
+      doc.text(row[1], pageWidth - 40, y + 16 + i * 14, { align: 'right' });
+    });
+
     doc.save(`LoanSchedule_Loan${loan.id}.pdf`);
   };
 
-  // 👉 Export to Excel
+  /* Excel export (raw numbers + ISO dates) */
   const exportToExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(
-      schedule.map((row) => ({
-        Installment: row.installment,
-        DueDate: row.dueDate,
-        Principal: row.principal,
-        Interest: row.interest,
-        Total: row.total,
-        Balance: row.balance,
-      }))
-    );
+    const worksheet = XLSX.utils.json_to_sheet(rowsForExcel(schedule));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Schedule');
     const excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
@@ -47,61 +87,29 @@ const LoanScheduleModal = ({ loan, schedule, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-900 p-6 rounded shadow-lg w-full max-w-3xl overflow-y-auto max-h-[85vh] border border-slate-200 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 p-6 rounded shadow-lg w-full max-w-4xl overflow-y-auto max-h-[85vh] border border-slate-200 dark:border-slate-800">
         <h2 className="text-xl font-bold mb-4 dark:text-slate-100">
-          Repayment Schedule for TZS {Number(loan.amount || 0).toLocaleString()}
+          Repayment Schedule — {fmtMoney(loan.amount, currency)}
         </h2>
 
-        {/* Export Buttons */}
         <div className="flex gap-3 mb-4">
-          <button
-            onClick={exportToPDF}
-            className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-          >
-            Export PDF
-          </button>
-          <button
-            onClick={exportToExcel}
-            className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-          >
-            Export Excel
-          </button>
+          <button onClick={exportToPDF} className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">Export PDF</button>
+          <button onClick={exportToExcel} className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Export Excel</button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border dark:border-slate-800">
-            <thead className="bg-gray-100 dark:bg-slate-800">
-              <tr>
-                <th className="border px-2 py-1">Installment</th>
-                <th className="border px-2 py-1">Due Date</th>
-                <th className="border px-2 py-1">Principal</th>
-                <th className="border px-2 py-1">Interest</th>
-                <th className="border px-2 py-1">Total</th>
-                <th className="border px-2 py-1">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {schedule.map((row, i) => (
-                <tr key={i}>
-                  <td className="border px-2 text-center">{row.installment}</td>
-                  <td className="border px-2">{row.dueDate}</td>
-                  <td className="border px-2">TZS {parseFloat(row.principal).toLocaleString()}</td>
-                  <td className="border px-2">TZS {parseFloat(row.interest).toLocaleString()}</td>
-                  <td className="border px-2 font-semibold">TZS {parseFloat(row.total).toLocaleString()}</td>
-                  <td className="border px-2">TZS {parseFloat(row.balance).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <ScheduleTable schedule={schedule} currency={currency} />
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm mt-4">
+          <div className="px-3 py-2 rounded border bg-white">Principal (Sched.): <b>{fmtMoney(totals.scheduledPrincipal, currency)}</b></div>
+          <div className="px-3 py-2 rounded border bg-white">Interest (Sched.): <b>{fmtMoney(totals.scheduledInterest, currency)}</b></div>
+          <div className="px-3 py-2 rounded border bg-white">Penalty (Sched.): <b>{fmtMoney(totals.scheduledPenalty, currency)}</b></div>
+          <div className="px-3 py-2 rounded border bg-white">Fees (Sched.): <b>{fmtMoney(totals.scheduledFees, currency)}</b></div>
+          <div className="px-3 py-2 rounded border bg-white">Total Payable: <b>{fmtMoney(totals.scheduledTotal, currency)}</b></div>
+          <div className="px-3 py-2 rounded border bg-white">Outstanding: <b>{fmtMoney(totals.outstandingTotal, currency)}</b></div>
         </div>
 
         <div className="text-right mt-4">
-          <button
-            onClick={onClose}
-            className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700"
-          >
-            Close
-          </button>
+          <button onClick={onClose} className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700">Close</button>
         </div>
       </div>
     </div>

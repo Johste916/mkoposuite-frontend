@@ -1,29 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api";
+import ScheduleTable from "../components/ScheduleTable";
+import {
+  fmtMoney,
+  asDate,
+  asDateTime,
+  asISO,
+  normalizeSchedule,
+  computeScheduleTotals,
+  downloadScheduleCSV,
+  downloadSchedulePDF,
+} from "../utils/loanSchedule";
 
-/* ---------- helpers ---------- */
-const fmtTZS = (n, currency = "TZS") =>
-  `\u200e${currency} ${Number(n || 0).toLocaleString()}`;
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "N/A");
-const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "");
-const fmtDateISO = (d) => {
-  if (!d) return "";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return String(d).slice(0, 10);
-  return dt.toISOString().slice(0, 10);
-};
-
-/* Normalize schedule payloads from different API shapes */
-function normalizeSchedule(payload) {
-  if (!payload) return null;
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload.schedule)) return payload.schedule;
-  if (Array.isArray(payload.rows)) return payload.rows;
-  if (Array.isArray(payload.data)) return payload.data;
-  return null;
-}
-
+/* ---------- status & UI helpers ---------- */
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-800 ring-yellow-200",
   approved: "bg-blue-100 text-blue-800 ring-blue-200",
@@ -63,40 +53,14 @@ function deriveStageFromStatus(status) {
   return "";
 }
 
-/* ------- paid breakdown allocator (fallback if server doesn't provide) ----- */
-function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
-  let remain = Number(totalPaid || 0);
-  let paidP = 0, paidI = 0, paidPN = 0, paidF = 0;
-
-  for (const row of schedule) {
-    const fee = Number(row.fee ?? row.fees ?? 0);
-    const pen = Number(row.penalty ?? 0);
-    const int = Number(row.interest ?? 0);
-    const pri = Number(row.principal ?? 0);
-
-    if (remain <= 0) break;
-    const f = Math.min(remain, fee);
-    paidF += f; remain -= f;
-
-    if (remain <= 0) break;
-    const p = Math.min(remain, pen);
-    paidPN += p; remain -= p;
-
-    if (remain <= 0) break;
-    const i = Math.min(remain, int);
-    paidI += i; remain -= i;
-
-    if (remain <= 0) break;
-    const pr = Math.min(remain, pri);
-    paidP += pr; remain -= pr;
-  }
-  return { paidPrincipal: paidP, paidInterest: paidI, paidPenalty: paidPN, paidFees: paidF };
-}
-
 /* -------------- light UI helpers (no external deps) -------------- */
 const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
   <div className="bg-white border-2 border-slate-300 rounded-2xl shadow-md">
-    <div className={`px-6 ${dense ? "py-3" : "py-4"} border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between`}>
+    <div
+      className={`px-6 ${
+        dense ? "py-3" : "py-4"
+      } border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between`}
+    >
       <div>
         {title && <h3 className="text-lg md:text-xl font-semibold tracking-tight">{title}</h3>}
         {subtitle && <p className="text-xs text-gray-600 mt-0.5">{subtitle}</p>}
@@ -345,7 +309,7 @@ export default function LoanDetails() {
       await api.patch(`/loans/${id}`, { amount: Number(suggestedAmount) });
       if (reviewComment.trim())
         await postCommentInline(
-          `Suggested amount: ${fmtTZS(suggestedAmount, currency)} — ${reviewComment.trim()}`
+          `Suggested amount: ${fmtMoney(suggestedAmount, currency)} — ${reviewComment.trim()}`
         );
       await loadLoan();
       alert("Suggestion saved.");
@@ -359,12 +323,12 @@ export default function LoanDetails() {
 
   // Close loan (legacy)
   const closeLoan = async () => {
-    const outstanding = scheduledOutstanding; // use computed outstanding
-    if (outstanding > 0 && !window.confirm("Outstanding > 0. Close anyway?")) return;
+    const remaining = Number(outstanding || 0);
+    if (remaining > 0 && !window.confirm("Outstanding > 0. Close anyway?")) return;
     try {
       await api.patch(`/loans/${id}/status`, {
         status: "closed",
-        override: outstanding > 0,
+        override: remaining > 0,
       });
       await loadLoan();
       alert("Loan closed.");
@@ -400,7 +364,9 @@ export default function LoanDetails() {
       if (loan?.status && !["active", "closed"].includes(String(loan.status).toLowerCase())) {
         try {
           await api.patch(`/loans/${id}/status`, { status: "active" });
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
 
       await loadLoan();
@@ -429,7 +395,7 @@ export default function LoanDetails() {
       amount: loan?.amount ?? "",
       interestRate: loan?.interestRate ?? "",
       termMonths: loan?.termMonths ?? loan?.durationMonths ?? "",
-      startDate: fmtDateISO(loan?.startDate || loan?.releaseDate),
+      startDate: asISO(loan?.startDate || loan?.releaseDate),
     });
     setOpenEdit(true);
   };
@@ -473,7 +439,7 @@ export default function LoanDetails() {
   const openRescheduleModal = () => {
     setRescheduleForm({
       termMonths: loan?.termMonths ?? "",
-      startDate: fmtDateISO(loan?.startDate || loan?.releaseDate),
+      startDate: asISO(loan?.startDate || loan?.releaseDate),
       previewOnly: false,
     });
     setOpenReschedule(true);
@@ -507,7 +473,8 @@ export default function LoanDetails() {
   };
 
   const reissueLoan = async () => {
-    if (!window.confirm("Reissue creates a new pending loan cloned from this one. Continue?")) return;
+    if (!window.confirm("Reissue creates a new pending loan cloned from this one. Continue?"))
+      return;
     try {
       const { data } = await api.post(`/loans/${id}/reissue`);
       const newId = data?.loan?.id || data?.id;
@@ -520,56 +487,16 @@ export default function LoanDetails() {
   };
 
   /* ---------- quick stats & aggregates ---------- */
-  const scheduledAgg = useMemo(() => {
-    const arr = Array.isArray(schedule) ? schedule : [];
-    const sum = (k) => arr.reduce((a, b) => a + Number(b?.[k] || 0), 0);
-    const principal = sum("principal");
-    const interest  = sum("interest");
-    const penalty   = sum("penalty");
-    const fees      = sum("fee") + sum("fees");
-    const total     = sum("total") || principal + interest + penalty + fees;
-
-    const totalPaid = repayments.reduce((a, b) => a + Number(b.amount || 0), 0);
-
-    const paidPrincipalExplicit = sum("paidPrincipal") || 0;
-    const paidInterestExplicit  = sum("paidInterest")  || 0;
-    const paidPenaltyExplicit   = sum("paidPenalty")   || 0;
-    const paidFeesExplicit      = sum("paidFees") + sum("paidFee") || 0;
-    const explicitSum = paidPrincipalExplicit + paidInterestExplicit + paidPenaltyExplicit + paidFeesExplicit;
-
-    const breakdown = explicitSum > 0
-      ? {
-          paidPrincipal: paidPrincipalExplicit,
-          paidInterest:  paidInterestExplicit,
-          paidPenalty:   paidPenaltyExplicit,
-          paidFees:      paidFeesExplicit,
-        }
-      : allocatePaidAcrossSchedule(arr, totalPaid);
-
-    const outstanding = Math.max(total - totalPaid, 0);
-
-    const next =
-      arr.find(r => (r.paid || r.settled) ? false :
-                    (Number(r.balance ?? (Number(r.total||0))) > 0)) || null;
-
-    return {
-      principal, interest, penalty, fees, total, totalPaid, outstanding,
-      ...breakdown,
-      nextDue: next ? {
-        idx: next.installment ?? next.period ?? (arr.indexOf(next) + 1),
-        date: next.dueDate || next.date || null,
-        amount: Number(next.total ?? 0),
-      } : null,
-    };
-  }, [schedule, repayments]);
+  const totals = useMemo(
+    () => computeScheduleTotals(schedule || [], repayments || []),
+    [schedule, repayments]
+  );
 
   // Prefer computed outstanding from schedule/repayments to avoid misleading backend default 0s
-  const scheduledOutstanding = scheduledAgg.outstanding ?? null;
-  const outstanding = (loan?.status === "closed")
-    ? 0
-    : (scheduledOutstanding ?? (loan?.outstanding ?? null));
+  const outstanding =
+    loan?.status === "closed" ? 0 : totals.outstanding ?? loan?.outstanding ?? null;
 
-  const nextDue = scheduledAgg.nextDue;
+  const nextDue = totals.nextDue;
 
   const repayTotals = useMemo(() => {
     const count = repayments.length || 0;
@@ -607,14 +534,17 @@ export default function LoanDetails() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
           <div className="col-span-2">
             <Label>Borrower</Label>
-            <Link className={`${actionLink} text-lg md:text-xl`} to={`/borrowers/${loan.borrowerId}`}>
+            <Link
+              className={`${actionLink} text-lg md:text-xl`}
+              to={`/borrowers/${loan.borrowerId}`}
+            >
               {loan.Borrower?.name || loan.borrowerName || "N/A"} <span>›</span>
             </Link>
           </div>
 
           <div>
             <Label>Amount</Label>
-            <div className="text-2xl font-semibold">{fmtTZS(loan.amount, currency)}</div>
+            <div className="text-2xl font-semibold">{fmtMoney(loan.amount, currency)}</div>
           </div>
 
           <div>
@@ -632,13 +562,13 @@ export default function LoanDetails() {
 
           <div>
             <Label>Start / Release</Label>
-            <div className="text-base">{fmtDate(loan.startDate || loan.releaseDate)}</div>
+            <div className="text-base">{asDate(loan.startDate || loan.releaseDate)}</div>
           </div>
 
           <div>
             <Label>Outstanding</Label>
             <div className="text-2xl font-semibold">
-              {outstanding == null ? "—" : fmtTZS(outstanding, currency)}
+              {outstanding == null ? "—" : fmtMoney(outstanding, currency)}
             </div>
           </div>
 
@@ -647,8 +577,8 @@ export default function LoanDetails() {
             <div className="text-base">
               {nextDue ? (
                 <>
-                  {fmtDate(nextDue.date)} ·{" "}
-                  <span className="font-medium">{fmtTZS(nextDue.amount, currency)}</span>
+                  {asDate(nextDue.date)} ·{" "}
+                  <span className="font-medium">{fmtMoney(nextDue.amount, currency)}</span>
                 </>
               ) : (
                 "—"
@@ -667,9 +597,9 @@ export default function LoanDetails() {
                 <div className="text-gray-600 text-sm">
                   Defaults: {product.interestMethod} @{" "}
                   {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
-                  {fmtTZS(product.minPrincipal, currency)} –{" "}
-                  {fmtTZS(product.maxPrincipal, currency)},{" "}
-                  {product.minTermMonths}-{product.maxTermMonths} months
+                  {fmtMoney(product.minPrincipal, currency)} –{" "}
+                  {fmtMoney(product.maxPrincipal, currency)}, {product.minTermMonths}-
+                  {product.maxTermMonths} months
                 </div>
               </div>
             </div>
@@ -679,16 +609,16 @@ export default function LoanDetails() {
         {/* At a glance */}
         <div className="mt-6 grid sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
           {[
-            ["Paid Principal", scheduledAgg.paidPrincipal],
-            ["Paid Interest", scheduledAgg.paidInterest],
-            ["Paid Penalties", scheduledAgg.paidPenalty],
-            ["Paid Fees", scheduledAgg.paidFees],
-            ["Total Paid", scheduledAgg.totalPaid],
-            ["Total Scheduled", scheduledAgg.total],
+            ["Paid Principal", totals.paidPrincipal],
+            ["Paid Interest", totals.paidInterest],
+            ["Paid Penalties", totals.paidPenalty],
+            ["Paid Fees", totals.paidFees],
+            ["Total Paid", totals.totalPaid],
+            ["Total Scheduled", totals.scheduledTotal],
           ].map(([label, val]) => (
             <div key={label} className="rounded-xl border-2 border-slate-200 p-3">
               <div className="text-gray-500 text-[12px]">{label}</div>
-              <div className="font-semibold text-base">{fmtTZS(val, currency)}</div>
+              <div className="font-semibold text-base">{fmtMoney(val, currency)}</div>
             </div>
           ))}
         </div>
@@ -701,8 +631,8 @@ export default function LoanDetails() {
             <>
               <h3 className="text-lg font-semibold">Changes Requested</h3>
               <p className="text-sm text-gray-600">
-                Update the application and attach missing documents, then <strong>Resubmit</strong>.
-                Add a short note if helpful.
+                Update the application and attach missing documents, then{" "}
+                <strong>Resubmit</strong>. Add a short note if helpful.
               </p>
               <label className="block text-xs text-gray-600">Comment (optional)</label>
               <textarea
@@ -821,47 +751,65 @@ export default function LoanDetails() {
 
       {/* QUICK ACTIONS */}
       <div className="flex flex-wrap gap-2 md:gap-3">
-        <Link to={`/loans`} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
+        <Link
+          to={`/loans`}
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+        >
           Back to Loans
         </Link>
 
-        <button onClick={() => setOpenSchedule(true)} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
+        <button
+          onClick={() => setOpenSchedule(true)}
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+        >
           View Schedule
         </button>
 
-        <a
-          href={`/api/loans/${id}/schedule/export.csv`}
+        <button
+          onClick={() => downloadScheduleCSV({ loan, schedule: schedule || [], currency })}
           className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
-          target="_blank" rel="noreferrer"
+          disabled={!Array.isArray(schedule) || !schedule.length}
         >
           Export CSV
-        </a>
-        <a
-          href={`/api/loans/${id}/schedule/export.pdf`}
+        </button>
+        <button
+          onClick={() => downloadSchedulePDF({ loan, schedule: schedule || [], currency })}
           className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
-          target="_blank" rel="noreferrer"
+          disabled={!Array.isArray(schedule) || !schedule.length}
         >
           Export PDF
-        </a>
+        </button>
 
         {canPostRepayment && (
-          <button onClick={() => setOpenRepay(true)} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
+          <button
+            onClick={() => setOpenRepay(true)}
+            className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+          >
             Post Repayment
           </button>
         )}
 
         {canEdit && (
           <>
-            <button onClick={openEditModal} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
+            <button
+              onClick={openEditModal}
+              className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+            >
               Edit Loan
             </button>
-            <button onClick={openRescheduleModal} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
+            <button
+              onClick={openRescheduleModal}
+              className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+            >
               Reschedule
             </button>
           </>
         )}
 
-        <button onClick={reissueLoan} className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50">
+        <button
+          onClick={reissueLoan}
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+        >
           Reissue
         </button>
 
@@ -890,7 +838,7 @@ export default function LoanDetails() {
         right={
           <div className="text-xs text-gray-500">
             {repayTotals.count} record{repayTotals.count === 1 ? "" : "s"} · Total{" "}
-            <span className="font-semibold">{fmtTZS(repayTotals.sum, currency)}</span>
+            <span className="font-semibold">{fmtMoney(repayTotals.sum, currency)}</span>
           </div>
         }
       >
@@ -914,8 +862,10 @@ export default function LoanDetails() {
                 {repayments.map((r, i) => (
                   <tr key={r.id || i} className="hover:bg-gray-50">
                     <td className="px-3 py-2 whitespace-nowrap">{i + 1}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{fmtDate(r.date)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(r.amount, currency)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{asDate(r.date)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">
+                      {fmtMoney(r.amount, currency)}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 ring-1 ring-slate-200">
                         {r.method || "—"}
@@ -927,9 +877,14 @@ export default function LoanDetails() {
               </tbody>
               <tfoot>
                 <tr className="bg-slate-50">
-                  <td className="px-3 py-3 border-t-2 border-slate-200 text-sm font-medium" colSpan={2}>Total</td>
+                  <td
+                    className="px-3 py-3 border-t-2 border-slate-200 text-sm font-medium"
+                    colSpan={2}
+                  >
+                    Total
+                  </td>
                   <td className="px-3 py-3 border-t-2 border-slate-200 text-right text-base font-semibold">
-                    {fmtTZS(repayTotals.sum, currency)}
+                    {fmtMoney(repayTotals.sum, currency)}
                   </td>
                   <td className="px-3 py-3 border-t-2 border-slate-200" colSpan={2}></td>
                 </tr>
@@ -955,7 +910,7 @@ export default function LoanDetails() {
                 <div className="flex-1 border-b pb-2">
                   <div className="flex justify-between text-xs text-gray-500">
                     <span className="font-medium text-gray-700">{c.author?.name || "User"}</span>
-                    <span>{fmtDateTime(c.createdAt)}</span>
+                    <span>{asDateTime(c.createdAt)}</span>
                   </div>
                   <p className="text-sm mt-0.5">{c.content}</p>
                 </div>
@@ -986,7 +941,9 @@ export default function LoanDetails() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xl font-semibold">Post Repayment</h4>
-              <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+              <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">
+                ✕
+              </button>
             </div>
             <div className="space-y-3">
               <div>
@@ -1033,7 +990,12 @@ export default function LoanDetails() {
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenRepay(false)} className="px-4 py-2 rounded-lg border-2 border-slate-300">Cancel</button>
+              <button
+                onClick={() => setOpenRepay(false)}
+                className="px-4 py-2 rounded-lg border-2 border-slate-300"
+              >
+                Cancel
+              </button>
               <button
                 onClick={handlePostRepayment}
                 disabled={postLoading}
@@ -1047,125 +1009,60 @@ export default function LoanDetails() {
       )}
 
       {/* SCHEDULE MODAL */}
-      {/* SCHEDULE MODAL */}
-{openSchedule && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-xl font-semibold">Repayment Schedule</h4>
-        <button onClick={() => setOpenSchedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
-      </div>
-
-      {loadingSchedule ? (
-        <p>Loading schedule…</p>
-      ) : !Array.isArray(schedule) || schedule.length === 0 ? (
-        <p>No schedule available.</p>
-      ) : (
-        <>
-          {/* Disbursed/Start & Next due */}
-          <div className="mb-3 text-sm text-gray-600 space-y-1">
-            <div>
-              <b>Disbursed:</b> {fmtDate(loan?.releaseDate || loan?.startDate) || "—"}
+      {openSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xl font-semibold">Repayment Schedule</h4>
+              <button
+                onClick={() => setOpenSchedule(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
             </div>
-            <div>
-              Next installment:&nbsp;
-              {nextDue ? (
-                <>
-                  <b>#{nextDue.idx}</b> on {fmtDate(nextDue.date)} — <b>{fmtTZS(nextDue.amount, currency)}</b>
-                </>
-              ) : "—"}
+
+            {loadingSchedule ? (
+              <p>Loading schedule…</p>
+            ) : !Array.isArray(schedule) || schedule.length === 0 ? (
+              <p>No schedule available.</p>
+            ) : (
+              <>
+                {/* Disbursed/Start & Next due */}
+                <div className="mb-3 text-sm text-gray-600 space-y-1">
+                  <div>
+                    <b>Disbursed:</b> {asDate(loan?.releaseDate || loan?.startDate) || "—"}
+                  </div>
+                  <div>
+                    Next installment:&nbsp;
+                    {nextDue ? (
+                      <>
+                        <b>#{nextDue.idx}</b> on {asDate(nextDue.date)} —{" "}
+                        <b>{fmtMoney(nextDue.amount, currency)}</b>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+                </div>
+
+                <div className="max-h-[70vh] overflow-auto">
+                  <ScheduleTable schedule={schedule || []} currency={currency} />
+                </div>
+              </>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setOpenSchedule(false)}
+                className="px-4 py-2 rounded-lg border-2 border-slate-300"
+              >
+                Close
+              </button>
             </div>
           </div>
-
-          <div className="max-h-[70vh] overflow-auto">
-            <table className="min-w-full text-base">
-              <thead className="bg-slate-100 sticky top-0 z-10">
-                <tr className="text-left">
-                  <th className="px-3 py-3 border-b-2 border-slate-200">#</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200">Due Date</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Principal</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Interest</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Total P&amp;I</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Penalty</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Fees</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Paid Principal</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Paid Interest</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Outstanding</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {schedule.map((row, idx) => {
-                  const principal = Number(row.principal || 0);
-                  const interest  = Number(row.interest || 0);
-                  const penalty   = Number(row.penalty  || 0);
-                  const fees      = Number(row.fee ?? row.fees ?? 0);
-                  const piTotal   = principal + interest;
-
-                  // Prefer server-provided breakdowns if present
-                  const paidP = row.paidPrincipal != null ? Number(row.paidPrincipal) : null;
-                  const paidI = row.paidInterest  != null ? Number(row.paidInterest)  : null;
-
-                  // Outstanding fallback:
-                  // 1) use row.balance if available
-                  // 2) else compute from paid breakdown if present
-                  // 3) else show P&I+fees+penalty (total) when pending
-                  const rowTotal = (row.total != null)
-                    ? Number(row.total)
-                    : principal + interest + penalty + fees;
-
-                  const settled = !!(row.paid || row.settled);
-
-                  const outstanding = (row.balance != null)
-                    ? Number(row.balance)
-                    : (paidP != null && paidI != null)
-                      ? Math.max(rowTotal - (paidP + paidI + Number(row.paidPenalty || 0) + Number(row.paidFees || row.paidFee || 0)), 0)
-                      : (settled ? 0 : rowTotal);
-
-                  return (
-                    <tr key={row.id || idx} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 whitespace-nowrap">{(row.installment ?? row.period ?? (idx + 1))}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{fmtDate(row.dueDate || row.date)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(principal, currency)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(interest, currency)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(piTotal, currency)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(penalty, currency)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(fees, currency)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">
-                        {paidP == null ? "—" : fmtTZS(paidP, currency)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">
-                        {paidI == null ? "—" : fmtTZS(paidI, currency)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">{fmtTZS(outstanding, currency)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {settled ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
-                            Settled
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-amber-200">
-                            Pending
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+        </div>
       )}
-
-      <div className="mt-4 flex justify-end">
-        <button onClick={() => setOpenSchedule(false)} className="px-4 py-2 rounded-lg border-2 border-slate-300">
-          Close
-        </button>
-      </div>
-    </div>
-  </div>
-)}
 
       {/* EDIT MODAL */}
       {openEdit && (
@@ -1173,7 +1070,9 @@ export default function LoanDetails() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xl font-semibold">Edit Loan</h4>
-              <button onClick={() => setOpenEdit(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+              <button onClick={() => setOpenEdit(false)} className="text-gray-500 hover:text-gray-700">
+                ✕
+              </button>
             </div>
             <div className="grid gap-3">
               <div>
@@ -1217,7 +1116,12 @@ export default function LoanDetails() {
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenEdit(false)} className="px-4 py-2 rounded-lg border-2 border-slate-300">Cancel</button>
+              <button
+                onClick={() => setOpenEdit(false)}
+                className="px-4 py-2 rounded-lg border-2 border-slate-300"
+              >
+                Cancel
+              </button>
               <button
                 onClick={saveEdit}
                 disabled={savingEdit}
@@ -1236,7 +1140,12 @@ export default function LoanDetails() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xl font-semibold">Reschedule Loan</h4>
-              <button onClick={() => setOpenReschedule(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+              <button
+                onClick={() => setOpenReschedule(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
             </div>
             <div className="grid gap-3">
               <div>
@@ -1244,7 +1153,9 @@ export default function LoanDetails() {
                 <input
                   type="number"
                   value={rescheduleForm.termMonths}
-                  onChange={(e) => setRescheduleForm((s) => ({ ...s, termMonths: e.target.value }))}
+                  onChange={(e) =>
+                    setRescheduleForm((s) => ({ ...s, termMonths: e.target.value }))
+                  }
                   className="border rounded-lg px-3 py-2 w-full"
                   min="1"
                 />
@@ -1254,7 +1165,9 @@ export default function LoanDetails() {
                 <input
                   type="date"
                   value={rescheduleForm.startDate}
-                  onChange={(e) => setRescheduleForm((s) => ({ ...s, startDate: e.target.value }))}
+                  onChange={(e) =>
+                    setRescheduleForm((s) => ({ ...s, startDate: e.target.value }))
+                  }
                   className="border rounded-lg px-3 py-2 w-full"
                 />
               </div>
@@ -1262,13 +1175,20 @@ export default function LoanDetails() {
                 <input
                   type="checkbox"
                   checked={rescheduleForm.previewOnly}
-                  onChange={(e) => setRescheduleForm((s) => ({ ...s, previewOnly: e.target.checked }))}
+                  onChange={(e) =>
+                    setRescheduleForm((s) => ({ ...s, previewOnly: e.target.checked }))
+                  }
                 />
                 Preview only (don’t save)
               </label>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenReschedule(false)} className="px-4 py-2 rounded-lg border-2 border-slate-300">Cancel</button>
+              <button
+                onClick={() => setOpenReschedule(false)}
+                className="px-4 py-2 rounded-lg border-2 border-slate-300"
+              >
+                Cancel
+              </button>
               <button
                 onClick={submitReschedule}
                 disabled={savingReschedule}

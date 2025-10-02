@@ -1,18 +1,38 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import api from '../../api';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
+import api from "../../api";
 
 /* ---------------- helpers ---------------- */
-const fmtMoney = (n, currency = 'TZS') =>
+const fmtMoney = (n, currency = "TZS") =>
   `\u200e${currency} ${Number(n || 0).toLocaleString()}`;
-const asDate = (d) => (d ? new Date(d).toLocaleDateString() : '—');
-const asISO = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+const asDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
+const asISO = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return String(d).slice(0, 10);
+  return dt.toISOString().slice(0, 10);
+};
 
-/** Soft-allocate a total paid amount across schedule rows (penalty → interest → principal).
- *  This is a safe fallback when backend doesn’t return explicit paid breakdowns.
+/* Normalize schedule payloads from different API shapes */
+function normalizeSchedule(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.schedule)) return payload.schedule;
+  if (Array.isArray(payload.rows)) return payload.rows;
+  if (Array.isArray(payload.data)) return payload.data;
+  return [];
+}
+
+/** Soft-allocate a total paid amount across schedule rows
+ *  (fees → penalty → interest → principal).
+ *  Fallback when backend doesn’t return explicit paid breakdowns.
  */
 function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
   let remain = Number(totalPaid || 0);
-  let paidP = 0, paidI = 0, paidPN = 0, paidF = 0;
+  let paidP = 0,
+    paidI = 0,
+    paidPN = 0,
+    paidF = 0;
 
   for (const row of schedule) {
     const fee = Number(row.fee ?? row.fees ?? 0);
@@ -22,35 +42,110 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
 
     if (remain <= 0) break;
     const f = Math.min(remain, fee);
-    paidF += f; remain -= f;
+    paidF += f;
+    remain -= f;
 
     if (remain <= 0) break;
     const p = Math.min(remain, pen);
-    paidPN += p; remain -= p;
+    paidPN += p;
+    remain -= p;
 
     if (remain <= 0) break;
     const i = Math.min(remain, int);
-    paidI += i; remain -= i;
+    paidI += i;
+    remain -= i;
 
     if (remain <= 0) break;
     const pr = Math.min(remain, pri);
-    paidP += pr; remain -= pr;
+    paidP += pr;
+    remain -= pr;
   }
-  return { paidPrincipal: paidP, paidInterest: paidI, paidPenalty: paidPN, paidFees: paidF };
+  return {
+    paidPrincipal: paidP,
+    paidInterest: paidI,
+    paidPenalty: paidPN,
+    paidFees: paidF,
+  };
+}
+
+/* Compute totals and next due using schedule + repayments */
+function computeTotals(schedule = [], repayments = []) {
+  const sum = (arr, k) => arr.reduce((a, b) => a + Number(b?.[k] || 0), 0);
+
+  const scheduledPrincipal = sum(schedule, "principal");
+  const scheduledInterest = sum(schedule, "interest");
+  const scheduledPenalty = sum(schedule, "penalty");
+  const scheduledFees = sum(schedule, "fee") + sum(schedule, "fees");
+
+  const scheduledTotal =
+    sum(schedule, "total") ||
+    scheduledPrincipal + scheduledInterest + scheduledPenalty + scheduledFees;
+
+  const totalPaid = repayments.reduce((a, b) => a + Number(b.amount || 0), 0);
+
+  // Prefer explicit paid breakdown fields if provided by backend:
+  const paidPrincipalExplicit = sum(schedule, "paidPrincipal") || 0;
+  const paidInterestExplicit = sum(schedule, "paidInterest") || 0;
+  const paidPenaltyExplicit = sum(schedule, "paidPenalty") || 0;
+  const paidFeesExplicit =
+    (sum(schedule, "paidFees") || 0) + (sum(schedule, "paidFee") || 0);
+  const explicitSum =
+    paidPrincipalExplicit +
+    paidInterestExplicit +
+    paidPenaltyExplicit +
+    paidFeesExplicit;
+
+  const breakdown =
+    explicitSum > 0
+      ? {
+          paidPrincipal: paidPrincipalExplicit,
+          paidInterest: paidInterestExplicit,
+          paidPenalty: paidPenaltyExplicit,
+          paidFees: paidFeesExplicit,
+        }
+      : allocatePaidAcrossSchedule(schedule, totalPaid);
+
+  const outstandingTotal = Math.max(scheduledTotal - totalPaid, 0);
+
+  // Next due: first not fully settled row (if flags available) else row with positive balance/total
+  const next =
+    schedule.find((r) =>
+      r.paid || r.settled
+        ? false
+        : Number(r.balance ?? Number(r.total || 0)) > 0
+    ) || null;
+
+  return {
+    scheduledPrincipal,
+    scheduledInterest,
+    scheduledPenalty,
+    scheduledFees,
+    scheduledTotal,
+    totalPaid,
+    outstandingTotal,
+    nextDue: next
+      ? {
+          idx: next.installment ?? next.period ?? (schedule.indexOf(next) + 1),
+          date: next.dueDate || next.date || null,
+          amount: Number(next.total ?? 0),
+        }
+      : null,
+    ...breakdown,
+  };
 }
 
 /** Try multiple endpoints to get company/org details */
 async function fetchCompanyDetails() {
   let company = {
-    name: 'MkopoSuite',
-    address: '',
-    phone: '',
-    email: '',
-    website: '',
-    logoUrl: '',
+    name: "MkopoSuite",
+    address: "",
+    phone: "",
+    email: "",
+    website: "",
+    logoUrl: "",
   };
   try {
-    const r = await api.get('/settings');
+    const r = await api.get("/settings");
     const s = r.data || {};
     company = {
       name: s.companyName || s.name || company.name,
@@ -63,7 +158,7 @@ async function fetchCompanyDetails() {
     return company;
   } catch {}
   try {
-    const r = await api.get('/account');
+    const r = await api.get("/account");
     const s = r.data?.settings || {};
     company = {
       name: s.companyName || s.name || company.name,
@@ -76,7 +171,7 @@ async function fetchCompanyDetails() {
     return company;
   } catch {}
   try {
-    const r = await api.get('/settings/sidebar');
+    const r = await api.get("/settings/sidebar");
     const app = r.data?.app || {};
     company.name = app.name || company.name;
     company.logoUrl = app.logoUrl || company.logoUrl;
@@ -87,38 +182,57 @@ async function fetchCompanyDetails() {
 /* Detect if due dates are monthly-ish (+/- a day) */
 function inferFrequency(schedule = []) {
   const dates = schedule
-    .map(r => new Date(r.dueDate || r.date))
-    .filter(d => !Number.isNaN(d.getTime()));
-  if (dates.length < 2) return '';
+    .map((r) => new Date(r.dueDate || r.date))
+    .filter((d) => !Number.isNaN(d.getTime()));
+  if (dates.length < 2) return "";
   let monthly = 0;
   for (let i = 1; i < dates.length; i++) {
-    const prev = dates[i-1], curr = dates[i];
-    const diffMonths = (curr.getFullYear() - prev.getFullYear()) * 12 + (curr.getMonth() - prev.getMonth());
+    const prev = dates[i - 1],
+      curr = dates[i];
+    const diffMonths =
+      (curr.getFullYear() - prev.getFullYear()) * 12 +
+      (curr.getMonth() - prev.getMonth());
     const sameDayish = Math.abs(curr.getDate() - prev.getDate()) <= 2;
     if (diffMonths === 1 && sameDayish) monthly++;
   }
-  return monthly >= Math.max(1, dates.length - 2) ? 'Monthly' : '';
+  return monthly >= Math.max(1, dates.length - 2) ? "Monthly" : "";
 }
 
 export default function LoanSchedulePage() {
-  const [loanId, setLoanId] = useState('');
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+
+  const [loanId, setLoanId] = useState("");
   const [loan, setLoan] = useState(null);
   const [schedule, setSchedule] = useState([]);
-  const [method, setMethod] = useState('');
-  const [currency, setCurrency] = useState('TZS');
+  const [method, setMethod] = useState("");
+  const [currency, setCurrency] = useState("TZS");
   const [repayments, setRepayments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [auto, setAuto] = useState(true);
   const [company, setCompany] = useState({
-    name: 'MkopoSuite',
-    address: '',
-    phone: '',
-    email: '',
-    website: '',
-    logoUrl: '',
+    name: "MkopoSuite",
+    address: "",
+    phone: "",
+    email: "",
+    website: "",
+    logoUrl: "",
   });
 
   const pollRef = useRef(null);
+
+  /* seed from route param or query string */
+  useEffect(() => {
+    const routeId = params.id ? String(params.id) : "";
+    const queryId = searchParams.get("id") || "";
+    const chosen = routeId || queryId || "";
+    if (chosen) {
+      setLoanId(chosen);
+      // Auto-load once when we get an id from route/query
+      fetchAll(chosen);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetchCompanyDetails().then(setCompany).catch(() => {});
@@ -129,18 +243,28 @@ export default function LoanSchedulePage() {
     if (!id) return;
     setLoading(true);
     try {
-      // schedule
-      const sch = await api.get(`/loans/${id}/schedule`);
-      const item = sch.data || {};
-      const schArr = Array.isArray(item) ? item : (item.schedule || []);
-      setSchedule(schArr);
-      setMethod(item.interestMethod || item.method || '');
-      if (item.currency) setCurrency(item.currency);
+      // Pull schedule + loan concurrently for speed
+      const [schRes, loanRes] = await Promise.all([
+        api.get(`/loans/${id}/schedule`),
+        api.get(`/loans/${id}`),
+      ]);
 
-      // loan
-      const lr = await api.get(`/loans/${id}`);
-      setLoan(lr.data || null);
-      if (lr.data?.currency) setCurrency(lr.data.currency);
+      const loanData = loanRes.data || null;
+      setLoan(loanData);
+
+      const normalized = normalizeSchedule(schRes.data);
+      setSchedule(normalized);
+
+      const methodFromSchedule =
+        schRes.data?.interestMethod || schRes.data?.method || "";
+      const methodFromLoan = loanData?.interestMethod || "";
+      setMethod(methodFromSchedule || methodFromLoan || "");
+
+      const ccyFromSchedule = schRes.data?.currency;
+      const ccyFromLoan = loanData?.currency;
+      if (ccyFromSchedule || ccyFromLoan) {
+        setCurrency(ccyFromSchedule || ccyFromLoan);
+      }
 
       // repayments (used for totals + status update)
       const rp = await api
@@ -150,21 +274,21 @@ export default function LoanSchedulePage() {
       setRepayments(rp);
 
       const hasPaid = (rp?.length || 0) > 0;
-      const status = (lr.data?.status || '').toLowerCase();
-      if (hasPaid && status && !['active', 'closed'].includes(status)) {
+      const status = (loanData?.status || "").toLowerCase();
+      if (hasPaid && status && !["active", "closed"].includes(status)) {
         try {
-          await api.patch(`/loans/${id}/status`, { status: 'active' });
+          await api.patch(`/loans/${id}/status`, { status: "active" });
           const lr2 = await api.get(`/loans/${id}`);
-          setLoan(lr2.data || lr.data || null);
+          setLoan(lr2.data || loanData || null);
         } catch {}
       }
 
-      window.dispatchEvent(new CustomEvent('loan:updated', { detail: { id } }));
+      window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id } }));
     } catch (e) {
       setSchedule([]);
       setRepayments([]);
       setLoan(null);
-      setMethod('');
+      setMethod("");
     } finally {
       setLoading(false);
     }
@@ -179,140 +303,113 @@ export default function LoanSchedulePage() {
   /* ----------- auto refresh & focus refresh ----------- */
   useEffect(() => {
     const onFocus = () => loanId && fetchAll(loanId.trim());
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [loanId]);
 
   useEffect(() => {
     if (!loanId || !auto) return;
-    pollRef.current && clearInterval(pollRef.current);
+    if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => fetchAll(loanId.trim()), 10000);
     return () => pollRef.current && clearInterval(pollRef.current);
   }, [loanId, auto]);
 
   /* ----------- computed totals (scheduled vs paid) ----------- */
-  const totals = useMemo(() => {
-    const sum = (arr, k) => arr.reduce((a, b) => a + Number(b?.[k] || 0), 0);
-    const scheduledPrincipal = sum(schedule, 'principal');
-    const scheduledInterest  = sum(schedule, 'interest');
-    const scheduledPenalty   = sum(schedule, 'penalty');
-    const scheduledFees      = sum(schedule, 'fee') + sum(schedule, 'fees');
-
-    const scheduledTotal = sum(schedule, 'total') ||
-      scheduledPrincipal + scheduledInterest + scheduledPenalty + scheduledFees;
-
-    const totalPaid = repayments.reduce((a, b) => a + Number(b.amount || 0), 0);
-
-    // Prefer explicit paid breakdown fields if provided by backend:
-    const paidPrincipalExplicit = sum(schedule, 'paidPrincipal') || 0;
-    const paidInterestExplicit  = sum(schedule, 'paidInterest')  || 0;
-    const paidPenaltyExplicit   = sum(schedule, 'paidPenalty')   || 0;
-    const paidFeesExplicit      = sum(schedule, 'paidFees') + sum(schedule, 'paidFee') || 0;
-    const explicitSum =
-      paidPrincipalExplicit + paidInterestExplicit + paidPenaltyExplicit + paidFeesExplicit;
-
-    const breakdown = explicitSum > 0
-      ? {
-          paidPrincipal: paidPrincipalExplicit,
-          paidInterest:  paidInterestExplicit,
-          paidPenalty:   paidPenaltyExplicit,
-          paidFees:      paidFeesExplicit,
-        }
-      : allocatePaidAcrossSchedule(schedule, totalPaid);
-
-    const outstandingTotal = Math.max(scheduledTotal - totalPaid, 0);
-
-    // Next due: first not fully settled row (if flags available) else row with positive balance
-    const next =
-      schedule.find(r => (r.paid || r.settled) ? false :
-                         (Number(r.balance ?? (Number(r.total||0))) > 0)) || null;
-
-    return {
-      scheduledPrincipal, scheduledInterest, scheduledPenalty, scheduledFees,
-      scheduledTotal,
-      totalPaid,
-      ...breakdown,
-      outstandingTotal,
-      nextDue: next ? {
-        idx: next.installment ?? next.period ?? (schedule.indexOf(next) + 1),
-        date: next.dueDate || next.date || null,
-        amount: Number(next.total ?? 0),
-      } : null,
-    };
-  }, [schedule, repayments]);
+  const totals = useMemo(
+    () => computeTotals(schedule || [], repayments || []),
+    [schedule, repayments]
+  );
 
   const frequency = useMemo(() => inferFrequency(schedule), [schedule]);
 
   /* ----------- export CSV ----------- */
   const downloadCSV = () => {
     if (!schedule.length) return;
-    const disbursed = loan?.releaseDate || loan?.startDate || '';
+    const disbursed = loan?.releaseDate || loan?.startDate || "";
 
     const meta = [
-      ['Company', company.name],
-      ['Address', company.address],
-      ['Phone', company.phone],
-      ['Email', company.email],
-      ['Website', company.website],
+      ["Company", company.name],
+      ["Address", company.address],
+      ["Phone", company.phone],
+      ["Email", company.email],
+      ["Website", company.website],
       [],
-      ['Loan ID', loan?.id ?? loanId],
-      ['Borrower', loan?.Borrower?.name || loan?.borrowerName || ''],
-      ['Status', loan?.status || ''],
-      ['Currency', currency],
-      ['Interest Method', method],
-      ['Disbursed', asISO(disbursed)],
-      ['Generated At', new Date().toLocaleString()],
+      ["Loan ID", loan?.id ?? loanId],
+      ["Borrower", loan?.Borrower?.name || loan?.borrowerName || ""],
+      ["Status", loan?.status || ""],
+      ["Currency", currency],
+      ["Interest Method", method],
+      ["Disbursed", asISO(disbursed)],
+      ["Generated At", new Date().toLocaleString()],
       [],
     ];
 
     const headers = [
-      'Installment',
-      'Due Date',
-      'Principal',
-      'Interest',
-      'Total P&I',
-      'Penalty',
-      'Fees',
-      'Paid Principal',
-      'Paid Interest',
-      'Outstanding',
-      'Settled',
+      "Installment",
+      "Due Date",
+      "Principal",
+      "Interest",
+      "Total P&I",
+      "Penalty",
+      "Fees",
+      "Paid Principal",
+      "Paid Interest",
+      "Outstanding",
+      "Settled",
     ];
     const rows = schedule.map((r, i) => {
       const pi = Number(r.principal || 0) + Number(r.interest || 0);
-      const outstanding = r.balance ?? '';
+      const outstanding =
+        r.balance != null
+          ? Number(r.balance)
+          : r.paid || r.settled
+          ? 0
+          : r.total != null
+          ? Number(r.total)
+          : pi + Number(r.penalty || 0) + Number(r.fee ?? r.fees ?? 0);
+
       return [
         r.installment ?? r.period ?? i + 1,
-        asISO(r.dueDate ?? r.date ?? ''),
+        asISO(r.dueDate ?? r.date ?? ""),
         Number(r.principal ?? 0),
         Number(r.interest ?? 0),
         Number(pi),
         Number(r.penalty ?? 0),
         Number(r.fee ?? r.fees ?? 0),
-        r.paidPrincipal != null ? Number(r.paidPrincipal) : '',
-        r.paidInterest  != null ? Number(r.paidInterest)  : '',
+        r.paidPrincipal != null ? Number(r.paidPrincipal) : "",
+        r.paidInterest != null ? Number(r.paidInterest) : "",
         outstanding,
-        r.paid || r.settled ? 'YES' : 'NO',
+        r.paid || r.settled ? "YES" : "NO",
       ];
     });
 
     const footer = [
       [],
-      ['Totals', '', totals.scheduledPrincipal, totals.scheduledInterest,
+      [
+        "Totals",
+        "",
+        totals.scheduledPrincipal,
+        totals.scheduledInterest,
         totals.scheduledPrincipal + totals.scheduledInterest,
-        totals.scheduledPenalty, totals.scheduledFees,
-        totals.paidPrincipal, totals.paidInterest, totals.outstandingTotal, ''],
-      ['Total Paid', '', '', '', '', '', '', '', '', totals.totalPaid, ''],
+        totals.scheduledPenalty,
+        totals.scheduledFees,
+        totals.paidPrincipal,
+        totals.paidInterest,
+        totals.outstandingTotal,
+        "",
+      ],
+      ["Total Paid", "", "", "", "", "", "", "", "", totals.totalPaid, ""],
     ];
 
     const all = [...meta, headers, ...rows, ...footer];
 
-    const csv =
-      all.map((r) => r.map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = all
+      .map((r) => r.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `loan_${loan?.id ?? loanId}_schedule.csv`;
     a.click();
@@ -325,13 +422,13 @@ export default function LoanSchedulePage() {
 
     let jsPDF, autoTable;
     try {
-      jsPDF = (await import('jspdf')).default;
-      autoTable = (await import('jspdf-autotable')).default;
+      jsPDF = (await import("jspdf")).default;
+      autoTable = (await import("jspdf-autotable")).default;
     } catch {
       return printFallback();
     }
 
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
 
     const leftX = 40;
@@ -341,67 +438,77 @@ export default function LoanSchedulePage() {
       try {
         const img = await fetch(company.logoUrl).then((r) => r.blob());
         const reader = new FileReader();
-        const p = new Promise((resolve) => { reader.onload = () => resolve(reader.result); });
+        const p = new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result);
+        });
         reader.readAsDataURL(img);
         const dataUrl = await p;
-        doc.addImage(dataUrl, 'PNG', leftX, y, 120, 40);
+        doc.addImage(dataUrl, "PNG", leftX, y, 120, 40);
       } catch {}
     }
 
     doc.setFontSize(14);
-    doc.text(company.name || 'Company', leftX, y + 65);
+    doc.text(company.name || "Company", leftX, y + 65);
     doc.setFontSize(10);
     const lines = [
       company.address,
-      [company.phone, company.email].filter(Boolean).join('  •  '),
+      [company.phone, company.email].filter(Boolean).join("  •  "),
       company.website,
     ].filter(Boolean);
     lines.forEach((line, i) => doc.text(String(line), leftX, y + 80 + i * 14));
 
     // Title + meta (right aligned)
     doc.setFontSize(16);
-    doc.text('Loan Repayment Schedule', pageWidth - 40, 50, { align: 'right' });
+    doc.text("Loan Repayment Schedule", pageWidth - 40, 50, { align: "right" });
     doc.setFontSize(10);
     const meta = [
       `Loan ID: ${loan?.id ?? loanId}`,
-      `Borrower: ${loan?.Borrower?.name || loan?.borrowerName || ''}`,
-      `Status: ${loan?.status || ''}`,
+      `Borrower: ${loan?.Borrower?.name || loan?.borrowerName || ""}`,
+      `Status: ${loan?.status || ""}`,
       `Currency: ${currency}`,
-      `Interest Method: ${method || ''}`,
-      `Disbursed: ${asISO(loan?.releaseDate || loan?.startDate || '')}`,
+      `Interest Method: ${method || ""}`,
+      `Disbursed: ${asISO(loan?.releaseDate || loan?.startDate || "")}`,
       `Generated: ${new Date().toLocaleString()}`,
     ];
-    meta.forEach((m, i) =>
-      doc.text(m, pageWidth - 40, 68 + i * 14, { align: 'right' })
-    );
+    meta.forEach((m, i) => doc.text(m, pageWidth - 40, 68 + i * 14, { align: "right" }));
 
     const columns = [
-      { header: '#', dataKey: 'idx' },
-      { header: 'Due Date', dataKey: 'dueDate' },
-      { header: 'Principal', dataKey: 'principal' },
-      { header: 'Interest', dataKey: 'interest' },
-      { header: 'Total P&I', dataKey: 'pi' },
-      { header: 'Penalty', dataKey: 'penalty' },
-      { header: 'Fees', dataKey: 'fees' },
-      { header: 'Paid Principal', dataKey: 'paidP' },
-      { header: 'Paid Interest', dataKey: 'paidI' },
-      { header: 'Outstanding', dataKey: 'outstanding' },
-      { header: 'Settled', dataKey: 'settled' },
+      { header: "#", dataKey: "idx" },
+      { header: "Due Date", dataKey: "dueDate" },
+      { header: "Principal", dataKey: "principal" },
+      { header: "Interest", dataKey: "interest" },
+      { header: "Total P&I", dataKey: "pi" },
+      { header: "Penalty", dataKey: "penalty" },
+      { header: "Fees", dataKey: "fees" },
+      { header: "Paid Principal", dataKey: "paidP" },
+      { header: "Paid Interest", dataKey: "paidI" },
+      { header: "Outstanding", dataKey: "outstanding" },
+      { header: "Settled", dataKey: "settled" },
     ];
+
     const rows = schedule.map((r, i) => {
       const pi = Number(r.principal || 0) + Number(r.interest || 0);
+      const outstanding =
+        r.balance != null
+          ? Number(r.balance)
+          : r.paid || r.settled
+          ? 0
+          : r.total != null
+          ? Number(r.total)
+          : pi + Number(r.penalty || 0) + Number(r.fee ?? r.fees ?? 0);
+
       return {
         idx: r.installment ?? r.period ?? i + 1,
-        dueDate: asISO(r.dueDate ?? r.date ?? ''),
+        dueDate: asISO(r.dueDate ?? r.date ?? ""),
         principal: fmtMoney(r.principal, currency),
         interest: fmtMoney(r.interest, currency),
         pi: fmtMoney(pi, currency),
         penalty: fmtMoney(r.penalty || 0, currency),
         fees: fmtMoney(r.fee ?? r.fees ?? 0, currency),
-        paidP: r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : '—',
-        paidI: r.paidInterest  != null ? fmtMoney(r.paidInterest,  currency) : '—',
-        outstanding: r.balance != null ? fmtMoney(r.balance, currency) : '—',
-        settled: r.paid || r.settled ? 'YES' : 'NO',
+        paidP: r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : "—",
+        paidI: r.paidInterest != null ? fmtMoney(r.paidInterest, currency) : "—",
+        outstanding: fmtMoney(outstanding, currency),
+        settled: r.paid || r.settled ? "YES" : "NO",
       };
     });
 
@@ -416,7 +523,9 @@ export default function LoanSchedulePage() {
       didDrawPage: () => {
         const str = `Page ${doc.internal.getNumberOfPages()}`;
         doc.setFontSize(9);
-        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, { align: 'right' });
+        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, {
+          align: "right",
+        });
       },
     });
 
@@ -424,24 +533,27 @@ export default function LoanSchedulePage() {
     let endY = doc.lastAutoTable?.finalY || 140;
     endY += 16;
     doc.setFontSize(11);
-    doc.text('Summary', 40, endY);
+    doc.text("Summary", 40, endY);
     endY += 8;
     doc.setFontSize(10);
     const sumLines = [
-      ['Principal (Sched.)', fmtMoney(totals.scheduledPrincipal, currency)],
-      ['Interest (Sched.)', fmtMoney(totals.scheduledInterest, currency)],
-      ['Total P&I (Sched.)', fmtMoney(totals.scheduledPrincipal + totals.scheduledInterest, currency)],
-      ['Penalty (Sched.)', fmtMoney(totals.scheduledPenalty, currency)],
-      ['Fees (Sched.)', fmtMoney(totals.scheduledFees, currency)],
-      ['Total Payable', fmtMoney(totals.scheduledTotal, currency)],
-      ['Paid Principal', fmtMoney(totals.paidPrincipal, currency)],
-      ['Paid Interest', fmtMoney(totals.paidInterest, currency)],
-      ['Total Paid', fmtMoney(totals.totalPaid, currency)],
-      ['Outstanding', fmtMoney(totals.outstandingTotal, currency)],
+      ["Principal (Sched.)", fmtMoney(totals.scheduledPrincipal, currency)],
+      ["Interest (Sched.)", fmtMoney(totals.scheduledInterest, currency)],
+      [
+        "Total P&I (Sched.)",
+        fmtMoney(totals.scheduledPrincipal + totals.scheduledInterest, currency),
+      ],
+      ["Penalty (Sched.)", fmtMoney(totals.scheduledPenalty, currency)],
+      ["Fees (Sched.)", fmtMoney(totals.scheduledFees, currency)],
+      ["Total Payable", fmtMoney(totals.scheduledTotal, currency)],
+      ["Paid Principal", fmtMoney(totals.paidPrincipal, currency)],
+      ["Paid Interest", fmtMoney(totals.paidInterest, currency)],
+      ["Total Paid", fmtMoney(totals.totalPaid, currency)],
+      ["Outstanding", fmtMoney(totals.outstandingTotal, currency)],
     ];
     sumLines.forEach((row, i) => {
       doc.text(row[0], 40, endY + 16 + i * 14);
-      doc.text(row[1], pageWidth - 40, endY + 16 + i * 14, { align: 'right' });
+      doc.text(row[1], pageWidth - 40, endY + 16 + i * 14, { align: "right" });
     });
 
     doc.save(`loan_${loan?.id ?? loanId}_schedule.pdf`);
@@ -452,27 +564,36 @@ export default function LoanSchedulePage() {
     const rowsHtml = schedule
       .map((r, i) => {
         const pi = Number(r.principal || 0) + Number(r.interest || 0);
+        const outstanding =
+          r.balance != null
+            ? Number(r.balance)
+            : r.paid || r.settled
+            ? 0
+            : r.total != null
+            ? Number(r.total)
+            : pi + Number(r.penalty || 0) + Number(r.fee ?? r.fees ?? 0);
+
         return `
           <tr>
             <td>${r.installment ?? r.period ?? i + 1}</td>
-            <td>${asISO(r.dueDate ?? r.date ?? '')}</td>
+            <td>${asISO(r.dueDate ?? r.date ?? "")}</td>
             <td>${fmtMoney(r.principal, currency)}</td>
             <td>${fmtMoney(r.interest, currency)}</td>
             <td>${fmtMoney(pi, currency)}</td>
             <td>${fmtMoney(r.penalty || 0, currency)}</td>
             <td>${fmtMoney(r.fee ?? r.fees ?? 0, currency)}</td>
-            <td>${r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : '—'}</td>
-            <td>${r.paidInterest  != null ? fmtMoney(r.paidInterest,  currency) : '—'}</td>
-            <td>${r.balance != null ? fmtMoney(r.balance, currency) : '—'}</td>
-            <td>${r.paid || r.settled ? 'YES' : 'NO'}</td>
+            <td>${r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : "—"}</td>
+            <td>${r.paidInterest  != null ? fmtMoney(r.paidInterest,  currency) : "—"}</td>
+            <td>${fmtMoney(outstanding, currency)}</td>
+            <td>${r.paid || r.settled ? "YES" : "NO"}</td>
           </tr>
         `;
       })
-      .join('');
+      .join("");
 
     const logoHtml = company.logoUrl
       ? `<img src="${company.logoUrl}" style="height:48px;object-fit:contain;margin-right:12px;" />`
-      : '';
+      : "";
 
     const html = `
       <html>
@@ -502,11 +623,11 @@ export default function LoanSchedulePage() {
               <div class="company">
                 ${logoHtml}
                 <div>
-                  <h1>${company.name || ''}</h1>
+                  <h1>${company.name || ""}</h1>
                   <div class="muted">
                     ${[company.address, company.phone, company.email, company.website]
                       .filter(Boolean)
-                      .join(' • ')}
+                      .join(" • ")}
                   </div>
                 </div>
               </div>
@@ -518,14 +639,21 @@ export default function LoanSchedulePage() {
 
             <div style="margin-top:12px;font-size:12px;">
               <div><b>Loan ID:</b> ${loan?.id ?? loanId}</div>
-              <div><b>Borrower:</b> ${loan?.Borrower?.name || loan?.borrowerName || ''}</div>
-              <div><b>Status:</b> ${loan?.status || ''}</div>
-              <div><b>Currency:</b> ${currency} &nbsp; • &nbsp; <b>Interest Method:</b> ${method || ''}</div>
-              <div><b>Disbursed:</b> ${asISO(loan?.releaseDate || loan?.startDate || '')}</div>
+              <div><b>Borrower:</b> ${loan?.Borrower?.name || loan?.borrowerName || ""}</div>
+              <div><b>Status:</b> ${loan?.status || ""}</div>
+              <div><b>Currency:</b> ${currency} &nbsp; • &nbsp; <b>Interest Method:</b> ${method || ""}</div>
+              <div><b>Disbursed:</b> ${asISO(loan?.releaseDate || loan?.startDate || "")}</div>
             </div>
 
             <div class="cal">
-              ${schedule.map((r, i) => `<span class="pill">#${r.installment ?? r.period ?? i+1}: ${asISO(r.dueDate || r.date || '')}</span>`).join('')}
+              ${schedule
+                .map(
+                  (r, i) =>
+                    `<span class="pill">#${r.installment ?? r.period ?? i + 1}: ${asISO(
+                      r.dueDate || r.date || ""
+                    )}</span>`
+                )
+                .join("")}
             </div>
 
             <table>
@@ -551,34 +679,44 @@ export default function LoanSchedulePage() {
 
             <div class="summary">
               <div class="card"><div class="muted">Principal (Sched.)</div><div><b>${fmtMoney(
-                totals.scheduledPrincipal, currency
+                totals.scheduledPrincipal,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Interest (Sched.)</div><div><b>${fmtMoney(
-                totals.scheduledInterest, currency
+                totals.scheduledInterest,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Total P&I (Sched.)</div><div><b>${fmtMoney(
-                totals.scheduledPrincipal + totals.scheduledInterest, currency
+                totals.scheduledPrincipal + totals.scheduledInterest,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Penalty (Sched.)</div><div><b>${fmtMoney(
-                totals.scheduledPenalty, currency
+                totals.scheduledPenalty,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Fees (Sched.)</div><div><b>${fmtMoney(
-                totals.scheduledFees, currency
+                totals.scheduledFees,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Total Payable</div><div><b>${fmtMoney(
-                totals.scheduledTotal, currency
+                totals.scheduledTotal,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Paid Principal</div><div><b>${fmtMoney(
-                totals.paidPrincipal, currency
+                totals.paidPrincipal,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Paid Interest</div><div><b>${fmtMoney(
-                totals.paidInterest, currency
+                totals.paidInterest,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Total Paid</div><div><b>${fmtMoney(
-                totals.totalPaid, currency
+                totals.totalPaid,
+                currency
               )}</b></div></div>
               <div class="card"><div class="muted">Outstanding</div><div><b>${fmtMoney(
-                totals.outstandingTotal, currency
+                totals.outstandingTotal,
+                currency
               )}</b></div></div>
             </div>
 
@@ -590,7 +728,7 @@ export default function LoanSchedulePage() {
       </html>
     `;
 
-    const w = window.open('', '_blank', 'noopener,noreferrer,width=1024,height=768');
+    const w = window.open("", "_blank", "noopener,noreferrer,width=1024,height=768");
     if (!w) return;
     w.document.open();
     w.document.write(html);
@@ -613,18 +751,25 @@ export default function LoanSchedulePage() {
           )}
           <p className="text-xs text-gray-500 mt-1">
             {company.name}
-            {company.address ? ` • ${company.address}` : ''}
-            {company.phone ? ` • ${company.phone}` : ''}
-            {company.email ? ` • ${company.email}` : ''}
+            {company.address ? ` • ${company.address}` : ""}
+            {company.phone ? ` • ${company.phone}` : ""}
+            {company.email ? ` • ${company.email}` : ""}
           </p>
           {loan && (
             <p className="text-xs text-gray-700 mt-1">
-              <b>Disbursed:</b> {asDate(loan.releaseDate || loan.startDate)}{frequency ? ` • <b>Frequency:</b> ${frequency}` : ''}
+              <b>Disbursed:</b> {asDate(loan.releaseDate || loan.startDate)}
+              {frequency && (
+                <>
+                  {" "}
+                  • <b>Frequency:</b> {frequency}
+                </>
+              )}
             </p>
           )}
           {totals?.nextDue && (
             <p className="text-xs text-gray-700 mt-1">
-              Next Installment #{totals.nextDue.idx} on {asDate(totals.nextDue.date)} — <b>{fmtMoney(totals.nextDue.amount, currency)}</b>
+              Next Installment #{totals.nextDue.idx} on {asDate(totals.nextDue.date)} —{" "}
+              <b>{fmtMoney(totals.nextDue.amount, currency)}</b>
             </p>
           )}
         </div>
@@ -636,11 +781,7 @@ export default function LoanSchedulePage() {
             Refresh
           </button>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={auto}
-              onChange={(e) => setAuto(e.target.checked)}
-            />
+            <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
             Auto-refresh
           </label>
           <button
@@ -671,7 +812,7 @@ export default function LoanSchedulePage() {
           onChange={(e) => setLoanId(e.target.value)}
         />
         <button className="bg-blue-600 text-white px-4 py-2 rounded">
-          {loading ? 'Loading…' : 'Load'}
+          {loading ? "Loading…" : "Load"}
         </button>
         {method && (
           <div className="self-center text-sm text-gray-700">
@@ -694,7 +835,9 @@ export default function LoanSchedulePage() {
             </div>
             <div>
               <div className="text-gray-500 text-xs">Total P&I (Sched.)</div>
-              <div className="font-semibold">{fmtMoney(totals.scheduledPrincipal + totals.scheduledInterest, currency)}</div>
+              <div className="font-semibold">
+                {fmtMoney(totals.scheduledPrincipal + totals.scheduledInterest, currency)}
+              </div>
             </div>
             <div>
               <div className="text-gray-500 text-xs">Penalty (Sched.)</div>
@@ -747,7 +890,7 @@ export default function LoanSchedulePage() {
                 <th className="p-2 border">Due Date</th>
                 <th className="p-2 border">Principal</th>
                 <th className="p-2 border">Interest</th>
-                <th className="p-2 border">Total P&I</th>
+                <th className="p-2 border">Total P&amp;I</th>
                 <th className="p-2 border">Penalty</th>
                 <th className="p-2 border">Fees</th>
                 <th className="p-2 border">Paid Principal</th>
@@ -760,27 +903,46 @@ export default function LoanSchedulePage() {
               {schedule.map((r, i) => {
                 const idx = r.installment ?? r.period ?? i + 1;
                 const pi = Number(r.principal || 0) + Number(r.interest || 0);
-                const status = r.paid || r.settled ? 'Settled' : 'Pending';
+                const outstanding =
+                  r.balance != null
+                    ? Number(r.balance)
+                    : r.paid || r.settled
+                    ? 0
+                    : r.total != null
+                    ? Number(r.total)
+                    : pi + Number(r.penalty || 0) + Number(r.fee ?? r.fees ?? 0);
+
+                const status = r.paid || r.settled ? "Settled" : "Pending";
                 return (
-                  <tr key={i} className={i % 2 ? 'bg-gray-50' : ''}>
+                  <tr key={i} className={i % 2 ? "bg-gray-50" : ""}>
                     <td className="border px-2 py-1 whitespace-nowrap">{idx}</td>
-                    <td className="border px-2 py-1 whitespace-nowrap">{asDate(r.dueDate || r.date)}</td>
-                    <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(r.principal, currency)}</td>
-                    <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(r.interest, currency)}</td>
+                    <td className="border px-2 py-1 whitespace-nowrap">
+                      {asDate(r.dueDate || r.date)}
+                    </td>
+                    <td className="border px-2 py-1 whitespace-nowrap">
+                      {fmtMoney(r.principal, currency)}
+                    </td>
+                    <td className="border px-2 py-1 whitespace-nowrap">
+                      {fmtMoney(r.interest, currency)}
+                    </td>
                     <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(pi, currency)}</td>
-                    <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(r.penalty || 0, currency)}</td>
-                    <td className="border px-2 py-1 whitespace-nowrap">{fmtMoney(r.fee ?? r.fees ?? 0, currency)}</td>
                     <td className="border px-2 py-1 whitespace-nowrap">
-                      {r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : '—'}
+                      {fmtMoney(r.penalty || 0, currency)}
                     </td>
                     <td className="border px-2 py-1 whitespace-nowrap">
-                      {r.paidInterest != null ? fmtMoney(r.paidInterest, currency) : '—'}
+                      {fmtMoney(r.fee ?? r.fees ?? 0, currency)}
                     </td>
                     <td className="border px-2 py-1 whitespace-nowrap">
-                      {r.balance != null ? fmtMoney(r.balance, currency) : '—'}
+                      {r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : "—"}
                     </td>
                     <td className="border px-2 py-1 whitespace-nowrap">
-                      {status === 'Settled' ? (
+                      {r.paidInterest != null ? fmtMoney(r.paidInterest, currency) : "—"}
+                    </td>
+                    <td className="border px-2 py-1 whitespace-nowrap">
+                      {fmtMoney(outstanding, currency)}
+                    </td>
+                    <td className="border px-2 py-1 whitespace-nowrap">
+                      {status === "Settled" ? (
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
                           Settled
                         </span>
