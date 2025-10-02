@@ -33,6 +33,92 @@ const ROUTE_PATHS = {
 const LS_KEY = 'ms_dash_filters_v1';
 const LS_AUTO = 'ms_dash_auto_refresh_v1';
 
+/** Support both prefixed (/api/...) and unprefixed backends */
+function apiVariants(p) {
+  const clean = p.startsWith('/') ? p : `/${p}`;
+  const noApi = clean.replace(/^\/api\//, '/');
+  const withApi = noApi.startsWith('/api/') ? noApi : `/api${noApi}`;
+  return Array.from(new Set([noApi, withApi]));
+}
+
+/** Canceled request guard (axios & fetch flavors) */
+function isAbort(err) {
+  return err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || /abort|cancell?ed/i.test(err?.message || '');
+}
+
+/** Try multiple GET endpoints until one succeeds */
+async function tryGET(paths = [], opts = {}) {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('No endpoint succeeded');
+}
+
+/** Normalizers */
+function toBranches(raw) {
+  const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
+  return arr.map((b) => ({
+    id: b.id ?? b._id ?? b.branchId ?? b.code ?? String(b.name || 'branch'),
+    name: b.name ?? b.title ?? b.label ?? String(b.code || '—'),
+  }));
+}
+function toUsers(raw) {
+  const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
+  return arr.map((u) => ({
+    id: u.id ?? u._id ?? u.userId ?? String(u.email || u.phone || 'user'),
+    name:
+      u.name ||
+      [u.firstName, u.lastName].filter(Boolean).join(' ').trim() ||
+      u.username ||
+      u.email ||
+      u.phone ||
+      '—',
+    roles: (u.roles || u.Roles || []).map((r) => (r.name || r.code || '').toString().toLowerCase()),
+    title: (u.title || u.jobTitle || '').toString().toLowerCase(),
+  }));
+}
+function isLoanOfficer(u) {
+  const hay = [...(u.roles || []), u.title || ''].join(' ');
+  return /loan.*officer|credit.*officer|field.*officer/i.test(hay);
+}
+function toSummary(raw) {
+  const s = raw?.summary || raw || {};
+  const n = (v) => Number(v || 0);
+  const pctNum = (v) => {
+    if (v == null) return 0;
+    const str = String(v).trim().replace('%', '');
+    const num = Number(str);
+    return Number.isFinite(num) ? num : 0;
+  };
+  return {
+    totalBorrowers: n(s.totalBorrowers ?? s.borrowers ?? s.clients),
+    totalLoans: n(s.totalLoans ?? s.loans),
+    totalDisbursed: n(s.totalDisbursed ?? s.disbursed),
+    totalPaid: n(s.totalPaid ?? s.paid),
+    totalRepaid: n(s.totalRepaid ?? s.repaid ?? s.collections),
+    totalExpectedRepayments: n(s.totalExpectedRepayments ?? s.expectedRepayments),
+    totalDeposits: n(s.totalDeposits ?? s.deposits),
+    totalWithdrawals: n(s.totalWithdrawals ?? s.withdrawals),
+    netSavings: n(s.netSavings ?? (s.totalDeposits || 0) - (s.totalWithdrawals || 0)),
+    defaultedLoan: n(s.defaultedLoan ?? s.defaulted ?? s.nplPrincipal),
+    defaultedInterest: n(s.defaultedInterest ?? s.nplInterest),
+    outstandingLoan: n(s.outstandingLoan ?? s.outstandingPrincipal ?? s.outstanding),
+    outstandingInterest: n(s.outstandingInterest ?? s.accruedInterest),
+    writtenOff: n(s.writtenOff ?? s.writeOffs),
+    parPercent: pctNum(s.parPercent ?? s.par ?? s.par30 ?? s.portfolioAtRisk),
+    topBorrowers: Array.isArray(s.topBorrowers) ? s.topBorrowers : [],
+    upcomingRepayments: Array.isArray(s.upcomingRepayments) ? s.upcomingRepayments : [],
+    branchPerformance: Array.isArray(s.branchPerformance) ? s.branchPerformance : [],
+    officerPerformance: Array.isArray(s.officerPerformance) ? s.officerPerformance : [],
+  };
+}
+
 /** Observe the <html> class list so charts can re-theme instantly */
 const useIsDarkMode = () => {
   const [isDark, setIsDark] = useState(() =>
@@ -52,7 +138,7 @@ const useIsDarkMode = () => {
 
 const TZS = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
-/* ---------- Unified field components to guarantee dark-mode contrast ---------- */
+/* ---------- Unified field components ---------- */
 const baseInput =
   'h-10 w-full rounded-lg border text-sm outline-none transition ' +
   'bg-white text-slate-900 border-slate-300 ' +
@@ -205,14 +291,18 @@ const Dashboard = () => {
   // ---------- Data fetchers ----------
   const fetchFilters = useCallback(async (signal) => {
     try {
-      const [branchesRes, officersRes] = await Promise.all([
-        api.get('/branches', { signal }),
-        api.get('/users', { params: { role: 'loan_officer' }, signal }),
+      const [branchesRaw, officersRaw] = await Promise.all([
+        tryGET([...apiVariants('branches'), ...apiVariants('org/branches')], { signal }),
+        tryGET([...apiVariants('users?role=loan_officer'), ...apiVariants('admin/staff?role=loan_officer')], { signal })
+          .catch(() => tryGET([...apiVariants('users'), ...apiVariants('admin/staff')], { signal })),
       ]);
-      setBranches(Array.isArray(branchesRes.data) ? branchesRes.data : []);
-      setOfficers(Array.isArray(officersRes.data) ? officersRes.data : []);
+      const br = toBranches(branchesRaw);
+      const allUsers = toUsers(officersRaw);
+      const onlyOfficers = allUsers.filter(isLoanOfficer);
+      setBranches(br);
+      setOfficers(onlyOfficers.length ? onlyOfficers : allUsers);
     } catch (err) {
-      if (err?.name !== 'CanceledError') {
+      if (!isAbort(err)) {
         console.error('Filter fetch error:', err?.message || err);
         pushToast('Failed to load filters', 'error');
       }
@@ -221,10 +311,13 @@ const Dashboard = () => {
 
   const fetchSummary = useCallback(async (signal) => {
     try {
-      const res = await api.get('/dashboard/summary', { params: { branchId, officerId, timeRange }, signal });
-      setSummary(res.data || {});
+      const data = await tryGET([...apiVariants('dashboard/summary')], {
+        signal,
+        params: { branchId, officerId, timeRange },
+      });
+      setSummary(toSummary(data));
     } catch (err) {
-      if (err?.name !== 'CanceledError') {
+      if (!isAbort(err)) {
         console.error('Dashboard summary error:', err?.message || err);
         pushToast('Failed to load summary', 'error');
       }
@@ -239,7 +332,6 @@ const Dashboard = () => {
         if (res?.data && Array.isArray(res.data)) {
           setComms(res.data);
         } else {
-          // Fallback to summary-provided comms (if backend merges there)
           setComms(Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : []);
         }
       } finally {
@@ -264,7 +356,7 @@ const Dashboard = () => {
         setActivity(res.data?.items || []);
         setActivityTotal(res.data?.total || 0);
       } catch (err) {
-        if (err?.name !== 'CanceledError') {
+        if (!isAbort(err)) {
           console.error('Activity fetch error:', err?.message || err);
           pushToast('Failed to load activity', 'error');
         }
@@ -278,7 +370,7 @@ const Dashboard = () => {
       const res = await api.get('/dashboard/monthly-trends', { signal });
       setTrends(res.data || {});
     } catch (err) {
-      if (err?.name !== 'CanceledError') {
+      if (!isAbort(err)) {
         console.error('Monthly trends error:', err?.message || err);
         pushToast('Failed to load trends', 'error');
       }
@@ -311,7 +403,7 @@ const Dashboard = () => {
       try {
         await loadAll(ac.signal);
       } catch (err) {
-        if (err?.name !== 'CanceledError') {
+        if (!isAbort(err)) {
           console.error('Dashboard fetch error:', err?.message || err);
           pushToast('Failed to load dashboard data', 'error');
         }
@@ -327,7 +419,7 @@ const Dashboard = () => {
     if (!summary) return;
     const ac = new AbortController();
     fetchCommunications(ac.signal).catch((err) => {
-      if (err?.name !== 'CanceledError') {
+      if (!isAbort(err)) {
         console.error('Comms fetch error:', err?.message || err);
         pushToast('Failed to load communications', 'error');
       }
@@ -397,7 +489,8 @@ const Dashboard = () => {
         dueDate: draft.dueDate || null,
         note: draft.note || '',
       });
-      setAssignDraft((d) => ({ ...d, [a.id]: { assigneeId: '', dueDate: '', note: '' } }));
+      // BUGFIX: clear the correct draft by activityId
+      setAssignDraft((d) => ({ ...d, [activityId]: { assigneeId: '', dueDate: '', note: '' } }));
       await fetchActivity();
       pushToast('Task assigned', 'success');
     } catch (err) {
@@ -1144,7 +1237,7 @@ const SummaryCard = ({
     ({
       indigo: {
         bg: 'from-indigo-50 to-white dark:from-slate-900 dark:to-slate-900',
-      ring: 'ring-indigo-100 dark:ring-indigo-900/40',
+        ring: 'ring-indigo-100 dark:ring-indigo-900/40',
         ink: 'text-indigo-700 dark:text-indigo-300',
         badge: 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-300',
         spot: 'bg-indigo-400/20'
