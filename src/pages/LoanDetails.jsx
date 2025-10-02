@@ -1,3 +1,4 @@
+// src/pages/LoanDetails.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api";
@@ -15,19 +16,20 @@ import {
 
 /* ---------- status & UI helpers ---------- */
 const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800 ring-yellow-200",
-  approved: "bg-blue-100 text-blue-800 ring-blue-200",
-  rejected: "bg-gray-200 text-gray-700 ring-gray-300",
-  disbursed: "bg-indigo-100 text-indigo-800 ring-indigo-200",
-  active: "bg-emerald-100 text-emerald-800 ring-emerald-200",
-  closed: "bg-slate-200 text-slate-700 ring-slate-300",
+  pending: "bg-yellow-100 text-yellow-900 ring-yellow-300",
+  approved: "bg-blue-100 text-blue-900 ring-blue-300",
+  rejected: "bg-gray-200 text-gray-900 ring-gray-300",
+  disbursed: "bg-indigo-100 text-indigo-900 ring-indigo-300",
+  active: "bg-emerald-100 text-emerald-900 ring-emerald-300",
+  closed: "bg-slate-200 text-slate-900 ring-slate-300",
 };
-const chip =
-  "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ring-inset";
 
-/* unified link style for high visibility & accessibility */
+const chip =
+  "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase ring-2 ring-inset";
+
+/* highly-visible link */
 const actionLink =
-  "inline-flex items-center gap-1 text-blue-700 font-semibold underline underline-offset-4 decoration-2 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded";
+  "inline-flex items-center gap-1 text-blue-700 font-bold underline underline-offset-4 decoration-2 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded";
 
 /* role helpers */
 const roleOf = () => {
@@ -55,22 +57,28 @@ function deriveStageFromStatus(status) {
 
 /* -------------- light UI helpers (no external deps) -------------- */
 const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
-  <div className="bg-white border-2 border-slate-300 rounded-2xl shadow-md">
+  <div className="bg-white border-2 border-slate-400 rounded-2xl shadow-lg w-full">
     <div
-      className={`px-6 ${dense ? "py-3" : "py-4"} border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between`}
+      className={`px-6 ${
+        dense ? "py-3" : "py-4"
+      } border-b-2 border-slate-300 bg-slate-100 flex items-center justify-between`}
     >
-      <div>
-        {title && <h3 className="text-lg md:text-xl font-semibold tracking-tight">{title}</h3>}
-        {subtitle && <p className="text-xs text-gray-600 mt-0.5">{subtitle}</p>}
+      <div className="min-w-0">
+        {title && (
+          <h3 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">
+            {title}
+          </h3>
+        )}
+        {subtitle && <p className="text-sm text-slate-800 mt-0.5">{subtitle}</p>}
       </div>
       {right}
     </div>
-    <div className={`px-6 ${dense ? "py-4" : "py-6"} text-[15px]`}>{children}</div>
+    <div className={`px-6 ${dense ? "py-4" : "py-6"} text-[15px] text-slate-900`}>{children}</div>
   </div>
 );
 
 const Label = ({ children }) => (
-  <div className="text-[12px] uppercase tracking-wide text-gray-600">{children}</div>
+  <div className="text-[12px] uppercase tracking-wide text-slate-900 font-semibold">{children}</div>
 );
 
 /* --------------------------- component --------------------------- */
@@ -132,7 +140,7 @@ export default function LoanDetails() {
   const [savingReschedule, setSavingReschedule] = useState(false);
 
   const currency = loan?.currency || "TZS";
-  const statusBadge = statusColors[loan?.status] || "bg-slate-100 text-slate-800 ring-slate-200";
+  const statusBadge = statusColors[loan?.status] || "bg-slate-100 text-slate-900 ring-slate-300";
 
   const role = roleOf();
   const canBM = isBM(role);
@@ -490,15 +498,10 @@ export default function LoanDetails() {
     [schedule, repayments]
   );
 
-  // IMPORTANT: wait for a real schedule before switching to computed values
   const scheduleReady = Array.isArray(schedule) && schedule.length > 0;
 
   const outstanding =
-    loan?.status === "closed"
-      ? 0
-      : scheduleReady
-      ? totals.outstanding
-      : loan?.outstanding ?? null;
+    loan?.status === "closed" ? 0 : scheduleReady ? totals.outstanding : loan?.outstanding ?? null;
 
   const nextDue = scheduleReady ? totals.nextDue : null;
 
@@ -511,19 +514,19 @@ export default function LoanDetails() {
   const canPostRepayment = loan?.status !== "closed" && Number(outstanding || 0) > 0;
 
   /* ---------- render ---------- */
-  if (loading) return <div className="max-w-7xl mx-auto px-6 py-6">Loading loan…</div>;
-  if (errs) return <div className="max-w-7xl mx-auto px-6 py-6 text-red-600">{errs}</div>;
-  if (!loan) return <div className="max-w-7xl mx-auto px-6 py-6">Loan not found.</div>;
+  if (loading) return <div className="w-full px-6 py-6">Loading loan…</div>;
+  if (errs) return <div className="w-full px-6 py-6 text-red-700 font-semibold">{errs}</div>;
+  if (!loan) return <div className="w-full px-6 py-6">Loan not found.</div>;
 
   return (
-    <div className="max-w-screen-2xl mx-auto px-6 py-6 space-y-6">
+    <div className="w-full px-4 md:px-6 py-6 space-y-6">
       {/* HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-3xl font-bold tracking-tight">Loan Details</h2>
+          <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Loan Details</h2>
           <span className={`${chip} ${statusBadge}`}>{loan.status}</span>
           {workflowStage && (
-            <span className={`${chip} bg-indigo-50 text-indigo-700 ring-indigo-200`}>
+            <span className={`${chip} bg-indigo-50 text-indigo-900 ring-indigo-300`}>
               Stage: {workflowStage.replaceAll("_", " ")}
             </span>
           )}
@@ -536,11 +539,12 @@ export default function LoanDetails() {
       {/* SUMMARY */}
       <SectionCard>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-          <div className="col-span-2">
+          <div className="col-span-2 min-w-0">
             <Label>Borrower</Label>
             <Link
-              className={`${actionLink} text-lg md:text-xl`}
+              className={`${actionLink} text-lg md:text-xl truncate`}
               to={`/borrowers/${loan.borrowerId}`}
+              title={loan.Borrower?.name || loan.borrowerName || "N/A"}
             >
               {loan.Borrower?.name || loan.borrowerName || "N/A"} <span>›</span>
             </Link>
@@ -548,41 +552,45 @@ export default function LoanDetails() {
 
           <div>
             <Label>Amount</Label>
-            <div className="text-2xl font-semibold">{fmtMoney(loan.amount, currency)}</div>
+            <div className="text-2xl font-extrabold">{fmtMoney(loan.amount, currency)}</div>
           </div>
 
           <div>
             <Label>Interest</Label>
             <div className="text-base">
-              <span className="font-medium">{loan.interestRate}%</span>{" "}
-              <span className="text-gray-600">· {loan.interestMethod || "—"}</span>
+              <span className="font-bold">{loan.interestRate}%</span>{" "}
+              <span className="text-slate-900">· {loan.interestMethod || "—"}</span>
             </div>
           </div>
 
           <div>
             <Label>Term</Label>
-            <div className="text-base">{loan.termMonths || loan.durationMonths} months</div>
+            <div className="text-base font-semibold">
+              {loan.termMonths || loan.durationMonths} months
+            </div>
           </div>
 
           <div>
             <Label>Start / Release</Label>
-            <div className="text-base">{asDate(loan.startDate || loan.releaseDate)}</div>
+            <div className="text-base font-semibold">
+              {asDate(loan.startDate || loan.releaseDate)}
+            </div>
           </div>
 
           <div>
             <Label>Outstanding</Label>
-            <div className="text-2xl font-semibold">
+            <div className="text-2xl font-extrabold">
               {outstanding == null ? "—" : fmtMoney(outstanding, currency)}
             </div>
           </div>
 
           <div>
             <Label>Next Due</Label>
-            <div className="text-base">
+            <div className="text-base font-semibold">
               {nextDue ? (
                 <>
                   {asDate(nextDue.date)} ·{" "}
-                  <span className="font-medium">{fmtMoney(nextDue.amount, currency)}</span>
+                  <span className="font-extrabold">{fmtMoney(nextDue.amount, currency)}</span>
                 </>
               ) : (
                 "—"
@@ -594,11 +602,11 @@ export default function LoanDetails() {
             <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
               <Label>Product</Label>
               <div className="text-base">
-                <span className="font-semibold">
+                <span className="font-extrabold">
                   {product.name}
                   {product.code ? ` (${product.code})` : ""}
                 </span>
-                <div className="text-gray-600 text-sm">
+                <div className="text-slate-900 text-sm mt-0.5">
                   Defaults: {product.interestMethod} @{" "}
                   {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
                   {fmtMoney(product.minPrincipal, currency)} –{" "}
@@ -620,9 +628,14 @@ export default function LoanDetails() {
             ["Total Paid", totals.totalPaid],
             ["Total Scheduled", totals.scheduledTotal],
           ].map(([label, val]) => (
-            <div key={label} className="rounded-xl border-2 border-slate-200 p-3">
-              <div className="text-gray-500 text-[12px]">{label}</div>
-              <div className="font-semibold text-base">
+            <div
+              key={label}
+              className="rounded-xl border-2 border-slate-400 p-3 bg-white shadow-sm"
+            >
+              <div className="text-[11px] uppercase tracking-wide text-slate-900 font-semibold">
+                {label}
+              </div>
+              <div className="font-bold text-lg">
                 {scheduleReady ? fmtMoney(val, currency) : "—"}
               </div>
             </div>
@@ -635,30 +648,30 @@ export default function LoanDetails() {
         <SectionCard dense>
           {showLOTB && (
             <>
-              <h3 className="text-lg font-semibold">Changes Requested</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="text-lg font-extrabold">Changes Requested</h3>
+              <p className="text-sm text-slate-900">
                 Update the application and attach missing documents, then{" "}
                 <strong>Resubmit</strong>. Add a short note if helpful.
               </p>
-              <label className="block text-xs text-gray-600">Comment (optional)</label>
+              <label className="block text-xs text-slate-900 font-semibold">Comment (optional)</label>
               <textarea
                 value={reviewComment}
                 onChange={(e) => setReviewComment(e.target.value)}
-                className="border rounded-lg px-3 py-2 w-full min-h-[44px]"
+                className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full min-h-[44px]"
                 placeholder="What did you fix / add?"
               />
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => workflowAction("resubmit")}
                   disabled={acting}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60 font-semibold shadow-sm"
                   title="Send for review again"
                 >
                   {acting ? "Submitting…" : "Resubmit for Review"}
                 </button>
                 <Link
                   to="/loans/applications"
-                  className="px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+                  className="px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
                   title="Open applications to edit details/attachments"
                 >
                   Edit Application
@@ -670,30 +683,32 @@ export default function LoanDetails() {
           {(showBMToolbar || showCOToolbar) && (
             <>
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">
+                <h3 className="text-lg font-extrabold">
                   {showBMToolbar ? "Branch Manager Review" : "Compliance Review"}
                 </h3>
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-gray-600">Suggested Principal</label>
+                  <label className="block text-xs text-slate-900 font-semibold">
+                    Suggested Principal
+                  </label>
                   <input
                     type="number"
-                    className="border rounded-lg px-3 py-2 w-full"
+                    className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                     value={suggestedAmount}
                     onChange={(e) => setSuggestedAmount(e.target.value)}
                     min="0"
                     step="0.01"
                   />
-                  <p className="text-[11px] text-gray-500 mt-1">
+                  <p className="text-[11px] text-slate-700 mt-1">
                     Save a suggestion or approve with a different amount.
                   </p>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600">Comment</label>
+                  <label className="block text-xs text-slate-900 font-semibold">Comment</label>
                   <textarea
-                    className="border rounded-lg px-3 py-2 w-full min-h-[44px]"
+                    className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full min-h-[44px]"
                     placeholder="Why approving / changes / rejection?"
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
@@ -701,7 +716,7 @@ export default function LoanDetails() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() =>
                     workflowAction(showBMToolbar ? "bm_approve" : "compliance_approve", {
@@ -709,14 +724,14 @@ export default function LoanDetails() {
                     })
                   }
                   disabled={acting}
-                  className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60"
+                  className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60 font-semibold shadow-sm"
                 >
                   {acting ? "Working…" : "Approve"}
                 </button>
                 <button
                   onClick={() => workflowAction("request_changes")}
                   disabled={acting}
-                  className="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-60"
+                  className="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-60 font-semibold shadow-sm"
                   title="Send back to Loan Officer with requested changes"
                 >
                   {acting ? "Working…" : "Request Changes"}
@@ -724,14 +739,14 @@ export default function LoanDetails() {
                 <button
                   onClick={() => workflowAction("reject")}
                   disabled={acting}
-                  className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-60"
+                  className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 disabled:opacity-60 font-semibold shadow-sm"
                 >
                   {acting ? "Working…" : "Reject"}
                 </button>
                 <button
                   onClick={saveSuggestion}
                   disabled={acting}
-                  className="px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50 disabled:opacity-60"
+                  className="px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 disabled:opacity-60 font-semibold"
                 >
                   {acting ? "Saving…" : "Save Suggestion"}
                 </button>
@@ -741,12 +756,12 @@ export default function LoanDetails() {
 
           {showDisburse && (
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-slate-900">
                 This loan is approved. Proceed to disbursement to finalize payout.
               </p>
               <Link
                 to={`/loans/${id}/disburse`}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-semibold shadow-sm"
               >
                 Disburse
               </Link>
@@ -756,31 +771,31 @@ export default function LoanDetails() {
       )}
 
       {/* QUICK ACTIONS */}
-      <div className="flex flex-wrap gap-2 md:gap-3">
+      <div className="flex flex-wrap gap-3">
         <Link
           to={`/loans`}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
         >
           Back to Loans
         </Link>
 
         <button
           onClick={() => setOpenSchedule(true)}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
         >
           View Schedule
         </button>
 
         <button
           onClick={() => downloadScheduleCSV({ loan, schedule: schedule || [], currency })}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
           disabled={!Array.isArray(schedule) || !schedule.length}
         >
           Export CSV
         </button>
         <button
           onClick={() => downloadSchedulePDF({ loan, schedule: schedule || [], currency })}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
           disabled={!Array.isArray(schedule) || !schedule.length}
         >
           Export PDF
@@ -789,7 +804,7 @@ export default function LoanDetails() {
         {canPostRepayment && (
           <button
             onClick={() => setOpenRepay(true)}
-            className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+            className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
           >
             Post Repayment
           </button>
@@ -799,13 +814,13 @@ export default function LoanDetails() {
           <>
             <button
               onClick={openEditModal}
-              className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+              className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
             >
               Edit Loan
             </button>
             <button
               onClick={openRescheduleModal}
-              className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+              className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
             >
               Reschedule
             </button>
@@ -814,7 +829,7 @@ export default function LoanDetails() {
 
         <button
           onClick={reissueLoan}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-300 hover:bg-gray-50"
+          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
         >
           Reissue
         </button>
@@ -822,7 +837,7 @@ export default function LoanDetails() {
         {canDelete && (
           <button
             onClick={deleteLoan}
-            className="bg-red-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-red-700"
+            className="bg-red-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-red-700 font-semibold shadow-sm"
           >
             Delete
           </button>
@@ -831,7 +846,7 @@ export default function LoanDetails() {
         {loan.status !== "closed" && (
           <button
             onClick={closeLoan}
-            className="bg-red-50 text-red-700 px-3 md:px-4 py-2 rounded-lg border-2 border-red-200 hover:bg-red-100"
+            className="bg-red-50 text-red-700 px-3 md:px-4 py-2 rounded-lg border-2 border-red-300 hover:bg-red-100 font-semibold"
           >
             Close Loan
           </button>
@@ -842,57 +857,59 @@ export default function LoanDetails() {
       <SectionCard
         title="Repayments"
         right={
-          <div className="text-xs text-gray-500">
+          <div className="text-sm text-slate-900 font-semibold">
             {repayTotals.count} record{repayTotals.count === 1 ? "" : "s"} · Total{" "}
-            <span className="font-semibold">{fmtMoney(repayTotals.sum, currency)}</span>
+            <span className="font-extrabold">{fmtMoney(repayTotals.sum, currency)}</span>
           </div>
         }
       >
         {loadingRepayments ? (
           <p>Loading repayments…</p>
         ) : repayments.length === 0 ? (
-          <div className="text-sm text-gray-600">No repayments found.</div>
+          <div className="text-sm text-slate-900">No repayments found.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-base">
+          <div className="overflow-x-auto rounded-xl border-2 border-slate-400">
+            <table className="min-w-full table-fixed">
               <thead className="bg-slate-100 sticky top-0 z-10">
                 <tr className="text-left">
-                  <th className="px-3 py-3 border-b-2 border-slate-200">#</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200">Date</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200 text-right">Amount</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200">Method</th>
-                  <th className="px-3 py-3 border-b-2 border-slate-200">Notes</th>
+                  {["#", "Date", "Amount", "Method", "Notes"].map((h) => (
+                    <th
+                      key={h}
+                      className="px-3 py-3 border border-slate-400 font-bold text-slate-900"
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {repayments.map((r, i) => (
-                  <tr key={r.id || i} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 whitespace-nowrap">{i + 1}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{asDate(r.date)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">
+                  <tr key={r.id || i} className={i % 2 ? "bg-slate-50" : "bg-white"}>
+                    <td className="px-3 py-2 border border-slate-300 whitespace-nowrap">{i + 1}</td>
+                    <td className="px-3 py-2 border border-slate-300 whitespace-nowrap">
+                      {asDate(r.date)}
+                    </td>
+                    <td className="px-3 py-2 border border-slate-300 text-right whitespace-nowrap">
                       {fmtMoney(r.amount, currency)}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 ring-1 ring-slate-200">
+                    <td className="px-3 py-2 border border-slate-300 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-900 ring-1 ring-slate-300">
                         {r.method || "—"}
                       </span>
                     </td>
-                    <td className="px-3 py-2">{r.notes || "—"}</td>
+                    <td className="px-3 py-2 border border-slate-300 break-words">{r.notes || "—"}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-50">
-                  <td
-                    className="px-3 py-3 border-t-2 border-slate-200 text-sm font-medium"
-                    colSpan={2}
-                  >
+                <tr className="bg-slate-100">
+                  <td className="px-3 py-3 border-t-2 border-slate-400 text-sm font-bold" colSpan={2}>
                     Total
                   </td>
-                  <td className="px-3 py-3 border-t-2 border-slate-200 text-right text-base font-semibold">
+                  <td className="px-3 py-3 border-t-2 border-slate-400 text-right text-base font-extrabold">
                     {fmtMoney(repayTotals.sum, currency)}
                   </td>
-                  <td className="px-3 py-3 border-t-2 border-slate-200" colSpan={2}></td>
+                  <td className="px-3 py-3 border-t-2 border-slate-400" colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>
@@ -905,20 +922,20 @@ export default function LoanDetails() {
         {loadingComments ? (
           <p>Loading comments…</p>
         ) : comments.length === 0 ? (
-          <div className="text-sm text-gray-600">No comments yet.</div>
+          <div className="text-sm text-slate-900">No comments yet.</div>
         ) : (
           <div className="space-y-3 max-h-72 overflow-auto pr-1">
             {comments.map((c, i) => (
               <div key={c.id || i} className="flex gap-3">
-                <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold select-none">
+                <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-900 flex items-center justify-center text-xs font-extrabold select-none">
                   {(c.author?.name || "U").slice(0, 1).toUpperCase()}
                 </div>
-                <div className="flex-1 border-b pb-2">
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span className="font-medium text-gray-700">{c.author?.name || "User"}</span>
+                <div className="flex-1 border-b-2 border-slate-300 pb-2">
+                  <div className="flex justify-between text-xs text-slate-700">
+                    <span className="font-bold text-slate-900">{c.author?.name || "User"}</span>
                     <span>{asDateTime(c.createdAt)}</span>
                   </div>
-                  <p className="text-sm mt-0.5">{c.content}</p>
+                  <p className="text-sm mt-0.5 break-words">{c.content}</p>
                 </div>
               </div>
             ))}
@@ -929,12 +946,12 @@ export default function LoanDetails() {
           <textarea
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            className="border rounded-lg px-3 py-2 w-full min-h-[44px]"
+            className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full min-h-[44px]"
             placeholder="Add a comment"
           />
           <button
             onClick={addComment}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold shadow-sm"
           >
             Post
           </button>
@@ -943,41 +960,41 @@ export default function LoanDetails() {
 
       {/* REPAYMENT MODAL */}
       {openRepay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-6 border-2 border-slate-400">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xl font-semibold">Post Repayment</h4>
-              <button onClick={() => setOpenRepay(false)} className="text-gray-500 hover:text-gray-700">
+              <h4 className="text-2xl font-extrabold">Post Repayment</h4>
+              <button onClick={() => setOpenRepay(false)} className="text-slate-700 hover:text-slate-900">
                 ✕
               </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-gray-600">Amount</label>
+                <label className="block text-sm text-slate-900 font-semibold">Amount</label>
                 <input
                   type="number"
                   value={repForm.amount}
                   onChange={(e) => setRepForm((s) => ({ ...s, amount: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                   min="0"
                   step="0.01"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Date</label>
+                <label className="block text-sm text-slate-900 font-semibold">Date</label>
                 <input
                   type="date"
                   value={repForm.date}
                   onChange={(e) => setRepForm((s) => ({ ...s, date: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Method</label>
+                <label className="block text-sm text-slate-900 font-semibold">Method</label>
                 <select
                   value={repForm.method}
                   onChange={(e) => setRepForm((s) => ({ ...s, method: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                 >
                   <option value="cash">Cash</option>
                   <option value="mobile">Mobile Money</option>
@@ -985,12 +1002,12 @@ export default function LoanDetails() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Notes (optional)</label>
+                <label className="block text-sm text-slate-900 font-semibold">Notes (optional)</label>
                 <input
                   type="text"
                   value={repForm.notes}
                   onChange={(e) => setRepForm((s) => ({ ...s, notes: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                   placeholder="Receipt no., reference, etc."
                 />
               </div>
@@ -998,14 +1015,14 @@ export default function LoanDetails() {
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setOpenRepay(false)}
-                className="px-4 py-2 rounded-lg border-2 border-slate-300"
+                className="px-4 py-2 rounded-lg border-2 border-slate-400 font-semibold"
               >
                 Cancel
               </button>
               <button
                 onClick={handlePostRepayment}
                 disabled={postLoading}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60 font-semibold shadow-sm"
               >
                 {postLoading ? "Posting…" : "Post"}
               </button>
@@ -1016,13 +1033,13 @@ export default function LoanDetails() {
 
       {/* SCHEDULE MODAL */}
       {openSchedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl p-6 border-2 border-slate-400">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xl font-semibold">Repayment Schedule</h4>
+              <h4 className="text-2xl font-extrabold">Repayment Schedule</h4>
               <button
                 onClick={() => setOpenSchedule(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-slate-700 hover:text-slate-900"
               >
                 ✕
               </button>
@@ -1035,7 +1052,7 @@ export default function LoanDetails() {
             ) : (
               <>
                 {/* Disbursed/Start & Next due */}
-                <div className="mb-3 text-sm text-gray-600 space-y-1">
+                <div className="mb-3 text-sm text-slate-900 space-y-1">
                   <div>
                     <b>Disbursed:</b> {asDate(loan?.releaseDate || loan?.startDate) || "—"}
                   </div>
@@ -1052,7 +1069,7 @@ export default function LoanDetails() {
                   </div>
                 </div>
 
-                <div className="max-h-[70vh] overflow-auto">
+                <div className="max-h-[75vh] overflow-auto rounded-xl border-2 border-slate-400">
                   <ScheduleTable schedule={schedule || []} currency={currency} />
                 </div>
               </>
@@ -1061,7 +1078,7 @@ export default function LoanDetails() {
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setOpenSchedule(false)}
-                className="px-4 py-2 rounded-lg border-2 border-slate-300"
+                className="px-4 py-2 rounded-lg border-2 border-slate-400 font-semibold"
               >
                 Close
               </button>
@@ -1072,66 +1089,66 @@ export default function LoanDetails() {
 
       {/* EDIT MODAL */}
       {openEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-slate-400">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xl font-semibold">Edit Loan</h4>
-              <button onClick={() => setOpenEdit(false)} className="text-gray-500 hover:text-gray-700">
+              <h4 className="text-2xl font-extrabold">Edit Loan</h4>
+              <button onClick={() => setOpenEdit(false)} className="text-slate-700 hover:text-slate-900">
                 ✕
               </button>
             </div>
             <div className="grid gap-3">
               <div>
-                <label className="block text-sm text-gray-600">Amount</label>
+                <label className="block text-sm text-slate-900 font-semibold">Amount</label>
                 <input
                   type="number"
                   value={editForm.amount}
                   onChange={(e) => setEditForm((s) => ({ ...s, amount: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                   min="0"
                   step="0.01"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Interest Rate (%)</label>
+                <label className="block text-sm text-slate-900 font-semibold">Interest Rate (%)</label>
                 <input
                   type="number"
                   value={editForm.interestRate}
                   onChange={(e) => setEditForm((s) => ({ ...s, interestRate: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                   step="0.01"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Term (months)</label>
+                <label className="block text-sm text-slate-900 font-semibold">Term (months)</label>
                 <input
                   type="number"
                   value={editForm.termMonths}
                   onChange={(e) => setEditForm((s) => ({ ...s, termMonths: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">Start Date</label>
+                <label className="block text-sm text-slate-900 font-semibold">Start Date</label>
                 <input
                   type="date"
                   value={editForm.startDate}
                   onChange={(e) => setEditForm((s) => ({ ...s, startDate: e.target.value }))}
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                 />
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setOpenEdit(false)}
-                className="px-4 py-2 rounded-lg border-2 border-slate-300"
+                className="px-4 py-2 rounded-lg border-2 border-slate-400 font-semibold"
               >
                 Cancel
               </button>
               <button
                 onClick={saveEdit}
                 disabled={savingEdit}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60"
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60 font-semibold shadow-sm"
               >
                 {savingEdit ? "Saving…" : "Save"}
               </button>
@@ -1142,42 +1159,42 @@ export default function LoanDetails() {
 
       {/* RESCHEDULE MODAL */}
       {openReschedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-slate-400">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xl font-semibold">Reschedule Loan</h4>
+              <h4 className="text-2xl font-extrabold">Reschedule Loan</h4>
               <button
                 onClick={() => setOpenReschedule(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-slate-700 hover:text-slate-900"
               >
                 ✕
               </button>
             </div>
             <div className="grid gap-3">
               <div>
-                <label className="block text-sm text-gray-600">New Term (months)</label>
+                <label className="block text-sm text-slate-900 font-semibold">New Term (months)</label>
                 <input
                   type="number"
                   value={rescheduleForm.termMonths}
                   onChange={(e) =>
                     setRescheduleForm((s) => ({ ...s, termMonths: e.target.value }))
                   }
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                   min="1"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600">New Start Date</label>
+                <label className="block text-sm text-slate-900 font-semibold">New Start Date</label>
                 <input
                   type="date"
                   value={rescheduleForm.startDate}
                   onChange={(e) =>
                     setRescheduleForm((s) => ({ ...s, startDate: e.target.value }))
                   }
-                  className="border rounded-lg px-3 py-2 w-full"
+                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
                 />
               </div>
-              <label className="inline-flex items-center gap-2 text-sm">
+              <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <input
                   type="checkbox"
                   checked={rescheduleForm.previewOnly}
@@ -1191,14 +1208,14 @@ export default function LoanDetails() {
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setOpenReschedule(false)}
-                className="px-4 py-2 rounded-lg border-2 border-slate-300"
+                className="px-4 py-2 rounded-lg border-2 border-slate-400 font-semibold"
               >
                 Cancel
               </button>
               <button
                 onClick={submitReschedule}
                 disabled={savingReschedule}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60"
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60 font-semibold shadow-sm"
               >
                 {savingReschedule ? "Working…" : rescheduleForm.previewOnly ? "Preview" : "Reschedule"}
               </button>
