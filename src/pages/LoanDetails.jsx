@@ -57,9 +57,7 @@ function deriveStageFromStatus(status) {
 const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
   <div className="bg-white border-2 border-slate-300 rounded-2xl shadow-md">
     <div
-      className={`px-6 ${
-        dense ? "py-3" : "py-4"
-      } border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between`}
+      className={`px-6 ${dense ? "py-3" : "py-4"} border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between`}
     >
       <div>
         {title && <h3 className="text-lg md:text-xl font-semibold tracking-tight">{title}</h3>}
@@ -492,11 +490,17 @@ export default function LoanDetails() {
     [schedule, repayments]
   );
 
-  // Prefer computed outstanding from schedule/repayments to avoid misleading backend default 0s
-  const outstanding =
-    loan?.status === "closed" ? 0 : totals.outstanding ?? loan?.outstanding ?? null;
+  // IMPORTANT: wait for a real schedule before switching to computed values
+  const scheduleReady = Array.isArray(schedule) && schedule.length > 0;
 
-  const nextDue = totals.nextDue;
+  const outstanding =
+    loan?.status === "closed"
+      ? 0
+      : scheduleReady
+      ? totals.outstanding
+      : loan?.outstanding ?? null;
+
+  const nextDue = scheduleReady ? totals.nextDue : null;
 
   const repayTotals = useMemo(() => {
     const count = repayments.length || 0;
@@ -618,7 +622,9 @@ export default function LoanDetails() {
           ].map(([label, val]) => (
             <div key={label} className="rounded-xl border-2 border-slate-200 p-3">
               <div className="text-gray-500 text-[12px]">{label}</div>
-              <div className="font-semibold text-base">{fmtMoney(val, currency)}</div>
+              <div className="font-semibold text-base">
+                {scheduleReady ? fmtMoney(val, currency) : "—"}
+              </div>
             </div>
           ))}
         </div>
