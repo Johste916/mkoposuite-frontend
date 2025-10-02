@@ -1,7 +1,19 @@
+// src/pages/reports/BorrowerReports.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
 const money = (v) => `TZS ${Number(v || 0).toLocaleString()}`;
+
+const ui = {
+  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
+  h1: 'text-3xl font-extrabold tracking-tight',
+  kpiCard: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4',
+  kpiLabel: 'text-[11px] uppercase tracking-wide text-slate-600 font-semibold',
+  kpiValue: 'mt-1 text-xl font-semibold',
+  alert: 'rounded-2xl border-2 border-rose-300 bg-rose-50 px-4 py-3 text-rose-800',
+  skeleton: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4',
+  placeholderCard: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4',
+};
 
 const BorrowerReports = () => {
   const [kpis, setKpis] = useState([
@@ -31,48 +43,39 @@ const BorrowerReports = () => {
         setLoading(false);
       }
     };
-
     fetchReports();
   }, []);
 
   return (
-    <div className="p-4 md:p-6 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
-      <h1 className="text-2xl font-semibold">Borrower Reports</h1>
+    <div className={ui.container}>
+      <h1 className={ui.h1}>Borrower Reports</h1>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="card p-4 animate-pulse"
-            >
-              <div className="h-3 w-24 rounded bg-[var(--border)] mb-3" />
-              <div className="h-6 w-32 rounded bg-[var(--border)]" />
+            <div key={i} className={ui.skeleton}>
+              <div className="mb-3 h-3 w-24 rounded bg-slate-200" />
+              <div className="h-6 w-32 rounded bg-slate-200" />
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className="card p-4">
-          <p className="text-sm" style={{ color: "var(--fg)" }}>
-            <span className="text-rose-600 dark:text-rose-400 font-medium">Error:</span>{" "}
-            <span className="opacity-80">{error}</span>
-          </p>
-        </div>
+        <div className={`${ui.alert} mt-4`}>{error}</div>
       ) : (
         <>
           {/* KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
             {kpis.map((k) => (
-              <div key={k.label} className="card p-4">
-                <div className="text-[11px] uppercase tracking-wide muted">{k.label}</div>
-                <div className="mt-1 text-xl font-semibold">{k.value}</div>
+              <div key={k.label} className={ui.kpiCard}>
+                <div className={ui.kpiLabel}>{k.label}</div>
+                <div className={ui.kpiValue}>{k.value}</div>
               </div>
             ))}
           </div>
 
           {/* Charts placeholder */}
-          <div className="card p-4">
-            <div className="text-sm muted">
+          <div className={`${ui.placeholderCard} mt-4`}>
+            <div className="text-sm text-slate-600">
               Charts will go here (by branch, officer, risk tiers).
             </div>
           </div>

@@ -1,3 +1,4 @@
+// src/pages/groups/AddGroup.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api";
 
@@ -7,7 +8,6 @@ function apiVariants(p) {
   const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
   return Array.from(new Set([noApi, withApi]));
 }
-
 async function tryGET(paths = [], opts = {}) {
   let lastErr;
   for (const p of paths) {
@@ -24,22 +24,15 @@ async function tryPOST(paths = [], body = {}, opts = {}) {
   }
   throw lastErr || new Error("No endpoint succeeded");
 }
-
 function toBranches(raw) {
   const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
-  return arr.map(b => ({
-    id: b.id ?? b._id ?? b.branchId ?? b.code ?? String(b.name || "branch"),
-    name: b.name ?? b.title ?? b.label ?? String(b.code || "—"),
-  }));
+  return arr.map(b => ({ id: b.id ?? b._id ?? b.branchId ?? b.code ?? String(b.name || "branch"), name: b.name ?? b.title ?? b.label ?? String(b.code || "—") }));
 }
 function toUsers(raw) {
   const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
   return arr.map(u => ({
     id: u.id ?? u._id ?? u.userId ?? String(u.email || u.phone || "user"),
-    name:
-      u.name ||
-      [u.firstName, u.lastName].filter(Boolean).join(" ").trim() ||
-      u.username || u.email || u.phone || "—",
+    name: u.name || [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.username || u.email || u.phone || "—",
     roles: (u.roles || u.Roles || []).map(r => (r.name || r.code || "").toString().toLowerCase()),
     title: (u.title || u.jobTitle || "").toString().toLowerCase(),
   }));
@@ -51,15 +44,18 @@ function isLoanOfficer(u) {
 
 const MEETING_DAYS = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
 
-const AddGroup = () => {
-  const [form, setForm] = useState({
-    name: "",
-    branchId: "",
-    meetingDay: "",
-    officerId: "",
-    notes: "",
-  });
+const ui = {
+  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
+  h1: 'text-3xl font-extrabold tracking-tight mb-4',
+  card: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4',
+  label: 'block text-xs uppercase tracking-wide text-slate-600 mb-1 font-semibold',
+  input: 'h-10 w-full rounded-lg border-2 border-slate-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500/40',
+  textarea: 'w-full rounded-lg border-2 border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/40',
+  primary: 'inline-flex items-center rounded-lg bg-indigo-600 text-white px-4 py-2 font-semibold hover:bg-indigo-700 disabled:opacity-60',
+};
 
+const AddGroup = () => {
+  const [form, setForm] = useState({ name: "", branchId: "", meetingDay: "", officerId: "", notes: "" });
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
@@ -74,13 +70,7 @@ const AddGroup = () => {
     (async () => {
       try {
         setLoadingBranches(true);
-        const data = await tryGET(
-          [
-            ...apiVariants("branches"),
-            ...apiVariants("org/branches"),
-          ],
-          { signal: ac.signal }
-        );
+        const data = await tryGET([...apiVariants("branches"), ...apiVariants("org/branches")], { signal: ac.signal });
         setBranches(toBranches(data));
       } catch { setBranches([]); }
       finally { setLoadingBranches(false); }
@@ -94,12 +84,7 @@ const AddGroup = () => {
       try {
         setLoadingOfficers(true);
         const raw = await tryGET(
-          [
-            ...apiVariants("users?role=loan_officer"),
-            ...apiVariants("admin/staff?role=loan_officer"),
-            ...apiVariants("users"),
-            ...apiVariants("admin/staff"),
-          ],
+          [...apiVariants("users?role=loan_officer"), ...apiVariants("admin/staff?role=loan_officer"), ...apiVariants("users"), ...apiVariants("admin/staff")],
           { signal: ac.signal }
         );
         const all = toUsers(raw);
@@ -111,12 +96,8 @@ const AddGroup = () => {
     return () => ac.abort();
   }, []);
 
-  const branchOptions = useMemo(
-    () => branches.map((b) => ({ value: String(b.id), label: b.name || String(b.id) })), [branches]
-  );
-  const officerOptions = useMemo(
-    () => officers.map((u) => ({ value: String(u.id), label: u.name || String(u.id) })), [officers]
-  );
+  const branchOptions = useMemo(() => branches.map((b) => ({ value: String(b.id), label: b.name || String(b.id) })), [branches]);
+  const officerOptions = useMemo(() => officers.map((u) => ({ value: String(u.id), label: u.name || String(u.id) })), [officers]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -130,14 +111,7 @@ const AddGroup = () => {
         officerId: form.officerId?.trim() || null,
         notes: form.notes || null,
       };
-      await tryPOST(
-        [
-          ...apiVariants("borrowers/groups"),
-          ...apiVariants("groups"),
-          ...apiVariants("borrower-groups"),
-        ],
-        payload
-      );
+      await tryPOST([...apiVariants("borrowers/groups"), ...apiVariants("groups"), ...apiVariants("borrower-groups")], payload);
       setMsg("✅ Group created.");
       setForm({ name: "", branchId: "", meetingDay: "", officerId: "", notes: "" });
     } catch (err) {
@@ -149,85 +123,50 @@ const AddGroup = () => {
   };
 
   return (
-    <div className="p-4 max-w-2xl bg-[var(--bg)] text-[var(--fg)]">
-      <h1 className="text-2xl font-semibold mb-4">Add Group</h1>
-      <form onSubmit={handleSubmit} className="card p-4 space-y-4">
-        <div>
-          <label className="block text-xs muted mb-1">Name</label>
-          <input
-            name="name"
-            value={form.name}
-            onChange={onChange}
-            required
-            className="input"
-            placeholder="Group name"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div className={ui.container}>
+      <h1 className={ui.h1}>Add Group</h1>
+      <form onSubmit={handleSubmit} className={ui.card}>
+        <div className="space-y-4">
           <div>
-            <label className="block text-xs muted mb-1">Branch</label>
-            <select
-              name="branchId"
-              value={form.branchId}
-              onChange={onChange}
-              className="input"
-              disabled={loadingBranches || !branchOptions.length}
-            >
-              <option value="">{loadingBranches ? "Loading…" : "(Select branch)"}</option>
-              {branchOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <label className={ui.label}>Name</label>
+            <input name="name" value={form.name} onChange={onChange} required className={ui.input} placeholder="Group name" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div>
+              <label className={ui.label}>Branch</label>
+              <select name="branchId" value={form.branchId} onChange={onChange} className={ui.input} disabled={loadingBranches || !branchOptions.length}>
+                <option value="">{loadingBranches ? "Loading…" : "(Select branch)"}</option>
+                {branchOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={ui.label}>Loan Officer</label>
+              <select name="officerId" value={form.officerId} onChange={onChange} className={ui.input} disabled={loadingOfficers || !officerOptions.length}>
+                <option value="">{loadingOfficers ? "Loading…" : "(None yet)"}</option>
+                {officerOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={ui.label}>Meeting Day</label>
+              <select name="meetingDay" value={form.meetingDay} onChange={onChange} className={ui.input}>
+                <option value="">(None)</option>
+                {MEETING_DAYS.map((d) => <option key={d} value={d}>{d[0].toUpperCase()+d.slice(1)}</option>)}
+              </select>
+            </div>
           </div>
 
           <div>
-            <label className="block text-xs muted mb-1">Loan Officer</label>
-            <select
-              name="officerId"
-              value={form.officerId}
-              onChange={onChange}
-              className="input"
-              disabled={loadingOfficers || !officerOptions.length}
-            >
-              <option value="">{loadingOfficers ? "Loading…" : "(None yet)"}</option>
-              {officerOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <label className={ui.label}>Notes</label>
+            <textarea name="notes" value={form.notes} onChange={onChange} rows={3} className={ui.textarea} placeholder="Optional notes about this group" />
           </div>
 
-          <div>
-            <label className="block text-xs muted mb-1">Meeting Day</label>
-            <select
-              name="meetingDay"
-              value={form.meetingDay}
-              onChange={onChange}
-              className="input"
-            >
-              <option value="">(None)</option>
-              {MEETING_DAYS.map((d) => <option key={d} value={d}>{d[0].toUpperCase()+d.slice(1)}</option>)}
-            </select>
+          <div className="flex items-center gap-2">
+            <button type="submit" disabled={saving} className={ui.primary}>
+              {saving ? "Saving…" : "Create Group"}
+            </button>
+            {msg && <div className="text-sm">{msg}</div>}
           </div>
-        </div>
-
-        <div>
-          <label className="block text-xs muted mb-1">Notes</label>
-          <textarea
-            name="notes"
-            value={form.notes}
-            onChange={onChange}
-            className="input"
-            rows={3}
-            placeholder="Optional notes about this group"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-          >
-            {saving ? "Saving…" : "Create Group"}
-          </button>
-          {msg && <div className="text-sm">{msg}</div>}
         </div>
       </form>
     </div>

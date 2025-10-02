@@ -1,5 +1,20 @@
+// src/pages/borrowers/BorrowerBlacklist.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../api";
+
+const ui = {
+  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
+  h1: 'text-3xl font-extrabold tracking-tight',
+  card: 'rounded-2xl border-2 border-slate-300 bg-white shadow',
+  input: 'h-10 w-full rounded-lg border-2 border-slate-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500/40',
+  primary: 'inline-flex items-center rounded-lg bg-rose-600 text-white px-4 py-2 font-semibold hover:bg-rose-700',
+  tableWrap: 'rounded-2xl border-2 border-slate-300 bg-white shadow overflow-x-auto',
+  th: 'bg-slate-100 text-left text-[13px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200',
+  td: 'px-3 py-2 border-2 border-slate-200 text-sm',
+  btn: 'inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-1.5 hover:bg-slate-50',
+  alert: 'rounded-2xl border-2 border-rose-300 bg-rose-50 px-4 py-3 text-rose-800',
+  info: 'rounded-2xl border-2 border-slate-300 bg-white px-4 py-3',
+};
 
 const BorrowerBlacklist = () => {
   const [rows, setRows] = useState([]);
@@ -59,77 +74,47 @@ const BorrowerBlacklist = () => {
   const nameOf = (r) => r?.name || `${r?.firstName || ""} ${r?.lastName || ""}`.trim() || r?.id || "—";
 
   return (
-    <div className="p-4 md:p-6 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
-      <h1 className="text-2xl font-semibold">Blacklist</h1>
+    <div className={ui.container}>
+      <h1 className={ui.h1}>Blacklist</h1>
 
       {/* Add form */}
-      <form onSubmit={onSubmit} className="card p-4 space-y-3 max-w-2xl">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <input
-            name="borrowerId"
-            placeholder="Borrower ID"
-            className="input"
-            value={form.borrowerId}
-            onChange={onChange}
-            required
-          />
-          <input
-            name="reason"
-            placeholder="Reason"
-            className="input"
-            value={form.reason}
-            onChange={onChange}
-          />
-          <input
-            name="until"
-            type="date"
-            className="input"
-            value={form.until}
-            onChange={onChange}
-          />
+      <form onSubmit={onSubmit} className={`${ui.card} mt-4 p-4`}>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <input name="borrowerId" placeholder="Borrower ID" className={ui.input} value={form.borrowerId} onChange={onChange} required />
+          <input name="reason" placeholder="Reason" className={ui.input} value={form.reason} onChange={onChange} />
+          <input name="until" type="date" className={ui.input} value={form.until} onChange={onChange} />
         </div>
-        <button className="inline-flex items-center px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700">
-          Add to Blacklist
-        </button>
+        <div className="mt-3">
+          <button className={ui.primary}>Add to Blacklist</button>
+        </div>
       </form>
 
       {/* Table */}
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--table-head-bg,transparent)]">
-            <tr className="text-left text-[var(--fg)]/80">
-              <th className="px-3 py-2">Borrower</th>
-              <th className="px-3 py-2">Reason</th>
-              <th className="px-3 py-2">Until</th>
-              <th className="px-3 py-2 text-right pr-4">Actions</th>
+      <div className={`${ui.tableWrap} mt-4`}>
+        <table className="w-full table-auto text-sm">
+          <thead>
+            <tr>
+              <th className={ui.th}>Borrower</th>
+              <th className={ui.th}>Reason</th>
+              <th className={ui.th}>Until</th>
+              <th className={ui.th}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td className="p-4 muted" colSpan={4}>Loading…</td>
-              </tr>
+              <tr><td className={ui.td} colSpan={4}>Loading…</td></tr>
             ) : err ? (
-              <tr>
-                <td className="p-4 text-rose-600 dark:text-rose-400" colSpan={4}>{err}</td>
-              </tr>
+              <tr><td className={`${ui.td} text-rose-700`} colSpan={4}>{err}</td></tr>
             ) : rows.length === 0 ? (
-              <tr>
-                <td className="p-4 muted" colSpan={4}>No blacklisted borrowers.</td>
-              </tr>
+              <tr><td className={ui.td} colSpan={4}>No blacklisted borrowers.</td></tr>
             ) : (
               rows.map((r) => (
-                <tr key={r.id} className="border-t border-[var(--border)] odd:bg-[var(--table-row-odd,transparent)] even:bg-[var(--table-row-even,transparent)]">
-                  <td className="px-3 py-2">{nameOf(r)}</td>
-                  <td className="px-3 py-2">{r.reason || "—"}</td>
-                  <td className="px-3 py-2">{fmtDate(r.until)}</td>
-                  <td className="px-3 py-2 text-right">
-                    <button
-                      className="px-2 py-1 border rounded-lg hover:bg-[var(--hover,#f9fafb)] dark:hover:bg-[color-mix(in_oklab,var(--fg)_8%,transparent)] border-[var(--border)]"
-                      onClick={() => remove(r.id)}
-                    >
-                      Remove
-                    </button>
+                <tr key={r.id}>
+                  <td className={ui.td}>{nameOf(r)}</td>
+                  <td className={ui.td}>{r.reason || "—"}</td>
+                  <td className={ui.td}>{fmtDate(r.until)}</td>
+                  <td className={ui.td}>
+                    <button className={ui.btn} onClick={() => remove(r.id)}>Remove</button>
                   </td>
                 </tr>
               ))

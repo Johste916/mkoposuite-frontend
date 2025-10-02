@@ -1,4 +1,15 @@
+// src/pages/borrowers/BorrowerImports.jsx
 import React, { useState } from 'react';
+
+const ui = {
+  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
+  h1: 'text-3xl font-extrabold tracking-tight',
+  card: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4 max-w-2xl',
+  input: 'block w-full h-10 rounded-lg border-2 border-slate-300 px-3',
+  primary: 'inline-flex items-center rounded-lg bg-blue-600 text-white px-3 py-2 font-semibold hover:bg-blue-700',
+  btn: 'inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50',
+  note: 'text-xs text-slate-600',
+};
 
 const BorrowerImports = () => {
   const [file, setFile] = useState(null);
@@ -16,14 +27,14 @@ const BorrowerImports = () => {
   };
 
   return (
-    <div className="max-w-2xl p-4 space-y-4">
-      <h1 className="text-2xl font-semibold">Borrower Imports</h1>
-      <form onSubmit={submit} className="bg-white rounded shadow p-4 space-y-3">
-        <input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-        <div className="text-xs text-gray-500">Accepted: CSV/XLSX.</div>
+    <div className={ui.container}>
+      <h1 className={ui.h1}>Borrower Imports</h1>
+      <form onSubmit={submit} className={`${ui.card} mt-4 space-y-3`}>
+        <input type="file" accept=".csv,.xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} className={ui.input} />
+        <div className={ui.note}>Accepted: CSV/XLSX.</div>
         <div className="flex gap-2">
-          <button type="submit" className="px-3 py-2 bg-blue-600 text-white rounded">Upload</button>
-          <button type="button" onClick={downloadSample} className="px-3 py-2 border rounded">Download Sample</button>
+          <button type="submit" className={ui.primary}>Upload</button>
+          <button type="button" onClick={downloadSample} className={ui.btn}>Download Sample</button>
         </div>
       </form>
     </div>

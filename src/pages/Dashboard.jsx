@@ -138,12 +138,22 @@ const useIsDarkMode = () => {
 
 const TZS = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
+/* ---------- Shared UI tokens for the bold, high-contrast look ---------- */
+const ui = {
+  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
+  h1: 'text-3xl font-extrabold tracking-tight',
+  card: 'rounded-2xl border-2 border-slate-300 bg-white shadow',
+  btn: 'inline-flex items-center justify-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50',
+  primary: 'inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700',
+  tableWrap: 'overflow-x-auto rounded-2xl border-2 border-slate-300 bg-white shadow',
+  th: 'bg-slate-100 text-left text-[13px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200',
+  td: 'px-3 py-2 border-2 border-slate-200 text-sm',
+};
+
 /* ---------- Unified field components ---------- */
 const baseInput =
-  'h-10 w-full rounded-lg border text-sm outline-none transition ' +
-  'bg-white text-slate-900 border-slate-300 ' +
-  'focus:ring-2 focus:ring-indigo-500/50 ' +
-  'dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700';
+  'h-10 w-full rounded-lg border-2 text-sm outline-none transition ' +
+  'bg-white text-slate-900 border-slate-300 focus:ring-2 focus:ring-indigo-500/40';
 
 const SelectField = ({ className = '', children, ...props }) => (
   <div className={`relative ${className}`}>
@@ -155,7 +165,7 @@ const SelectField = ({ className = '', children, ...props }) => (
       {children}
     </select>
     <ChevronDown
-      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600"
       aria-hidden="true"
     />
   </div>
@@ -170,7 +180,7 @@ const DateField = ({ className = '', ...props }) => (
       style={{ backgroundImage: 'none' }}
     />
     <Calendar
-      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-300"
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600"
       aria-hidden="true"
     />
   </div>
@@ -489,7 +499,6 @@ const Dashboard = () => {
         dueDate: draft.dueDate || null,
         note: draft.note || '',
       });
-      // BUGFIX: clear the correct draft by activityId
       setAssignDraft((d) => ({ ...d, [activityId]: { assigneeId: '', dueDate: '', note: '' } }));
       await fetchActivity();
       pushToast('Task assigned', 'success');
@@ -508,11 +517,11 @@ const Dashboard = () => {
     const pct = m > 0 ? Math.round((v / m) * 100) : 0;
     return (
       <div className="space-y-1">
-        <div className="flex justify-between text-xs text-gray-600 dark:text-slate-300">
+        <div className="flex justify-between text-xs text-slate-600">
           <span>{label}</span>
           <span className="tabular-nums">{v.toLocaleString()}</span>
         </div>
-        <div className="h-2 w-full bg-gray-100 dark:bg-slate-800 rounded">
+        <div className="h-2 w-full bg-slate-100 rounded">
           <div
             className="h-2 rounded transition-[width] duration-500"
             style={{ width: `${pct}%`, backgroundColor: 'currentColor' }}
@@ -523,7 +532,7 @@ const Dashboard = () => {
   };
 
   const Skeleton = ({ className = '' }) => (
-    <div className={`animate-pulse bg-gray-100 dark:bg-slate-800/50 rounded ${className}`} />
+    <div className={`animate-pulse bg-slate-100 rounded ${className}`} />
   );
 
   // Download all attachments from ticker
@@ -563,665 +572,631 @@ const Dashboard = () => {
   const ss = String(secsLeft % 60).padStart(2, '0');
 
   return (
-    <div className="space-y-6">
-      {/* Scoped CSS to remove native dropdown/calendar icons (prevents double arrows) */}
-      <style>{`
-        /* Select: remove native arrow across browsers */
-        select.ms-select {
-          -webkit-appearance: none;
-          -moz-appearance: none;
-          appearance: none;
-          background-image: none !important;
-        }
-        /* Legacy Edge/IE */
-        select.ms-select::-ms-expand { display: none; }
+    <div className={ui.container}>
+      <div className="space-y-6">
+        {/* Scoped CSS to remove native dropdown/calendar icons (prevents double arrows) */}
+        <style>{`
+          /* Select: remove native arrow across browsers */
+          select.ms-select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: none !important;
+          }
+          /* Legacy Edge/IE */
+          select.ms-select::-ms-expand { display: none; }
 
-        /* Date input: hide native calendar button so our icon is the only one */
-        input.ms-date[type="date"] {
-          -webkit-appearance: none;
-          appearance: none;
-          background-image: none !important;
-        }
-        input.ms-date[type="date"]::-webkit-calendar-picker-indicator {
-          opacity: 0;
-          display: none;
-        }
-      `}</style>
+          /* Date input: hide native calendar button so our icon is the only one */
+          input.ms-date[type="date"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: none !important;
+          }
+          input.ms-date[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0;
+            display: none;
+          }
+        `}</style>
 
-      {/* Top bar */}
-      <div className="rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm border border-slate-200 dark:border-slate-800 p-4 md:p-6">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Dashboard
-            </h1>
-            <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
-              Quick snapshot of borrowers, loans, repayments and savings.
-            </p>
-            <p className="text-xs text-slate-600 dark:text-slate-300/90 mt-1">
-              {lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleString()}` : 'Loading…'}
-            </p>
+        {/* Top bar */}
+        <div className={`${ui.card} p-4 md:p-6`}>
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <h1 className={ui.h1}>Dashboard</h1>
+              <p className="text-sm text-slate-700 mt-1">
+                Quick snapshot of borrowers, loans, repayments and savings.
+              </p>
+              <p className="text-xs text-slate-600 mt-1">
+                {lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleString()}` : 'Loading…'}
+              </p>
+            </div>
+
+            {/* Filters (wrap as needed) */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <SelectField
+                aria-label="Filter by branch"
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="min-w-[11rem]"
+              >
+                <option value="">All Branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </SelectField>
+
+              <SelectField
+                aria-label="Filter by loan officer"
+                value={officerId}
+                onChange={(e) => setOfficerId(e.target.value)}
+                className="min-w-[12rem]"
+              >
+                <option value="">All Loan Officers</option>
+                {officers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name || o.email}
+                  </option>
+                ))}
+              </SelectField>
+
+              <SelectField
+                aria-label="Filter by time range"
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+                className="min-w-[10rem]"
+              >
+                <option value="">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="quarter">This Quarter</option>
+                <option value="semiAnnual">Semi-Annual</option>
+                <option value="annual">Annual</option>
+              </SelectField>
+
+              <SelectField
+                aria-label="Auto refresh interval"
+                value={autoRefresh}
+                onChange={(e) => setAutoRefresh(Number(e.target.value))}
+                className="min-w-[12rem]"
+              >
+                <option value={0}>No Auto-Refresh</option>
+                <option value={1}>Every 1 min</option>
+                <option value={5}>Every 5 mins</option>
+                <option value={15}>Every 15 mins</option>
+              </SelectField>
+
+              <button
+                className={ui.btn}
+                onClick={() => {
+                  const ac = new AbortController();
+                  Promise.all([
+                    fetchSummary(ac.signal),
+                    fetchActivity({ page: 1 }, ac.signal),
+                    fetchTrends(ac.signal),
+                    fetchCommunications(ac.signal),
+                  ])
+                    .then(() => {
+                      setActivityPage(1);
+                      setLastUpdatedAt(new Date());
+                      if (autoRefresh > 0) setNextRefreshAt(Date.now() + autoRefresh * 60000);
+                      pushToast('Dashboard refreshed', 'success');
+                    })
+                    .catch(() => pushToast('Refresh failed', 'error'))
+                    .finally(() => ac.abort());
+                }}
+                aria-label="Refresh dashboard"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
-          {/* Filters (wrap as needed) */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <SelectField
-              aria-label="Filter by branch"
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="min-w-[11rem]"
-            >
-              <option value="">All Branches</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </SelectField>
-
-            <SelectField
-              aria-label="Filter by loan officer"
-              value={officerId}
-              onChange={(e) => setOfficerId(e.target.value)}
-              className="min-w-[12rem]"
-            >
-              <option value="">All Loan Officers</option>
-              {officers.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name || o.email}
-                </option>
-              ))}
-            </SelectField>
-
-            <SelectField
-              aria-label="Filter by time range"
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-              className="min-w-[10rem]"
-            >
-              <option value="">All Time</option>
-              <option value="today">Today</option>
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-              <option value="quarter">This Quarter</option>
-              <option value="semiAnnual">Semi-Annual</option>
-              <option value="annual">Annual</option>
-            </SelectField>
-
-            <SelectField
-              aria-label="Auto refresh interval"
-              value={autoRefresh}
-              onChange={(e) => setAutoRefresh(Number(e.target.value))}
-              className="min-w-[12rem]"
-            >
-              <option value={0}>No Auto-Refresh</option>
-              <option value={1}>Every 1 min</option>
-              <option value={5}>Every 5 mins</option>
-              <option value={15}>Every 15 mins</option>
-            </SelectField>
-
-            <button
-              className="ms-btn h-10 px-3.5 sm:px-4 inline-flex items-center justify-center whitespace-nowrap shrink-0
-                         bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700
-                         hover:bg-slate-50 dark:hover:bg-slate-800/80 rounded-lg"
-              onClick={() => {
-                const ac = new AbortController();
-                Promise.all([
-                  fetchSummary(ac.signal),
-                  fetchActivity({ page: 1 }, ac.signal),
-                  fetchTrends(ac.signal),
-                  fetchCommunications(ac.signal),
-                ])
-                  .then(() => {
-                    setActivityPage(1);
-                    setLastUpdatedAt(new Date());
-                    if (autoRefresh > 0) setNextRefreshAt(Date.now() + autoRefresh * 60000);
-                    pushToast('Dashboard refreshed', 'success');
-                  })
-                  .catch(() => pushToast('Refresh failed', 'error'))
-                  .finally(() => ac.abort());
-              }}
-              aria-label="Refresh dashboard"
-            >
-              Refresh
-            </button>
-          </div>
+          {autoRefresh > 0 && nextRefreshAt && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border-2 border-slate-300 px-2.5 py-1 text-xs text-slate-800">
+              Auto-refresh in {mm}:{ss}
+            </div>
+          )}
         </div>
 
-        {autoRefresh > 0 && nextRefreshAt && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
-            Auto-refresh in {mm}:{ss}
+        {/* Toasts */}
+        <div className="fixed right-4 top-4 z-50 space-y-2">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`px-3 py-2 rounded shadow text-sm text-white ${
+                t.type === 'error' ? 'bg-red-600' : t.type === 'success' ? 'bg-emerald-600' : 'bg-slate-800'
+              }`}
+            >
+              {t.msg}
+            </div>
+          ))}
+        </div>
+
+        {/* === Communications ribbon === */}
+        {(comms?.length ?? 0) > 0 && (
+          <div className={`${ui.card} overflow-hidden`}>
+            <div className="flex items-center justify-between px-3 py-2 border-b-2 border-slate-200 bg-slate-50">
+              <div className="text-xs font-semibold text-slate-700">General Communications</div>
+              {comms.some((c) => Array.isArray(c.attachments) && c.attachments.length > 0) && (
+                <button
+                  onClick={downloadAllAttachments}
+                  className={`${ui.btn} h-7 px-2 text-xs`}
+                  title="Open all attachments"
+                  disabled={loadingComms}
+                >
+                  <Download className="w-3 h-3" /> Download all
+                </button>
+              )}
+            </div>
+            <div className="relative h-10">
+              <style>{`@keyframes ms-marquee{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
+              <div
+                className="absolute whitespace-nowrap will-change-transform text-sm text-slate-900 flex items-center gap-8 px-3"
+                style={{ animation: 'ms-marquee 18s linear infinite' }}
+              >
+                {comms.map((c, idx) => (
+                  <span key={c.id || c.text || idx} className="inline-flex items-center gap-2">
+                    {c.type && (
+                      <span className="text-[11px] px-1.5 py-0.5 border-2 rounded bg-white border-slate-300">
+                        {c.type}
+                      </span>
+                    )}
+                    {c.priority && (
+                      <span className="text-[11px] px-1.5 py-0.5 border-2 rounded bg-white border-slate-300">
+                        {c.priority}
+                      </span>
+                    )}
+                    {c.audienceRole && (
+                      <span className="text-[11px] px-1.5 py-0.5 border-2 rounded bg-white border-slate-300">
+                        role: {c.audienceRole}
+                      </span>
+                    )}
+                    {typeof c.audienceBranchId !== 'undefined' && c.audienceBranchId !== null && (
+                      <span className="text-[11px] px-1.5 py-0.5 border-2 rounded bg-white border-slate-300">
+                        {branchNameById(c.audienceBranchId)}
+                      </span>
+                    )}
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600" />
+                    <span className="truncate">{c.text}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Toasts */}
-      <div className="fixed right-4 top-4 z-50 space-y-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`px-3 py-2 rounded shadow text-sm text-white ${
-              t.type === 'error' ? 'bg-red-600' : t.type === 'success' ? 'bg-emerald-600' : 'bg-slate-800'
-            }`}
-          >
-            {t.msg}
-          </div>
-        ))}
-      </div>
-
-      {/* === Communications ribbon === */}
-      {(comms?.length ?? 0) > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 dark:bg-slate-800/60 dark:border-slate-700">
-            <div className="text-xs font-semibold text-gray-700 dark:text-slate-200">General Communications</div>
-            {comms.some((c) => Array.isArray(c.attachments) && c.attachments.length > 0) && (
-              <button
-                onClick={downloadAllAttachments}
-                className="text-xs flex items-center gap-1 border rounded px-2 py-1 dark:border-slate-700 dark:hover:bg-slate-800"
-                title="Open all attachments"
-                disabled={loadingComms}
-              >
-                <Download className="w-3 h-3" /> Download all
-              </button>
-            )}
-          </div>
-          <div className="relative h-10">
-            <style>{`@keyframes ms-marquee{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
-            <div
-              className="absolute whitespace-nowrap will-change-transform text-sm text-gray-800 dark:text-slate-100 flex items-center gap-8 px-3"
-              style={{ animation: 'ms-marquee 18s linear infinite' }}
-            >
-              {comms.map((c, idx) => (
-                <span key={c.id || c.text || idx} className="inline-flex items-center gap-2">
-                  {c.type && (
-                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
-                      {c.type}
-                    </span>
-                  )}
-                  {c.priority && (
-                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
-                      {c.priority}
-                    </span>
-                  )}
-                  {c.audienceRole && (
-                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
-                      role: {c.audienceRole}
-                    </span>
-                  )}
-                  {typeof c.audienceBranchId !== 'undefined' && c.audienceBranchId !== null && (
-                    <span className="text-[11px] px-1.5 py-0.5 border rounded bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200">
-                      {branchNameById(c.audienceBranchId)}
-                    </span>
-                  )}
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  <span className="truncate">{c.text}</span>
-                </span>
-              ))}
-            </div>
-          </div>
+        {/* Quick Actions */}
+        <div className="flex flex-wrap gap-3">
+          <Link to="/loans/add" className={ui.btn}><PlusCircle className="w-4 h-4" /> Add Loan</Link>
+          <Link to="/borrowers/add" className={ui.btn}><PlusCircle className="w-4 h-4" /> Add Borrower</Link>
+          <Link to="/repayments/new" className={ui.btn}><PlusCircle className="w-4 h-4" /> Record Repayment</Link>
         </div>
-      )}
 
-      {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3">
-        <Link
-          to="/loans/add"
-          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm rounded-lg
-                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
-        >
-          <PlusCircle className="w-4 h-4" /> Add Loan
-        </Link>
-        <Link
-          to="/borrowers/add"
-          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm rounded-lg
-                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
-        >
-          <PlusCircle className="w-4 h-4" /> Add Borrower
-        </Link>
-        <Link
-          to="/repayments/new"
-          className="ms-btn px-3 py-2 flex items-center gap-2 shadow-sm rounded-lg
-                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
-        >
-          <PlusCircle className="w-4 h-4" /> Record Repayment
-        </Link>
-      </div>
-
-      {/* Main + Right Sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-        {/* Main */}
-        <main className="space-y-6">
-          {loading ? (
-            <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-32" />
-              ))}
-            </div>
-          ) : (
-            <>
-              {/* Summary Cards (auto-fit) */}
+        {/* Main + Right Sidebar */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+          {/* Main */}
+          <main className="space-y-6">
+            {loading ? (
               <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
-                <SummaryCard
-                  tone="indigo" title="Total Borrowers"
-                  value={n(summary?.totalBorrowers).toLocaleString()}
-                  icon={<Users className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.borrowers)}
-                />
-                <SummaryCard
-                  tone="sky" title="Total Loans"
-                  value={n(summary?.totalLoans).toLocaleString()}
-                  icon={<CreditCard className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.loans)}
-                />
-                <SummaryCard
-                  tone="blue" title="Total Disbursed"
-                  value={money(summary?.totalDisbursed)}
-                  icon={<CreditCard className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })}
-                />
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-32" />
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* Summary Cards (auto-fit) */}
+                <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
+                  <SummaryCard
+                    tone="indigo" title="Total Borrowers"
+                    value={n(summary?.totalBorrowers).toLocaleString()}
+                    icon={<Users className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.borrowers)}
+                  />
+                  <SummaryCard
+                    tone="sky" title="Total Loans"
+                    value={n(summary?.totalLoans).toLocaleString()}
+                    icon={<CreditCard className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.loans)}
+                  />
+                  <SummaryCard
+                    tone="blue" title="Total Disbursed"
+                    value={money(summary?.totalDisbursed)}
+                    icon={<CreditCard className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })}
+                  />
+                  <SummaryCard
+                    tone="emerald" title="Total Paid"
+                    value={money(summary?.totalPaid)}
+                    icon={<DollarSign className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })}
+                  />
+                  <SummaryCard
+                    tone="emerald" title="Total Repaid"
+                    value={money(summary?.totalRepaid)}
+                    icon={<DollarSign className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })}
+                  />
+                  <SummaryCard
+                    tone="indigo" title="Expected Repayments"
+                    value={money(summary?.totalExpectedRepayments)}
+                    icon={<ClipboardList className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })}
+                  />
+                  <SummaryCard
+                    tone="cyan" title="Total Deposits"
+                    value={money(summary?.totalDeposits)}
+                    icon={<DollarSign className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.deposits)}
+                  />
+                  <SummaryCard
+                    tone="amber" title="Total Withdrawals"
+                    value={money(summary?.totalWithdrawals)}
+                    icon={<DollarSign className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.withdrawals)}
+                  />
+                  <SummaryCard
+                    tone="blue" title="Net Savings"
+                    value={money(summary?.netSavings)}
+                    icon={<DollarSign className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.savings)}
+                  />
+                  <SummaryCard
+                    tone="rose" title="Defaulted Loan"
+                    value={money(summary?.defaultedLoan)}
+                    icon={<AlertTriangle className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })}
+                  />
+                  <SummaryCard
+                    tone="rose" title="Defaulted Interest"
+                    value={money(summary?.defaultedInterest)}
+                    icon={<AlertTriangle className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })}
+                  />
+                  <SummaryCard
+                    tone="violet" title="Outstanding Loan"
+                    value={money(summary?.outstandingLoan)}
+                    icon={<CreditCard className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })}
+                  />
+                  <SummaryCard
+                    tone="violet" title="Outstanding Interest"
+                    value={money(summary?.outstandingInterest)}
+                    icon={<DollarSign className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })}
+                  />
+                  <SummaryCard
+                    tone="slate" title="Written Off"
+                    value={money(summary?.writtenOff)}
+                    icon={<ThumbsDown className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })}
+                  />
+                  <SummaryCard
+                    tone="indigo" title="PAR (Portfolio at Risk)"
+                    value={`${n(summary?.parPercent)}%`}
+                    icon={<BarChart2 className="w-6 h-6" />}
+                    to={makeTo(ROUTE_PATHS.par, { tab: 'par' })}
+                  />
+                </div>
 
-                <SummaryCard
-                  tone="emerald" title="Total Paid"
-                  value={money(summary?.totalPaid)}
-                  icon={<DollarSign className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })}
-                />
-                <SummaryCard
-                  tone="emerald" title="Total Repaid"
-                  value={money(summary?.totalRepaid)}
-                  icon={<DollarSign className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })}
-                />
-                <SummaryCard
-                  tone="indigo" title="Expected Repayments"
-                  value={money(summary?.totalExpectedRepayments)}
-                  icon={<ClipboardList className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })}
-                />
+                {/* Monthly Trends */}
+                {trends && (
+                  <div className={`${ui.card} p-4`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <BarChart2 className="w-5 h-5 text-indigo-600" />
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        {`Monthly Trends${(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}`}
+                      </h3>
+                    </div>
 
-                <SummaryCard
-                  tone="cyan" title="Total Deposits"
-                  value={money(summary?.totalDeposits)}
-                  icon={<DollarSign className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.deposits)}
-                />
-                <SummaryCard
-                  tone="amber" title="Total Withdrawals"
-                  value={money(summary?.totalWithdrawals)}
-                  icon={<DollarSign className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.withdrawals)}
-                />
-                <SummaryCard
-                  tone="blue" title="Net Savings"
-                  value={money(summary?.netSavings)}
-                  icon={<DollarSign className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.savings)}
-                />
+                    <div className="mb-4">
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart
+                          data={[
+                            { name: 'Loans', value: n(trends.monthlyLoans) },
+                            { name: 'Deposits', value: n(trends.monthlyDeposits) },
+                            { name: 'Repayments', value: n(trends.monthlyRepayments) },
+                          ]}
+                        >
+                          <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                          <XAxis dataKey="name" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                          <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
+                            wrapperStyle={{ outline: 'none' }}
+                          />
+                          <Legend wrapperStyle={{ color: chartColors.legend }} />
+                          <Bar dataKey="value" fill={chartColors.bar1} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
 
-                <SummaryCard
-                  tone="rose" title="Defaulted Loan"
-                  value={money(summary?.defaultedLoan)}
-                  icon={<AlertTriangle className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })}
-                />
-                <SummaryCard
-                  tone="rose" title="Defaulted Interest"
-                  value={money(summary?.defaultedInterest)}
-                  icon={<AlertTriangle className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })}
-                />
+                    {(() => {
+                      const vals = [n(trends.monthlyLoans), n(trends.monthlyDeposits), n(trends.monthlyRepayments)];
+                      const max = Math.max(...vals);
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="text-indigo-600">
+                            <MiniBar label="Loans (count)" value={n(trends.monthlyLoans)} max={max} />
+                          </div>
+                          <div className="text-emerald-600">
+                            <MiniBar label="Deposits (TZS)" value={n(trends.monthlyDeposits)} max={max} />
+                          </div>
+                          <div className="text-blue-600">
+                            <MiniBar label="Repayments (TZS)" value={n(trends.monthlyRepayments)} max={max} />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
 
-                <SummaryCard
-                  tone="violet" title="Outstanding Loan"
-                  value={money(summary?.outstandingLoan)}
-                  icon={<CreditCard className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })}
-                />
-                <SummaryCard
-                  tone="violet" title="Outstanding Interest"
-                  value={money(summary?.outstandingInterest)}
-                  icon={<DollarSign className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })}
-                />
+                {/* Top Borrowers / Upcoming Repayments */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className={ui.tableWrap}>
+                    <div className="p-4 border-b-2 border-slate-200">
+                      <h3 className="text-lg font-semibold text-slate-900">Top Borrowers</h3>
+                    </div>
+                    {topBorrowers.length === 0 ? (
+                      <div className="p-4 text-sm text-slate-700">No data available.</div>
+                    ) : (
+                      <table className="min-w-full">
+                        <thead>
+                          <tr>
+                            <th className={ui.th}>Name</th>
+                            <th className={ui.th}>Outstanding</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {topBorrowers.map((b) => (
+                            <tr key={b.id}>
+                              <td className={ui.td}>{b.name}</td>
+                              <td className={ui.td}>{money(b.outstanding)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
 
-                <SummaryCard
-                  tone="slate" title="Written Off"
-                  value={money(summary?.writtenOff)}
-                  icon={<ThumbsDown className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })}
-                />
-                <SummaryCard
-                  tone="indigo" title="PAR (Portfolio at Risk)"
-                  value={`${n(summary?.parPercent)}%`}
-                  icon={<BarChart2 className="w-6 h-6" />}
-                  to={makeTo(ROUTE_PATHS.par, { tab: 'par' })}
-                />
+                  <div className={ui.tableWrap}>
+                    <div className="p-4 border-b-2 border-slate-200">
+                      <h3 className="text-lg font-semibold text-slate-900">Upcoming Repayments</h3>
+                    </div>
+                    {upcomingRepayments.length === 0 ? (
+                      <div className="p-4 text-sm text-slate-700">No data available.</div>
+                    ) : (
+                      <table className="min-w-full">
+                        <thead>
+                          <tr>
+                            <th className={ui.th}>Borrower</th>
+                            <th className={ui.th}>Due Date</th>
+                            <th className={ui.th}>Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {upcomingRepayments.map((r) => (
+                            <tr key={r.id}>
+                              <td className={ui.td}>{r.borrower}</td>
+                              <td className={ui.td}>{r.dueDate}</td>
+                              <td className={ui.td}>{money(r.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* Performance charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className={`${ui.card} p-4`}>
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Branch Performance</h3>
+                    {branchPerformance.length === 0 ? (
+                      <p className="text-slate-700 text-sm">No data available.</p>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={branchPerformance}>
+                          <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                          <XAxis dataKey="branch" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                          <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
+                            wrapperStyle={{ outline: 'none' }}
+                          />
+                          <Legend wrapperStyle={{ color: chartColors.legend }} />
+                          <Bar dataKey="disbursed" fill={chartColors.bar1} />
+                          <Bar dataKey="repayments" fill={chartColors.bar2} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+
+                  <div className={`${ui.card} p-4`}>
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Officer Performance</h3>
+                    {officerPerformance.length === 0 ? (
+                      <p className="text-slate-700 text-sm">No data available.</p>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={officerPerformance}>
+                          <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                          <XAxis dataKey="officer" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                          <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
+                            wrapperStyle={{ outline: 'none' }}
+                          />
+                          <Legend wrapperStyle={{ color: chartColors.legend }} />
+                          <Bar dataKey="loans" fill={chartColors.bar1} />
+                          <Bar dataKey="collections" fill={chartColors.bar2} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </main>
+
+          {/* RIGHT Sidebar: Recent Activity */}
+          <aside className="lg:sticky lg:top-4 self-start">
+            <div className={`${ui.card} p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <ClipboardList className="w-5 h-5 text-indigo-600" />
+                <h2 className="text-lg font-semibold text-slate-900">Recent Activity</h2>
               </div>
 
-              {/* Monthly Trends */}
-              {trends && (
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <BarChart2 className="w-5 h-5 text-indigo-600 dark:text-indigo-300" />
-                    <h3 className="font-semibold text-gray-900 dark:text-slate-100">
-                      {`Monthly Trends${(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}`}
-                    </h3>
-                  </div>
+              {/* Date search */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <DateField value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
+                <DateField value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
+                <button
+                  className={`${ui.btn} col-span-2 h-9 text-sm`}
+                  onClick={() => {
+                    setActivityPage(1);
+                    fetchActivity({ page: 1 });
+                  }}
+                >
+                  Search by date
+                </button>
+              </div>
 
-                  <div className="mb-4">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart
-                        data={[
-                          { name: 'Loans', value: n(trends.monthlyLoans) },
-                          { name: 'Deposits', value: n(trends.monthlyDeposits) },
-                          { name: 'Repayments', value: n(trends.monthlyRepayments) },
-                        ]}
-                      >
-                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
-                        <XAxis dataKey="name" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
-                          wrapperStyle={{ outline: 'none' }}
-                        />
-                        <Legend wrapperStyle={{ color: chartColors.legend }} />
-                        <Bar dataKey="value" fill={chartColors.bar1} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+              {/* Scroll list with fade */}
+              <div className="relative">
+                <div className="absolute inset-x-0 top-0 h-6 pointer-events-none bg-gradient-to-b from-white to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-white to-transparent" />
+                <div className="max-h-[520px] overflow-y-auto pr-1 space-y-3">
+                  {activity.length === 0 ? (
+                    <p className="text-slate-700 text-sm">No activity.</p>
+                  ) : (
+                    activity.map((a) => (
+                      <div key={a.id} className="rounded-xl border-2 border-slate-200 p-3">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {a.type} • {a.entityType} #{a.entityId}
+                        </p>
+                        <p className="text-xs text-slate-800 break-words">{a.message}</p>
+                        <p className="text-[11px] text-slate-600 mt-1">
+                          by {a.createdBy?.name || a.createdBy?.email} • {new Date(a.createdAt).toLocaleString()}
+                        </p>
 
-                  {(() => {
-                    const vals = [n(trends.monthlyLoans), n(trends.monthlyDeposits), n(trends.monthlyRepayments)];
-                    const max = Math.max(...vals);
-                    return (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="text-indigo-600 dark:text-indigo-400">
-                          <MiniBar label="Loans (count)" value={n(trends.monthlyLoans)} max={max} />
+                        {/* latest comments preview */}
+                        {Array.isArray(a.comments) && a.comments.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {a.comments.map((c) => (
+                              <div key={c.id} className="bg-slate-50 border-2 border-slate-200 rounded p-2">
+                                <p className="text-xs text-slate-900 break-words">{c.comment}</p>
+                                <p className="text-[11px] text-slate-600 mt-0.5">
+                                  — {c.createdBy?.name || c.createdBy?.email} • {new Date(c.createdAt).toLocaleString()}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* reply + assign */}
+                        <div className="mt-2 flex gap-2">
+                          <TextField
+                            value={commentDraft[a.id] || ''}
+                            onChange={(e) => setCommentDraft((d) => ({ ...d, [a.id]: e.target.value }))}
+                            placeholder="Reply…"
+                            className="flex-1 h-9 text-xs"
+                          />
+                          <button
+                            onClick={() => submitComment(a.id)}
+                            disabled={submitting[`c-${a.id}`]}
+                            className={`${ui.btn} h-9 px-2 text-xs disabled:opacity-50 gap-1`}
+                          >
+                            <MessageSquare className="w-3 h-3" /> Reply
+                          </button>
                         </div>
-                        <div className="text-emerald-600 dark:text-emerald-400">
-                          <MiniBar label="Deposits (TZS)" value={n(trends.monthlyDeposits)} max={max} />
-                        </div>
-                        <div className="text-blue-600 dark:text-blue-400">
-                          <MiniBar label="Repayments (TZS)" value={n(trends.monthlyRepayments)} max={max} />
+
+                        <div className="mt-2 grid grid-cols-4 gap-2">
+                          <SelectField
+                            value={assignDraft[a.id]?.assigneeId || ''}
+                            onChange={(e) =>
+                              setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), assigneeId: e.target.value } }))
+                            }
+                            className="col-span-2 h-9 text-xs"
+                          >
+                            <option value="">Assign to…</option>
+                            {officers.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.name || o.email}
+                              </option>
+                            ))}
+                          </SelectField>
+                          <DateField
+                            value={assignDraft[a.id]?.dueDate || ''}
+                            onChange={(e) =>
+                              setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), dueDate: e.target.value } }))
+                            }
+                            className="h-9 text-xs"
+                          />
+                          <button
+                            onClick={() => submitAssignment(a.id)}
+                            disabled={submitting[`a-${a.id}`]}
+                            className={`${ui.btn} h-9 px-2 text-xs disabled:opacity-50 gap-1`}
+                          >
+                            <UserPlus className="w-3 h-3" /> Assign
+                          </button>
+                          <TextField
+                            value={assignDraft[a.id]?.note || ''}
+                            onChange={(e) =>
+                              setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), note: e.target.value } }))
+                            }
+                            placeholder="Note…"
+                            className="col-span-4 h-9 text-xs"
+                          />
                         </div>
                       </div>
-                    );
-                  })()}
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* pagination */}
+              {activityTotal > activityPageSize && (
+                <div className="flex justify-between items-center mt-3 text-xs text-slate-800">
+                  <span>{Math.min(activityPage * activityPageSize, activityTotal)} of {activityTotal}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const p = Math.max(activityPage - 1, 1);
+                        setActivityPage(p);
+                        fetchActivity({ page: p });
+                      }}
+                      disabled={activityPage === 1}
+                      className={`${ui.btn} px-2 py-1 disabled:opacity-50`}
+                    >
+                      Prev
+                    </button>
+                    <button
+                      onClick={() => {
+                        const next = activityPage * activityPageSize < activityTotal ? activityPage + 1 : activityPage;
+                        if (next !== activityPage) {
+                          setActivityPage(next);
+                          fetchActivity({ page: next });
+                        }
+                      }}
+                      disabled={activityPage * activityPageSize >= activityTotal}
+                      className={`${ui.btn} px-2 py-1 disabled:opacity-50`}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               )}
-
-              {/* Top Borrowers / Upcoming Repayments */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 overflow-x-auto">
-                  <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Top Borrowers</h3>
-                  {topBorrowers.length === 0 ? (
-                    <p className="text-gray-700 dark:text-slate-300 text-sm">No data available.</p>
-                  ) : (
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-gray-700 dark:text-slate-300">
-                          <th className="py-1 pr-4">Name</th>
-                          <th className="py-1 pr-4">Outstanding</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-slate-900 dark:text-slate-100">
-                        {topBorrowers.map((b) => (
-                          <tr key={b.id} className="border-t border-slate-200 dark:border-slate-700">
-                            <td className="py-1 pr-4">{b.name}</td>
-                            <td className="py-1 pr-4">{money(b.outstanding)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 overflow-x-auto">
-                  <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Upcoming Repayments</h3>
-                  {upcomingRepayments.length === 0 ? (
-                    <p className="text-gray-700 dark:text-slate-300 text-sm">No data available.</p>
-                  ) : (
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-gray-700 dark:text-slate-300">
-                          <th className="py-1 pr-4">Borrower</th>
-                          <th className="py-1 pr-4">Due Date</th>
-                          <th className="py-1 pr-4">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-slate-900 dark:text-slate-100">
-                        {upcomingRepayments.map((r) => (
-                          <tr key={r.id} className="border-t border-slate-200 dark:border-slate-700">
-                            <td className="py-1 pr-4">{r.borrower}</td>
-                            <td className="py-1 pr-4">{r.dueDate}</td>
-                            <td className="py-1 pr-4">{money(r.amount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-
-              {/* Performance charts */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-                  <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Branch Performance</h3>
-                  {branchPerformance.length === 0 ? (
-                    <p className="text-gray-700 dark:text-slate-300 text-sm">No data available.</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={branchPerformance}>
-                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
-                        <XAxis dataKey="branch" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
-                          wrapperStyle={{ outline: 'none' }}
-                        />
-                        <Legend wrapperStyle={{ color: chartColors.legend }} />
-                        <Bar dataKey="disbursed" fill={chartColors.bar1} />
-                        <Bar dataKey="repayments" fill={chartColors.bar2} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-                  <h3 className="font-semibold mb-2 text-slate-900 dark:text-slate-100">Officer Performance</h3>
-                  {officerPerformance.length === 0 ? (
-                    <p className="text-gray-700 dark:text-slate-300 text-sm">No data available.</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={officerPerformance}>
-                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
-                        <XAxis dataKey="officer" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
-                          wrapperStyle={{ outline: 'none' }}
-                        />
-                        <Legend wrapperStyle={{ color: chartColors.legend }} />
-                        <Bar dataKey="loans" fill={chartColors.bar1} />
-                        <Bar dataKey="collections" fill={chartColors.bar2} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </main>
-
-        {/* RIGHT Sidebar: Recent Activity */}
-        <aside className="lg:sticky lg:top-4 self-start">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <ClipboardList className="w-5 h-5 text-indigo-600 dark:text-indigo-300" />
-              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Recent Activity</h2>
             </div>
-
-            {/* Date search */}
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <DateField value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
-              <DateField value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
-              <button
-                className="ms-btn col-span-2 h-9 text-sm rounded-lg
-                           bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                           border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
-                onClick={() => {
-                  setActivityPage(1);
-                  fetchActivity({ page: 1 });
-                }}
-              >
-                Search by date
-              </button>
-            </div>
-
-            {/* Scroll list with fade */}
-            <div className="relative">
-              <div className="absolute inset-x-0 top-0 h-6 pointer-events-none bg-gradient-to-b from-white to-transparent dark:from-slate-900" />
-              <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-white to-transparent dark:from-slate-900" />
-              <div className="max-h-[520px] overflow-y-auto pr-1 space-y-3">
-                {activity.length === 0 ? (
-                  <p className="text-gray-700 dark:text-slate-300 text-sm">No activity.</p>
-                ) : (
-                  activity.map((a) => (
-                    <div key={a.id} className="border rounded p-3 border-slate-200 dark:border-slate-700">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                        {a.type} • {a.entityType} #{a.entityId}
-                      </p>
-                      <p className="text-xs text-slate-800 dark:text-slate-200 break-words">{a.message}</p>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
-                        by {a.createdBy?.name || a.createdBy?.email} • {new Date(a.createdAt).toLocaleString()}
-                      </p>
-
-                      {/* latest comments preview */}
-                      {Array.isArray(a.comments) && a.comments.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {a.comments.map((c) => (
-                            <div key={c.id} className="bg-gray-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-2">
-                              <p className="text-xs text-gray-900 dark:text-slate-100 break-words">{c.comment}</p>
-                              <p className="text-[11px] text-gray-600 dark:text-slate-400 mt-0.5">
-                                — {c.createdBy?.name || c.createdBy?.email} • {new Date(c.createdAt).toLocaleString()}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* reply + assign */}
-                      <div className="mt-2 flex gap-2">
-                        <TextField
-                          value={commentDraft[a.id] || ''}
-                          onChange={(e) => setCommentDraft((d) => ({ ...d, [a.id]: e.target.value }))}
-                          placeholder="Reply…"
-                          className="flex-1 h-9 text-xs"
-                        />
-                        <button
-                          onClick={() => submitComment(a.id)}
-                          disabled={submitting[`c-${a.id}`]}
-                          className="ms-btn h-9 px-2 text-xs disabled:opacity-50 flex items-center gap-1 rounded-lg
-                                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
-                        >
-                          <MessageSquare className="w-3 h-3" /> Reply
-                        </button>
-                      </div>
-
-                      <div className="mt-2 grid grid-cols-4 gap-2">
-                        <SelectField
-                          value={assignDraft[a.id]?.assigneeId || ''}
-                          onChange={(e) =>
-                            setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), assigneeId: e.target.value } }))
-                          }
-                          className="col-span-2 h-9 text-xs"
-                        >
-                          <option value="">Assign to…</option>
-                          {officers.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.name || o.email}
-                            </option>
-                          ))}
-                        </SelectField>
-                        <DateField
-                          value={assignDraft[a.id]?.dueDate || ''}
-                          onChange={(e) =>
-                            setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), dueDate: e.target.value } }))
-                          }
-                          className="h-9 text-xs"
-                        />
-                        <button
-                          onClick={() => submitAssignment(a.id)}
-                          disabled={submitting[`a-${a.id}`]}
-                          className="ms-btn h-9 px-2 text-xs disabled:opacity-50 flex items-center justify-center gap-1 rounded-lg
-                                     bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                                     border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
-                        >
-                          <UserPlus className="w-3 h-3" /> Assign
-                        </button>
-                        <TextField
-                          value={assignDraft[a.id]?.note || ''}
-                          onChange={(e) =>
-                            setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), note: e.target.value } }))
-                          }
-                          placeholder="Note…"
-                          className="col-span-4 h-9 text-xs"
-                        />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* pagination */}
-            {activityTotal > activityPageSize && (
-              <div className="flex justify-between items-center mt-3 text-xs text-slate-800 dark:text-slate-200">
-                <span>{Math.min(activityPage * activityPageSize, activityTotal)} of {activityTotal}</span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      const p = Math.max(activityPage - 1, 1);
-                      setActivityPage(p);
-                      fetchActivity({ page: p });
-                    }}
-                    disabled={activityPage === 1}
-                    className="ms-btn px-2 py-1 disabled:opacity-50 rounded-lg
-                               bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                               border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => {
-                      const next = activityPage * activityPageSize < activityTotal ? activityPage + 1 : activityPage;
-                      if (next !== activityPage) {
-                        setActivityPage(next);
-                        fetchActivity({ page: next });
-                      }
-                    }}
-                    disabled={activityPage * activityPageSize >= activityTotal}
-                    className="ms-btn px-2 py-1 disabled:opacity-50 rounded-lg
-                               bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100
-                               border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/80"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </aside>
+          </aside>
+        </div>
       </div>
     </div>
   );
 };
 
-/** Professional KPI card with subtle tinted background */
+/** Bold, high-contrast KPI card (strong borders, punchy headings) */
 const SummaryCard = ({
   title,
   value,
@@ -1232,79 +1207,18 @@ const SummaryCard = ({
   deltaLabel = '',
   spark = null
 }) => {
-  // deliberately muted/tinted palettes for professional feel
-  const tones =
+  const palette =
     ({
-      indigo: {
-        bg: 'from-indigo-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-indigo-100 dark:ring-indigo-900/40',
-        ink: 'text-indigo-700 dark:text-indigo-300',
-        badge: 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-300',
-        spot: 'bg-indigo-400/20'
-      },
-      sky: {
-        bg: 'from-sky-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-sky-100 dark:ring-sky-900/40',
-        ink: 'text-sky-700 dark:text-sky-300',
-        badge: 'bg-sky-600/10 text-sky-600 dark:text-sky-300',
-        spot: 'bg-sky-400/20'
-      },
-      blue: {
-        bg: 'from-blue-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-blue-100 dark:ring-blue-900/40',
-        ink: 'text-blue-700 dark:text-blue-300',
-        badge: 'bg-blue-600/10 text-blue-600 dark:text-blue-300',
-        spot: 'bg-blue-400/20'
-      },
-      emerald: {
-        bg: 'from-emerald-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-emerald-100 dark:ring-emerald-900/40',
-        ink: 'text-emerald-700 dark:text-emerald-300',
-        badge: 'bg-emerald-600/10 text-emerald-600 dark:text-emerald-300',
-        spot: 'bg-emerald-400/20'
-      },
-      cyan: {
-        bg: 'from-cyan-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-cyan-100 dark:ring-cyan-900/40',
-        ink: 'text-cyan-700 dark:text-cyan-300',
-        badge: 'bg-cyan-600/10 text-cyan-600 dark:text-cyan-300',
-        spot: 'bg-cyan-400/20'
-      },
-      amber: {
-        bg: 'from-amber-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-amber-100 dark:ring-amber-900/40',
-        ink: 'text-amber-700 dark:text-amber-300',
-        badge: 'bg-amber-600/10 text-amber-600 dark:text-amber-300',
-        spot: 'bg-amber-400/20'
-      },
-      violet: {
-        bg: 'from-violet-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-violet-100 dark:ring-violet-900/40',
-        ink: 'text-violet-700 dark:text-violet-300',
-        badge: 'bg-violet-600/10 text-violet-600 dark:text-violet-300',
-        spot: 'bg-violet-400/20'
-      },
-      rose: {
-        bg: 'from-rose-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-rose-100 dark:ring-rose-900/40',
-        ink: 'text-rose-700 dark:text-rose-300',
-        badge: 'bg-rose-600/10 text-rose-600 dark:text-rose-300',
-        spot: 'bg-rose-400/20'
-      },
-      slate: {
-        bg: 'from-slate-50 to-white dark:from-slate-900 dark:to-slate-900',
-        ring: 'ring-slate-100 dark:ring-slate-800/60',
-        ink: 'text-slate-700 dark:text-slate-300',
-        badge: 'bg-slate-600/10 text-slate-600 dark:text-slate-300',
-        spot: 'bg-slate-400/20'
-      }
-    }[tone]) || {
-      bg: 'from-slate-50 to-white dark:from-slate-900 dark:to-slate-900',
-      ring: 'ring-slate-100 dark:ring-slate-800/60',
-      ink: 'text-slate-700 dark:text-slate-300',
-      badge: 'bg-slate-600/10 text-slate-600 dark:text-slate-300',
-      spot: 'bg-slate-400/20'
-    };
+      indigo: 'text-indigo-700 ring-indigo-200',
+      sky: 'text-sky-700 ring-sky-200',
+      blue: 'text-blue-700 ring-blue-200',
+      emerald: 'text-emerald-700 ring-emerald-200',
+      cyan: 'text-cyan-700 ring-cyan-200',
+      amber: 'text-amber-700 ring-amber-200',
+      violet: 'text-violet-700 ring-violet-200',
+      rose: 'text-rose-700 ring-rose-200',
+      slate: 'text-slate-700 ring-slate-200',
+    }[tone]) || 'text-slate-700 ring-slate-200';
 
   // tiny sparkline (optional)
   const Spark = () => {
@@ -1333,42 +1247,27 @@ const SummaryCard = ({
     delta == null
       ? ''
       : delta >= 0
-      ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-600/10'
-      : 'text-rose-700 dark:text-rose-300 bg-rose-600/10';
+      ? 'text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200'
+      : 'text-rose-700 bg-rose-50 ring-1 ring-rose-200';
 
   return (
     <div className="group relative">
       {to && (
         <Link
           to={to}
-          className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           aria-label={`View ${title} details`}
           title={`View ${title} details`}
         />
       )}
 
-      {/* Card */}
-      <div
-        className={[
-          'relative rounded-xl p-5 min-h-[10.5rem] shadow-sm transition-all',
-          'bg-gradient-to-br',
-          tones.bg,
-          'ring-1',
-          tones.ring,
-          to ? 'hover:shadow-md hover:-translate-y-0.5' : ''
-        ].join(' ')}
-      >
-        {/* decorative soft color spot in the corner */}
-        <div className={`pointer-events-none absolute -top-6 -right-6 h-24 w-24 rounded-full blur-2xl ${tones.spot}`} />
-
+      <div className="relative rounded-2xl border-2 border-slate-300 bg-white p-5 min-h-[10.5rem] shadow transition-all group-hover:shadow-md group-hover:-translate-y-0.5">
         <div className="relative flex items-start justify-between gap-3">
           {/* icon badge */}
-          <div className={`p-3 rounded-full ${tones.badge}`}>{icon}</div>
+          <div className={`p-3 rounded-full bg-white ring-2 ${palette}`}>{icon}</div>
 
           {delta != null && (
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${deltaColor}`}
-            >
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${deltaColor}`}>
               {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toLocaleString()}%
               {deltaLabel && <span className="opacity-70">&nbsp;{deltaLabel}</span>}
             </span>
@@ -1376,13 +1275,13 @@ const SummaryCard = ({
         </div>
 
         <div className="relative mt-3 min-w-0">
-          <h3 className={`text-sm font-medium ${tones.ink} truncate`}>{title}</h3>
-          <p className="text-[28px] md:text-[32px] leading-tight font-semibold text-slate-900 dark:text-white font-mono tabular-nums break-words">
+          <h3 className={`text-sm font-semibold ${palette.split(' ')[0]} truncate`}>{title}</h3>
+          <p className="text-[28px] md:text-[32px] leading-tight font-semibold text-slate-900 font-mono tabular-nums break-words">
             {value ?? '—'}
           </p>
         </div>
 
-        <div className="relative text-slate-400 dark:text-slate-500">
+        <div className="relative text-slate-400">
           <Spark />
         </div>
       </div>
