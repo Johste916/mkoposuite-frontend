@@ -1,48 +1,63 @@
-/* ---------- Color tokens ---------- */
+/* =========================================================
+   TOKENS (light / dark)
+   ========================================================= */
 :root {
+  /* Surfaces & text */
   --bg: #ffffff;
   --fg: #0b0f14;
   --muted: #6b7280;
   --card: #ffffff;
-  --border: #e5e7eb;
-  --ring: #2563eb;
 
+  /* Borders / grid */
+  --border: #cbd5e1;         /* slate-300 (inner grid) */
+  --border-strong: #94a3b8;  /* slate-400 (outer frames) */
+
+  /* Focus ring / brand blue */
+  --ring: #60a5fa;           /* blue-400/500ish */
+
+  /* Inputs & menus */
   --input-bg: #ffffff;
   --input-fg: var(--fg);
   --input-placeholder: var(--muted);
   --input-border: var(--border);
   --menu-bg: #ffffff;
   --menu-fg: var(--fg);
-  --menu-shadow: 0 8px 28px rgba(0,0,0,.12);
+  --menu-shadow: 0 10px 28px rgba(0,0,0,.12);
 
   /* Table/KPI helpers */
-  --table-head-bg: #f8fafc;
-  --table-foot-bg: #f8fafc;
+  --table-head-bg: #f1f5f9;  /* slate-100 */
+  --table-foot-bg: #f1f5f9;
   --table-row-odd: #ffffff;
   --table-row-even: #fbfdff;
   --kpi-bg: #f8fafc;
 
+  /* Generic badge */
   --badge-bg: #e2e8f0;
   --badge-fg: #334155;
 }
 
-/* Auto-dark when no explicit theme forced */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b0f14;
+    --bg: #0b0f14;           /* near-slate-950 */
     --fg: #edf1f7;
     --muted: #9aa4b2;
     --card: #0f141c;
-    --border: #1f2937;
+
+    /* Dark borders */
+    --border: #273244;        /* inner grid (deep navy/blue-gray) */
+    --border-strong: #334155; /* slate-700 (outer frames) */
+
     --ring: #60a5fa;
 
+    /* Inputs & menus */
     --input-bg: #111827;
     --input-fg: var(--fg);
     --input-placeholder: var(--muted);
-    --input-border: #273244;
+    --input-border: var(--border);
     --menu-bg: #0f141c;
     --menu-fg: var(--fg);
 
+    /* Table helpers */
     --table-head-bg: #111927;
     --table-foot-bg: #111927;
     --table-row-odd: #0f172a;
@@ -54,22 +69,20 @@
   }
 }
 
-/* Forced theme via data attribute */
-[data-theme="light"] { }
-[data-theme="dark"]  { }
+/* Optional forced theme via data attribute:
+   [data-theme="light"] / [data-theme="dark"] can override the above if your ThemeProvider uses them. */
 
-/* ---------- Global app surfaces ---------- */
+/* =========================================================
+   GLOBAL BASE
+   ========================================================= */
 html { font-size: 15px; color-scheme: light dark; }
-body { background: var(--bg); color: var(--fg); }
+body { background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; }
 
-/* Focus ring */
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
-/* ---------- Reusable components ---------- */
-
-/* Inputs (text/select/textarea) */
+/* Inputs (neutral base) */
 .input,
-input[type="text"], input[type="search"], input[type="number"],
+input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="date"],
 select, textarea {
   width: 100%;
   border-radius: .5rem;
@@ -78,23 +91,172 @@ select, textarea {
   color: var(--input-fg);
   border: 1px solid var(--input-border);
 }
-.input::placeholder,
-input::placeholder, textarea::placeholder { color: var(--input-placeholder); }
-
-/* Make native selects inherit theme */
+.input::placeholder, input::placeholder, textarea::placeholder { color: var(--input-placeholder); }
 select, option { color: var(--input-fg); background-color: var(--input-bg); }
 
-/* Card & muted text helpers (used in pages) */
+/* Simple card + muted helper (base) */
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; }
 .muted { color: var(--muted); }
 
-/* Dropdown/menus */
+/* Menus / dropdowns (base) */
 .menu {
   background: var(--menu-bg);
   color: var(--menu-fg);
   box-shadow: var(--menu-shadow);
   border: 1px solid var(--input-border);
+  border-radius: .75rem;
 }
 
 /* Ensure filter dropdowns float above sticky headers/tables */
 .filter-field { position: relative; z-index: 50; }
+
+/* =========================================================
+   BOLD / HIGH-CONTRAST (Loan Details look)
+   Scope with .app-theme-bold so you can opt-in globally.
+   ========================================================= */
+.app-theme-bold {
+  color: var(--fg);
+  background: var(--bg);
+}
+
+/* Punchy headings */
+.app-theme-bold h1 { font-size: 2rem;   line-height: 2.25rem; font-weight: 800; letter-spacing: -0.01em; }
+.app-theme-bold h2 { font-size: 1.5rem; line-height: 2rem;   font-weight: 800; letter-spacing: -0.01em; }
+.app-theme-bold h3 { font-size: 1.125rem; line-height: 1.75rem; font-weight: 700; letter-spacing: -0.005em; }
+.app-theme-bold .muted { color: var(--muted); }
+
+/* Upgrade existing "card-like" blocks: stronger frames, soft shadow */
+.app-theme-bold .card {
+  background: var(--card);
+  border: 2px solid var(--border-strong);
+  border-radius: 1rem;
+  box-shadow: 0 10px 20px rgba(0,0,0,.08);
+}
+/* Any pre-styled box with both border + rounded becomes “clean card” automatically */
+.app-theme-bold :is(div,section,article)[class*="border"][class*="rounded"] {
+  border-color: var(--border-strong);
+  border-width: 2px;
+  border-radius: 1rem;
+}
+
+/* Inputs — thicker borders for clarity */
+.app-theme-bold .input,
+.app-theme-bold input[type="text"], .app-theme-bold input[type="search"], .app-theme-bold input[type="number"],
+.app-theme-bold input[type="email"], .app-theme-bold input[type="date"],
+.app-theme-bold select, .app-theme-bold textarea {
+  border-radius: .625rem;
+  padding: .625rem .75rem;
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 2px solid var(--input-border);
+  outline: none;
+}
+.app-theme-bold .input::placeholder,
+.app-theme-bold input::placeholder,
+.app-theme-bold textarea::placeholder { color: var(--input-placeholder); }
+.app-theme-bold select, .app-theme-bold option { color: var(--input-fg); background-color: var(--input-bg); }
+
+/* Buttons — quiet + primary */
+.app-theme-bold button {
+  border: 2px solid var(--border-strong);
+  border-radius: .625rem;
+  padding: .5rem .75rem;
+  font-weight: 600;
+  background: #fff;
+  color: var(--fg);
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.app-theme-bold button:hover { background: #f8fafc; }
+.app-theme-bold .btn-primary {
+  background: #4f46e5;   /* indigo-600 */
+  color: #fff;
+  border-color: #4f46e5;
+}
+.app-theme-bold .btn-primary:hover { background: #4338ca; }
+
+/* Action link (bold + underlined) */
+.app-theme-bold .action-link {
+  display: inline-flex; align-items: center; gap: .25rem;
+  font-weight: 800;
+  color: #1d4ed8; /* blue-700 */
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
+  border-radius: .25rem;
+}
+.app-theme-bold .action-link:hover { color: #1e40af; } /* blue-800 */
+.app-theme-bold .action-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* Badges */
+.app-theme-bold .badge {
+  display: inline-flex; align-items: center; gap: .375rem;
+  border-radius: 9999px;
+  padding: .125rem .5rem;
+  font-size: .75rem; font-weight: 800;
+  background: var(--badge-bg); color: var(--badge-fg);
+  border: 2px solid var(--border);
+}
+
+/* CRISP TABLES (full grid) */
+.app-theme-bold .table-wrap { overflow-x: auto; }
+
+/* Outer table frame (use .table-frame on the container around <table>) */
+.app-theme-bold .table-frame {
+  border: 2px solid var(--border-strong);
+  border-radius: .75rem;
+  overflow: hidden;
+  background: var(--card);
+}
+
+/* Base table look */
+.app-theme-bold table {
+  width: 100%;
+  border-collapse: collapse;   /* single grid lines */
+  font-size: .9375rem;         /* 15px */
+}
+.app-theme-bold thead th {
+  background: var(--table-head-bg);
+  color: #334155;              /* slate-700 */
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 700;
+}
+.app-theme-bold :is(th, td) {
+  border: 1px solid var(--border);   /* inner grid lines */
+  padding: .5rem .75rem;
+  vertical-align: top;
+}
+.app-theme-bold tbody tr:nth-child(odd)  td { background: var(--table-row-odd); }
+.app-theme-bold tbody tr:nth-child(even) td { background: var(--table-row-even); }
+.app-theme-bold tbody tr:hover td { background: #f1f5f9; } /* slate-100 hover (light); readable in dark as well */
+.app-theme-bold tfoot td {
+  background: var(--table-foot-bg);
+  font-weight: 700;
+  border-top: 2px solid var(--border-strong);
+}
+
+/* Sticky header helper: add .sticky-head to a table wrapper */
+.app-theme-bold .sticky-head thead th { position: sticky; top: 0; z-index: 1; }
+
+/* Menus/Dropdowns — stronger frame */
+.app-theme-bold .menu {
+  background: var(--menu-bg);
+  color: var(--menu-fg);
+  border: 2px solid var(--input-border);
+  box-shadow: var(--menu-shadow);
+  border-radius: .75rem;
+}
+
+/* “Full-width” section so nothing feels cramped (optional) */
+.app-theme-bold .full-bleed {
+  width: 100vw;
+  position: relative;
+  left: 50%; right: 50%;
+  margin-left: -50vw; margin-right: -50vw;
+  padding-left: max(1rem, calc((100vw - 1280px)/2));
+  padding-right: max(1rem, calc((100vw - 1280px)/2));
+}
+
+/* Opt-out for special tables */
+.app-theme-bold table.no-grid { border-collapse: separate; }
+.app-theme-bold table.no-grid :is(th,td) { border: 0; }

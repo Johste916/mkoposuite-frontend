@@ -2,12 +2,17 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
-/**
- * Permissions admin:
- *  GET    /permissions
- *  POST   /permissions
- *  DELETE /permissions/:id
- */
+const ui = {
+  page: "w-full px-4 md:px-6 lg:px-10 py-6 text-slate-900",
+  h1: "text-3xl font-extrabold tracking-tight",
+  card: "rounded-2xl border-2 border-slate-300 bg-white shadow",
+  th: "bg-slate-100 text-left text-[12px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200",
+  td: "px-3 py-2 border-2 border-slate-200 text-sm",
+  field: "h-11 w-full rounded-lg border-2 border-slate-300 bg-white text-sm px-3 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-600",
+  btn: "inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50 font-semibold",
+  btnPrimary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700",
+  btnDanger: "inline-flex items-center rounded-lg bg-rose-600 text-white px-3 py-2 font-semibold hover:bg-rose-700",
+};
 
 export default function Permissions() {
   const [permissions, setPermissions] = useState([]);
@@ -61,56 +66,49 @@ export default function Permissions() {
   }, []);
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold">Permissions</h1>
+    <div className={ui.page}>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+        <h1 className={ui.h1}>Permissions</h1>
         <div className="flex gap-2">
           <input
             type="text"
-            className="border px-3 py-2 rounded w-64"
+            className={`${ui.field} w-72 h-10`}
             placeholder="New permission (e.g., loan.approve)"
             value={newPermission}
             onChange={(e) => setNewPermission(e.target.value)}
           />
-          <button
-            onClick={addPermission}
-            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60"
-            disabled={saving}
-          >
+          <button onClick={addPermission} className={`${ui.btnPrimary} disabled:opacity-60`} disabled={saving}>
             {saving ? "Saving…" : "Add"}
           </button>
         </div>
       </div>
 
-      <div className="bg-white border rounded overflow-x-auto">
-        <table className="w-full">
+      <div className={`${ui.card} overflow-x-auto`}>
+        <table className="min-w-full border-separate border-spacing-0">
           <thead>
-            <tr className="bg-gray-100">
-              <th className="border px-3 py-2 text-left">ID</th>
-              <th className="border px-3 py-2 text-left">Name</th>
-              <th className="border px-3 py-2 text-right">Actions</th>
+            <tr>
+              {["ID", "Name", "Actions"].map((h, i) => (
+                <th key={h} className={`${ui.th} ${i === 2 ? "text-right" : ""}`}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={3} className="text-center py-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={3} className={`${ui.td} text-center py-8 text-slate-600`}>Loading…</td></tr>
             ) : permissions.length ? (
               permissions.map((p) => (
-                <tr key={p.id}>
-                  <td className="border px-3 py-2">{p.id}</td>
-                  <td className="border px-3 py-2">{p.name}</td>
-                  <td className="border px-3 py-2 text-right">
-                    <button
-                      onClick={() => deletePermission(p.id)}
-                      className="bg-red-500 text-white px-3 py-1 rounded"
-                    >
+                <tr key={p.id} className="hover:bg-slate-50">
+                  <td className={ui.td}>{p.id}</td>
+                  <td className={ui.td}>{p.name}</td>
+                  <td className={`${ui.td} text-right`}>
+                    <button onClick={() => deletePermission(p.id)} className={ui.btnDanger}>
                       Delete
                     </button>
                   </td>
                 </tr>
               ))
             ) : (
-              <tr><td colSpan={3} className="text-center py-6 text-gray-500">No permissions found</td></tr>
+              <tr><td colSpan={3} className={`${ui.td} text-center py-8 text-slate-600`}>No permissions found</td></tr>
             )}
           </tbody>
         </table>

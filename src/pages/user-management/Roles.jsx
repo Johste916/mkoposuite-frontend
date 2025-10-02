@@ -2,13 +2,17 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
-/**
- * Roles admin:
- *  GET    /roles
- *  POST   /roles
- *  PUT    /roles/:id    (optional; if not supported, you can keep only POST+DELETE)
- *  DELETE /roles/:id
- */
+const ui = {
+  page: "w-full px-4 md:px-6 lg:px-10 py-6 text-slate-900",
+  h1: "text-3xl font-extrabold tracking-tight",
+  card: "rounded-2xl border-2 border-slate-300 bg-white shadow",
+  th: "bg-slate-100 text-left text-[12px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200",
+  td: "px-3 py-2 border-2 border-slate-200 text-sm",
+  field: "h-11 w-full rounded-lg border-2 border-slate-300 bg-white text-sm px-3 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-600",
+  btn: "inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50 font-semibold",
+  btnPrimary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700",
+  btnDanger: "inline-flex items-center rounded-lg bg-rose-600 text-white px-3 py-2 font-semibold hover:bg-rose-700",
+};
 
 const Roles = () => {
   const [roles, setRoles] = useState([]);
@@ -40,7 +44,6 @@ const Roles = () => {
     if (!name) return alert("Please enter a role name");
     try {
       if (editId) {
-        // Will work if your backend supports PUT /roles/:id
         await api.put(`/roles/${editId}`, { name });
       } else {
         await api.post("/roles", { name });
@@ -73,44 +76,46 @@ const Roles = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Roles</h2>
+    <div className={ui.page}>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className={ui.h1}>Roles</h1>
         <button
           onClick={() => {
             setShowModal(true);
             setNewRole("");
             setEditId(null);
           }}
-          className="bg-blue-600 text-white px-4 py-1.5 rounded"
+          className={ui.btnPrimary}
         >
           + Add Role
         </button>
       </div>
 
-      <div className="bg-white border rounded overflow-x-auto">
-        <table className="min-w-full">
-          <thead className="bg-gray-100">
+      <div className={`${ui.card} overflow-x-auto`}>
+        <table className="min-w-full border-separate border-spacing-0">
+          <thead>
             <tr>
-              <th className="px-4 py-2 text-left">Role Name</th>
-              <th className="px-4 py-2 text-right">Actions</th>
+              <th className={ui.th}>Role Name</th>
+              <th className={`${ui.th} text-right`}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="2" className="px-4 py-6 text-center text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={2} className={`${ui.td} text-center py-8 text-slate-600`}>Loading…</td></tr>
             ) : roles.length ? (
               roles.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="px-4 py-2">{r.name}</td>
-                  <td className="px-4 py-2 text-right space-x-3">
-                    <button onClick={() => handleEdit(r)} className="text-blue-600 hover:underline">Edit</button>
-                    <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:underline">Delete</button>
+                <tr key={r.id} className="hover:bg-slate-50">
+                  <td className={ui.td}>{r.name}</td>
+                  <td className={`${ui.td} text-right`}>
+                    <div className="inline-flex gap-2">
+                      <button onClick={() => handleEdit(r)} className={ui.btn}>Edit</button>
+                      <button onClick={() => handleDelete(r.id)} className={ui.btnDanger}>Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))
             ) : (
-              <tr><td colSpan="2" className="px-4 py-6 text-center text-gray-500">No roles found</td></tr>
+              <tr><td colSpan={2} className={`${ui.td} text-center py-8 text-slate-600`}>No roles found</td></tr>
             )}
           </tbody>
         </table>
@@ -119,17 +124,17 @@ const Roles = () => {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded w-full max-w-md shadow-md">
-            <h3 className="text-lg font-bold mb-4">{editId ? "Edit Role" : "New Role"}</h3>
+          <div className="w-full max-w-md rounded-2xl border-2 border-slate-300 bg-white p-5 shadow">
+            <h3 className="text-lg font-bold tracking-tight mb-3">{editId ? "Edit Role" : "New Role"}</h3>
             <input
               value={newRole}
               onChange={(e) => setNewRole(e.target.value)}
-              className="w-full border px-3 py-2 mb-4 rounded"
+              className={`${ui.field} mb-3`}
               placeholder="Role name (e.g., Admin, Accountant)"
             />
-            <div className="flex justify-end space-x-2">
-              <button onClick={() => setShowModal(false)} className="px-4 py-1.5 rounded border">Cancel</button>
-              <button onClick={handleSubmit} className="bg-blue-600 text-white px-4 py-1.5 rounded">
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowModal(false)} className={ui.btn}>Cancel</button>
+              <button onClick={handleSubmit} className={ui.btnPrimary}>
                 {editId ? "Update" : "Save"}
               </button>
             </div>

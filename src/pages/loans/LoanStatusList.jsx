@@ -1,3 +1,4 @@
+// src/pages/loans/LoanStatusList.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api";
@@ -6,6 +7,7 @@ import { exportCSVFromRows, exportExcelHTMLFromRows, exportPDFPrintFromRows } fr
 import Pagination from "../../components/table/Pagination";
 import ConfirmDialog from "../../components/common/ConfirmDialog";
 import { useToast } from "../../components/common/ToastProvider";
+import { Search, ChevronDown, Filter } from "lucide-react";
 
 /* ---------- constants ---------- */
 const CORE_STATUSES = ["pending", "approved", "rejected", "disbursed", "active", "closed"];
@@ -29,6 +31,40 @@ const TITLE_MAP = {
   "1-month-late": "1 Month Late",
   "3-months-late": "3 Months Late",
 };
+
+/* ---------- high-contrast UI tokens ---------- */
+const ui = {
+  page: "w-full px-4 md:px-6 lg:px-10 py-6 text-slate-900",
+  h1: "text-3xl font-extrabold tracking-tight",
+  sub: "text-sm text-slate-700",
+  card: "rounded-2xl border-2 border-slate-300 bg-white shadow",
+  th: "bg-slate-100 text-left text-[12px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200 select-none",
+  td: "px-3 py-2 border-2 border-slate-200 text-sm align-top",
+  btn: "inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50 font-semibold",
+  btnGhost: "inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50",
+  btnPrimary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700",
+  fieldBase:
+    "h-11 w-full rounded-lg border-2 border-slate-300 bg-white text-sm outline-none " +
+    "focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-600 transition",
+  fieldIcon: "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500",
+};
+
+/* ---------- clean, parallel fields ---------- */
+const TextField = ({ className = "", leadingIcon = null, ...props }) => (
+  <div className={`relative ${className}`}>
+    {leadingIcon}
+    <input {...props} className={`${ui.fieldBase} ${leadingIcon ? "pl-10" : ""}`} />
+  </div>
+);
+
+const SelectField = ({ className = "", children, ...props }) => (
+  <div className={`relative ${className}`}>
+    <select {...props} className={`${ui.fieldBase} pr-9 appearance-none bg-none ms-select`} style={{ backgroundImage: "none" }}>
+      {children}
+    </select>
+    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+  </div>
+);
 
 export default function LoanStatusList() {
   const { status } = useParams(); // core status or a derived scope
@@ -74,7 +110,7 @@ export default function LoanStatusList() {
   const title = TITLE_MAP[status] || "Loans";
   const showActions = ["disbursed", "active"].includes(String(status || "").toLowerCase());
 
-  /* ---------- fetch lists for filters (products & loan officers) ---------- */
+  /* ---------- fetch lists for filters ---------- */
   useEffect(() => {
     (async () => {
       try {
@@ -94,7 +130,7 @@ export default function LoanStatusList() {
     })();
   }, []);
 
-  /* ---------- load data with server-side filters when possible ---------- */
+  /* ---------- load data with server-side filters ---------- */
   const load = async (opts = {}) => {
     setLoading(true);
     try {
@@ -105,7 +141,6 @@ export default function LoanStatusList() {
         if (BACKEND_ENUM_STATUSES.includes(String(status))) {
           params.status = String(status);
         } else {
-          // derived "active" -> hint as scope, or omit to avoid enum errors in DB
           params.scope = String(status);
         }
       } else if (status) {
@@ -129,7 +164,7 @@ export default function LoanStatusList() {
         : [];
       let total = res.data?.total ?? data.length;
 
-      // Client-side mapping for "active": treat as disbursed (and optionally still owing)
+      // Client-side mapping for "active"
       let dataAdj = data;
       if (String(status).toLowerCase() === "active") {
         dataAdj = data.filter(
@@ -186,11 +221,7 @@ export default function LoanStatusList() {
       // product
       if (productId && String(l.productId) !== String(productId)) return false;
       // officer
-      if (
-        officerId &&
-        String(l.officerId || l.loanOfficerId) !== String(officerId)
-      )
-        return false;
+      if (officerId && String(l.officerId || l.loanOfficerId) !== String(officerId)) return false;
       // amount
       const amt = Number(l.amount ?? l.principal ?? 0);
       if (minAmt && !(amt >= Number(minAmt))) return false;
@@ -221,30 +252,21 @@ export default function LoanStatusList() {
 
   // slice for client pagination when server doesn't paginate
   const paged = useMemo(() => {
-    // If backend provided total > rows.length, assume server-pagination already applied
-    if (totalCount > rows.length) return filtered;
+    if (totalCount > rows.length) return filtered; // server pagination
     const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, page, pageSize, rows.length, totalCount]);
 
   /* ---------- totals ---------- */
   const totals = useMemo(() => {
-    let p = 0,
-      i = 0,
-      f = 0,
-      pen = 0,
-      t = 0;
+    let p = 0, i = 0, f = 0, pen = 0, t = 0;
     filtered.forEach((l) => {
       const op = Number(l.outstandingPrincipal || 0);
       const oi = Number(l.outstandingInterest || 0);
       const of = Number(l.outstandingFees || 0);
       const ope = Number(l.outstandingPenalty || 0);
       const tot = l.outstanding != null ? Number(l.outstanding) : op + oi + of + ope;
-      p += op;
-      i += oi;
-      f += of;
-      pen += ope;
-      t += tot;
+      p += op; i += oi; f += of; pen += ope; t += tot;
     });
     return { p, i, f, pen, t };
   }, [filtered]);
@@ -344,9 +366,7 @@ export default function LoanStatusList() {
       ];
       const head = columns.map((c) => `"${c.label.replace(/"/g, '""')}"`).join(",");
       const body = data
-        .map((row, i) =>
-          columns.map((c) => `"${String(c.value(row, i) ?? "").replace(/"/g, '""')}"`).join(",")
-        )
+        .map((row, i) => columns.map((c) => `"${String(c.value(row, i) ?? "").replace(/"/g, '""')}"`).join(","))
         .join("\n");
       const csv = `${head}\n${body}`;
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -407,16 +427,35 @@ export default function LoanStatusList() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  const clearFilters = () => {
+    setQ("");
+    setProductId("");
+    setOfficerId("");
+    setStartDate("");
+    setEndDate("");
+    setMinAmt("");
+    setMaxAmt("");
+    setPage(1);
+    setSearchParams(new URLSearchParams());
+    setTimeout(() => load({ skipSyncUrl: true }), 0);
+  };
+
   return (
-    <div className="p-4 space-y-4">
-      {/* header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div className={ui.page}>
+      {/* Hide native select arrows (Windows IE/Edge legacy) */}
+      <style>{`
+        select.ms-select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: none !important; }
+        select.ms-select::-ms-expand { display: none; }
+      `}</style>
+
+      {/* Header */}
+      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-2xl font-bold">{title}</h2>
-          <div className="text-sm text-gray-600">
+          <h2 className={ui.h1}>{title}</h2>
+          <div className={ui.sub}>
             Total: {fmtNum(totalCount)}{" "}
-            <span className="mx-2 text-gray-400">•</span>
-            <Link to="/loans" className="text-indigo-600 underline">
+            <span className="mx-2 text-slate-400">•</span>
+            <Link to="/loans" className="text-indigo-700 underline font-semibold">
               All Loans
             </Link>
           </div>
@@ -424,171 +463,101 @@ export default function LoanStatusList() {
 
         {/* export buttons */}
         <div className="flex flex-wrap gap-2">
-          <button onClick={exportCSV} className="px-3 py-2 rounded border hover:bg-gray-50">
-            Export CSV
-          </button>
-          <button onClick={exportExcel} className="px-3 py-2 rounded border hover:bg-gray-50">
-            Export Excel
-          </button>
-          <button onClick={exportPDF} className="px-3 py-2 rounded border hover:bg-gray-50">
-            Export PDF
-          </button>
+          <button onClick={exportCSV} className={ui.btnGhost}>Export CSV</button>
+          <button onClick={exportExcel} className={ui.btnGhost}>Export Excel</button>
+          <button onClick={exportPDF} className={ui.btnGhost}>Export PDF</button>
         </div>
       </div>
 
-      {/* filters */}
-      <div className="bg-white rounded shadow border p-3">
-        <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="md:col-span-2">
-            <label className="text-xs text-gray-600">
-              Search (borrower / phone / product / loan #)
-            </label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              placeholder="e.g. Jane, 0712…, Business Loan"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
+      {/* Filters */}
+      <div className={`${ui.card} p-4 mb-6`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="inline-flex items-center gap-2 text-slate-800 font-semibold">
+            <Filter className="w-4 h-4" /> Filters
           </div>
+          <button onClick={clearFilters} className="text-sm underline decoration-slate-300 hover:decoration-slate-600">
+            Clear all
+          </button>
+        </div>
 
-          <div>
-            <label className="text-xs text-gray-600">Product</label>
-            <select
-              className="w-full border rounded px-3 py-2"
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-            >
-              <option value="">All</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.code ? ` (${p.code})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-600">Loan Officer</label>
-            <select
-              className="w-full border rounded px-3 py-2"
-              value={officerId}
-              onChange={(e) => setOfficerId(e.target.value)}
-            >
-              <option value="">All</option>
-              {officers.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name || o.email}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-600">From Date</label>
-            <input
-              type="date"
-              className="w-full border rounded px-3 py-2"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-600">To Date</label>
-            <input
-              type="date"
-              className="w-full border rounded px-3 py-2"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-600">Min Amount</label>
-            <input
-              type="number"
-              className="w-full border rounded px-3 py-2"
-              value={minAmt}
-              onChange={(e) => setMinAmt(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-600">Max Amount</label>
-            <input
-              type="number"
-              className="w-full border rounded px-3 py-2"
-              value={maxAmt}
-              onChange={(e) => setMaxAmt(e.target.value)}
-            />
-          </div>
+        {/* neat, parallel grid; full-width on large screens */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+          <TextField
+            className="lg:col-span-2"
+            leadingIcon={<Search className={ui.fieldIcon} />}
+            placeholder="Search borrower / phone / product / loan #"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <SelectField value={productId} onChange={(e) => setProductId(e.target.value)}>
+            <option value="">Product: All</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.code ? ` (${p.code})` : ""}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
+            <option value="">Officer: All</option>
+            {officers.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name || o.email}
+              </option>
+            ))}
+          </SelectField>
+          <TextField type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <TextField type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <TextField type="number" placeholder="Min Amount" value={minAmt} onChange={(e) => setMinAmt(e.target.value)} />
+          <TextField type="number" placeholder="Max Amount" value={maxAmt} onChange={(e) => setMaxAmt(e.target.value)} />
         </div>
 
         <div className="mt-3 flex gap-2">
           <button
-            onClick={() => {
-              setPage(1);
-              load();
-            }}
-            className="px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+            onClick={() => { setPage(1); load(); }}
+            className={ui.btnPrimary}
           >
             Apply Filters
           </button>
-          <button
-            onClick={() => {
-              setQ("");
-              setProductId("");
-              setOfficerId("");
-              setStartDate("");
-              setEndDate("");
-              setMinAmt("");
-              setMaxAmt("");
-              setPage(1);
-              setSearchParams(new URLSearchParams());
-              setTimeout(() => load({ skipSyncUrl: true }), 0);
-            }}
-            className="px-3 py-2 rounded border hover:bg-gray-50"
-          >
+          <button onClick={clearFilters} className={ui.btn}>
             Reset
           </button>
         </div>
       </div>
 
-      {/* table */}
-      <div className="bg-white rounded shadow border overflow-x-auto">
+      {/* Table */}
+      <div className={`${ui.card} overflow-x-auto`}>
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-700">
-            <tr className="[&>th]:px-2 [&>th]:py-2 [&>th]:border">
-              <th>Date</th>
-              <th>Borrower Name</th>
-              <th>Phone Number</th>
-              <th>Loan Product</th>
-              <th>Principal Amount</th>
-              <th>Interest Amount</th>
-              <th>Outstanding Principal</th>
-              <th>Outstanding Interest</th>
-              <th>Outstanding Fees</th>
-              <th>Outstanding Penalty</th>
-              <th>Total Outstanding</th>
-              <th>Interest Rate/Year (%)</th>
-              <th>Loan Duration (Months)</th>
-              <th>Loan Officer</th>
-              <th>Status</th>
-              {showActions && <th>Action</th>}
+          <thead>
+            <tr>
+              <th className={ui.th}>Date</th>
+              <th className={ui.th}>Borrower Name</th>
+              <th className={ui.th}>Phone Number</th>
+              <th className={ui.th}>Loan Product</th>
+              <th className={`${ui.th} text-right`}>Principal Amount</th>
+              <th className={`${ui.th} text-right`}>Interest Amount</th>
+              <th className={`${ui.th} text-right`}>Outstanding Principal</th>
+              <th className={`${ui.th} text-right`}>Outstanding Interest</th>
+              <th className={`${ui.th} text-right`}>Outstanding Fees</th>
+              <th className={`${ui.th} text-right`}>Outstanding Penalty</th>
+              <th className={`${ui.th} text-right`}>Total Outstanding</th>
+              <th className={`${ui.th} text-right`}>Interest Rate/Year (%)</th>
+              <th className={`${ui.th} text-right`}>Loan Duration (Months)</th>
+              <th className={ui.th}>Loan Officer</th>
+              <th className={ui.th}>Status</th>
+              {showActions && <th className={`${ui.th}`}>Action</th>}
             </tr>
           </thead>
 
-        <tbody ref={dropdownRef}>
+          <tbody ref={dropdownRef}>
             {loading ? (
               <tr>
-                <td colSpan={15 + (showActions ? 1 : 0)} className="p-6 text-center text-gray-500">
+                <td colSpan={headCount} className={`${ui.td} text-center py-10 text-slate-600`}>
                   Loading…
                 </td>
               </tr>
             ) : paged.length === 0 ? (
               <tr>
-                <td colSpan={15 + (showActions ? 1 : 0)} className="p-6 text-center text-gray-500">
+                <td colSpan={headCount} className={`${ui.td} text-center py-10 text-slate-600`}>
                   No loans found.
                 </td>
               </tr>
@@ -598,9 +567,7 @@ export default function LoanStatusList() {
                 const product = l.Product || l.product || {};
                 const officer = l.officer || {};
                 const currency = l.currency || "TZS";
-
-                const date =
-                  l.releaseDate || l.startDate || l.createdAt || l.disbursementDate || null;
+                const date = l.releaseDate || l.startDate || l.createdAt || l.disbursementDate || null;
 
                 const op = l.outstandingPrincipal ?? null;
                 const oi = l.outstandingInterest ?? null;
@@ -623,102 +590,81 @@ export default function LoanStatusList() {
                 const termMonths = l.termMonths ?? l.durationMonths ?? null;
 
                 return (
-                  <tr key={l.id} className="[&>td]:px-2 [&>td]:py-2 [&>td]:border hover:bg-gray-50">
-                    <td>{fmtDate(date)}</td>
-                    <td>
+                  <tr key={l.id} className="hover:bg-slate-50">
+                    <td className={ui.td}>{fmtDate(date)}</td>
+                    <td className={ui.td}>
                       {borrower.id ? (
-                        <Link to={`/borrowers/${borrower.id}`} className="text-indigo-700 hover:underline">
+                        <Link to={`/borrowers/${borrower.id}`} className="text-indigo-700 hover:underline font-semibold">
                           {borrower.name || l.borrowerName || "—"}
                         </Link>
                       ) : (
                         borrower.name || l.borrowerName || "—"
                       )}
                     </td>
-                    <td>{borrower.phone || l.borrowerPhone || "—"}</td>
-                    <td>{product.name || l.productName || "—"}</td>
-                    <td>{fmtC(l.amount ?? l.principal, currency)}</td>
-                    <td>{fmtC(l.interestAmount, currency)}</td>
-                    <td>{fmtTZS(op, currency)}</td>
-                    <td>{fmtTZS(oi, currency)}</td>
-                    <td>{fmtTZS(of, currency)}</td>
-                    <td>{fmtTZS(ope, currency)}</td>
-                    <td>{fmtTZS(totalOutstanding, currency)}</td>
-                    <td>{fmtPct(annualRate)}</td>
-                    <td>{fmtNum(termMonths)}</td>
-                    <td>{l.officerName || officer.name || "—"}</td>
-                    <td>{l.status || "—"}</td>
+                    <td className={ui.td}>{borrower.phone || l.borrowerPhone || "—"}</td>
+                    <td className={ui.td}>{product.name || l.productName || "—"}</td>
+                    <td className={`${ui.td} text-right`}>{fmtC(l.amount ?? l.principal, currency)}</td>
+                    <td className={`${ui.td} text-right`}>{fmtC(l.interestAmount, currency)}</td>
+                    <td className={`${ui.td} text-right`}>{fmtTZS(op, currency)}</td>
+                    <td className={`${ui.td} text-right`}>{fmtTZS(oi, currency)}</td>
+                    <td className={`${ui.td} text-right`}>{fmtTZS(of, currency)}</td>
+                    <td className={`${ui.td} text-right`}>{fmtTZS(ope, currency)}</td>
+                    <td className={`${ui.td} text-right`}>{fmtTZS(totalOutstanding, currency)}</td>
+                    <td className={`${ui.td} text-right`}>{fmtPct(annualRate)}</td>
+                    <td className={`${ui.td} text-right`}>{fmtNum(termMonths)}</td>
+                    <td className={ui.td}>{l.officerName || officer.name || "—"}</td>
+                    <td className={ui.td}>{l.status || "—"}</td>
 
                     {showActions && (
-                      <td className="whitespace-nowrap">
+                      <td className={`${ui.td} whitespace-nowrap`}>
                         <div className="relative inline-block">
                           <button
-                            className="px-2 py-1 rounded border hover:bg-gray-50"
+                            className="px-2 py-1 rounded border-2 border-slate-300 hover:bg-slate-50 font-medium"
                             onClick={() => setMenuOpenRow((r) => (r === l.id ? null : l.id))}
                           >
                             Actions ▾
                           </button>
                           {menuOpenRow === l.id && (
-                            <div className="absolute right-0 mt-1 w-56 bg-white border rounded shadow-lg z-10">
+                            <div className="absolute right-0 mt-1 w-56 bg-white border-2 border-slate-300 rounded-lg shadow-lg z-10 overflow-hidden">
                               <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  viewLoan(l.id);
-                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                onClick={() => { setMenuOpenRow(null); viewLoan(l.id); }}
                               >
                                 View (details & repayments)
                               </button>
                               <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  editLoan(l.id);
-                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                onClick={() => { setMenuOpenRow(null); editLoan(l.id); }}
                               >
                                 Edit
                               </button>
                               <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  recordRepayment(l.id);
-                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                onClick={() => { setMenuOpenRow(null); recordRepayment(l.id); }}
                               >
                                 Record Repayment
                               </button>
                               <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={async () => {
-                                  setMenuOpenRow(null);
-                                  await downloadSchedule(l);
-                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                onClick={async () => { setMenuOpenRow(null); await downloadSchedule(l); }}
                               >
                                 Download Schedule (CSV)
                               </button>
                               <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  reschedule(l.id);
-                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                onClick={() => { setMenuOpenRow(null); reschedule(l.id); }}
                               >
                                 Reschedule Repayments
                               </button>
                               <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  redisburse(l.id);
-                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                onClick={() => { setMenuOpenRow(null); redisburse(l.id); }}
                               >
                                 Re-disburse
                               </button>
                               <button
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                                onClick={() => {
-                                  setMenuOpenRow(null);
-                                  openAssignOfficer(l);
-                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                                onClick={() => { setMenuOpenRow(null); openAssignOfficer(l); }}
                               >
                                 Assign Loan Officer
                               </button>
@@ -735,16 +681,16 @@ export default function LoanStatusList() {
 
           {!loading && filtered.length > 0 && (
             <tfoot>
-              <tr className="bg-gray-50 font-semibold [&>td]:px-2 [&>td]:py-2 [&>td]:border">
-                <td colSpan={6} className="text-right">
+              <tr className="bg-slate-100">
+                <td className={`${ui.td} font-semibold text-right`} colSpan={6}>
                   Totals:
                 </td>
-                <td>{fmtTZS(totals.p)}</td>
-                <td>{fmtTZS(totals.i)}</td>
-                <td>{fmtTZS(totals.f)}</td>
-                <td>{fmtTZS(totals.pen)}</td>
-                <td>{fmtTZS(totals.t)}</td>
-                <td colSpan={4 + (showActions ? 1 : 0)}></td>
+                <td className={`${ui.td} font-semibold text-right`}>{fmtTZS(totals.p)}</td>
+                <td className={`${ui.td} font-semibold text-right`}>{fmtTZS(totals.i)}</td>
+                <td className={`${ui.td} font-semibold text-right`}>{fmtTZS(totals.f)}</td>
+                <td className={`${ui.td} font-semibold text-right`}>{fmtTZS(totals.pen)}</td>
+                <td className={`${ui.td} font-semibold text-right`}>{fmtTZS(totals.t)}</td>
+                <td className={ui.td} colSpan={4 + (showActions ? 1 : 0)}></td>
               </tr>
             </tfoot>
           )}
@@ -766,12 +712,12 @@ export default function LoanStatusList() {
       {/* Assign officer modal */}
       {assignModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-4">
+          <div className="bg-white rounded-2xl border-2 border-slate-300 shadow-xl w-full max-w-md p-4">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-lg font-semibold">Assign Loan Officer</h4>
+              <h4 className="text-lg font-bold">Assign Loan Officer</h4>
               <button
                 onClick={() => setAssignModal({ open: false, loan: null, officerId: "" })}
-                className="text-gray-500 hover:text-gray-700"
+                className="px-2 py-1 rounded hover:bg-slate-50"
                 aria-label="Close"
               >
                 ✕
@@ -779,49 +725,43 @@ export default function LoanStatusList() {
             </div>
 
             <div className="space-y-3">
-              <div className="text-sm text-gray-700">
+              <div className="text-sm">
                 Loan:{" "}
-                <span className="font-medium">
+                <span className="font-semibold">
                   {assignModal.loan?.Borrower?.name ||
                     assignModal.loan?.borrowerName ||
                     `#${assignModal.loan?.id}`}
                 </span>
               </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Officer</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={assignModal.officerId}
-                  onChange={(e) =>
-                    setAssignModal((s) => ({ ...s, officerId: e.target.value }))
-                  }
-                >
-                  <option value="">Select officer…</option>
-                  {officers.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name || o.fullName || o.email || `User ${o.id}`}
-                    </option>
-                  ))}
-                </select>
-                {!officers.length && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    No officers found. Ensure users with role “loan_officer” exist.
-                  </p>
-                )}
-              </div>
+              <SelectField
+                value={assignModal.officerId}
+                onChange={(e) => setAssignModal((s) => ({ ...s, officerId: e.target.value }))}
+              >
+                <option value="">Select officer…</option>
+                {officers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name || o.fullName || o.email || `User ${o.id}`}
+                  </option>
+                ))}
+              </SelectField>
+              {!officers.length && (
+                <p className="text-xs text-amber-700">
+                  No officers found. Ensure users with role “loan_officer” exist.
+                </p>
+              )}
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setAssignModal({ open: false, loan: null, officerId: "" })}
-                className="px-3 py-2 rounded border"
+                className={ui.btn}
               >
                 Cancel
               </button>
               <button
                 onClick={submitAssignOfficer}
                 disabled={!assignModal.officerId}
-                className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+                className={ui.btnPrimary + " disabled:opacity-60"}
               >
                 Assign
               </button>
