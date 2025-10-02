@@ -1,3 +1,4 @@
+// GroupReports.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../../api";
 
@@ -35,6 +36,11 @@ function toSummary(raw) {
   };
 }
 
+/* ---------- Shared styles ---------- */
+const containerCls = "w-full px-4 md:px-6 lg:px-8 py-6 min-h-screen bg-white text-slate-900";
+const card = "rounded-2xl border-2 border-slate-400 bg-white shadow-lg";
+const statCard = `${card} p-4`;
+
 const GroupReports = () => {
   const [summary, setSummary] = useState({
     totalGroups: 0,
@@ -70,48 +76,46 @@ const GroupReports = () => {
   useEffect(() => { fetchGroupSummary(); }, []);
 
   return (
-    <div className="p-4 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Group Reports</h1>
+    <div className={containerCls}>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-3xl font-extrabold tracking-tight">Group Reports</h1>
         <button
           onClick={fetchGroupSummary}
-          className="px-3 py-2 rounded border border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
+          className="px-3 py-2 rounded-lg border-2 border-slate-400 bg-white hover:bg-slate-50 font-semibold"
         >
           Refresh
         </button>
       </div>
 
       {loading ? (
-        <p className="muted">Loading group analytics...</p>
+        <p className="text-slate-700">Loading group analytics...</p>
       ) : error ? (
-        <p className="text-rose-600 dark:text-rose-400">{error}</p>
+        <p className="text-rose-700">{error}</p>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="card p-4">
-              <div className="text-xs muted">Total Groups</div>
-              <div className="text-xl font-semibold">{summary.totalGroups || 0}</div>
+            <div className={statCard}>
+              <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-700">Total Groups</div>
+              <div className="mt-1 text-2xl font-extrabold">{summary.totalGroups || 0}</div>
             </div>
-            <div className="card p-4">
-              <div className="text-xs muted">Active Groups</div>
-              <div className="text-xl font-semibold">{summary.activeGroups || 0}</div>
+            <div className={statCard}>
+              <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-700">Active Groups</div>
+              <div className="mt-1 text-2xl font-extrabold">{summary.activeGroups || 0}</div>
             </div>
-            <div className="card p-4">
-              <div className="text-xs muted">Total Group Loans</div>
-              <div className="text-xl font-semibold">
+            <div className={statCard}>
+              <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-700">Total Group Loans</div>
+              <div className="mt-1 text-2xl font-extrabold">
                 {Number(summary.totalLoans || 0).toLocaleString()}
               </div>
             </div>
-            <div className="card p-4">
-              <div className="text-xs muted">PAR</div>
-              <div className="text-xl font-semibold text-rose-600 dark:text-rose-400">
-                {summary.par || "0%"}
-              </div>
+            <div className={statCard}>
+              <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-700">PAR</div>
+              <div className="mt-1 text-2xl font-extrabold text-rose-700">{summary.par || "0%"}</div>
             </div>
           </div>
 
-          <div className="card p-4">
-            <p className="text-sm muted">
+          <div className={`${card} p-4 mt-4`}>
+            <p className="text-sm text-slate-700">
               Charts and trends (by branch, officer, performance tiers) will appear here once backend analytics endpoints are available.
             </p>
           </div>
