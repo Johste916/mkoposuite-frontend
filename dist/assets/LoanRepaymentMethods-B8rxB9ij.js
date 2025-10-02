@@ -1,0 +1,1 @@
+import{j as t}from"./index-DSXeOGvG.js";import{T as o}from"./TypesEditor-BnQiAftq.js";import"./admin-BAu_Caxe.js";import"./index-CNSQ5DQZ.js";function n(){return t.jsx(o,{title:"Loan Repayment Methods",category:"loan-repayment-methods"})}export{n as default};

@@ -69,6 +69,22 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
   return { paidPrincipal: paidP, paidInterest: paidI, paidPenalty: paidPN, paidFees: paidF };
 }
 
+/* ---------- compute outstanding for a single row ---------- */
+export const computeRowOutstanding = (row) => {
+  const principal = Number(row?.principal || 0);
+  const interest  = Number(row?.interest  || 0);
+  const penalty   = Number(row?.penalty   || 0);
+  const fees      = Number(row?.fee ?? row?.fees ?? 0);
+  const pi        = principal + interest;
+
+  if (row?.balance != null) return Number(row.balance);
+  if (row?.paid || row?.settled) return 0;
+  if (row?.total != null) return Number(row.total);
+
+  // fallback total if no explicit total provided
+  return pi + penalty + fees;
+};
+
 /* ---------- shared column names + row mapper for the table ---------- */
 export const SCHEDULE_COLUMNS = [
   '#',
@@ -125,7 +141,7 @@ export function mapScheduleRows(schedule = []) {
   return rows;
 }
 
-/* ---------- totals / aggregates used by both pages ---------- */
+/* ---------- totals / aggregates used by both pages/modals ---------- */
 export function computeScheduleTotals(schedule = [], repayments = []) {
   const arr = Array.isArray(schedule) ? schedule : [];
   const sum = (k) => arr.reduce((a, b) => a + Number(b?.[k] || 0), 0);
@@ -172,7 +188,8 @@ export function computeScheduleTotals(schedule = [], repayments = []) {
 
   return {
     scheduledPrincipal, scheduledInterest, scheduledPenalty, scheduledFees,
-    scheduledTotal, totalPaid, outstanding, nextDue,
+    scheduledTotal, totalPaid, outstanding, outstandingTotal: outstanding, // provide both keys
+    nextDue,
     ...breakdown,
   };
 }
@@ -483,3 +500,59 @@ function printFallback({ loan, schedule = [], currency, method, company }) {
   w.document.write(html);
   w.document.close();
 }
+
+/* ---------- row builders for exports ---------- */
+/**
+ * Build row objects for jsPDF / jspdf-autotable exports.
+ * Keys: idx, dueDate, principal, interest, pi, penalty, fees, paidP, paidI, outstanding, settled
+ */
+export const rowsForPDF = (schedule = [], currency = 'TZS') =>
+  (Array.isArray(schedule) ? schedule : []).map((r, i) => {
+    const principal = Number(r.principal || 0);
+    const interest  = Number(r.interest  || 0);
+    const penalty   = Number(r.penalty   || 0);
+    const fees      = Number(r.fee ?? r.fees ?? 0);
+    const pi        = principal + interest;
+    const outstanding = computeRowOutstanding(r);
+
+    return {
+      idx: r.installment ?? r.period ?? i + 1,
+      dueDate: asISO(r.dueDate ?? r.date ?? ''),
+      principal: fmtMoney(principal, currency),
+      interest: fmtMoney(interest, currency),
+      pi: fmtMoney(pi, currency),
+      penalty: fmtMoney(penalty, currency),
+      fees: fmtMoney(fees, currency),
+      paidP: r.paidPrincipal != null ? fmtMoney(Number(r.paidPrincipal), currency) : '—',
+      paidI: r.paidInterest  != null ? fmtMoney(Number(r.paidInterest),  currency) : '—',
+      outstanding: fmtMoney(outstanding, currency),
+      settled: r.paid || r.settled ? 'YES' : 'NO',
+    };
+  });
+
+/**
+ * Build plain-value rows handy for Excel (no currency formatting).
+ */
+export const rowsForExcel = (schedule = []) =>
+  (Array.isArray(schedule) ? schedule : []).map((r, i) => {
+    const principal = Number(r.principal || 0);
+    const interest  = Number(r.interest  || 0);
+    const penalty   = Number(r.penalty   || 0);
+    const fees      = Number(r.fee ?? r.fees ?? 0);
+    const pi        = principal + interest;
+    const outstanding = computeRowOutstanding(r);
+
+    return {
+      idx: r.installment ?? r.period ?? i + 1,
+      dueDate: asISO(r.dueDate ?? r.date ?? ''),
+      principal,
+      interest,
+      pi,
+      penalty,
+      fees,
+      paidP: r.paidPrincipal != null ? Number(r.paidPrincipal) : '',
+      paidI: r.paidInterest  != null ? Number(r.paidInterest)  : '',
+      outstanding,
+      settled: r.paid || r.settled ? 'YES' : 'NO',
+    };
+  });
