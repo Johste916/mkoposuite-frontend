@@ -69,20 +69,35 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
   return { paidPrincipal: paidP, paidInterest: paidI, paidPenalty: paidPN, paidFees: paidF };
 }
 
-/* ---------- compute outstanding for a single row ---------- */
+/* ---------- compute outstanding for a single row (trust numbers, not flags) ---------- */
 export const computeRowOutstanding = (row) => {
   const principal = Number(row?.principal || 0);
   const interest  = Number(row?.interest  || 0);
   const penalty   = Number(row?.penalty   || 0);
   const fees      = Number(row?.fee ?? row?.fees ?? 0);
-  const pi        = principal + interest;
+  const total     = row?.total != null ? Number(row.total) : (principal + interest + penalty + fees);
 
-  if (row?.balance != null) return Number(row.balance);
-  if (row?.paid || row?.settled) return 0;
-  if (row?.total != null) return Number(row.total);
+  // 1) Trust numeric balance if provided
+  if (row?.balance != null && !Number.isNaN(Number(row.balance))) return Number(row.balance);
 
-  // fallback total if no explicit total provided
-  return pi + penalty + fees;
+  // 2) If we have any paid breakdowns, compute from them
+  const hasPaidBreakdown =
+    row?.paidPrincipal != null ||
+    row?.paidInterest  != null ||
+    row?.paidPenalty   != null ||
+    row?.paidFees      != null ||
+    row?.paidFee       != null;
+
+  if (hasPaidBreakdown) {
+    const paidP  = Number(row.paidPrincipal || 0);
+    const paidI  = Number(row.paidInterest  || 0);
+    const paidPN = Number(row.paidPenalty   || 0);
+    const paidF  = Number(row.paidFees || 0) + Number(row.paidFee || 0);
+    return Math.max(total - (paidP + paidI + paidPN + paidF), 0);
+  }
+
+  // 3) No reliable numbers → show total; don't zero out based on flags
+  return total;
 };
 
 /* ---------- shared column names + row mapper for the table ---------- */
@@ -100,29 +115,23 @@ export const SCHEDULE_COLUMNS = [
   'Status',
 ];
 
-/** Map raw schedule rows from various shapes into a consistent row shape the table expects */
+/** Map raw schedule rows into a consistent shape for the table */
 export function mapScheduleRows(schedule = []) {
   const rows = [];
+  const eps = 1e-6;
+
   for (let i = 0; i < schedule.length; i++) {
     const r = schedule[i];
     const principal = Number(r.principal || 0);
     const interest  = Number(r.interest || 0);
     const penalty   = Number(r.penalty  || 0);
     const fees      = Number(r.fee ?? r.fees ?? 0);
-    const total     = r.total != null ? Number(r.total) : principal + interest + penalty + fees;
 
     const paidP = r.paidPrincipal != null ? Number(r.paidPrincipal) : null;
     const paidI = r.paidInterest  != null ? Number(r.paidInterest)  : null;
-    const paidPN = r.paidPenalty  != null ? Number(r.paidPenalty)   : 0;
-    const paidF  = (r.paidFees != null ? Number(r.paidFees) : 0) + (r.paidFee ? Number(r.paidFee) : 0);
 
-    const settled = !!(r.paid || r.settled);
-    const outstanding =
-      r.balance != null
-        ? Number(r.balance)
-        : (paidP != null && paidI != null)
-          ? Math.max(total - (paidP + paidI + paidPN + paidF), 0)
-          : (settled ? 0 : total);
+    const outstanding = computeRowOutstanding(r);
+    const status = outstanding <= eps ? 'Settled' : 'Pending';
 
     rows.push({
       idx: r.installment ?? r.period ?? (i + 1),
@@ -135,7 +144,7 @@ export function mapScheduleRows(schedule = []) {
       paidP,
       paidI,
       outstanding,
-      status: settled ? 'Settled' : 'Pending',
+      status,
     });
   }
   return rows;
@@ -172,11 +181,8 @@ export function computeScheduleTotals(schedule = [], repayments = []) {
 
   const outstanding = Math.max(scheduledTotal - totalPaid, 0);
 
-  const next =
-    arr.find((r) =>
-      (r.paid || r.settled) ? false :
-      (Number(r.balance ?? Number(r.total || 0)) > 0)
-    ) || null;
+  // Next due: first row whose computed outstanding is positive
+  const next = arr.find((r) => computeRowOutstanding(r) > 0) || null;
 
   const nextDue = next
     ? {
@@ -188,7 +194,7 @@ export function computeScheduleTotals(schedule = [], repayments = []) {
 
   return {
     scheduledPrincipal, scheduledInterest, scheduledPenalty, scheduledFees,
-    scheduledTotal, totalPaid, outstanding, outstandingTotal: outstanding, // provide both keys
+    scheduledTotal, totalPaid, outstanding, outstandingTotal: outstanding, // both keys
     nextDue,
     ...breakdown,
   };
@@ -252,7 +258,7 @@ export function downloadScheduleCSV({ loan, schedule = [], currency = 'TZS', met
     [],
   ];
 
-  const headers = SCHEDULE_COLUMNS.slice(0, -1).concat('Settled'); // keep same order as table + settled
+  const headers = SCHEDULE_COLUMNS.slice(0, -1).concat('Settled');
   const rows = mapScheduleRows(schedule).map((r) => [
     r.idx,
     r.dueDateISO,
@@ -264,7 +270,7 @@ export function downloadScheduleCSV({ loan, schedule = [], currency = 'TZS', met
     r.paidP ?? '',
     r.paidI ?? '',
     r.outstanding,
-    r.status === 'Settled' ? 'YES' : 'NO',
+    r.outstanding <= 1e-6 ? 'YES' : 'NO',
   ]);
 
   const totals = computeScheduleTotals(schedule, []);
@@ -352,6 +358,7 @@ export async function downloadSchedulePDF({ loan, schedule = [], currency = 'TZS
     { header: 'Settled', dataKey: 'settled' },
   ];
 
+  const eps = 1e-6;
   const rows = mapScheduleRows(schedule).map((r) => ({
     idx: r.idx,
     dueDate: r.dueDateISO,
@@ -363,7 +370,7 @@ export async function downloadSchedulePDF({ loan, schedule = [], currency = 'TZS
     paidP: r.paidP == null ? '—' : fmtMoney(r.paidP, currency),
     paidI: r.paidI == null ? '—' : fmtMoney(r.paidI, currency),
     outstanding: fmtMoney(r.outstanding, currency),
-    settled: r.status === 'Settled' ? 'YES' : 'NO',
+    settled: r.outstanding <= eps ? 'YES' : 'NO',
   }));
 
   autoTable(doc, {
@@ -425,7 +432,7 @@ function printFallback({ loan, schedule = [], currency, method, company }) {
         <td>${r.paidP == null ? '—' : fmtMoney(r.paidP, currency)}</td>
         <td>${r.paidI == null ? '—' : fmtMoney(r.paidI, currency)}</td>
         <td>${fmtMoney(r.outstanding, currency)}</td>
-        <td>${r.status === 'Settled' ? 'YES' : 'NO'}</td>
+        <td>${r.outstanding <= 1e-6 ? 'YES' : 'NO'}</td>
       </tr>`
     )
     .join('');
@@ -502,10 +509,6 @@ function printFallback({ loan, schedule = [], currency, method, company }) {
 }
 
 /* ---------- row builders for exports ---------- */
-/**
- * Build row objects for jsPDF / jspdf-autotable exports.
- * Keys: idx, dueDate, principal, interest, pi, penalty, fees, paidP, paidI, outstanding, settled
- */
 export const rowsForPDF = (schedule = [], currency = 'TZS') =>
   (Array.isArray(schedule) ? schedule : []).map((r, i) => {
     const principal = Number(r.principal || 0);
@@ -514,6 +517,7 @@ export const rowsForPDF = (schedule = [], currency = 'TZS') =>
     const fees      = Number(r.fee ?? r.fees ?? 0);
     const pi        = principal + interest;
     const outstanding = computeRowOutstanding(r);
+    const eps = 1e-6;
 
     return {
       idx: r.installment ?? r.period ?? i + 1,
@@ -526,13 +530,10 @@ export const rowsForPDF = (schedule = [], currency = 'TZS') =>
       paidP: r.paidPrincipal != null ? fmtMoney(Number(r.paidPrincipal), currency) : '—',
       paidI: r.paidInterest  != null ? fmtMoney(Number(r.paidInterest),  currency) : '—',
       outstanding: fmtMoney(outstanding, currency),
-      settled: r.paid || r.settled ? 'YES' : 'NO',
+      settled: outstanding <= eps ? 'YES' : 'NO',
     };
   });
 
-/**
- * Build plain-value rows handy for Excel (no currency formatting).
- */
 export const rowsForExcel = (schedule = []) =>
   (Array.isArray(schedule) ? schedule : []).map((r, i) => {
     const principal = Number(r.principal || 0);
@@ -541,6 +542,7 @@ export const rowsForExcel = (schedule = []) =>
     const fees      = Number(r.fee ?? r.fees ?? 0);
     const pi        = principal + interest;
     const outstanding = computeRowOutstanding(r);
+    const eps = 1e-6;
 
     return {
       idx: r.installment ?? r.period ?? i + 1,
@@ -553,6 +555,6 @@ export const rowsForExcel = (schedule = []) =>
       paidP: r.paidPrincipal != null ? Number(r.paidPrincipal) : '',
       paidI: r.paidInterest  != null ? Number(r.paidInterest)  : '',
       outstanding,
-      settled: r.paid || r.settled ? 'YES' : 'NO',
+      settled: outstanding <= eps ? 'YES' : 'NO',
     };
   });
