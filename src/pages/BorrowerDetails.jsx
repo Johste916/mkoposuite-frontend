@@ -23,12 +23,7 @@ const displayBranch = (b) =>
   firstFilled(b?.branchName, b?.Branch?.name, b?.branch?.name, b?.branch) || "—";
 
 const displayOfficer = (b) =>
-  firstFilled(
-    b?.officerName,
-    b?.officer?.name,
-    b?.loanOfficer?.name,
-    b?.loanOfficer
-  ) || "—";
+  firstFilled(b?.officerName, b?.officer?.name, b?.loanOfficer?.name, b?.loanOfficer) || "—";
 
 const initials = (nameLike) => {
   const s = String(nameLike || "").trim();
@@ -38,26 +33,27 @@ const initials = (nameLike) => {
 };
 
 const chip = (status) => {
-  const base = "px-2 py-0.5 text-xs font-semibold rounded-full border shadow-sm";
+  const base =
+    "px-2 py-0.5 text-[11px] font-bold uppercase rounded-full border-2 ring-1 ring-inset shadow-sm";
   const s = String(status || "").toLowerCase();
   switch (s) {
     case "pending":
     case "pending_kyc":
-      return `${base} bg-amber-100 border-amber-300 text-amber-800`;
+      return `${base} bg-amber-100 border-amber-300 ring-amber-200 text-amber-900`;
     case "approved":
-      return `${base} bg-emerald-100 border-emerald-300 text-emerald-800`;
+      return `${base} bg-emerald-100 border-emerald-300 ring-emerald-200 text-emerald-900`;
     case "rejected":
-      return `${base} bg-rose-100 border-rose-300 text-rose-800`;
+      return `${base} bg-rose-100 border-rose-300 ring-rose-200 text-rose-900`;
     case "active":
-      return `${base} bg-blue-100 border-blue-300 text-blue-800`;
+      return `${base} bg-blue-100 border-blue-300 ring-blue-200 text-blue-900`;
     case "disabled":
-      return `${base} bg-slate-100 border-slate-300 text-slate-800`;
+      return `${base} bg-slate-100 border-slate-300 ring-slate-200 text-slate-900`;
     case "blacklisted":
-      return `${base} bg-red-100 border-red-300 text-red-800`;
+      return `${base} bg-red-100 border-red-300 ring-red-200 text-red-900`;
     case "closed":
-      return `${base} bg-gray-100 border-gray-300 text-gray-800`;
+      return `${base} bg-gray-100 border-gray-300 ring-gray-200 text-gray-900`;
     default:
-      return `${base} bg-gray-100 border-gray-300 text-gray-800`;
+      return `${base} bg-gray-100 border-gray-300 ring-gray-200 text-gray-900`;
   }
 };
 
@@ -75,19 +71,20 @@ const tryGET = async (paths = [], opts = {}) => {
   throw lastErr || new Error(`All endpoints failed: ${paths.join(", ")}`);
 };
 
-const withTenant = (tenantId) =>
-  tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {};
+const withTenant = (tenantId) => (tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {});
 
 /* Small visual helpers */
 const strongLink =
-  "text-indigo-700 font-semibold underline decoration-2 underline-offset-2 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-sm";
+  "inline-flex items-center gap-1 text-indigo-700 font-bold underline decoration-2 underline-offset-4 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded";
 
 const Card = ({ title, icon, children, className = "" }) => (
-  <section className={`rounded-2xl border border-gray-300 bg-white shadow-sm p-4 md:p-5 ${className}`}>
+  <section
+    className={`rounded-2xl border-2 border-slate-400 bg-white shadow-lg p-4 md:p-5 ${className}`}
+  >
     {title && (
       <div className="flex items-center gap-2 mb-3">
         {icon}
-        <h2 className="text-base md:text-lg font-semibold text-black">{title}</h2>
+        <h2 className="text-lg md:text-xl font-extrabold text-slate-900 tracking-tight">{title}</h2>
       </div>
     )}
     {children}
@@ -96,16 +93,15 @@ const Card = ({ title, icon, children, className = "" }) => (
 
 const Field = ({ label, children }) => (
   <div className="min-w-0">
-    <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">
-      {label}
+    <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-900">{label}</div>
+    <div className="mt-1 text-[15px] text-slate-900 break-words">
+      {isEmpty(children) ? "—" : children}
     </div>
-    <div className="mt-1 text-[15px] text-black break-words">{isEmpty(children) ? "—" : children}</div>
   </div>
 );
 
 const DlGrid = ({ items, cols = 3 }) => {
-  const colCls =
-    cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
+  const colCls = cols === 2 ? "lg:grid-cols-2" : cols === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
   return (
     <div className={`grid gap-4 sm:grid-cols-2 ${colCls}`}>
       {items.map((it, i) => (
@@ -118,25 +114,25 @@ const DlGrid = ({ items, cols = 3 }) => {
 };
 
 const PillTabs = ({ tabs, active, onChange }) => (
-  <div className="flex flex-wrap gap-2 border-b px-2 pt-2 border-gray-300">
+  <div className="flex flex-wrap gap-2 border-b-2 px-2 pt-2 border-slate-400 bg-white rounded-t-2xl">
     {tabs.map((t) => {
       const is = active === t.key;
       return (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`px-3 py-1.5 text-sm rounded-full border transition ${
+          className={`px-3 py-1.5 text-sm rounded-full border-2 transition font-semibold ${
             is
-              ? "bg-indigo-600 text-white border-indigo-600"
-              : "bg-white text-black hover:bg-gray-50 border-gray-300"
+              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+              : "bg-white text-slate-900 hover:bg-slate-50 border-slate-400"
           } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
         >
           {t.label}
           {typeof t.count === "number" && (
             <span
-              className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full text-xs ${
-                is ? "bg-white/20 text-white" : "bg-gray-100 text-gray-800"
-              } px-1.5`}
+              className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full text-xs px-1.5 ${
+                is ? "bg-white/20 text-white" : "bg-slate-100 text-slate-900"
+              }`}
             >
               {t.count}
             </span>
@@ -152,7 +148,7 @@ function firstFilled(...vals) {
   for (const v of vals.flat()) {
     if (v === 0) return 0;
     if (v === false) continue;
-    if (v === null || v === undefined) continue;
+    if (v == null) continue;
     const s = typeof v === "string" ? v.trim() : v;
     if (Array.isArray(s)) {
       if (s.filter(Boolean).length) return s;
@@ -238,7 +234,6 @@ const BorrowerDetails = () => {
     nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone),
     nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship),
     branchId: b?.branchId ?? b?.Branch?.id ?? b?.branch?.id ?? "",
-    // accept both officerId and loanOfficerId from BE
     officerId: b?.officerId ?? b?.loanOfficerId ?? b?.officer?.id ?? b?.loanOfficer?.id ?? "",
     status: b?.status ?? "active",
     maritalStatus: firstFilled(b?.maritalStatus, b?.marriageStatus),
@@ -261,15 +256,18 @@ const BorrowerDetails = () => {
       const qTenant = b?.tenantId ? `&tenantId=${encodeURIComponent(b.tenantId)}` : "";
 
       const [loanData, repayData, commentData, savingsData] = await Promise.all([
-        tryGET([`/loans?borrowerId=${id}${qTenant}`, `/borrowers/${id}/loans`, `/loans/borrower/${id}`]).catch(() => {
-          setErrors((x) => ({ ...x, loans: "Couldn’t load loans." }));
-          return [];
-        }),
-        tryGET([`/repayments?borrowerId=${id}${qTenant}`, `/borrowers/${id}/repayments`, `/repayments/borrower/${id}`]).catch(
-          () => []
+        tryGET([`/loans?borrowerId=${id}${qTenant}`, `/borrowers/${id}/loans`, `/loans/borrower/${id}`]).catch(
+          () => {
+            setErrors((x) => ({ ...x, loans: "Couldn’t load loans." }));
+            return [];
+          }
         ),
+        tryGET([
+          `/repayments?borrowerId=${id}${qTenant}`,
+          `/borrowers/${id}/repayments`,
+          `/repayments/borrower/${id}`,
+        ]).catch(() => []),
         tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
-        // prefer borrower route to avoid 404
         tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`]).catch(() => {
           setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
           return {};
@@ -301,8 +299,16 @@ const BorrowerDetails = () => {
         tryGET(["/users?role=officer", "/officers", "/users/loan-officers"], opt).catch(() => []),
       ]);
 
-      const brs = Array.isArray(branchRes?.items) ? branchRes.items : Array.isArray(branchRes) ? branchRes : [];
-      const ofs = Array.isArray(officerRes?.items) ? officerRes.items : Array.isArray(officerRes) ? officerRes : [];
+      const brs = Array.isArray(branchRes?.items)
+        ? branchRes.items
+        : Array.isArray(branchRes)
+        ? branchRes
+        : [];
+      const ofs = Array.isArray(officerRes?.items)
+        ? officerRes.items
+        : Array.isArray(officerRes)
+        ? officerRes
+        : [];
 
       setBranches(
         brs.map((b) => ({
@@ -334,7 +340,7 @@ const BorrowerDetails = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [borrower?.tenantId]);
 
-  // auto-refresh this page when any other page broadcasts a loan/borrower update
+  // auto-refresh on broadcast
   useEffect(() => {
     const onUpdated = () => fetchBorrowerBundle();
     window.addEventListener("loan:updated", onUpdated);
@@ -377,13 +383,17 @@ const BorrowerDetails = () => {
   const handleRepaymentSaved = async () => {
     try {
       const repay = await tryGET([
-        `/repayments?borrowerId=${id}${borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""}`,
+        `/repayments?borrowerId=${id}${
+          borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+        }`,
         `/borrowers/${id}/repayments`,
       ]);
       setRepayments(Array.isArray(repay) ? repay : repay?.items || []);
     } catch {}
     await fetchBorrowerBundle();
-    window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id: selectedLoanForRepayment?.id } }));
+    window.dispatchEvent(
+      new CustomEvent("loan:updated", { detail: { id: selectedLoanForRepayment?.id } })
+    );
     window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
   };
 
@@ -402,7 +412,6 @@ const BorrowerDetails = () => {
         status: form.status,
         nationalId: form.nationalId,
         branchId: form.branchId || null,
-        // send both keys to be compatible with BE variants
         officerId: form.officerId || null,
         loanOfficerId: form.officerId || null,
         idType: form.idType,
@@ -427,11 +436,9 @@ const BorrowerDetails = () => {
 
       await api.patch(`/borrowers/${form.id}`, payload, withTenant(borrower?.tenantId));
 
-      // IMPORTANT: Re-fetch canonical borrower to reflect formatting/mirrors from backend
       await fetchBorrowerBundle();
       setIsEditing(false);
 
-      // broadcast for other modules
       window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id: form.id } }));
     } catch (e) {
       alert("Couldn’t update borrower.");
@@ -443,7 +450,12 @@ const BorrowerDetails = () => {
 
   // Admin actions
   const handleDisable = async () => {
-    if (!window.confirm("Disable this borrower? They will not be able to apply or receive disbursements.")) return;
+    if (
+      !window.confirm(
+        "Disable this borrower? They will not be able to apply or receive disbursements."
+      )
+    )
+      return;
     try {
       await api.post(`/borrowers/${id}/disable`, {}, withTenant(borrower?.tenantId));
       setBorrower((b) => ({ ...b, status: "disabled" }));
@@ -467,7 +479,11 @@ const BorrowerDetails = () => {
       window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
     } catch {
       try {
-        await api.patch(`/borrowers/${id}`, { status: "blacklisted" }, withTenant(borrower?.tenantId));
+        await api.patch(
+          `/borrowers/${id}`,
+          { status: "blacklisted" },
+          withTenant(borrower?.tenantId)
+        );
         setBorrower((b) => ({ ...b, status: "blacklisted" }));
         window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
       } catch {
@@ -477,7 +493,12 @@ const BorrowerDetails = () => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Permanently delete this borrower and their client profile? This cannot be undone.")) return;
+    if (
+      !window.confirm(
+        "Permanently delete this borrower and their client profile? This cannot be undone."
+      )
+    )
+      return;
     try {
       await api.delete(`/borrowers/${id}`, withTenant(borrower?.tenantId));
       navigate("/borrowers");
@@ -493,12 +514,14 @@ const BorrowerDetails = () => {
       const due = r.dueDate ? new Date(r.dueDate) : null;
       const status = String(r.status || "").toLowerCase();
       const paid = safeNum(r.amountPaid ?? r.paidAmount) > 0;
-      return due && due < today && !paid && (status === "overdue" || status === "due" || status === "");
+      return (
+        due && due < today && !paid && (status === "overdue" || status === "due" || status === "")
+      );
     }).length;
   }, [repayments]);
 
   if (!borrower || !form) {
-    return <div className="p-4 min-h-screen bg-white text-black">Loading...</div>;
+    return <div className="w-full px-6 py-6 min-h-screen bg-white text-slate-900">Loading...</div>;
   }
 
   const bName = displayName(borrower);
@@ -512,7 +535,10 @@ const BorrowerDetails = () => {
 
   // Savings aggregates
   const deposits = savings.reduce((s, t) => (t.type === "deposit" ? s + safeNum(t.amount) : s), 0);
-  const withdrawals = savings.reduce((s, t) => (t.type === "withdrawal" ? s + safeNum(t.amount) : s), 0);
+  const withdrawals = savings.reduce(
+    (s, t) => (t.type === "withdrawal" ? s + safeNum(t.amount) : s),
+    0
+  );
   const charges = savings.reduce((s, t) => (t.type === "charge" ? s + safeNum(t.amount) : s), 0);
   const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
 
@@ -526,24 +552,59 @@ const BorrowerDetails = () => {
   );
 
   const businessName = firstFilled(borrower.businessName, borrower.tradeName, borrower.shopName);
-  const occupation = firstFilled(borrower.occupation, borrower.businessType, borrower.jobTitle, borrower.sector);
-  const employmentStatus = firstFilled(borrower.employmentStatus, borrower.employment, borrower.employmentType);
+  const occupation = firstFilled(
+    borrower.occupation,
+    borrower.businessType,
+    borrower.jobTitle,
+    borrower.sector
+  );
+  const employmentStatus = firstFilled(
+    borrower.employmentStatus,
+    borrower.employment,
+    borrower.employmentType
+  );
   const nationalId = firstFilled(borrower.nationalId, borrower.nid, borrower.idNumber);
   const idType = firstFilled(borrower.idType, borrower.identificationType);
   const idIssued = firstFilled(borrower.idIssuedDate, borrower.idIssueDate, borrower.idDateIssued);
   const idExpiry = firstFilled(borrower.idExpiryDate, borrower.idExpireDate, borrower.idDateExpiry);
   const maritalStatus = firstFilled(borrower.maritalStatus, borrower.marriageStatus);
-  const educationLevel = firstFilled(borrower.educationLevel, borrower.education, borrower.educationStatus);
-  const customerNumber = firstFilled(borrower.customerNumber, borrower.accountNumber, borrower.clientNumber);
+  const educationLevel = firstFilled(
+    borrower.educationLevel,
+    borrower.education,
+    borrower.educationStatus
+  );
+  const customerNumber = firstFilled(
+    borrower.customerNumber,
+    borrower.accountNumber,
+    borrower.clientNumber
+  );
   const tin = firstFilled(borrower.tin, borrower.TIN, borrower.taxId);
   const nationality = firstFilled(borrower.nationality, borrower.country);
   const dob = firstFilled(borrower.birthDate, borrower.dateOfBirth, borrower.dob);
 
-  const nextKinName = firstFilled(borrower.nextKinName, borrower.nextOfKinName, borrower.kinName, borrower.emergencyContactName);
-  const nextKinPhone = firstFilled(borrower.nextKinPhone, borrower.nextOfKinPhone, borrower.kinPhone, borrower.emergencyContactPhone);
-  const nextKinRel = firstFilled(borrower.nextOfKinRelationship, borrower.kinRelationship, borrower.relationship);
+  const nextKinName = firstFilled(
+    borrower.nextKinName,
+    borrower.nextOfKinName,
+    borrower.kinName,
+    borrower.emergencyContactName
+  );
+  const nextKinPhone = firstFilled(
+    borrower.nextKinPhone,
+    borrower.nextOfKinPhone,
+    borrower.kinPhone,
+    borrower.emergencyContactPhone
+  );
+  const nextKinRel = firstFilled(
+    borrower.nextOfKinRelationship,
+    borrower.kinRelationship,
+    borrower.relationship
+  );
 
-  const registrationDate = firstFilled(borrower.regDate, borrower.registrationDate, borrower.createdAt);
+  const registrationDate = firstFilled(
+    borrower.regDate,
+    borrower.registrationDate,
+    borrower.createdAt
+  );
 
   // options for static selects
   const GENDER_OPTS = [
@@ -576,21 +637,21 @@ const BorrowerDetails = () => {
   ];
 
   return (
-    <div className="p-4 md:p-6 min-h-screen bg-white text-black">
+    <div className="w-full px-4 md:px-6 py-6 min-h-screen bg-white text-slate-900">
       {/* Top bar */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-5">
         <div className="text-sm">
           <Link to={`/borrowers${tenantQuery}`} className={strongLink}>
             Borrowers
           </Link>{" "}
-          <span className="text-gray-700">/</span>{" "}
-          <span className="font-medium">{bName}</span>
+          <span className="text-slate-700">/</span>{" "}
+          <span className="font-extrabold tracking-tight">{bName}</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {!isEditing ? (
             <button
               onClick={() => setIsEditing(true)}
-              className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="text-slate-900 border-2 border-slate-400 hover:bg-slate-50 px-3 py-1.5 rounded-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               Update info
             </button>
@@ -601,14 +662,14 @@ const BorrowerDetails = () => {
                   setIsEditing(false);
                   setForm(mapBorrowerToForm(borrower)); // reset
                 }}
-                className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="text-slate-900 border-2 border-slate-400 hover:bg-slate-50 px-3 py-1.5 rounded-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 Cancel
               </button>
               <button
                 onClick={saveUpdates}
                 disabled={saving}
-                className="bg-indigo-600 disabled:opacity-60 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="bg-indigo-600 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 shadow-sm"
               >
                 {saving ? "Saving..." : "Save"}
               </button>
@@ -618,19 +679,19 @@ const BorrowerDetails = () => {
             <>
               <button
                 onClick={handleDisable}
-                className="text-black border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="text-slate-900 border-2 border-slate-400 hover:bg-slate-50 px-3 py-1.5 rounded-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 Disable
               </button>
               <button
                 onClick={handleBlacklist}
-                className="bg-rose-600 text-white px-3 py-1.5 rounded-md hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                className="bg-rose-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 shadow-sm"
               >
                 Blacklist
               </button>
               <button
                 onClick={handleDelete}
-                className="bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                className="bg-red-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 shadow-sm"
               >
                 Delete
               </button>
@@ -640,9 +701,9 @@ const BorrowerDetails = () => {
       </div>
 
       {/* Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* MAIN */}
-        <div className="lg:col-span-3 space-y-5">
+        <div className="lg:col-span-3 space-y-6">
           {/* Profile */}
           <Card>
             <div className="flex gap-5">
@@ -652,10 +713,10 @@ const BorrowerDetails = () => {
                   <img
                     src={borrower.photoUrl}
                     alt={bName}
-                    className="w-24 h-24 rounded-2xl object-cover border border-gray-300"
+                    className="w-24 h-24 rounded-2xl object-cover border-2 border-slate-400"
                   />
                 ) : (
-                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-semibold">
+                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-extrabold">
                     {initials(bName)}
                   </div>
                 )}
@@ -665,42 +726,85 @@ const BorrowerDetails = () => {
               </div>
 
               {/* Name + quick contact */}
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   {isEditing ? (
                     <input
                       value={form.name ?? ""}
                       onChange={(e) => onChange("name", e.target.value)}
-                      className="text-2xl font-bold tracking-tight border border-gray-300 rounded-md px-2 py-1"
+                      className="text-3xl font-extrabold tracking-tight border-2 border-slate-400 rounded-lg px-2 py-1"
                       placeholder="Full name"
                     />
                   ) : (
-                    <h1 className="text-2xl font-bold tracking-tight">{bName}</h1>
+                    <h1 className="text-3xl font-extrabold tracking-tight truncate">{bName}</h1>
                   )}
-                  <span className="text-xs text-gray-700">ID: {borrower.id}</span>
-                  <span className="text-xs text-gray-700">Tenant: {borrower.tenantId || "—"}</span>
+                  <span className="text-xs text-slate-700">ID: {borrower.id}</span>
+                  <span className="text-xs text-slate-700">
+                    Tenant: {borrower.tenantId || "—"}
+                  </span>
                 </div>
 
-                <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <Field label="Phone">
                     {isEditing ? (
                       <input
                         value={form.phone ?? ""}
                         onChange={(e) => onChange("phone", e.target.value)}
-                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2"
+                        className="w-full text-sm border-2 border-slate-400 rounded-lg px-3 py-2"
                         placeholder="e.g., 2557xxxxxxx"
                       />
                     ) : (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span>
-                          {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) ||
-                            "—"}
+                          {firstFilled(
+                            borrower.phone,
+                            borrower.msisdn,
+                            borrower.mobile,
+                            borrower.primaryPhone
+                          ) || "—"}
                         </span>
-                        {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) && (
+                        {firstFilled(
+                          borrower.phone,
+                          borrower.msisdn,
+                          borrower.mobile,
+                          borrower.primaryPhone
+                        ) && (
                           <>
-                            <a className={strongLink} href={tel(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>Call</a>
-                            <a className={strongLink} href={sms(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)}>SMS</a>
-                            <a className={strongLink} href={wa(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone)} target="_blank" rel="noreferrer">WhatsApp</a>
+                            <a
+                              className={strongLink}
+                              href={tel(
+                                borrower.phone ||
+                                  borrower.msisdn ||
+                                  borrower.mobile ||
+                                  borrower.primaryPhone
+                              )}
+                            >
+                              Call
+                            </a>
+                            <a
+                              className={strongLink}
+                              href={sms(
+                                borrower.phone ||
+                                  borrower.msisdn ||
+                                  borrower.mobile ||
+                                  borrower.primaryPhone
+                              )}
+                            >
+                              SMS
+                            </a>
+                            <a
+                              className={strongLink}
+                              href={wa(
+                                borrower.phone ||
+                                  borrower.msisdn ||
+                                  borrower.mobile ||
+                                  borrower.primaryPhone
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              WhatsApp
+                            </a>
                           </>
                         )}
                       </div>
@@ -712,14 +816,16 @@ const BorrowerDetails = () => {
                       <input
                         value={form.email ?? ""}
                         onChange={(e) => onChange("email", e.target.value)}
-                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2"
+                        className="w-full text-sm border-2 border-slate-400 rounded-lg px-3 py-2"
                         placeholder="e.g., user@email.com"
                       />
                     ) : (
                       <div className="flex items-center gap-2">
                         <span>{firstFilled(borrower.email, borrower.mail) || "—"}</span>
                         {firstFilled(borrower.email, borrower.mail) && (
-                          <a className={strongLink} href={mail(borrower.email || borrower.mail)}>Email</a>
+                          <a className={strongLink} href={mail(borrower.email || borrower.mail)}>
+                            Email
+                          </a>
                         )}
                       </div>
                     )}
@@ -730,7 +836,7 @@ const BorrowerDetails = () => {
                       <input
                         value={form.addressLine ?? ""}
                         onChange={(e) => onChange("addressLine", e.target.value)}
-                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2"
+                        className="w-full text-sm border-2 border-slate-400 rounded-lg px-3 py-2"
                         placeholder="Street, ward, district, city"
                       />
                     ) : (
@@ -742,7 +848,7 @@ const BorrowerDetails = () => {
             </div>
 
             {/* Divider */}
-            <hr className="my-4 border-gray-300" />
+            <hr className="my-4 border-2 border-slate-300" />
 
             {/* Identity mirrors Add Borrower */}
             <div className="grid gap-5">
@@ -755,10 +861,12 @@ const BorrowerDetails = () => {
                       <select
                         value={form.gender ?? ""}
                         onChange={(e) => onChange("gender", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       >
                         {GENDER_OPTS.map((o) => (
-                          <option key={o.v} value={o.v}>{o.t}</option>
+                          <option key={o.v} value={o.v}>
+                            {o.t}
+                          </option>
                         ))}
                       </select>
                     ) : (
@@ -772,7 +880,7 @@ const BorrowerDetails = () => {
                         type="date"
                         value={form.birthDate ? isoDateOnly(form.birthDate) : ""}
                         onChange={(e) => onChange("birthDate", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
                     ) : (
                       dmy(dob)
@@ -784,7 +892,7 @@ const BorrowerDetails = () => {
                       <input
                         value={form.occupation ?? ""}
                         onChange={(e) => onChange("occupation", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
                     ) : (
                       firstFilled(occupation, businessName)
@@ -796,37 +904,49 @@ const BorrowerDetails = () => {
                       <select
                         value={form.employmentStatus ?? ""}
                         onChange={(e) => onChange("employmentStatus", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       >
                         {EMPLOYMENT_OPTS.map((o) => (
-                          <option key={o.v} value={o.v}>{o.t}</option>
+                          <option key={o.v} value={o.v}>
+                            {o.t}
+                          </option>
                         ))}
                       </select>
                     ) : (
                       employmentStatus
                     ),
                   },
-                  { label: "Customer No.", value: isEditing ? (
+                  {
+                    label: "Customer No.",
+                    value: isEditing ? (
                       <input
                         value={form.customerNumber ?? ""}
                         onChange={(e) => onChange("customerNumber", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
-                    ) : customerNumber },
-                  { label: "Nationality", value: isEditing ? (
+                    ) : (
+                      customerNumber
+                    ),
+                  },
+                  {
+                    label: "Nationality",
+                    value: isEditing ? (
                       <input
                         value={form.nationality ?? ""}
                         onChange={(e) => onChange("nationality", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
-                    ) : nationality },
+                    ) : (
+                      nationality
+                    ),
+                  },
                   {
                     label: "Marital Status",
                     value: isEditing ? (
                       <input
                         value={form.maritalStatus ?? ""}
                         onChange={(e) => onChange("maritalStatus", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
                     ) : (
                       maritalStatus
@@ -838,7 +958,7 @@ const BorrowerDetails = () => {
                       <input
                         value={form.educationLevel ?? ""}
                         onChange={(e) => onChange("educationLevel", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
                     ) : (
                       educationLevel
@@ -850,10 +970,12 @@ const BorrowerDetails = () => {
                       <select
                         value={form.status ?? "active"}
                         onChange={(e) => onChange("status", e.target.value)}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                        className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       >
                         {STATUS_OPTS.map((o) => (
-                          <option key={o.v} value={o.v}>{o.t}</option>
+                          <option key={o.v} value={o.v}>
+                            {o.t}
+                          </option>
                         ))}
                       </select>
                     ) : (
@@ -874,10 +996,12 @@ const BorrowerDetails = () => {
                           <select
                             value={form.idType ?? ""}
                             onChange={(e) => onChange("idType", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           >
                             {IDTYPE_OPTS.map((o) => (
-                              <option key={o.v} value={o.v}>{o.t}</option>
+                              <option key={o.v} value={o.v}>
+                                {o.t}
+                              </option>
                             ))}
                           </select>
                         ) : (
@@ -890,7 +1014,7 @@ const BorrowerDetails = () => {
                           <input
                             value={form.nationalId ?? ""}
                             onChange={(e) => onChange("nationalId", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
                         ) : (
                           nationalId || borrower.idNumber
@@ -903,7 +1027,7 @@ const BorrowerDetails = () => {
                             type="date"
                             value={form.idIssuedDate ? isoDateOnly(form.idIssuedDate) : ""}
                             onChange={(e) => onChange("idIssuedDate", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
                         ) : (
                           dmy(idIssued)
@@ -916,7 +1040,7 @@ const BorrowerDetails = () => {
                             type="date"
                             value={form.idExpiryDate ? isoDateOnly(form.idExpiryDate) : ""}
                             onChange={(e) => onChange("idExpiryDate", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
                         ) : (
                           dmy(idExpiry)
@@ -928,9 +1052,11 @@ const BorrowerDetails = () => {
                           <input
                             value={form.tin ?? ""}
                             onChange={(e) => onChange("tin", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : tin,
+                        ) : (
+                          tin
+                        ),
                       },
                     ]}
                   />
@@ -947,7 +1073,7 @@ const BorrowerDetails = () => {
                             <select
                               value={form.branchId ?? ""}
                               onChange={(e) => onChange("branchId", e.target.value)}
-                              className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                              className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                             >
                               <option value="">—</option>
                               {branches.map((b) => (
@@ -960,7 +1086,7 @@ const BorrowerDetails = () => {
                             <input
                               value={form.branchId ?? ""}
                               onChange={(e) => onChange("branchId", e.target.value)}
-                              className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                              className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                               placeholder="Branch ID"
                             />
                           )
@@ -975,7 +1101,7 @@ const BorrowerDetails = () => {
                             <select
                               value={form.officerId ?? ""}
                               onChange={(e) => onChange("officerId", e.target.value)}
-                              className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                              className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                             >
                               <option value="">—</option>
                               {officers.map((u) => (
@@ -988,7 +1114,7 @@ const BorrowerDetails = () => {
                             <input
                               value={form.officerId ?? ""}
                               onChange={(e) => onChange("officerId", e.target.value)}
-                              className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                              className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                               placeholder="Officer ID"
                             />
                           )
@@ -996,20 +1122,30 @@ const BorrowerDetails = () => {
                           displayOfficer(borrower)
                         ),
                       },
-                      { label: "Loan Type", value: isEditing ? (
+                      {
+                        label: "Loan Type",
+                        value: isEditing ? (
                           <input
                             value={form.loanType ?? ""}
                             onChange={(e) => onChange("loanType", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : firstFilled(borrower.loanType, borrower.productType, "individual") },
-                      { label: "Group ID", value: isEditing ? (
+                        ) : (
+                          firstFilled(borrower.loanType, borrower.productType, "individual")
+                        ),
+                      },
+                      {
+                        label: "Group ID",
+                        value: isEditing ? (
                           <input
                             value={form.groupId ?? ""}
                             onChange={(e) => onChange("groupId", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : firstFilled(borrower.groupId, borrower.group, borrower.groupCode) },
+                        ) : (
+                          firstFilled(borrower.groupId, borrower.group, borrower.groupCode)
+                        ),
+                      },
                       {
                         label: "Registration Date",
                         value: isEditing ? (
@@ -1017,9 +1153,11 @@ const BorrowerDetails = () => {
                             type="date"
                             value={form.regDate ? isoDateOnly(form.regDate) : ""}
                             onChange={(e) => onChange("regDate", e.target.value)}
-                            className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                            className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : dmy(registrationDate),
+                        ) : (
+                          dmy(registrationDate)
+                        ),
                       },
                     ]}
                   />
@@ -1036,7 +1174,7 @@ const BorrowerDetails = () => {
                         <input
                           value={form.nextKinName ?? ""}
                           onChange={(e) => onChange("nextKinName", e.target.value)}
-                          className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                         />
                       ) : (
                         nextKinName
@@ -1048,7 +1186,7 @@ const BorrowerDetails = () => {
                         <input
                           value={form.nextKinPhone ?? ""}
                           onChange={(e) => onChange("nextKinPhone", e.target.value)}
-                          className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                         />
                       ) : (
                         nextKinPhone
@@ -1060,7 +1198,7 @@ const BorrowerDetails = () => {
                         <input
                           value={form.nextOfKinRelationship ?? ""}
                           onChange={(e) => onChange("nextOfKinRelationship", e.target.value)}
-                          className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                          className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                         />
                       ) : (
                         nextKinRel
@@ -1081,19 +1219,26 @@ const BorrowerDetails = () => {
                   ? `${Number(borrower.parPercent).toFixed(2)}%`
                   : "0%",
               },
-              { k: "Overdue Amount", v: money(firstFilled(borrower.overdueAmount, borrower.pastDueAmount, 0)) },
+              {
+                k: "Overdue Amount",
+                v: money(firstFilled(borrower.overdueAmount, borrower.pastDueAmount, 0)),
+              },
               { k: "Missed Repayments", v: missedRepayments },
               { k: "Net Savings", v: money(firstFilled(borrower.netSavings, borrower.savingsNet, 0)) },
             ].map((c, i) => (
-              <div key={i} className="rounded-2xl p-4 border bg-white border-gray-300">
-                <div className="text-[12px] font-medium uppercase tracking-wider text-gray-700">{c.k}</div>
-                <div className="mt-1 text-2xl font-semibold text-black">{c.v}</div>
+              <div key={i} className="rounded-2xl p-4 border-2 bg-white border-slate-400 shadow-sm">
+                <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-900">
+                  {c.k}
+                </div>
+                <div className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">
+                  {c.v}
+                </div>
               </div>
             ))}
           </div>
 
           {/* Tabs */}
-          <div className="rounded-2xl border bg-white border-gray-300">
+          <div className="rounded-2xl border-2 bg-white border-slate-400 shadow-lg">
             <PillTabs
               active={activeTab}
               onChange={setActiveTab}
@@ -1110,16 +1255,18 @@ const BorrowerDetails = () => {
               {/* Loans */}
               {activeTab === "loans" && (
                 <>
-                  {errors.loans && <div className="mb-3 text-sm text-rose-700 font-medium">{errors.loans}</div>}
+                  {errors.loans && (
+                    <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.loans}</div>
+                  )}
                   {loans.length === 0 ? (
                     <Empty
                       text={
                         <>
                           No loans for this borrower.
                           <Link
-                            to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
-                              borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-                            }`}
+                            to={`/loans/applications?borrowerId=${encodeURIComponent(
+                              borrower.id
+                            )}${borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""}`}
                             className={`ml-1 ${strongLink}`}
                           >
                             Create loan
@@ -1129,16 +1276,27 @@ const BorrowerDetails = () => {
                     />
                   ) : (
                     <Table
-                      head={["Loan", "Reference", "Status", "Amount", "Outstanding", "Next Due", "Actions"]}
+                      head={[
+                        "Loan",
+                        "Reference",
+                        "Status",
+                        "Amount",
+                        "Outstanding",
+                        "Next Due",
+                        "Actions",
+                      ]}
                       rows={loans.map((l) => {
-                        const outTotal = l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
+                        const outTotal =
+                          l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
                         const nextDate = l.nextDueDate || l.nextInstallmentDate || null;
                         const nextAmt = l.nextDueAmount || l.nextInstallmentAmount || null;
 
                         return [
                           <Link
                             to={`/loans/${encodeURIComponent(l.id)}${
-                              borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                              borrower?.tenantId
+                                ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
+                                : ""
                             }`}
                             className={strongLink}
                           >
@@ -1147,25 +1305,29 @@ const BorrowerDetails = () => {
                           l.reference || `L-${l.id}`,
                           <span className={chip(l.status)}>{String(l.status || "—")}</span>,
                           <div className="text-right tabular-nums">{money(l.amount)}</div>,
-                          <div className="text-right tabular-nums">{outTotal == null ? "—" : money(outTotal)}</div>,
+                          <div className="text-right tabular-nums">
+                            {outTotal == null ? "—" : money(outTotal)}
+                          </div>,
                           nextDate ? (
                             <div className="text-right">
                               {new Date(nextDate).toLocaleDateString()}
-                              {nextAmt ? <span className="ml-1 font-medium">{money(nextAmt)}</span> : null}
+                              {nextAmt ? (
+                                <span className="ml-1 font-bold">{money(nextAmt)}</span>
+                              ) : null}
                             </div>
                           ) : (
                             "—"
                           ),
                           <div className="flex gap-2 justify-end">
                             <button
-                              className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                              className="px-3 py-1.5 rounded-lg border-2 border-slate-400 text-slate-900 hover:bg-slate-50 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                               onClick={() => handleViewSchedule(l.id)}
                             >
                               Schedule
                             </button>
                             {String(userRole || "").toLowerCase() === "admin" && (
                               <button
-                                className="px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                                className="px-3 py-1.5 rounded-lg border-2 border-slate-400 text-slate-900 hover:bg-slate-50 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                                 onClick={() => {
                                   setSelectedLoanForRepayment(l);
                                   setShowRepaymentModal(true);
@@ -1200,7 +1362,9 @@ const BorrowerDetails = () => {
                         r.loanId ? (
                           <Link
                             to={`/loans/${encodeURIComponent(r.loanId)}${
-                              borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                              borrower?.tenantId
+                                ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
+                                : ""
                             }`}
                             className={strongLink}
                           >
@@ -1219,7 +1383,9 @@ const BorrowerDetails = () => {
               {/* Savings */}
               {activeTab === "savings" && (
                 <>
-                  {errors.savings && <div className="mb-3 text-sm text-rose-700 font-medium">{errors.savings}</div>}
+                  {errors.savings && (
+                    <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.savings}</div>
+                  )}
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
                     <BadgeCard label="Deposits" value={money(deposits)} tone="emerald" />
@@ -1230,12 +1396,12 @@ const BorrowerDetails = () => {
 
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-black">Filter:</span>
+                      <span className="text-sm text-slate-900">Filter:</span>
                       <label className="relative z-50">
                         <select
                           value={filterType}
                           onChange={(e) => setFilterType(e.target.value)}
-                          className="text-sm border border-gray-300 rounded-md px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                          className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         >
                           <option value="all">All</option>
                           <option value="deposit">Deposits</option>
@@ -1246,7 +1412,9 @@ const BorrowerDetails = () => {
                       </label>
                     </div>
                     <Link
-                      to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(borrower.id)}`}
+                      to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(
+                        borrower.id
+                      )}`}
                       className={`${strongLink} text-sm`}
                     >
                       View savings accounts
@@ -1303,7 +1471,7 @@ const BorrowerDetails = () => {
         </div>
 
         {/* NOTES SIDEBAR */}
-        <aside className="lg:col-span-1 space-y-5">
+        <aside className="lg:col-span-1 space-y-6">
           <Card title="Notes">
             <input
               onKeyDown={(e) => {
@@ -1313,17 +1481,20 @@ const BorrowerDetails = () => {
                 }
               }}
               placeholder="Add a note and press Enter…"
-              className="w-full text-sm mb-3 border border-gray-300 rounded-md px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="w-full text-sm mb-3 border-2 border-slate-400 rounded-lg px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
             {comments.length === 0 ? (
-              <div className="text-xs text-gray-700">No notes yet.</div>
+              <div className="text-xs text-slate-900">No notes yet.</div>
             ) : (
               <>
                 <ul className="space-y-2">
                   {visibleComments.map((c, i) => (
-                    <li key={`${i}-${c.createdAt}`} className="p-2 text-xs rounded-lg border border-gray-300 bg-white">
-                      <div className="text-black">{c.content}</div>
-                      <div className="text-[10px] text-gray-700 mt-1">
+                    <li
+                      key={`${i}-${c.createdAt}`}
+                      className="p-2 text-xs rounded-lg border-2 border-slate-400 bg-white"
+                    >
+                      <div className="text-slate-900 break-words">{c.content}</div>
+                      <div className="text-[10px] text-slate-700 mt-1">
                         {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
                       </div>
                     </li>
@@ -1332,7 +1503,7 @@ const BorrowerDetails = () => {
                 {comments.length > 3 && (
                   <button
                     onClick={() => setShowAllComments((s) => !s)}
-                    className="mt-3 w-full text-xs px-3 py-1.5 rounded-md border border-gray-300 text-black hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    className="mt-3 w-full text-xs px-3 py-1.5 rounded-lg border-2 border-slate-400 text-slate-900 hover:bg-slate-50 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   >
                     {showAllComments ? "Show less" : `Show all (${comments.length})`}
                   </button>
@@ -1366,20 +1537,22 @@ const BorrowerDetails = () => {
 
 /* ---------- Support UI pieces ---------- */
 const Empty = ({ text }) => (
-  <div className="p-6 text-sm rounded-2xl border border-dashed border-gray-300 text-black bg-white">
+  <div className="p-6 text-sm rounded-2xl border-2 border-dashed border-slate-400 text-slate-900 bg-white">
     {text}
   </div>
 );
 
 const Table = ({ head = [], rows = [] }) => (
-  <div className="overflow-auto rounded-xl border border-gray-300 bg-white">
-    <table className="min-w-full text-[15px] border-collapse">
-      <thead className="bg-gray-100 text-black border-b border-gray-300">
+  <div className="overflow-x-auto rounded-xl border-2 border-slate-400 bg-white">
+    <table className="min-w-full table-fixed text-[15px]">
+      <thead className="bg-slate-100 text-slate-900">
         <tr className="text-left">
           {head.map((h, i) => (
             <th
               key={i}
-              className={`px-3 py-2 font-semibold ${i === head.length - 1 ? "text-right" : ""} border-b border-gray-300`}
+              className={`px-3 py-2 font-bold border border-slate-400 ${
+                i === head.length - 1 ? "text-right" : ""
+              }`}
             >
               {h}
             </th>
@@ -1388,11 +1561,13 @@ const Table = ({ head = [], rows = [] }) => (
       </thead>
       <tbody>
         {rows.map((r, i) => (
-          <tr key={i} className="odd:bg-white even:bg-gray-50 hover:bg-gray-100/70">
+          <tr key={i} className={i % 2 ? "bg-slate-50" : "bg-white"}>
             {r.map((c, j) => (
               <td
                 key={j}
-                className={`px-3 py-2 align-top ${j === head.length - 1 ? "text-right" : ""} border-b border-gray-200`}
+                className={`px-3 py-2 align-top border border-slate-300 break-words ${
+                  j === head.length - 1 ? "text-right" : ""
+                }`}
               >
                 {c}
               </td>
@@ -1406,19 +1581,26 @@ const Table = ({ head = [], rows = [] }) => (
 
 const BadgeCard = ({ label, value, tone = "emerald" }) => {
   const toneMap = {
-    emerald: "bg-emerald-50 text-emerald-800 border border-emerald-200",
-    amber: "bg-amber-50 text-amber-800 border border-amber-200",
-    sky: "bg-sky-50 text-sky-800 border border-sky-200",
-    rose: "bg-rose-50 text-rose-800 border border-rose-200",
+    emerald: "bg-emerald-50 text-emerald-900 border-2 border-emerald-200",
+    amber: "bg-amber-50 text-amber-900 border-2 border-amber-200",
+    sky: "bg-sky-50 text-sky-900 border-2 border-sky-200",
+    rose: "bg-rose-50 text-rose-900 border-2 border-rose-200",
   };
   return (
-    <div className={`p-3 rounded-xl text-sm ${toneMap[tone]}`}>
+    <div className={`p-3 rounded-xl text-sm ${toneMap[tone]} shadow-sm`}>
       {label}: <strong>{value}</strong>
     </div>
   );
 };
 
-const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepayment, onAddRepayment }) => {
+const ActivityTimeline = ({
+  loans,
+  repayments,
+  savings,
+  comments,
+  canAddRepayment,
+  onAddRepayment,
+}) => {
   const items = [];
   loans.forEach((l) =>
     items.push({
@@ -1453,11 +1635,11 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h4 className="font-semibold text-black">📜 Activity Timeline</h4>
+        <h4 className="font-extrabold text-slate-900">📜 Activity Timeline</h4>
         {canAddRepayment && (
           <button
             onClick={onAddRepayment}
-            className="bg-indigo-600 text-white px-3 py-1.5 rounded-md hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 shadow-sm"
           >
             Record Repayment
           </button>
@@ -1465,8 +1647,8 @@ const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepaymen
       </div>
       <ul className="space-y-2 text-sm">
         {items.map((item, i) => (
-          <li key={i} className="border-l-4 pl-3 border-gray-300 text-black">
-            <span className="text-gray-700">
+          <li key={i} className="border-l-4 pl-3 border-slate-400 text-slate-900">
+            <span className="text-slate-700">
               {item.date ? new Date(item.date).toLocaleDateString() : "—"}
             </span>{" "}
             – {item.text}
