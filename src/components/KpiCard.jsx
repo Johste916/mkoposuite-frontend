@@ -16,12 +16,12 @@ export default function KpiCard({ title, value, icon, tone = "indigo" }) {
     }[tone] || { ring: "ring-slate-100 dark:ring-slate-800", icon: "text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-950/40" };
 
   return (
-    <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 ring-1 ${tones.ring} min-h-[7rem]`}>
+    <div className={`rounded-2xl shadow-sm border border-[var(--border)] bg-[var(--card)] p-4 ring-1 ${tones.ring} min-h-[7rem]`}>
       <div className="flex items-center gap-3">
         <div className={`p-2 rounded-full ${tones.icon}`}>{icon}</div>
         <div>
-          <h3 className="text-xs font-medium text-gray-500 dark:text-slate-400">{title}</h3>
-          <p className="text-xl font-semibold text-gray-900 dark:text-white">{value ?? "—"}</p>
+          <h3 className="text-xs font-medium text-[var(--muted)]">{title}</h3>
+          <p className="text-xl font-semibold text-[var(--fg)]">{value ?? "—"}</p>
         </div>
       </div>
     </div>

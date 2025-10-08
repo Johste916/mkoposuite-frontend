@@ -1,15 +1,24 @@
+// src/pages/loans/DisbursementQueue.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
-/* --- UI tokens for the bold, high-contrast look --- */
+/* --- Token-based UI (matches theme.css + .app-theme-bold) --- */
 const ui = {
-  wrap: "w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900",
+  wrap: "w-full px-4 md:px-6 lg:px-8 py-6 bg-[var(--bg)] text-[var(--fg)]",
   h1: "text-3xl font-extrabold tracking-tight",
-  sub: "text-sm text-slate-700",
-  card: "rounded-2xl border-2 border-slate-300 bg-white shadow",
-  th: "bg-slate-100 text-left text-[12px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200 select-none",
-  td: "px-3 py-2 border-2 border-slate-200 text-sm",
-  btn: "inline-flex items-center justify-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50",
+  sub: "text-sm text-[var(--muted)]",
+  // rely on tokens; .app-theme-bold will further upgrade .card / .table-frame
+  card: "card overflow-hidden",
+  tableWrap: "table-wrap table-frame",
+  th:
+    "bg-[var(--table-head-bg)] text-left text-[12px] uppercase tracking-wide " +
+    "text-[var(--fg)]/90 font-semibold px-3 py-2 border border-[var(--border)] select-none",
+  td: "px-3 py-2 border border-[var(--border)] text-sm text-[var(--fg)]",
+  btn:
+    "inline-flex items-center justify-center rounded-lg border-2 border-[var(--border-strong)] " +
+    "px-3 py-2 bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] " +
+    "focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
 };
 
 const money = (v, c = "TZS") => `\u200e${c} ${Number(v || 0).toLocaleString()}`;
@@ -46,7 +55,7 @@ export default function DisbursementQueue() {
           <h1 className={ui.h1}>Disbursement Queue</h1>
           <p className={ui.sub}>Loans awaiting disbursement.</p>
           {lastUpdated && (
-            <p className="text-xs text-slate-600 mt-1">
+            <p className="text-xs text-[var(--muted)] mt-1">
               Last updated {lastUpdated.toLocaleString()}
             </p>
           )}
@@ -56,10 +65,10 @@ export default function DisbursementQueue() {
         </button>
       </div>
 
-      {/* Card with full-width, crisp table */}
-      <div className={`${ui.card} overflow-hidden`}>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm border-2 border-slate-300 border-collapse bg-white">
+      {/* Card with full-width, crisp table (token colors only) */}
+      <div className={`${ui.card}`}>
+        <div className={`${ui.tableWrap}`}>
+          <table className="min-w-full text-sm">
             <thead>
               <tr>
                 <th className={ui.th}>Ref</th>
@@ -71,22 +80,29 @@ export default function DisbursementQueue() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className={`${ui.td} text-center py-10 text-slate-600`}>
+                  <td colSpan={4} className={`${ui.td} text-center py-10 text-[var(--muted)]`}>
                     Loading…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className={`${ui.td} text-center py-10 text-slate-600`}>
+                  <td colSpan={4} className={`${ui.td} text-center py-10 text-[var(--muted)]`}>
                     Empty
                   </td>
                 </tr>
               ) : (
-                items.map((l) => (
-                  <tr key={l.id} className="hover:bg-slate-50">
+                items.map((l, i) => (
+                  <tr
+                    key={l.id}
+                    className={`transition-colors ${
+                      i % 2 === 0 ? "bg-[var(--table-row-even)]" : "bg-[var(--table-row-odd)]"
+                    } hover:bg-[var(--chip-soft)]`}
+                  >
                     <td className={ui.td}>{l.reference || `L-${l.id}`}</td>
                     <td className={ui.td}>{l.Borrower?.name || "—"}</td>
-                    <td className={ui.td}>{money(l.amount, l.currency || "TZS")}</td>
+                    <td className={`${ui.td} text-right tabular-nums`}>
+                      {money(l.amount, l.currency || "TZS")}
+                    </td>
                     <td className={ui.td}>{fmtDate(l.approvalDate?.slice(0, 10))}</td>
                   </tr>
                 ))
@@ -95,13 +111,13 @@ export default function DisbursementQueue() {
           </table>
         </div>
 
-        {/* Footer summary (optional but useful, still bold & tidy) */}
+        {/* Footer summary (tokenized) */}
         {!loading && items.length > 0 && (
-          <div className="flex items-center justify-between px-3 py-2 border-t-2 border-slate-300 text-sm">
-            <span className="text-slate-700">
+          <div className="flex items-center justify-between px-3 py-2 border-t-2 border-[var(--border-strong)] text-sm">
+            <span className="text-[var(--fg)]">
               {items.length.toLocaleString()} ready for disbursement
             </span>
-            <span className="text-slate-700">
+            <span className="text-[var(--fg)]">
               Total{" "}
               {money(
                 items.reduce((s, r) => s + Number(r.amount || 0), 0),

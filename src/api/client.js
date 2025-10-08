@@ -72,4 +72,6 @@ client.interceptors.response.use(
   }
 );
 
-export default client;
+// Compatibility shim for older imports
+export { default } from "./index";
+export * from "./index";

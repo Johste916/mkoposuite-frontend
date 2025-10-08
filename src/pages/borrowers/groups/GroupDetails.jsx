@@ -135,18 +135,23 @@ async function fetchGroupFlexible(id, signal) {
   return null;
 }
 
-/* UI classes */
+/* ---------- Token-based UI ---------- */
 const ui = {
-  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
-  h1: 'text-3xl font-extrabold tracking-tight',
-  card: 'rounded-2xl border-2 border-slate-300 bg-white shadow',
-  btn: 'inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50',
-  primary: 'inline-flex items-center rounded-lg bg-indigo-600 text-white px-4 py-2 font-semibold hover:bg-indigo-700 disabled:opacity-60',
-  input: 'h-10 rounded-lg border-2 border-slate-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500/40',
-  tableWrap: 'rounded-2xl border-2 border-slate-300 bg-white shadow overflow-x-auto',
-  th: 'bg-slate-100 text-left text-[13px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200',
-  td: 'px-3 py-2 border-2 border-slate-200 text-sm',
-  chip: 'ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+  container: "w-full px-4 md:px-6 lg:px-8 py-6 bg-[var(--bg)] text-[var(--fg)]",
+  h1: "text-3xl font-extrabold tracking-tight",
+  h1Muted: "font-medium text-[var(--muted)]",
+  card: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow",
+  btn: "inline-flex items-center rounded-lg border-2 border-[var(--border-strong)] px-3 py-2 hover:bg-[var(--kpi-bg)] " +
+       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  primary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-4 py-2 font-semibold hover:bg-indigo-700 " +
+           "disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  input: "h-10 rounded-lg border-2 px-3 outline-none focus:ring-2 focus:ring-[var(--ring)] " +
+         "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)]",
+  tableWrap: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow overflow-x-auto",
+  th: "bg-[var(--kpi-bg)] text-left text-[13px] uppercase tracking-wide text-[var(--muted)] font-semibold px-3 py-2 border-2 border-[var(--border)]",
+  td: "px-3 py-2 border-2 border-[var(--border)] text-sm",
+  chip: "ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold " +
+        "bg-[var(--chip-soft)] text-[var(--fg)] ring-1 ring-[var(--border)]",
 };
 
 const GroupDetails = () => {
@@ -234,14 +239,21 @@ const GroupDetails = () => {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <h1 className={ui.h1}>
           Group #{groupId}
-          {group?.name ? <span className="font-medium text-slate-700"> • {group.name}</span> : null}
+          {group?.name ? <span className={`ml-2 ${ui.h1Muted}`}>• {group.name}</span> : null}
         </h1>
         <button onClick={refresh} className={ui.btn}>Refresh</button>
       </div>
 
       {/* Alerts */}
-      {loading && <div className="rounded-2xl border-2 border-slate-300 bg-white px-4 py-3">Loading…</div>}
-      {error && <div className="rounded-2xl border-2 border-rose-300 bg-rose-50 px-4 py-3 text-rose-800">{error}</div>}
+      {loading && <div className={`${ui.card} px-4 py-3`}>Loading…</div>}
+      {error && (
+        <div
+          className="rounded-2xl border-2 px-4 py-3"
+          style={{ borderColor: "var(--danger-border)", background: "var(--danger-bg)", color: "var(--danger-fg)" }}
+        >
+          {error}
+        </div>
+      )}
 
       {/* Grid */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -269,11 +281,7 @@ const GroupDetails = () => {
                 placeholder="Add borrower…"
               />
             </div>
-            <button
-              onClick={addMember}
-              disabled={!picked || adding}
-              className={ui.primary}
-            >
+            <button onClick={addMember} disabled={!picked || adding} className={ui.primary}>
               {adding ? "Adding…" : "Add"}
             </button>
           </div>
@@ -293,7 +301,7 @@ const GroupDetails = () => {
                 {members.length === 0 ? (
                   <tr>
                     <td className={ui.td} colSpan={4}>
-                      <span className="text-slate-600">No members yet.</span>
+                      <span className="text-[var(--muted)]">No members yet.</span>
                     </td>
                   </tr>
                 ) : (
@@ -302,7 +310,7 @@ const GroupDetails = () => {
                       <td className={ui.td}>
                         <Link
                           to={`/borrowers/${encodeURIComponent(m.id)}`}
-                          className="font-semibold underline decoration-2 underline-offset-2 hover:text-slate-950"
+                          className="font-semibold underline decoration-2 underline-offset-2 hover:opacity-90 text-[var(--fg)]"
                         >
                           {m.name}
                         </Link>
@@ -312,10 +320,7 @@ const GroupDetails = () => {
                         {m.role ? <span className={ui.chip}>{String(m.role).toUpperCase()}</span> : "—"}
                       </td>
                       <td className={ui.td}>
-                        <button
-                          className="inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-1.5 hover:bg-slate-50"
-                          onClick={() => removeMember(m.id)}
-                        >
+                        <button className={ui.btn} onClick={() => removeMember(m.id)}>
                           Remove
                         </button>
                       </td>

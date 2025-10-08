@@ -1,19 +1,25 @@
-// src/pages/borrowers/BorrowerBlacklist.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
 const ui = {
-  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
-  h1: 'text-3xl font-extrabold tracking-tight',
-  card: 'rounded-2xl border-2 border-slate-300 bg-white shadow',
-  input: 'h-10 w-full rounded-lg border-2 border-slate-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500/40',
-  primary: 'inline-flex items-center rounded-lg bg-rose-600 text-white px-4 py-2 font-semibold hover:bg-rose-700',
-  tableWrap: 'rounded-2xl border-2 border-slate-300 bg-white shadow overflow-x-auto',
-  th: 'bg-slate-100 text-left text-[13px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200',
-  td: 'px-3 py-2 border-2 border-slate-200 text-sm',
-  btn: 'inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-1.5 hover:bg-slate-50',
-  alert: 'rounded-2xl border-2 border-rose-300 bg-rose-50 px-4 py-3 text-rose-800',
-  info: 'rounded-2xl border-2 border-slate-300 bg-white px-4 py-3',
+  container: "w-full px-4 md:px-6 lg:px-8 py-6 bg-[var(--bg)] text-[var(--fg)]",
+  h1: "text-3xl font-extrabold tracking-tight",
+  card: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow",
+  input:
+    "h-10 w-full rounded-lg border-2 px-3 outline-none focus:ring-2 focus:ring-[var(--ring)] " +
+    "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)]",
+  primary:
+    "inline-flex items-center rounded-lg bg-rose-600 text-white px-4 py-2 font-semibold hover:bg-rose-700 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  tableWrap: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow overflow-x-auto",
+  th: "bg-[var(--kpi-bg)] text-left text-[13px] uppercase tracking-wide text-[var(--muted)] font-semibold px-3 py-2 border-2 border-[var(--border)]",
+  td: "px-3 py-2 border-2 border-[var(--border)] text-sm",
+  btn:
+    "inline-flex items-center rounded-lg border-2 border-[var(--border-strong)] px-3 py-1.5 hover:bg-[var(--kpi-bg)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  alert:
+    "rounded-2xl px-4 py-3",
+  info: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3",
 };
 
 const BorrowerBlacklist = () => {
@@ -104,7 +110,16 @@ const BorrowerBlacklist = () => {
             {loading ? (
               <tr><td className={ui.td} colSpan={4}>Loading…</td></tr>
             ) : err ? (
-              <tr><td className={`${ui.td} text-rose-700`} colSpan={4}>{err}</td></tr>
+              <tr>
+                <td className={ui.td} colSpan={4}>
+                  <div
+                    className={ui.alert}
+                    style={{ border: "2px solid var(--danger-border)", background: "var(--danger-bg)", color: "var(--danger-fg)", borderRadius: "1rem" }}
+                  >
+                    {err}
+                  </div>
+                </td>
+              </tr>
             ) : rows.length === 0 ? (
               <tr><td className={ui.td} colSpan={4}>No blacklisted borrowers.</td></tr>
             ) : (

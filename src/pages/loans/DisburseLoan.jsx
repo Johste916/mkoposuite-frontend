@@ -1,308 +1,424 @@
-// src/pages/loans/DisburseLoan.jsx
-import React, { useEffect, useRef, useState, useMemo } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+// src/pages/loans/DisbursedLoans.jsx
+import React, { useEffect, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
+import { Search, Filter, Download, ChevronDown, Calendar, RefreshCw } from "lucide-react";
 import api from "../../api";
-import { Wallet, Save, Calendar } from "lucide-react";
 
-/* === high-contrast tokens === */
+/* ---------- Token-aware UI (no reliance on `.card`) ---------- */
 const ui = {
-  page: "w-full px-4 md:px-6 lg:px-10 py-6 text-slate-900 dark:text-slate-100",
-  h1: "text-3xl md:text-4xl font-black tracking-tight",
-  sub: "text-sm text-slate-700 dark:text-slate-300",
-  card: "rounded-2xl border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm",
-  label: "text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300",
+  page: "w-full px-4 md:px-6 lg:px-8 py-6 bg-[var(--bg)] text-[var(--fg)]",
+  h1: "text-2xl md:text-3xl font-extrabold tracking-tight",
+  sub: "text-sm text-[var(--muted)]",
+
+  // Explicit token classes so vendor CSS can't override
+  card:
+    "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow",
+
+  // Table frame that matches theme.css tokens
+  tableWrap:
+    "overflow-x-auto rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow",
+
+  th:
+    "sticky top-0 z-10 bg-[var(--table-head-bg)] text-left text-[12px] md:text-[13px] " +
+    "uppercase tracking-wide font-semibold px-3 py-2 border border-[var(--border)] text-[var(--fg)]/95",
+  td: "px-3 py-2 border border-[var(--border)] text-sm text-[var(--fg)] align-top",
+
+  btn:
+    "inline-flex items-center gap-2 rounded-lg px-3 py-2 font-semibold border-2 " +
+    "border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] " +
+    "focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-60",
+
+  primary:
+    "inline-flex items-center gap-2 rounded-lg px-3 py-2 font-semibold " +
+    "bg-[var(--primary)] text-[var(--primary-contrast)] hover:brightness-95 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] " +
+    "focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-60",
+
   input:
-    "w-full rounded-lg border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 " +
-    "focus:outline-none focus:ring-2 focus:ring-indigo-500/70 focus:border-indigo-600 transition",
-  badge:
-    "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border-2 border-indigo-300 text-indigo-800 " +
-    "bg-indigo-50 dark:border-indigo-900/50 dark:text-indigo-300 dark:bg-indigo-950/30",
-  btnGhost:
-    "px-4 py-2 rounded-xl border-2 border-slate-300 dark:border-slate-700 hover:bg-slate-50 " +
-    "dark:hover:bg-slate-800 transition",
-  btnPrimary:
-    "inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-700 text-white hover:bg-indigo-800 " +
-    "disabled:opacity-60 disabled:cursor-not-allowed shadow",
-  alert:
-    "rounded-xl border-2 border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900/60 " +
-    "dark:bg-rose-950/30 dark:text-rose-300 px-3 py-2 text-sm",
-  divider: "border-t-2 border-slate-300 dark:border-slate-700",
+    "h-10 w-full rounded-lg text-sm outline-none border-2 " +
+    "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
+    "placeholder:text-[var(--input-placeholder)] focus-visible:outline-none focus-visible:ring-2 " +
+    "focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
 };
 
-const METHODS = [
-  { value: "cash", label: "Cash" },
-  { value: "bank", label: "Bank" },
-  { value: "mobile_money", label: "Mobile Money" },
-  { value: "other", label: "Other" },
-];
+/* ---------- tiny helpers (select/date) ---------- */
+const baseInput =
+  "h-10 w-full rounded-lg text-sm outline-none border-2 " +
+  "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
+  "placeholder:text-[var(--input-placeholder)] focus-visible:outline-none focus-visible:ring-2 " +
+  "focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]";
 
-// normalize any backend list shape to an array
+const SelectField = ({ className = "", children, ...props }) => (
+  <div className={`relative ${className}`}>
+    <select {...props} className={`${baseInput} pr-9 appearance-none bg-none ms-select`}>
+      {children}
+    </select>
+    <ChevronDown
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]"
+      aria-hidden="true"
+    />
+  </div>
+);
+
+const DateField = ({ className = "", ...props }) => (
+  <div className={`relative ${className}`}>
+    <input type="date" {...props} className={`${baseInput} pr-9 appearance-none bg-none ms-date`} />
+    <Calendar
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]"
+      aria-hidden="true"
+    />
+  </div>
+);
+
+/* Normalize arrays safely */
 const toArray = (data) =>
-  Array.isArray(data) ? data
-  : Array.isArray(data?.items) ? data.items
-  : Array.isArray(data?.rows) ? data.rows
-  : Array.isArray(data?.results) ? data.results
-  : [];
+  Array.isArray(data) ? data :
+  Array.isArray(data?.items) ? data.items :
+  Array.isArray(data?.rows) ? data.rows :
+  Array.isArray(data?.results) ? data.results : [];
 
-const readErr = (e) => {
-  const d = e?.response?.data;
-  if (typeof d === "string") return d;
-  if (d?.message) return d.message;
-  if (d?.error) return d.error;
-  return e?.response?.statusText || e?.message || "Server error";
-};
+/* ---------- Page ---------- */
+export default function DisbursedLoans() {
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
 
-const money = (v, c = "TZS") => `\u200e${c} ${Number(v || 0).toLocaleString()}`;
+  // filters
+  const [q, setQ] = useState("");
+  const [product, setProduct] = useState("");
+  const [officer, setOfficer] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [minAmt, setMinAmt] = useState("");
+  const [maxAmt, setMaxAmt] = useState("");
 
-export default function DisburseLoan() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const [products, setProducts] = useState([]);
+  const [officers, setOfficers] = useState([]);
 
-  const user = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem("user") || "{}"); } catch { return {}; }
+  // paging
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  /* Fetch filters (products/officers) */
+  const fetchFilters = useCallback(async () => {
+    const [p, o] = await Promise.all([
+      api.get("/loan-products").catch(() => ({ data: [] })),
+      api.get("/users?role=loan_officer").catch(() => ({ data: [] })),
+    ]);
+    setProducts(toArray(p.data));
+    setOfficers(toArray(o.data));
   }, []);
-  const role = (user?.role || "").toLowerCase();
-  const canDisburse = role === "admin" || role === "accountant";
 
-  const [loan, setLoan] = useState(null);
-  const [banks, setBanks] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [err, setErr] = useState("");
-  const slipRef = useRef(null);
-
-  const [form, setForm] = useState({
-    method: "cash",
-    bankId: "",
-    reference: "",
-    amount: "",
-    date: new Date().toISOString().slice(0, 10),
-    note: "",
-  });
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const [l, b] = await Promise.all([
-          api.get(`/loans/${id}`),
-          api.get("/banks").catch(() => ({ data: [] })),
-        ]);
-        const loanData = l?.data || null;
-        setLoan(loanData);
-        setBanks(toArray(b?.data));
-        if (loanData?.amount && !form.amount) {
-          setForm((f) => ({ ...f, amount: String(loanData.amount) }));
-        }
-      } catch (e) {
-        setErr(readErr(e));
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    if (!canDisburse) return;
-    if (!form.amount || Number(form.amount) <= 0) {
-      return alert("Enter a valid amount to disburse.");
-    }
-
-    setSubmitting(true);
-    setErr("");
+  /* Fetch data */
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      const fd = new FormData();
-      fd.append("method", form.method);
-      fd.append("bankId", form.method === "bank" ? (form.bankId || "") : "");
-      fd.append("reference", form.reference || "");
-      fd.append("amount", form.amount || "");
-      fd.append("date", form.date || "");
-      fd.append("note", form.note || "");
-      if (slipRef.current?.files?.[0]) fd.append("attachment", slipRef.current.files[0]);
-
-      await api.post(`/loans/${id}/disburse`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      alert("Loan disbursed");
-      navigate(`/loans/${id}`);
-    } catch (e) {
-      setErr(readErr(e));
+      const res = await api.get("/loans/disbursed", {
+        params: {
+          page,
+          pageSize,
+          q: q || undefined,
+          productId: product || undefined,
+          officerId: officer || undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+          minAmount: minAmt || undefined,
+          maxAmount: maxAmt || undefined,
+        },
+      });
+      const items = toArray(res?.data?.items || res?.data);
+      const totalCount = Number(res?.data?.total ?? res?.data?.totalCount ?? items.length) || 0;
+      setRows(items);
+      setTotal(totalCount);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
+  }, [page, pageSize, q, product, officer, dateFrom, dateTo, minAmt, maxAmt]);
+
+  useEffect(() => { fetchFilters().catch(() => {}); }, [fetchFilters]);
+  useEffect(() => { fetchData().catch(() => {}); }, [fetchData]);
+
+  const resetFilters = () => {
+    setQ(""); setProduct(""); setOfficer("");
+    setDateFrom(""); setDateTo("");
+    setMinAmt(""); setMaxAmt("");
+    setPage(1);
   };
 
-  if (!canDisburse) {
-    return (
-      <div className={ui.page}>
-        <div className={ui.card}>
-          <p className="text-sm">
-            You don’t have permission to disburse loans. This page is available to <b>Admin</b> and <b>Accountant</b> roles.
-          </p>
-          <div className="mt-4">
-            <Link to={`/loans/${id}`} className="text-indigo-700 hover:underline text-sm font-semibold">
-              Back to loan
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const exportAs = async (fmt) => {
+    const res = await api.get(`/loans/disbursed/export`, {
+      params: {
+        format: fmt, q, productId: product, officerId: officer,
+        dateFrom, dateTo, minAmount: minAmt, maxAmount: maxAmt,
+      },
+      responseType: "blob",
+    });
+    const mime =
+      fmt === "pdf"
+        ? "application/pdf"
+        : fmt === "xlsx"
+        ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        : "text/csv";
+    const blob = new Blob([res.data], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `disbursed_loans.${fmt === "pdf" ? "pdf" : fmt}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const pages = Math.max(1, Math.ceil((total || 0) / pageSize));
+  const hasFilters = q || product || officer || dateFrom || dateTo || minAmt || maxAmt;
 
   return (
     <div className={ui.page}>
-      {/* Header */}
-      <div className="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+      {/* Remove native select/calendar icons to keep token icons clean */}
+      <style>{`
+        select.ms-select{ -webkit-appearance:none; -moz-appearance:none; appearance:none; background-image:none!important; }
+        select.ms-select::-ms-expand{ display:none; }
+        input.ms-date[type="date"]{ -webkit-appearance:none; appearance:none; background-image:none!important; }
+        input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; display:none; }
+      `}</style>
+
+      {/* Header + actions */}
+      <div className="mb-5 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
         <div>
-          <h1 className={ui.h1}>Disburse Loan</h1>
-          {loan && (
-            <p className={ui.sub}>
-              Borrower: <b>{loan.Borrower?.name || loan.borrowerName || "—"}</b> • Amount: <b>{money(loan.amount, loan.currency || "TZS")}</b>
-            </p>
-          )}
+          <h1 className={ui.h1}>Disbursed Loans</h1>
+          <p className={ui.sub}>{total.toLocaleString()} total</p>
         </div>
-        <Link to={`/loans/${id}`} className="text-indigo-700 hover:underline text-sm font-semibold">
-          Back to Loan
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button className={ui.btn} onClick={() => exportAs("csv")}>
+            <Download className="w-4 h-4" /> CSV
+          </button>
+          <button className={ui.btn} onClick={() => exportAs("xlsx")}>
+            <Download className="w-4 h-4" /> Excel
+          </button>
+          <button className={ui.btn} onClick={() => exportAs("pdf")}>
+            <Download className="w-4 h-4" /> PDF
+          </button>
+          <button className={ui.btn} onClick={() => fetchData()}>
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Error */}
-      {err && <div className={`${ui.alert} mb-4`}>{err}</div>}
+      {/* Filters */}
+      <section className={`${ui.card} p-4 md:p-5 mb-5`} aria-label="Filters">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
+          <span className="text-sm font-semibold">Filters</span>
+          {hasFilters && (
+            <button
+              className="ml-auto text-sm underline decoration-2 underline-offset-2 hover:opacity-90"
+              onClick={resetFilters}
+            >
+              Clear all
+            </button>
+          )}
+        </div>
 
-      <form onSubmit={onSubmit} className="w-full">
-        {/* Snapshot card — crisp separators */}
-        {loan && (
-          <section className={`${ui.card} mb-6`}>
-            <div className="flex items-center gap-2 mb-4">
-              <span className={ui.badge}>
-                <Wallet className="h-4 w-4" /> Loan Snapshot
-              </span>
+        <div className="grid grid-cols-12 gap-3">
+          {/* Search */}
+          <div className="col-span-12 lg:col-span-4">
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]"
+                aria-hidden="true"
+              />
+              <input
+                className={`${ui.input} pl-8`}
+                placeholder="Search borrower / phone / product / loan #"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                aria-label="Search"
+              />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-slate-300 dark:divide-slate-700 rounded-lg overflow-hidden border-2 border-slate-200 dark:border-slate-800">
-              <KV label="Borrower" value={loan.Borrower?.name || loan.borrowerName || "—"} />
-              <KV label="Product" value={loan.Product?.name || loan.productName || "—"} />
-              <KV label="Approved Amount" value={money(loan.amount, loan.currency || "TZS")} />
-              <KV label="Status" value={(loan.status || "—").replaceAll("_", " ")} />
-            </div>
-          </section>
-        )}
-
-        {/* Disbursement details */}
-        <section className={ui.card}>
-          <div className="flex items-center gap-2 mb-4">
-            <span className={ui.badge}>
-              <Wallet className="h-4 w-4" /> Disbursement Details
-            </span>
           </div>
 
-          {/* Full-width, parallel grid, strong borders everywhere */}
-          <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-12 md:col-span-4">
-              <label className={ui.label}>Method</label>
-              <select
-                className={ui.input}
-                value={form.method}
-                onChange={(e) => setForm({ ...form, method: e.target.value })}
-              >
-                {METHODS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="col-span-12 md:col-span-4">
-              <label className={ui.label}>Amount</label>
-              <input
-                type="number"
-                className={ui.input}
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              />
-            </div>
-
-            <div className="col-span-12 md:col-span-4">
-              <label className={`${ui.label} flex items-center gap-1`}>
-                <Calendar className="h-3.5 w-3.5" /> Date
-              </label>
-              <input
-                type="date"
-                className={ui.input}
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-              />
-            </div>
-
-            {form.method === "bank" && (
-              <>
-                <div className="col-span-12 md:col-span-6">
-                  <label className={ui.label}>Bank</label>
-                  <select
-                    className={ui.input}
-                    value={form.bankId}
-                    onChange={(e) => setForm({ ...form, bankId: e.target.value })}
-                  >
-                    <option value="">Select bank…</option>
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-span-12 md:col-span-6">
-                  <label className={ui.label}>Reference</label>
-                  <input
-                    className={ui.input}
-                    value={form.reference}
-                    onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                    placeholder="Txn ref / slip #"
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="col-span-12">
-              <label className={ui.label}>Note (optional)</label>
-              <textarea
-                className={`${ui.input} min-h-[110px]`}
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-              />
-            </div>
-
-            <div className="col-span-12">
-              <label className={ui.label}>Upload slip / proof (optional)</label>
-              <input ref={slipRef} type="file" className={ui.input} />
-            </div>
+          {/* Selects */}
+          <div className="col-span-12 sm:col-span-4 lg:col-span-2">
+            <SelectField value={product} onChange={(e) => setProduct(e.target.value)} aria-label="Product">
+              <option value="">Product: All</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </SelectField>
           </div>
-        </section>
+          <div className="col-span-12 sm:col-span-4 lg:col-span-2">
+            <SelectField value={officer} onChange={(e) => setOfficer(e.target.value)} aria-label="Officer">
+              <option value="">Officer: All</option>
+              {officers.map((o) => (
+                <option key={o.id} value={o.id}>{o.name || o.email}</option>
+              ))}
+            </SelectField>
+          </div>
 
-        {/* Sticky actions — full width, bold border */}
-        <div className="sticky bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur">
-          <div className={`${ui.divider}`} />
-          <div className="px-4 md:px-6 lg:px-10 py-3 w-full flex justify-end gap-3">
-            <Link to={`/loans/${id}`} className={ui.btnGhost}>
-              Cancel
-            </Link>
-            <button type="submit" disabled={submitting} className={ui.btnPrimary}>
-              <Save className="h-4 w-4" />
-              {submitting ? "Disbursing…" : "Disburse"}
+          {/* Dates */}
+          <div className="col-span-6 sm:col-span-2">
+            <DateField value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} aria-label="Start date" />
+          </div>
+          <div className="col-span-6 sm:col-span-2">
+            <DateField value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="End date" />
+          </div>
+
+          {/* Amount range */}
+          <div className="col-span-6 sm:col-span-2">
+            <input
+              className={ui.input}
+              placeholder="Min Amount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={minAmt}
+              onChange={(e) => setMinAmt(e.target.value)}
+              aria-label="Minimum amount"
+            />
+          </div>
+          <div className="col-span-6 sm:col-span-2">
+            <input
+              className={ui.input}
+              placeholder="Max Amount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={maxAmt}
+              onChange={(e) => setMaxAmt(e.target.value)}
+              aria-label="Maximum amount"
+            />
+          </div>
+
+          {/* Apply / Reset */}
+          <div className="col-span-12 flex gap-2 pt-1">
+            <button
+              className={ui.primary}
+              onClick={() => { setPage(1); fetchData(); }}
+            >
+              Apply Filters
+            </button>
+            <button className={ui.btn} onClick={resetFilters}>
+              Reset
             </button>
           </div>
         </div>
-      </form>
+      </section>
+
+      {/* Table */}
+      <section className={ui.tableWrap} aria-label="Results table">
+        <table className="min-w-full">
+          <thead>
+            <tr>
+              {[
+                "Date", "Borrower", "Phone", "Loan Product",
+                "Principal", "Interest", "Outstanding Principal", "Outstanding Interest",
+                "Outstanding Fees", "Outstanding Penalty", "Total Outstanding",
+                "Interest/Year %", "Duration (months)", "Loan Officer", "Status", "Action",
+              ].map((h) => (
+                <th key={h} className={ui.th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={16} className={`${ui.td} text-[var(--muted)]`}>Loading…</td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={16} className={`${ui.td} text-[var(--muted)]`}>No disbursed loans found.</td>
+              </tr>
+            ) : (
+              rows.map((r, i) => (
+                <tr
+                  key={r.id}
+                  className={`transition-colors ${
+                    i % 2 === 0 ? "bg-[var(--table-row-even)]" : "bg-[var(--table-row-odd)]"
+                  } hover:bg-[var(--chip-soft)]`}
+                >
+                  <td className={ui.td}>{r.date || r.disbursedAt || "—"}</td>
+                  <td className={ui.td}>
+                    {r.borrowerId ? (
+                      <Link
+                        className="underline decoration-2 underline-offset-2 hover:opacity-90"
+                        to={`/borrowers/${r.borrowerId}`}
+                      >
+                        {r.borrowerName}
+                      </Link>
+                    ) : (
+                      r.borrowerName || "—"
+                    )}
+                  </td>
+                  <td className={ui.td}>{r.borrowerPhone || "—"}</td>
+                  <td className={ui.td}>{r.productName || "—"}</td>
+
+                  {/* numeric right-aligned */}
+                  <td className={`${ui.td} text-right tabular-nums`}>{fmt(r.principal)}</td>
+                  <td className={`${ui.td} text-right tabular-nums`}>{fmt(r.interestAmount)}</td>
+                  <td className={`${ui.td} text-right tabular-nums`}>{fmt(r.outstandingPrincipal)}</td>
+                  <td className={`${ui.td} text-right tabular-nums`}>{fmt(r.outstandingInterest)}</td>
+                  <td className={`${ui.td} text-right tabular-nums`}>{fmt(r.outstandingFees)}</td>
+                  <td className={`${ui.td} text-right tabular-nums`}>{fmt(r.outstandingPenalty)}</td>
+                  <td className={`${ui.td} text-right font-semibold tabular-nums`}>{fmt(r.totalOutstanding)}</td>
+
+                  <td className={`${ui.td} text-right tabular-nums`}>{num(r.interestRateYear)}</td>
+                  <td className={`${ui.td} text-right tabular-nums`}>{num(r.durationMonths)}</td>
+
+                  <td className={ui.td}>{r.officerName || "—"}</td>
+                  <td className={ui.td}>{(r.status || "—").replaceAll("_", " ")}</td>
+                  <td className={ui.td}>
+                    <Link className={`${ui.btn} h-9`} to={`/loans/${r.id}`}>View</Link>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </section>
+
+      {/* Pagination */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-[var(--muted)]">
+          Page {page} of {Math.max(1, Math.ceil((total || 0) / pageSize))} • {total.toLocaleString()} total
+        </div>
+        <div className="flex items-center gap-2">
+          <SelectField
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+            className="w-[140px]"
+            aria-label="Rows per page"
+          >
+            {[10, 25, 50, 100].map((n) => (
+              <option key={n} value={n}>{n} / page</option>
+            ))}
+          </SelectField>
+          <div className="flex gap-2">
+            <button className={ui.btn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+              Prev
+            </button>
+            <button
+              className={ui.btn}
+              onClick={() => setPage((p) => Math.min(Math.max(1, Math.ceil((total || 0) / pageSize)), p + 1))}
+              disabled={page >= Math.max(1, Math.ceil((total || 0) / pageSize))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* --- small “key–value” cell used in the snapshot grid --- */
-function KV({ label, value }) {
-  return (
-    <div className="p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
-        {label}
-      </div>
-      <div className="text-base font-semibold text-slate-900 dark:text-white break-words">
-        {value ?? "—"}
-      </div>
-    </div>
-  );
+/* ---------- utilities ---------- */
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : "—";
+}
+const TZS = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+function fmt(v, c = "TZS") {
+  const n = Number(v || 0);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  return `${c} ${TZS.format(n)}`;
 }

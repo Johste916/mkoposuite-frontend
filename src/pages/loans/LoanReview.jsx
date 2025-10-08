@@ -2,7 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api";
 import {
-  Filter, Search, ChevronLeft, ChevronRight, Check, X as XIcon, CornerUpLeft, Loader2, ChevronDown,
+  Filter,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  X as XIcon,
+  CornerUpLeft,
+  Loader2,
+  ChevronDown,
 } from "lucide-react";
 
 /* ---------- config ---------- */
@@ -17,33 +25,64 @@ const STAGES = [
   { value: "returned_with_comment", label: "Returned with Comment" },
 ];
 
-const statusBadge = (stage) =>
-  stage === "approved"
-    ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
-    : stage === "rejected"
-    ? "bg-rose-100 text-rose-700 ring-1 ring-rose-200"
-    : stage === "returned_with_comment"
-    ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
-    : "bg-slate-100 text-slate-700 ring-1 ring-slate-200";
-
 /* ---------- helpers ---------- */
 const money = (v, c = "TZS") => `\u200e${c} ${Number(v || 0).toLocaleString()}`;
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
-/* ---------- shared UI tokens (bold/high-contrast) ---------- */
+/* ---------- token-based UI (matches .app-theme-bold / theme.css) ---------- */
 const ui = {
-  wrap: "w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900",
+  wrap: "w-full px-4 md:px-6 lg:px-8 py-6 bg-[var(--bg)] text-[var(--fg)]",
   h1: "text-3xl font-extrabold tracking-tight",
-  sub: "text-sm text-slate-700",
-  card: "rounded-2xl border-2 border-slate-300 bg-white shadow",
-  btn: "inline-flex items-center justify-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50",
+  sub: "text-sm text-[var(--muted)]",
+  card: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow",
+  btn:
+    "inline-flex items-center justify-center rounded-lg border-2 border-[var(--border-strong)] " +
+    "px-3 py-2 bg-[var(--card)] hover:bg-[var(--kpi-bg)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
   btnIcon: "w-4 h-4",
-  primary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700",
-  th: "bg-slate-100 text-left text-[12px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200 select-none",
-  td: "px-3 py-2 border-2 border-slate-200 text-sm",
-  chip: "px-2 py-0.5 text-[11px] rounded-full",
-  fieldBase: "h-11 w-full rounded-lg border-2 border-slate-300 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40 bg-white",
-  fieldIcon: "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500",
+  primary:
+    "inline-flex items-center rounded-lg px-3 py-2 font-semibold " +
+    "bg-[var(--accent)] text-[var(--on-accent)] hover:opacity-90 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  th:
+    "bg-[var(--kpi-bg)] text-left text-[12px] uppercase tracking-wide text-[var(--muted)] " +
+    "font-semibold px-3 py-2 border-2 border-[var(--border)] select-none",
+  td: "px-3 py-2 border-2 border-[var(--border)] text-sm",
+  chip: "px-2 py-0.5 text-[11px] rounded-full border",
+  fieldBase:
+    "h-11 w-full rounded-lg border-2 text-sm outline-none px-3 " +
+    "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
+    "placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--ring)]",
+  fieldIcon:
+    "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]",
+};
+
+/* status chip inline styles via tokens */
+const statusStyle = (stage) => {
+  const s = (stage || "").toLowerCase();
+  if (s === "approved")
+    return {
+      background: "var(--success-bg)",
+      color: "var(--success-fg)",
+      borderColor: "var(--success-border)",
+    };
+  if (s === "rejected")
+    return {
+      background: "var(--danger-bg)",
+      color: "var(--danger-fg)",
+      borderColor: "var(--danger-border)",
+    };
+  if (s === "returned_with_comment")
+    return {
+      background: "var(--warn-bg)",
+      color: "var(--warn-fg)",
+      borderColor: "var(--warn-border)",
+    };
+  return {
+    background: "var(--chip-soft)",
+    color: "var(--fg)",
+    borderColor: "var(--border)",
+  };
 };
 
 /* ---------- tiny field components (clean, parallel) ---------- */
@@ -56,7 +95,7 @@ const SelectField = ({ className = "", children, ...props }) => (
     >
       {children}
     </select>
-    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
   </div>
 );
 
@@ -274,7 +313,9 @@ export default function LoanReview() {
   /* ----- clear filters ----- */
   const clearFilters = () => {
     setQ("");
-    setStage(role === "compliance" ? "compliance_review" : role === "branch_manager" ? "manager_review" : "submitted");
+    setStage(
+      role === "compliance" ? "compliance_review" : role === "branch_manager" ? "manager_review" : "submitted"
+    );
     setProductId("");
     setBranchId("");
     setOfficerId("");
@@ -314,10 +355,13 @@ export default function LoanReview() {
       {/* Filters (clean, parallel layout) */}
       <div className={`${ui.card} p-4 mb-5`}>
         <div className="flex items-center justify-between mb-3">
-          <div className="inline-flex items-center gap-2 text-slate-700 font-semibold">
+          <div className="inline-flex items-center gap-2 text-[var(--muted)] font-semibold">
             <Filter className="w-4 h-4" /> Filters
           </div>
-          <button onClick={clearFilters} className="text-sm underline decoration-slate-300 hover:decoration-slate-600">
+          <button
+            onClick={clearFilters}
+            className="text-sm underline decoration-[var(--border)] hover:decoration-[var(--fg)]"
+          >
             Clear all
           </button>
         </div>
@@ -421,25 +465,28 @@ export default function LoanReview() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className={`${ui.td} text-center py-10 text-slate-600`}>
+                  <td colSpan={8} className={`${ui.td} text-center py-10 text-[var(--muted)]`}>
                     Loading…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className={`${ui.td} text-center py-10 text-slate-600`}>
+                  <td colSpan={8} className={`${ui.td} text-center py-10 text-[var(--muted)]`}>
                     No applications found.
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
+                  <tr key={r.id} className="hover:bg-[var(--kpi-bg)]">
                     <td className={ui.td}>{fmtDate(r.createdAt)}</td>
                     <td className={ui.td}>
-                      <Link to={`/borrowers/${r.borrowerId}`} className="text-indigo-600 hover:underline">
+                      <Link
+                        to={`/borrowers/${r.borrowerId}`}
+                        className="underline decoration-2 underline-offset-2 text-[var(--fg)] hover:opacity-90"
+                      >
                         {r.Borrower?.name || r.borrowerName || "—"}
                       </Link>
-                      <div className="text-xs text-slate-600">
+                      <div className="text-xs text-[var(--muted)]">
                         {r.loanNumber ? `Loan #${r.loanNumber}` : ""}
                       </div>
                     </td>
@@ -448,34 +495,55 @@ export default function LoanReview() {
                     <td className={ui.td}>{r.officerName || "—"}</td>
                     <td className={ui.td}>{r.branchName || "—"}</td>
                     <td className={ui.td}>
-                      <span className={`${ui.chip} ${statusBadge((r.stage || r.status || "").toLowerCase())}`}>
+                      <span className={ui.chip} style={statusStyle(r.stage || r.status)}>
                         {(r.stage || r.status || "—").replaceAll("_", " ")}
                       </span>
                     </td>
                     <td className={`${ui.td} text-right`}>
                       <div className="inline-flex gap-1">
-                        <Link
-                          to={`/loans/${r.id}`}
-                          className="px-2 py-1 text-xs rounded border-2 border-slate-300 hover:bg-slate-50"
-                        >
+                        <Link to={`/loans/${r.id}`} className={ui.btn + " text-xs px-2 py-1"}>
                           View
                         </Link>
+
                         {canActOnRow(r) && (
                           <>
+                            {/* Approve */}
                             <button
-                              className="px-2 py-1 text-xs rounded border-2 border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700 inline-flex items-center gap-1"
+                              className={`px-2 py-1 text-xs rounded border-2 inline-flex items-center gap-1
+                                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
+                              style={{
+                                background: "var(--success)",
+                                color: "var(--on-success, var(--on-accent))",
+                                borderColor: "var(--success-strong, var(--success-border))",
+                              }}
                               onClick={() => setModal({ type: "approve", row: r })}
                             >
                               <Check className="w-3.5 h-3.5" /> Approve
                             </button>
+
+                            {/* Return */}
                             <button
-                              className="px-2 py-1 text-xs rounded border-2 border-amber-700 bg-amber-600 text-white hover:bg-amber-700 inline-flex items-center gap-1"
+                              className={`px-2 py-1 text-xs rounded border-2 inline-flex items-center gap-1
+                                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
+                              style={{
+                                background: "var(--warn)",
+                                color: "var(--on-warn, var(--on-accent))",
+                                borderColor: "var(--warn-strong, var(--warn-border))",
+                              }}
                               onClick={() => setModal({ type: "return", row: r })}
                             >
                               <CornerUpLeft className="w-3.5 h-3.5" /> Return
                             </button>
+
+                            {/* Reject */}
                             <button
-                              className="px-2 py-1 text-xs rounded border-2 border-rose-700 bg-rose-600 text-white hover:bg-rose-700 inline-flex items-center gap-1"
+                              className={`px-2 py-1 text-xs rounded border-2 inline-flex items-center gap-1
+                                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
+                              style={{
+                                background: "var(--danger)",
+                                color: "var(--on-danger, var(--on-accent))",
+                                borderColor: "var(--danger-strong, var(--danger-border))",
+                              }}
                               onClick={() => setModal({ type: "reject", row: r })}
                             >
                               <XIcon className="w-3.5 h-3.5" /> Reject
@@ -492,15 +560,16 @@ export default function LoanReview() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-3 py-2 border-t-2 border-slate-300 text-sm">
-          <div className="text-slate-600">
+        <div className="flex items-center justify-between px-3 py-2 border-t-2 border-[var(--border-strong)] text-sm">
+          <div className="text-[var(--muted)]">
             {pageFrom}–{pageTo} of {total}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-1 border-2 border-slate-300 rounded disabled:opacity-50"
+              className={`p-1 border-2 border-[var(--border-strong)] bg-[var(--card)] rounded disabled:opacity-50
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
               title="Previous page"
             >
               <ChevronLeft className={ui.btnIcon} />
@@ -508,7 +577,8 @@ export default function LoanReview() {
             <button
               onClick={() => setPage((p) => (p * PAGE_SIZE < total ? p + 1 : p))}
               disabled={page * PAGE_SIZE >= total}
-              className="p-1 border-2 border-slate-300 rounded disabled:opacity-50"
+              className={`p-1 border-2 border-[var(--border-strong)] bg-[var(--card)] rounded disabled:opacity-50
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
               title="Next page"
             >
               <ChevronRight className={ui.btnIcon} />
@@ -545,7 +615,7 @@ const Th = ({ label, sortKey, sort, dir, onSort }) => {
       title="Sort"
       aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
     >
-      <span className={`inline-flex items-center gap-1 ${active ? "text-indigo-700" : ""}`}>
+      <span className={`inline-flex items-center gap-1 ${active ? "text-[var(--ring)]" : ""}`}>
         {label}
         {active ? (dir === "asc" ? "▲" : "▼") : ""}
       </span>
@@ -564,15 +634,21 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
       ? "Reject Application"
       : "Return with Comment";
 
-  const showSuggestedAmount = role === "branch_manager" && (type === "approve" || type === "return");
+  // FIX: removed stray parenthesis at end
+  const showSuggestedAmount =
+    role === "branch_manager" && (type === "approve" || type === "return");
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className="absolute inset-0"
+        onClick={onClose}
+        style={{ background: "var(--overlay, rgba(0,0,0,.40))" }}
+      />
       <div className={`relative ${ui.card} w-[95%] max-w-lg p-4`}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-lg">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-50" title="Close">
+          <h3 className="font-semibold text-lg"> {title} </h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-[var(--kpi-bg)]" title="Close">
             <XIcon className="w-5 h-5" />
           </button>
         </div>
@@ -580,22 +656,22 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
         <div className="space-y-3">
           <div className="text-sm">
             <div>
-              <span className="text-slate-600">Borrower:</span>{" "}
+              <span className="text-[var(--muted)]">Borrower:</span>{" "}
               {row.Borrower?.name || row.borrowerName || "—"}
             </div>
             <div>
-              <span className="text-slate-600">Product:</span>{" "}
+              <span className="text-[var(--muted)]">Product:</span>{" "}
               {row.Product?.name || row.productName || "—"}
             </div>
             <div>
-              <span className="text-slate-600">Amount:</span>{" "}
+              <span className="text-[var(--muted)]">Amount:</span>{" "}
               {money(row.amount, row.currency || "TZS")}
             </div>
           </div>
 
           {showSuggestedAmount && (
             <div>
-              <label className="text-xs text-slate-600">Suggested Amount (optional)</label>
+              <label className="text-xs text-[var(--muted)]">Suggested Amount (optional)</label>
               <input
                 type="number"
                 className={ui.fieldBase}
@@ -603,7 +679,7 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
                 value={suggestedAmount}
                 onChange={(e) => setSuggestedAmount(e.target.value)}
               />
-              <p className="text-[11px] text-slate-600 mt-1">
+              <p className="text-[11px] text-[var(--muted)] mt-1">
                 Branch Manager can suggest a different principal before forwarding to Compliance.
               </p>
             </div>
@@ -611,7 +687,7 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
 
           {type !== "approve" && (
             <div>
-              <label className="text-xs text-slate-600">Comment</label>
+              <label className="text-xs text-[var(--muted)]">Comment</label>
               <textarea
                 className={`${ui.fieldBase} min-h-[96px]`}
                 placeholder={type === "reject" ? "Reason for rejection…" : "What needs to be updated…"}
@@ -631,7 +707,12 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
             <button
               disabled={busy}
               onClick={() => onApprove(row, suggestedAmount)}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg disabled:opacity-60"
+              style={{
+                background: "var(--success)",
+                color: "var(--on-success, var(--on-accent))",
+                border: "2px solid var(--success-strong, var(--success-border))",
+              }}
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Approve
             </button>
@@ -641,7 +722,12 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
             <button
               disabled={busy}
               onClick={() => onReturn(row, comment, suggestedAmount)}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg disabled:opacity-60"
+              style={{
+                background: "var(--warn)",
+                color: "var(--on-warn, var(--on-accent))",
+                border: "2px solid var(--warn-strong, var(--warn-border))",
+              }}
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Return
             </button>
@@ -651,7 +737,12 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
             <button
               disabled={busy}
               onClick={() => onReject(row, comment)}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg disabled:opacity-60"
+              style={{
+                background: "var(--danger)",
+                color: "var(--on-danger, var(--on-accent))",
+                border: "2px solid var(--danger-strong, var(--danger-border))",
+              }}
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Reject
             </button>

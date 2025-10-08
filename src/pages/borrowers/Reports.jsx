@@ -1,18 +1,17 @@
-// src/pages/reports/BorrowerReports.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
 const money = (v) => `TZS ${Number(v || 0).toLocaleString()}`;
 
 const ui = {
-  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
-  h1: 'text-3xl font-extrabold tracking-tight',
-  kpiCard: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4',
-  kpiLabel: 'text-[11px] uppercase tracking-wide text-slate-600 font-semibold',
-  kpiValue: 'mt-1 text-xl font-semibold',
-  alert: 'rounded-2xl border-2 border-rose-300 bg-rose-50 px-4 py-3 text-rose-800',
-  skeleton: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4',
-  placeholderCard: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4',
+  container: "w-full px-4 md:px-6 lg:px-8 py-6 bg-[var(--bg)] text-[var(--fg)]",
+  h1: "text-3xl font-extrabold tracking-tight",
+  kpiCard: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4",
+  kpiLabel: "text-[11px] uppercase tracking-wide text-[var(--muted)] font-semibold",
+  kpiValue: "mt-1 text-xl font-semibold",
+  alert: "rounded-2xl px-4 py-3",
+  skeleton: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4",
+  placeholderCard: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4",
 };
 
 const BorrowerReports = () => {
@@ -54,13 +53,18 @@ const BorrowerReports = () => {
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className={ui.skeleton}>
-              <div className="mb-3 h-3 w-24 rounded bg-slate-200" />
-              <div className="h-6 w-32 rounded bg-slate-200" />
+              <div className="mb-3 h-3 w-24 rounded bg-[var(--kpi-bg)]" />
+              <div className="h-6 w-32 rounded bg-[var(--kpi-bg)]" />
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className={`${ui.alert} mt-4`}>{error}</div>
+        <div
+          className={`${ui.alert} mt-4`}
+          style={{ border: "2px solid var(--danger-border)", background: "var(--danger-bg)", color: "var(--danger-fg)", borderRadius: "1rem" }}
+        >
+          {error}
+        </div>
       ) : (
         <>
           {/* KPIs */}
@@ -75,7 +79,7 @@ const BorrowerReports = () => {
 
           {/* Charts placeholder */}
           <div className={`${ui.placeholderCard} mt-4`}>
-            <div className="text-sm text-slate-600">
+            <div className="text-sm text-[var(--muted)]">
               Charts will go here (by branch, officer, risk tiers).
             </div>
           </div>

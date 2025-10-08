@@ -6,6 +6,32 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { CSVLink } from "react-csv";
 
+/* ---------- token UI ---------- */
+const ui = {
+  page: "p-4 md:p-6 lg:p-8 space-y-6 bg-[var(--bg)] text-[var(--fg)]",
+  h1: "text-2xl md:text-3xl font-extrabold tracking-tight",
+  card:
+    "card rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow",
+  kpi: "p-4 rounded-xl border-2 border-[var(--border-strong)] bg-[var(--card)]",
+  input: "input",
+  btn:
+    "inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold " +
+    "border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
+  primary:
+    "inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold " +
+    "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
+  tableWrap:
+    "overflow-x-auto rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)]",
+  th:
+    "bg-[var(--table-head-bg)] text-left text-[12px] uppercase tracking-wide font-semibold " +
+    "px-3 py-2 border border-[var(--border)] text-[var(--fg)]/90",
+  td: "px-3 py-2 border border-[var(--border)] text-sm",
+  actionLink:
+    "inline-flex items-center gap-1 font-extrabold text-[var(--primary)] underline underline-offset-4 decoration-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+};
+
 /* ---------------- helpers ---------------- */
 const toArray = (data) =>
   Array.isArray(data)
@@ -51,7 +77,6 @@ function addMonthsDateOnly(dateStr, months) {
   return target.toISOString().slice(0, 10);
 }
 
-/* ---------------- page ---------------- */
 const Loan = () => {
   const navigate = useNavigate();
 
@@ -169,7 +194,7 @@ const Loan = () => {
       pending: statusOf("pending"),
       approved: statusOf("approved"),
       disbursed: statusOf("disbursed"),
-      active: statusOf("active"), // UI-only; backend treats "active" as disbursed & not closed
+      active: statusOf("active"),
       closed: statusOf("closed"),
       rejected: statusOf("rejected"),
     };
@@ -184,7 +209,6 @@ const Loan = () => {
         const outstanding =
           l.outstanding ?? l.outstandingAmount ?? l.remainingAmount ?? undefined;
 
-        // Try to derive paid amount when we can
         let paidAmount = "";
         if (Number.isFinite(outstanding)) {
           const base = Number.isFinite(totalInterest) ? amount + totalInterest : amount;
@@ -280,34 +304,17 @@ const Loan = () => {
     doc.save("loans.pdf");
   };
 
-  // UI helpers
-  const statusBadge = (statusRaw) => {
-    const status = (statusRaw || "").toLowerCase();
-    const base = "px-2 py-1 rounded text-xs font-semibold";
-    switch (status) {
-      case "pending":
-        return `${base} bg-yellow-100 text-yellow-800`;
-      case "approved":
-        return `${base} bg-emerald-100 text-emerald-800`;
-      case "rejected":
-        return `${base} bg-rose-100 text-rose-800`;
-      case "disbursed":
-      case "active":
-        return `${base} bg-blue-100 text-blue-800`;
-      case "closed":
-        return `${base} bg-gray-100 text-gray-900`;
-      default:
-        return `${base} bg-gray-200 text-gray-900`;
-    }
-  };
+  // neutral, tokenized status chip
+  const statusBadge = (statusRaw) =>
+    "px-2 py-1 rounded text-xs font-semibold bg-[var(--badge-bg)] text-[var(--badge-fg)] ring-1 ring-[var(--border)]";
 
   /* ---------------- render ---------------- */
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 text-black dark:text-white">
+    <div className={ui.page}>
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">All Loans</h2>
-        <Link className="text-black font-semibold underline" to="/loans/applications">
+        <h2 className={ui.h1}>All Loans</h2>
+        <Link className={ui.actionLink} to="/loans/applications">
           New Application
         </Link>
       </div>
@@ -315,36 +322,33 @@ const Loan = () => {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
-          { label: "Total", value: filteredLoans.length },
-          { label: "Principal", value: currency(filteredLoans.reduce((s, l) => s + Number(l.amount || l.principal || 0), 0)) },
-          { label: "Pending", value: filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === "pending").length },
-          { label: "Approved", value: filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === "approved").length },
-          { label: "Disbursed", value: filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === "disbursed").length },
-          { label: "Active", value: filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === "active").length },
+          { label: "Total", value: kpis.total },
+          { label: "Principal", value: currency(kpis.totalPrincipal) },
+          { label: "Pending", value: kpis.pending },
+          { label: "Approved", value: kpis.approved },
+          { label: "Disbursed", value: kpis.disbursed },
+          { label: "Active", value: kpis.active },
         ].map((k, i) => (
-          <div
-            key={i}
-            className="card p-4 ring-2 ring-black/10 border-2 border-black/20 text-black dark:text-white"
-          >
-            <p className="text-xs"> {k.label} </p>
+          <div key={i} className={ui.kpi}>
+            <p className="text-xs text-[var(--muted)]">{k.label}</p>
             <p className="text-lg font-bold">{k.value}</p>
           </div>
         ))}
       </div>
 
       {/* Filters & Export */}
-      <div className="card p-4 grid grid-cols-1 md:grid-cols-6 gap-3 ring-2 ring-black/10 border-2 border-black/20 text-black dark:text-white">
+      <div className={`${ui.card} p-4 grid grid-cols-1 md:grid-cols-6 gap-3`}>
         <input
           type="text"
           placeholder="Search borrower or loan ID…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="input md:col-span-2 text-black"
+          className={`${ui.input} md:col-span-2`}
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="input text-black"
+          className={ui.input}
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
@@ -357,7 +361,7 @@ const Loan = () => {
         <select
           value={branchFilter}
           onChange={(e) => setBranchFilter(e.target.value)}
-          className="input text-black"
+          className={ui.input}
         >
           <option value="">All Branches</option>
           {branches.map((b) => (
@@ -369,7 +373,7 @@ const Loan = () => {
         <select
           value={productFilter}
           onChange={(e) => setProductFilter(e.target.value)}
-          className="input text-black"
+          className={ui.input}
         >
           <option value="">All Products</option>
           {products.map((p) => (
@@ -382,38 +386,38 @@ const Loan = () => {
           type="date"
           value={dateFrom}
           onChange={(e) => setDateFrom(e.target.value)}
-          className="input text-black"
+          className={ui.input}
         />
         <input
           type="date"
           value={dateTo}
           onChange={(e) => setDateTo(e.target.value)}
-          className="input text-black"
+          className={ui.input}
         />
         <div className="md:col-span-6 flex justify-end gap-2">
           <CSVLink
             data={exportRows}
             headers={exportHeaders}
             filename="loans.csv"
-            className="px-4 py-2 rounded bg-black text-white hover:opacity-90"
+            className={ui.primary}
           >
             Export CSV
           </CSVLink>
-          <button onClick={exportPDF} className="px-4 py-2 rounded bg-black text-white hover:opacity-90">
+          <button onClick={exportPDF} className={ui.primary}>
             Export PDF
           </button>
         </div>
       </div>
 
       {/* Table */}
-      <div className="card overflow-x-auto ring-2 ring-black/10 border-2 border-black/20">
+      <div className={ui.tableWrap}>
         {loading ? (
           <p className="p-4">Loading loans…</p>
         ) : filteredLoans.length === 0 ? (
-          <p className="p-4">No loans found.</p>
+          <p className="p-4 text-[var(--muted)]">No loans found.</p>
         ) : (
-          <table className="min-w-full text-sm border-2 border-black/30">
-            <thead className="bg-white text-black">
+          <table className="min-w-full text-sm">
+            <thead>
               <tr>
                 {[
                   "ID",
@@ -430,14 +434,14 @@ const Loan = () => {
                   "Status",
                   "Action",
                 ].map((h) => (
-                  <th key={h} className="p-2 border-2 border-black/30 text-left">
+                  <th key={h} className={ui.th}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filteredLoans.map((l) => {
+              {filteredLoans.map((l, i) => {
                 const status = (l.status || l.loanStatus || "").toLowerCase();
                 const borrowerName =
                   l.Borrower?.name || l.borrowerName || l.borrower_name || l.borrower?.name || "N/A";
@@ -469,26 +473,28 @@ const Loan = () => {
                 }
 
                 return (
-                  <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-2 py-2 border-2 border-black/20">{l.id}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{borrowerName}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{branchName}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{productName}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{amount}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{rate}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{term}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{start}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{end}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{paidGuess}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">{outstanding}</td>
-                    <td className="px-2 py-2 border-2 border-black/20">
+                  <tr
+                    key={l.id}
+                    className={`${
+                      i % 2 === 0 ? "bg-[var(--table-row-even)]" : "bg-[var(--table-row-odd)]"
+                    } hover:bg-[var(--chip-soft)] transition-colors`}
+                  >
+                    <td className={ui.td}>{l.id}</td>
+                    <td className={ui.td}>{borrowerName}</td>
+                    <td className={ui.td}>{branchName}</td>
+                    <td className={ui.td}>{productName}</td>
+                    <td className={ui.td}>{amount}</td>
+                    <td className={ui.td}>{rate}</td>
+                    <td className={ui.td}>{term}</td>
+                    <td className={ui.td}>{start}</td>
+                    <td className={ui.td}>{end}</td>
+                    <td className={ui.td}>{paidGuess}</td>
+                    <td className={ui.td}>{outstanding}</td>
+                    <td className={ui.td}>
                       <span className={statusBadge(status)}>{status}</span>
                     </td>
-                    <td className="px-2 py-2 border-2 border-black/20">
-                      <button
-                        onClick={() => navigate(`/loans/${l.id}`)}
-                        className="text-black underline"
-                      >
+                    <td className={ui.td}>
+                      <button onClick={() => navigate(`/loans/${l.id}`)} className={ui.actionLink}>
                         View loan
                       </button>
                     </td>

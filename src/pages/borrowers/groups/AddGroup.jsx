@@ -1,4 +1,3 @@
-// src/pages/groups/AddGroup.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api";
 
@@ -44,14 +43,21 @@ function isLoanOfficer(u) {
 
 const MEETING_DAYS = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
 
+/* ---------- Token-based UI ---------- */
 const ui = {
-  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
-  h1: 'text-3xl font-extrabold tracking-tight mb-4',
-  card: 'rounded-2xl border-2 border-slate-300 bg-white shadow p-4',
-  label: 'block text-xs uppercase tracking-wide text-slate-600 mb-1 font-semibold',
-  input: 'h-10 w-full rounded-lg border-2 border-slate-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500/40',
-  textarea: 'w-full rounded-lg border-2 border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/40',
-  primary: 'inline-flex items-center rounded-lg bg-indigo-600 text-white px-4 py-2 font-semibold hover:bg-indigo-700 disabled:opacity-60',
+  container: "w-full px-4 md:px-6 lg:px-8 py-6 bg-[var(--bg)] text-[var(--fg)]",
+  h1: "text-3xl font-extrabold tracking-tight mb-4",
+  card: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4",
+  label: "block text-xs uppercase tracking-wide text-[var(--muted)] mb-1 font-semibold",
+  input:
+    "h-10 w-full rounded-lg border-2 px-3 outline-none focus:ring-2 focus:ring-[var(--ring)] " +
+    "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)]",
+  textarea:
+    "w-full rounded-lg border-2 px-3 py-2 outline-none focus:ring-2 focus:ring-[var(--ring)] " +
+    "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)]",
+  primary:
+    "inline-flex items-center rounded-lg bg-indigo-600 text-white px-4 py-2 font-semibold hover:bg-indigo-700 disabled:opacity-60 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
 };
 
 const AddGroup = () => {

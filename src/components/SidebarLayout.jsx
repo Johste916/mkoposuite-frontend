@@ -1,5 +1,12 @@
-// src/components/SidebarLayout.jsx
-import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+// src/layouts/SidebarLayout.jsx
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+} from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiBarChart2,
@@ -25,39 +32,59 @@ import {
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
-import { useFeatureConfig, filterNavByFeatures } from "../context/FeatureConfigContext";
+import {
+  useFeatureConfig,
+  filterNavByFeatures,
+} from "../context/FeatureConfigContext";
+import { useTheme } from "../providers/ThemeProvider";
+import BrandMark from "../components/BrandMark";
 
 /* -------------------------------- helpers --------------------------------- */
 const isUuid = (v) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(v || "")
+  );
 const isNumericId = (v) => /^\d+$/.test(String(v || ""));
 
-/* ------------------------------- NAV CONFIG --------------------------------
-   NOTE: “Account” items live in the avatar dropdown to avoid duplication. */
+const isEditableTarget = (el) => {
+  if (!el) return false;
+  const tag = (el.tagName || "").toLowerCase();
+  const editable =
+    tag === "input" ||
+    tag === "textarea" ||
+    el.isContentEditable ||
+    el.getAttribute?.("role") === "textbox";
+  return editable;
+};
+
+/* ------------------------------- NAV CONFIG -------------------------------- */
 const NAV = () => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
   {
-    label: "Borrowers", icon: <FiUsers />, to: "/borrowers", children: [
+    label: "Borrowers",
+    icon: <FiUsers />,
+    to: "/borrowers",
+    children: [
       { label: "View Borrowers", to: "/borrowers" },
       { label: "Add Borrower", to: "/borrowers/add" },
       { label: "KYC Queue", to: "/borrowers/kyc" },
       { label: "Blacklist", to: "/borrowers/blacklist" },
       { label: "Imports", to: "/borrowers/imports" },
       { label: "Reports", to: "/borrowers/reports" },
-
-      // Borrower Groups
       { label: "View Borrower Groups", to: "/borrowers/groups" },
       { label: "Add Borrower Group", to: "/borrowers/groups/add" },
       { label: "Group Reports", to: "/borrowers/groups/reports" },
       { label: "Group Imports", to: "/borrowers/groups/imports" },
-
       { label: "Send SMS to All", to: "/borrowers/sms" },
       { label: "Send Email to All", to: "/borrowers/email" },
       { label: "Invite Borrowers", to: "/borrowers/invite" },
-    ]
+    ],
   },
   {
-    label: "Loans", icon: <FiCreditCard />, to: "/loans", children: [
+    label: "Loans",
+    icon: <FiCreditCard />,
+    to: "/loans",
+    children: [
       { label: "Loan Products", to: "/loans/products" },
       { label: "View All Loans", to: "/loans" },
       { label: "Add Loan", to: "/loans/applications" },
@@ -72,10 +99,13 @@ const NAV = () => [
       { label: "Principal Outstanding", to: "/loans/status/principal-outstanding" },
       { label: "1 Month Late", to: "/loans/status/1-month-late" },
       { label: "3 Months Late", to: "/loans/status/3-months-late" },
-    ]
+    ],
   },
   {
-    label: "Repayments", icon: <FiDollarSign />, to: "/repayments", children: [
+    label: "Repayments",
+    icon: <FiDollarSign />,
+    to: "/repayments",
+    children: [
       { label: "View Repayments", to: "/repayments" },
       { label: "Record Repayment", to: "/repayments/new" },
       { label: "Receipts", to: "/repayments/receipts" },
@@ -83,29 +113,38 @@ const NAV = () => [
       { label: "Add via CSV", to: "/repayments/csv" },
       { label: "Repayment Charts", to: "/repayments/charts" },
       { label: "Approve Repayments", to: "/repayments/approve" },
-    ]
+    ],
   },
   { label: "Collateral Register", icon: <FiBriefcase />, to: "/collateral" },
   {
-    label: "Collection Sheets", icon: <FiCreditCard />, to: "/collections", children: [
+    label: "Collection Sheets",
+    icon: <FiCreditCard />,
+    to: "/collections",
+    children: [
       { label: "Daily Collection Sheet", to: "/collections/daily" },
       { label: "Missed Repayment Sheet", to: "/collections/missed" },
       { label: "Past Maturity Loans", to: "/collections/past-maturity" },
       { label: "Send SMS", to: "/collections/sms" },
       { label: "Send Email", to: "/collections/email" },
-    ]
+    ],
   },
   {
-    label: "Savings", icon: <BsBank />, to: "/savings", children: [
+    label: "Savings",
+    icon: <BsBank />,
+    to: "/savings",
+    children: [
       { label: "View Savings", to: "/savings" },
       { label: "Transactions", to: "/savings/transactions" },
       { label: "Upload CSV", to: "/savings/transactions/csv" },
       { label: "Approve Transactions", to: "/savings/transactions/approve" },
       { label: "Savings Report", to: "/savings/report" },
-    ]
+    ],
   },
   {
-    label: "Banking", icon: <BsBank />, to: "/banks", children: [
+    label: "Banking",
+    icon: <BsBank />,
+    to: "/banks",
+    children: [
       { label: "View Banks", to: "/banks" },
       { label: "Add Bank", to: "/banks/add" },
       { label: "View Bank Transactions", to: "/banks/transactions" },
@@ -121,16 +160,22 @@ const NAV = () => [
       { label: "Add Cash Transaction", to: "/cash/transactions/add" },
       { label: "Cash Reconciliation", to: "/cash/reconciliation" },
       { label: "Cash Statement", to: "/cash/statements" },
-    ]
+    ],
   },
   {
-    label: "Investors", icon: <FiUsers />, to: "/investors", children: [
+    label: "Investors",
+    icon: <FiUsers />,
+    to: "/investors",
+    children: [
       { label: "View Investors", to: "/investors" },
       { label: "Add Investor", to: "/investors/add" },
-    ]
+    ],
   },
   {
-    label: "HR & Payroll", icon: <FiUserCheck />, to: "/payroll", children: [
+    label: "HR & Payroll",
+    icon: <FiUserCheck />,
+    to: "/payroll",
+    children: [
       { label: "View Payroll", to: "/payroll" },
       { label: "Add Payroll", to: "/payroll/add" },
       { label: "Payroll Report", to: "/payroll/report" },
@@ -138,47 +183,65 @@ const NAV = () => [
       { label: "Attendance", to: "/hr/attendance" },
       { label: "Leave Management", to: "/hr/leave" },
       { label: "Contracts", to: "/hr/contracts" },
-    ]
+    ],
   },
   {
-    label: "Expenses", icon: <FiCreditCard />, to: "/expenses", children: [
+    label: "Expenses",
+    icon: <FiCreditCard />,
+    to: "/expenses",
+    children: [
       { label: "View Expenses", to: "/expenses" },
       { label: "Add Expense", to: "/expenses/add" },
       { label: "Upload CSV", to: "/expenses/csv" },
-    ]
+    ],
   },
   {
-    label: "Other Income", icon: <FiDollarSign />, to: "/other-income", children: [
+    label: "Other Income",
+    icon: <FiDollarSign />,
+    to: "/other-income",
+    children: [
       { label: "View Other Income", to: "/other-income" },
       { label: "Add Other Income", to: "/other-income/add" },
       { label: "Upload CSV", to: "/other-income/csv" },
-    ]
+    ],
   },
   {
-    label: "Asset Management", icon: <FiBriefcase />, to: "/assets", children: [
+    label: "Asset Management",
+    icon: <FiBriefcase />,
+    to: "/assets",
+    children: [
       { label: "View Assets", to: "/assets" },
       { label: "Add Asset", to: "/assets/add" },
-    ]
+    ],
   },
   {
-    label: "Accounting", icon: <FiDatabase />, to: "/accounting", children: [
+    label: "Accounting",
+    icon: <FiDatabase />,
+    to: "/accounting",
+    children: [
       { label: "Chart of Accounts", to: "/accounting/chart-of-accounts" },
       { label: "Trial Balance", to: "/accounting/trial-balance" },
       { label: "Profit & Loss", to: "/accounting/profit-loss" },
       { label: "Cashflow", to: "/accounting/cashflow" },
-    ]
+    ],
   },
   {
-    label: "User Management", icon: <FiUserCheck />, to: "/user-management", children: [
+    label: "User Management",
+    icon: <FiUserCheck />,
+    to: "/user-management",
+    children: [
       { label: "Staff", to: "/user-management" },
       { label: "Users", to: "/user-management/users" },
       { label: "Roles", to: "/user-management/roles" },
       { label: "Permissions", to: "/user-management/permissions" },
-    ]
+    ],
   },
   { label: "Branches", icon: <FiDatabase />, to: "/branches" },
   {
-    label: "Reports", icon: <FiBarChart2 />, to: "/reports", children: [
+    label: "Reports",
+    icon: <FiBarChart2 />,
+    to: "/reports",
+    children: [
       { label: "Borrowers Report", to: "/reports/borrowers" },
       { label: "Loan Report", to: "/reports/loans" },
       { label: "Loan Arrears Aging", to: "/reports/arrears-aging" },
@@ -189,7 +252,7 @@ const NAV = () => [
       { label: "Pro-Rata Collections", to: "/reports/pro-rata" },
       { label: "Disbursement Report", to: "/reports/disbursement" },
       { label: "Fees Report", to: "/reports/fees" },
-      { label: "Loan Officer Report", to: "/reports/loan-officer" }, // fixed route
+      { label: "Loan Officer Report", to: "/reports/loan-officer" },
       { label: "MFRS Ratios", to: "/reports/mfrs" },
       { label: "Daily Report", to: "/reports/daily" },
       { label: "Monthly Report", to: "/reports/monthly" },
@@ -197,11 +260,12 @@ const NAV = () => [
       { label: "Portfolio At Risk (PAR)", to: "/reports/par" },
       { label: "At a Glance", to: "/reports/at-a-glance" },
       { label: "All Entries", to: "/reports/all" },
-    ]
+    ],
   },
 ];
 
-const pathIsIn = (pathname, base) => pathname === base || pathname.startsWith(base + "/");
+const pathIsIn = (pathname, base) =>
+  pathname === base || pathname.startsWith(base + "/");
 
 /* --------------------------- Header Global Search -------------------------- */
 const HeaderGlobalSearch = ({ branchId }) => {
@@ -212,57 +276,166 @@ const HeaderGlobalSearch = ({ branchId }) => {
   const [hits, setHits] = useState([]);
   const [sel, setSel] = useState(0);
   const debounceRef = useRef(null);
+  const inputRef = useRef(null);
+  const rootRef = useRef(null);
 
-  const ENTITY_ROUTES = useMemo(() => ({
-    borrower: (h) => ({ to: `/borrowers/${h.id}` }),
-    borrowers: (h) => ({ to: `/borrowers/${h.id}` }),
-    loan: (h) => ({ to: `/loans/${h.id}` }),
-    loans: (h) => ({ to: `/loans/${h.id}` }),
-    repayment: (h) => ({ to: `/repayments/${h.id}` }),
-    repayments: (h) => ({ to: `/repayments?q=${encodeURIComponent(h.meta?.receiptNo || h.id)}` }),
-    deposit: (h) => ({ to: `/deposits?q=${encodeURIComponent(h.id)}` }),
-    withdrawal: (h) => ({ to: `/withdrawals?q=${encodeURIComponent(h.id)}` }),
-    saving: (h) => ({ to: `/savings?q=${encodeURIComponent(h.meta?.accountNo || h.id)}` }),
-    user: (h) => ({ to: `/users/${h.id}` }),
-    branch: (h) => ({ to: `/branches/${h.id}` }),
-    default: (h) => ({ to: `/?q=${encodeURIComponent(h.title || q)}` }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [q]);
+  // Deep-link routes
+  const ENTITY_ROUTES = useMemo(
+    () => ({
+      borrower: (h) => ({ to: `/borrowers/${h.id}` }),
+      borrowers: (h) => ({ to: `/borrowers/${h.id}` }),
+      group: (h) => ({ to: `/borrowers/groups/${h.id}` }),
+      borrower_group: (h) => ({ to: `/borrowers/groups/${h.id}` }),
 
-  const fetchHits = useCallback(async (query) => {
-    if (!query || query.trim().length < 2) {
-      setHits([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await api.get("/search", {
-        params: { q: query.trim(), branchId: branchId || undefined, limit: 12 },
-      });
-      const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.items) ? res.data.items : []);
-      const norm = arr.map((h) => ({
-        id: h.id ?? h._id ?? h.uuid,
-        type: (h.type || h.entity || h.module || "default").toString().toLowerCase(),
-        title: h.title || h.name || h.fullName || h.borrowerName || h.loanNo || h.receiptNo || h.accountNo || String(h.id ?? ""),
-        subtitle: h.subtitle || h.email || h.phone || h.meta?.loanNo || h.meta?.receiptNo || h.meta?.branchName || "",
-        amount: h.amount ?? h.total ?? h.balance ?? h.value,
-        meta: h.meta || h,
-        routeHint: h.routeHint,
-      })).filter(x => x.id);
-      setHits(norm);
-      setSel(0);
-    } catch {
-      setHits([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [branchId]);
+      loan: (h) => ({ to: `/loans/${h.id}` }),
+      loans: (h) => ({ to: `/loans/${h.id}` }),
 
+      repayment: (h) => ({ to: `/repayments/${h.id}` }),
+      repayments: (h) => ({
+        to: `/repayments?q=${encodeURIComponent(h.meta?.receiptNo || h.id)}`,
+      }),
+      receipt: (h) => ({
+        to: `/repayments/receipts?q=${encodeURIComponent(
+          h.meta?.receiptNo || h.id
+        )}`,
+      }),
+
+      saving: (h) => ({
+        to: `/savings?q=${encodeURIComponent(h.meta?.accountNo || h.id)}`,
+      }),
+      deposit: (h) => ({ to: `/deposits?q=${encodeURIComponent(h.id)}` }),
+      withdrawal: (h) => ({ to: `/withdrawals?q=${encodeURIComponent(h.id)}` }),
+      bank: (h) => ({ to: `/banks/${h.id}` }),
+      bank_transaction: (h) => ({
+        to: `/banks/transactions?q=${encodeURIComponent(h.id)}`,
+      }),
+      cash_transaction: (h) => ({
+        to: `/cash/transactions?q=${encodeURIComponent(h.id)}`,
+      }),
+
+      collateral: (h) => ({
+        to: `/collateral?q=${encodeURIComponent(h.id)}`,
+      }),
+      expense: (h) => ({ to: `/expenses?q=${encodeURIComponent(h.id)}` }),
+      income: (h) => ({ to: `/other-income?q=${encodeURIComponent(h.id)}` }),
+      asset: (h) => ({ to: `/assets/${h.id}` }),
+
+      user: (h) => ({ to: `/users/${h.id}` }),
+      staff: (h) => ({
+        to: `/user-management?userId=${encodeURIComponent(h.id)}`,
+      }),
+      role: (h) => ({
+        to: `/user-management/roles?q=${encodeURIComponent(h.title || h.id)}`,
+      }),
+      permission: (h) => ({
+        to: `/user-management/permissions?q=${encodeURIComponent(
+          h.title || h.id
+        )}`,
+      }),
+      investor: (h) => ({ to: `/investors/${h.id}` }),
+      employee: (h) => ({ to: `/hr/employees/${h.id}` }),
+      payroll: (h) => ({ to: `/payroll?q=${encodeURIComponent(h.id)}` }),
+      branch: (h) => ({ to: `/branches/${h.id}` }),
+
+      default: (h) => ({ to: `/?q=${encodeURIComponent(h.title || q)}` }),
+    }),
+    [q]
+  );
+
+  const fetchHits = useCallback(
+    async (query) => {
+      if (!query || query.trim().length < 2) {
+        setHits([]);
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await api.get("/search", {
+          params: { q: query.trim(), branchId: branchId || undefined, limit: 12 },
+        });
+        const arr = Array.isArray(res.data)
+          ? res.data
+          : Array.isArray(res.data?.items)
+          ? res.data.items
+          : [];
+        const norm = arr
+          .map((h) => ({
+            id: h.id ?? h._id ?? h.uuid,
+            type: (h.type || h.entity || h.module || "default")
+              .toString()
+              .toLowerCase(),
+            title:
+              h.title ||
+              h.name ||
+              h.fullName ||
+              h.borrowerName ||
+              h.loanNo ||
+              h.receiptNo ||
+              h.accountNo ||
+              String(h.id ?? ""),
+            subtitle:
+              h.subtitle ||
+              h.email ||
+              h.phone ||
+              h.meta?.loanNo ||
+              h.meta?.receiptNo ||
+              h.meta?.branchName ||
+              "",
+            amount: h.amount ?? h.total ?? h.balance ?? h.value,
+            meta: h.meta || h,
+            routeHint: h.routeHint,
+          }))
+          .filter((x) => x.id);
+        setHits(norm);
+        setSel(0);
+      } catch {
+        setHits([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [branchId]
+  );
+
+  // Debounced querying
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => fetchHits(q), 220);
     return () => debounceRef.current && clearTimeout(debounceRef.current);
   }, [q, fetchHits]);
+
+  // Click outside to close
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  // Global shortcuts: "/" and ⌘K / Ctrl+K
+  useEffect(() => {
+    const onKey = (e) => {
+      if (isEditableTarget(e.target)) return;
+      if (e.key === "/") {
+        e.preventDefault();
+        inputRef.current?.focus();
+        setOpen(true);
+      }
+      const isMac = navigator.platform.toUpperCase().includes("MAC");
+      if (
+        (isMac && e.metaKey && e.key.toLowerCase() === "k") ||
+        (!isMac && e.ctrlKey && e.key.toLowerCase() === "k")
+      ) {
+        e.preventDefault();
+        inputRef.current?.focus();
+        setOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const go = (hit) => {
     const build = ENTITY_ROUTES[hit.type] || ENTITY_ROUTES.default;
@@ -299,45 +472,81 @@ const HeaderGlobalSearch = ({ branchId }) => {
     return g;
   }, [hits]);
 
+  const onSearchClick = async () => {
+    if (q.trim().length < 2) {
+      inputRef.current?.focus();
+      setOpen(true);
+      return;
+    }
+    if (!hits.length) {
+      await fetchHits(q);
+      setOpen(true);
+      return;
+    }
+    go(hits[0]);
+  };
+
   return (
-    <div className="relative w-full">
+    <div ref={rootRef} className="relative w-full">
       <div className="relative">
-        <FiSearch className="absolute left-3 top-3 text-slate-400" />
+        {/* Left icon */}
+        <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+          <FiSearch className="w-4 h-4 text-[var(--muted)]" aria-hidden />
+        </span>
+
+        {/* Input — fixed height and paddings so it never overlaps */}
         <input
+          ref={inputRef}
           type="text"
           value={q}
-          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setOpen(true);
+          }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Search borrowers, loans, receipts…"
-          className="w-full pl-9 pr-8 py-2 text-sm rounded-md border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
+          placeholder="Search everything…  (/ or ⌘K / Ctrl+K)"
+          className="w-full !h-11 !pl-10 !pr-12 text-sm rounded-md border
+                     bg-[var(--input-bg)] border-[var(--border)]
+                     text-[var(--input-fg)] placeholder:text-[var(--input-placeholder)]
+                     focus:outline-none focus:ring-2 focus:ring-[var(--ring)]
+                     appearance-none"
           aria-label="Global search"
         />
+
+        {/* Clear button */}
         {q && (
           <button
-            onClick={() => { setQ(""); setHits([]); }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+            onClick={() => {
+              setQ("");
+              setHits([]);
+              inputRef.current?.focus();
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:opacity-80 opacity-70"
             aria-label="Clear search"
+            type="button"
           >
-            <FiX />
+            <FiX className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {open && (q?.length >= 2) && (
+      {/* Results */}
+      {open && q?.length >= 2 && (
         <div
-          className="absolute z-[60] mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden"
+          className="absolute z-[60] mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-lg overflow-hidden"
           onMouseDown={(e) => e.preventDefault()}
+          role="listbox"
         >
           {loading ? (
-            <div className="p-3 text-sm text-slate-600 dark:text-slate-300">Searching…</div>
+            <div className="p-3 text-sm opacity-80">Searching…</div>
           ) : hits.length === 0 ? (
-            <div className="p-3 text-sm text-slate-600 dark:text-slate-300">No results.</div>
+            <div className="p-3 text-sm opacity-80">No results.</div>
           ) : (
             <div className="max-h-80 overflow-auto">
               {Object.entries(grouped).map(([type, list]) => (
                 <div key={type}>
-                  <div className="px-3 py-1 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60">
+                  <div className="px-3 py-1 text-[11px] uppercase tracking-wide opacity-70 bg-[color:transparent]">
                     {type}
                   </div>
                   {list.map((h, idx) => {
@@ -348,21 +557,24 @@ const HeaderGlobalSearch = ({ branchId }) => {
                         key={`${type}-${h.id}-${idx}`}
                         onMouseEnter={() => setSel(flatIndex)}
                         onClick={() => go(h)}
-                        className={`w-full text-left px-3 py-2 text-sm border-b border-slate-100 dark:border-slate-800 ${active ? "bg-blue-50 dark:bg-slate-800/70" : "bg-transparent"}`}
+                        className={`w-full text-left px-3 py-2 text-sm border-b border-[var(--border)] ${
+                          active ? "bg-[var(--chip-soft)]" : "bg-transparent"
+                        }`}
+                        role="option"
+                        aria-selected={active}
+                        type="button"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                              {h.title}
-                            </div>
+                            <div className="font-medium truncate">{h.title}</div>
                             {h.subtitle && (
-                              <div className="text-xs text-slate-600 dark:text-slate-300 truncate">
+                              <div className="text-xs opacity-80 truncate">
                                 {h.subtitle}
                               </div>
                             )}
                           </div>
                           {Number.isFinite(h.amount) && (
-                            <div className="text-xs text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                            <div className="text-xs opacity-80 whitespace-nowrap">
                               TZS {new Intl.NumberFormat().format(h.amount)}
                             </div>
                           )}
@@ -376,6 +588,19 @@ const HeaderGlobalSearch = ({ branchId }) => {
           )}
         </div>
       )}
+
+      {/* External Search button (never overlaps the input) */}
+      <button
+        type="button"
+        onClick={onSearchClick}
+        className="absolute -right-[108px] top-0 h-11 inline-flex items-center gap-2 px-3 rounded-md
+                   border-2 border-[var(--border)] bg-[var(--panel)] text-[var(--fg)]
+                   hover:bg-[var(--chip-soft)]"
+        title="Search"
+      >
+        <FiSearch className="w-4 h-4" />
+        <span className="text-sm">Search</span>
+      </button>
     </div>
   );
 };
@@ -400,8 +625,8 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
         className={({ isActive }) =>
           `${baseItem} ${
             isActive
-              ? "bg-blue-600 text-white shadow-sm"
-              : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+              ? "bg-[var(--nav-item-active-bg)] text-[var(--nav-item-active-fg)] shadow-sm"
+              : "text-[var(--nav-item)] hover:bg-[var(--nav-item-hover-bg)]"
           }`
         }
         onClick={onNavigate}
@@ -433,8 +658,8 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
         onKeyDown={onKeyDown}
         className={`${baseItem} ${
           isActiveSection
-            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-200"
-            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+            ? "bg-[var(--nav-item-active-bg)] text-[var(--nav-item-active-fg)]"
+            : "text-[var(--nav-item)] hover:bg-[var(--nav-item-hover-bg)]"
         } w-full justify-between`}
         aria-expanded={open}
         aria-controls={panelId}
@@ -446,11 +671,7 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
         {open ? <FiChevronUp /> : <FiChevronDown />}
       </button>
 
-      <div
-        id={panelId}
-        hidden={!open}
-        className="mt-1 ml-2 border-l border-slate-200 dark:border-slate-700"
-      >
+      <div id={panelId} hidden={!open} className="mt-1 ml-2 border-l border-[var(--border)]">
         <div className="pl-3 py-1 space-y-1">
           {item.children.map((c) => (
             <NavLink
@@ -459,8 +680,8 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
               className={({ isActive }) =>
                 `block px-2 py-1.5 rounded text-[13px] ${
                   isActive
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                    ? "bg-[var(--nav-item-active-bg)] text-[var(--nav-item-active-fg)] shadow-sm"
+                    : "text-[var(--nav-item)] hover:bg-[var(--nav-item-hover-bg)]"
                 }`
               }
               onClick={onNavigate}
@@ -480,7 +701,7 @@ const SidebarLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [darkMode, setDarkMode] = useState(false);
+  const { isDark, toggleTheme } = useTheme();
   const [user, setUser] = useState(null);
 
   const [tenant, setTenant] = useState(null); // { id, name }
@@ -507,11 +728,21 @@ const SidebarLayout = () => {
     try {
       delete api.defaults.headers.common.Authorization;
       [
-        "token","jwt","authToken","accessToken","access_token",
-        "user","tenant","tenantId","tenantName","activeBranchId",
+        "token",
+        "jwt",
+        "authToken",
+        "accessToken",
+        "access_token",
+        "user",
+        "tenant",
+        "tenantId",
+        "tenantName",
+        "activeBranchId",
       ].forEach((k) => localStorage.removeItem(k));
       if (typeof sessionStorage !== "undefined") {
-        try { sessionStorage.clear(); } catch {}
+        try {
+          sessionStorage.clear();
+        } catch {}
       }
       delete api.defaults.headers.common["x-tenant-id"];
       delete api.defaults.headers.common["x-branch-id"];
@@ -522,27 +753,27 @@ const SidebarLayout = () => {
   const lower = (s) => String(s || "").toLowerCase();
   const hasAnyRole = (...allowed) => {
     const primary = lower(user?.role);
-    const list =
-      Array.isArray(user?.roles)
-        ? user.roles.map(lower)
-        : Array.isArray(user?.Roles)
-        ? user.Roles.map((r) => lower(r?.name || r))
-        : [];
+    const list = Array.isArray(user?.roles)
+      ? user.roles.map(lower)
+      : Array.isArray(user?.Roles)
+      ? user.Roles.map((r) => lower(r?.name || r))
+      : [];
     return allowed.some((r) => r === primary || list.includes(r));
   };
 
-  /* theme + user + tenant load */
+  /* user + tenant load */
   useEffect(() => {
-    const storedDark = localStorage.getItem("darkMode");
-    setDarkMode(storedDark === "true");
-
     const tok =
       localStorage.getItem("token") ||
       localStorage.getItem("jwt") ||
       localStorage.getItem("access_token") ||
       localStorage.getItem("authToken") ||
       localStorage.getItem("accessToken");
-    if (tok) api.defaults.headers.common.Authorization = `Bearer ${tok.replace(/^Bearer /i, "")}`;
+    if (tok)
+      api.defaults.headers.common.Authorization = `Bearer ${tok.replace(
+        /^Bearer /i,
+        ""
+      )}`;
 
     try {
       const rawTenant = localStorage.getItem("tenant");
@@ -592,11 +823,6 @@ const SidebarLayout = () => {
     }
   }, [activeBranchId]);
 
-  useEffect(() => {
-    localStorage.setItem("darkMode", darkMode ? "true" : "false");
-    document.documentElement.classList.toggle("dark", darkMode);
-  }, [darkMode]);
-
   // Branch changes triggered by external pages (optional)
   useEffect(() => {
     const onBranch = (e) => {
@@ -625,10 +851,11 @@ const SidebarLayout = () => {
     (async () => {
       try {
         const res = await api.get("/branches");
-        const list =
-          Array.isArray(res.data) ? res.data :
-          Array.isArray(res.data?.items) ? res.data.items :
-          res.data?.data || [];
+        const list = Array.isArray(res.data)
+          ? res.data
+          : Array.isArray(res.data?.items)
+          ? res.data.items
+          : res.data?.data || [];
         setBranches(list);
         if (list.length && !activeBranchId) {
           const firstId = String(list[0]?.id ?? "");
@@ -654,67 +881,76 @@ const SidebarLayout = () => {
     setAvatarOpen(false);
   }, [location.pathname]);
 
-  const initial = (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
-
-  const toggleDark = useCallback(() => setDarkMode((v) => !v), []);
+  const initial =
+    (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() ||
+    "U";
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
+  // Derive org/company label for sidebar header
+  const orgName =
+    (tenant?.name || "").trim() ||
+    (user?.tenant?.name || "").trim() ||
+    (user?.organization?.name || "").trim() ||
+    (user?.companyName || "").trim() ||
+    (user?.displayName || user?.name || user?.email || "").trim() ||
+    "Workspace";
+
   return (
-    <div className={`min-h-screen ${darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
-      {/* Header (no backdrop-blur; cheaper paints) */}
-      <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    /* app-theme-bold enables token hardeners globally */
+    <div className="app-theme-bold min-h-screen bg-[var(--bg)] text-[var(--fg)]">
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b bg-[var(--panel)] border-[var(--border)]">
         <div className="px-3 md:px-4">
           <div className="h-14 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <button
-                className="lg:hidden p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="lg:hidden p-2 rounded hover:bg-[var(--nav-item-hover-bg)]"
                 onClick={() => setMobileOpen((v) => !v)}
                 aria-label={mobileOpen ? "Close menu" : "Open menu"}
               >
                 {mobileOpen ? <FiX /> : <FiMenu />}
               </button>
-              <span className="text-lg font-extrabold tracking-tight">
-                <span className="text-blue-600">Mkopo</span>
-                <span className="text-slate-800 dark:text-slate-200">Suite</span>
-              </span>
 
-              {tenant?.name && (
-                <span className="ml-2 px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                  {tenant.name}
-                </span>
-              )}
+              {/* Brand word-mark only */}
+              <BrandMark size={28} />
             </div>
 
-            <div className="hidden md:flex items-center gap-2 min-w-[280px] max-w-[640px] w-full">
-              <HeaderGlobalSearch branchId={activeBranchId} />
+            {/* Centered search area on desktop */}
+            <div className="hidden md:flex flex-1 justify-center">
+              <div className="relative w-full max-w-[720px]">
+                <HeaderGlobalSearch branchId={activeBranchId} />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
               <select
-                className="hidden md:block px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 dark:text-slate-200 text-sm border border-slate-200 dark:border-slate-700"
+                className="hidden md:block px-2 py-1 rounded text-sm border bg-[var(--input-bg)] border-[var(--border)] text-[var(--input-fg)]"
                 value={activeBranchId}
                 onChange={(e) => setActiveBranchId(e.target.value)}
                 aria-label="Active branch"
               >
                 <option value="">Branch</option>
                 {branches.map((b) => (
-                  <option key={b.id} value={String(b.id)}>{b.name}</option>
+                  <option key={b.id} value={String(b.id)}>
+                    {b.name}
+                  </option>
                 ))}
               </select>
 
               <button
-                onClick={toggleDark}
-                className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={toggleTheme}
+                className="p-2 rounded hover:bg-[var(--nav-item-hover-bg)]"
                 aria-label="Toggle dark mode"
+                title="Toggle theme"
               >
-                {darkMode ? <FiSun /> : <FiMoon />}
+                {isDark ? <FiSun /> : <FiMoon />}
               </button>
 
               {/* Avatar dropdown */}
               <div className="relative" ref={avatarRef}>
                 <button
                   onClick={() => setAvatarOpen((v) => !v)}
-                  className="inline-flex items-center gap-2 h-9 px-2 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-2 h-9 px-2 rounded border border-[var(--border)] hover:bg-[var(--nav-item-hover-bg)]"
                   aria-expanded={avatarOpen}
                   title="Account"
                 >
@@ -724,78 +960,136 @@ const SidebarLayout = () => {
                   <FiChevronDown className="opacity-70" />
                 </button>
                 {avatarOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 z-[60] p-2">
-                    <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <div className="absolute right-0 mt-2 w-64 rounded-xl shadow-xl border border-[var(--border)] bg-[var(--panel)] z-[60] p-2">
+                    <div className="px-3 py-2 text-xs opacity-80 flex items-center gap-2">
                       <FiUser />
                       <div className="truncate">
-                        <div className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                        <div className="font-medium truncate">
                           {user?.displayName || user?.name || user?.email || "User"}
                         </div>
-                        <div className="truncate opacity-70">{(user?.role || "user").toLowerCase()}</div>
+                        <div className="truncate opacity-70">
+                          {(user?.role || "user").toLowerCase()}
+                        </div>
                       </div>
                     </div>
-                    <hr className="my-2 border-slate-200 dark:border-slate-700" />
-                    {/* Always available */}
+                    <hr className="my-2 border-[var(--border)]" />
                     <NavLink
                       to="/account/settings"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2"><FiSettings /> Profile &amp; Settings</span>
+                      <span className="inline-flex items-center gap-2">
+                        <FiSettings /> Profile &amp; Settings
+                      </span>
                     </NavLink>
                     <NavLink
                       to="/billing"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2"><FiCreditCard /> Billing</span>
+                      <span className="inline-flex items-center gap-2">
+                        <FiCreditCard /> Billing
+                      </span>
                     </NavLink>
                     <NavLink
                       to="/sms-console"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2"><FiMessageSquare /> SMS Console</span>
+                      <span className="inline-flex items-center gap-2">
+                        <FiMessageSquare /> SMS Console
+                      </span>
                     </NavLink>
                     <NavLink
                       to="/billing-by-phone"
-                      className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"
+                      className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
                       onClick={() => setAvatarOpen(false)}
                     >
-                      <span className="inline-flex items-center gap-2"><FiPhone /> Billing by Phone</span>
+                      <span className="inline-flex items-center gap-2">
+                        <FiPhone /> Billing by Phone
+                      </span>
                     </NavLink>
 
-                    {/* Admin/gated items */}
-                    {hasAnyRole("system_admin","super_admin","admin","director","developer") && (
+                    {hasAnyRole(
+                      "system_admin",
+                      "super_admin",
+                      "admin",
+                      "director",
+                      "developer"
+                    ) && (
                       <>
-                        <NavLink to="/subscription" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
-                          <span className="inline-flex items-center gap-2"><FiSettings /> Subscription</span>
+                        <NavLink
+                          to="/subscription"
+                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <FiSettings /> Subscription
+                          </span>
                         </NavLink>
-                        <NavLink to="/support-tickets" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
-                          <span className="inline-flex items-center gap-2"><FiSettings /> Support Tickets</span>
+                        <NavLink
+                          to="/support-tickets"
+                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <FiSettings /> Support Tickets
+                          </span>
                         </NavLink>
-                        <NavLink to="/impersonate-tenant" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
-                          <span className="inline-flex items-center gap-2"><FiUsers /> Impersonate</span>
+                        <NavLink
+                          to="/impersonate-tenant"
+                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <FiUsers /> Impersonate
+                          </span>
                         </NavLink>
-                        <NavLink to="/tenants-admin" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
-                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (New)</span>
+                        <NavLink
+                          to="/tenants-admin"
+                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <FiUsers /> Tenants (New)
+                          </span>
                         </NavLink>
-                        <NavLink to="/account/organization" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
-                          <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
+                        <NavLink
+                          to="/account/organization"
+                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <FiSettings /> Organization
+                          </span>
                         </NavLink>
-                        <NavLink to="/admin/tenants" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
-                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (SysAdmin)</span>
+                        <NavLink
+                          to="/admin/tenants"
+                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
+                          onClick={() => setAvatarOpen(false)}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <FiUsers /> Tenants (SysAdmin)
+                          </span>
                         </NavLink>
                       </>
                     )}
-                    <NavLink to="/admin" className="block px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-sm" onClick={() => setAvatarOpen(false)}>
-                      <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
+                    <NavLink
+                      to="/admin"
+                      className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
+                      onClick={() => setAvatarOpen(false)}
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <FiSettings /> Admin
+                      </span>
                     </NavLink>
                     <button
                       onClick={logoutAndGo}
-                      className="w-full text-left px-3 py-2 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-sm text-rose-600 dark:text-rose-300"
+                      className="w-full text-left px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm text-rose-400"
                     >
-                      <span className="inline-flex items-center gap-2"><FiLogOut /> Logout</span>
+                      <span className="inline-flex items-center gap-2">
+                        <FiLogOut /> Logout
+                      </span>
                     </button>
                   </div>
                 )}
@@ -808,14 +1102,19 @@ const SidebarLayout = () => {
       {/* Shell: left sidebar + main content */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
         {/* Sidebar */}
-        <aside className="hidden lg:block border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
-            <div className="px-3 pb-2 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Navigation
+        <aside className="app-sidebar hidden lg:block">
+          <div className="sidebar-scroll h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
+            {/* Single place to show org/user/company */}
+            <div
+              className="px-3 pb-2 text-xs font-semibold tracking-tight text-[var(--muted)] truncate"
+              title={orgName}
+            >
+              {orgName}
             </div>
+
             <nav className="space-y-1" aria-label="Primary">
               {featuresLoading ? (
-                <div className="px-3 py-2 text-xs text-slate-500">Loading menu…</div>
+                <div className="px-3 py-2 text-xs opacity-70">Loading menu…</div>
               ) : (
                 computedNav.map((item) => (
                   <Section
@@ -832,28 +1131,36 @@ const SidebarLayout = () => {
         </aside>
 
         {/* Main content */}
-        <main className="min-h-[calc(100vh-56px)] px-3 md:px-6 py-4">
-          <Outlet />
+        <main className="legacy-compat min-h-[calc(100vh-56px)]">
+          <div className="ms-page">
+            <Outlet />
+          </div>
         </main>
       </div>
 
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-[70] flex">
-          <div className="w-72 max-w-[80vw] h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col">
-            <div className="h-14 flex items-center justify-between px-3 border-b border-slate-200 dark:border-slate-800">
-              <span className="font-semibold">Menu</span>
+          <div className="app-sidebar w-72 max-w-[80vw] h-full shadow-xl flex flex-col">
+            <div className="h-14 flex items-center justify-between px-3 border-b border-[var(--border)]">
+              <BrandMark size={24} />
               <button
-                className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="p-2 rounded hover:bg-[var(--nav-item-hover-bg)]"
                 onClick={closeMobile}
                 aria-label="Close"
               >
                 <FiX />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-2 py-3">
+            <div
+              className="px-3 pt-2 pb-1 text-xs font-semibold text-[var(--muted)] truncate"
+              title={orgName}
+            >
+              {orgName}
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 py-2">
               {featuresLoading ? (
-                <div className="px-3 py-2 text-xs text-slate-500">Loading menu…</div>
+                <div className="px-3 py-2 text-xs opacity-70">Loading menu…</div>
               ) : (
                 <nav className="space-y-1" aria-label="Mobile primary">
                   {computedNav.map((item) => (

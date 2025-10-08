@@ -8,22 +8,39 @@ import {
 
 /* ---------------- helpers ---------------- */
 const today = () => new Date().toLocaleDateString("en-CA"); // local YYYY-MM-DD
-const clsInput = "input text-black dark:text-white placeholder-black/60 dark:placeholder-white/70";
 
-/* Stronger, high-contrast borders & dividers */
-const strongBorder = "border-2 border-black/20 dark:border-white/30";
-const strongRing = "ring-2 ring-black/10 dark:ring-white/20";
-const strongDivide = "divide-y-2 divide-black/10 dark:divide-white/20";
-
-/* Card shell with stronger borders */
-const card = `bg-white dark:bg-slate-900/40 rounded-2xl shadow-sm ${strongRing} ${strongBorder} p-5 md:p-7`;
-
-/* Table-like row container for lists */
-const rowShell = "grid items-center gap-3 p-3 md:p-4";
-const listShell = `rounded-xl overflow-hidden ${strongBorder}`;
-const listHead =
-  "bg-slate-50/80 dark:bg-slate-800/60 text-xs font-bold text-black dark:text-white grid gap-3 p-3 md:p-3.5";
-const listBody = `${strongDivide}`;
+/* ---------- Token-based UI (theme.css) ---------- */
+const ui = {
+  container: "p-4 md:p-6 lg:p-8 bg-[var(--bg)] text-[var(--fg)]",
+  sectionHeader: "flex items-center gap-2 pb-4 mb-5 border-b-2 border-[var(--border)]",
+  card: "bg-[var(--card)] rounded-2xl shadow p-5 md:p-7 border-2 border-[var(--border-strong)]",
+  icon: "h-5 w-5 text-[var(--fg)]",
+  label: "text-xs font-semibold",
+  note: "text-[11px] text-[var(--muted)]",
+  link:
+    "text-[var(--ring)] underline decoration-2 underline-offset-4 font-semibold " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] rounded",
+  btn:
+    "inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-[var(--border-strong)] " +
+    "bg-[var(--card)] hover:bg-[var(--kpi-bg)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  btnIcon:
+    "p-2 rounded hover:bg-[var(--kpi-bg)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  primary:
+    "inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent)] text-[var(--on-accent)] " +
+    "hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  input:
+    "h-10 rounded-lg border-2 px-3 outline-none " +
+    "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
+    "focus:ring-2 focus:ring-[var(--ring)] placeholder:text-[var(--muted)]",
+  listShell: "rounded-xl overflow-hidden border-2 border-[var(--border-strong)] bg-[var(--card)]",
+  listHead:
+    "bg-[var(--kpi-bg)] text-xs font-bold text-[var(--fg)] grid gap-3 p-3 md:p-3.5 border-b-2 border-[var(--border)]",
+  listBody: "divide-y-2 divide-[var(--border)]",
+  rowShell: "grid items-center gap-3 p-3 md:p-4",
+};
 
 /* normalize any backend list shape to an array */
 const toArray = (data) =>
@@ -442,14 +459,14 @@ export default function LoanApplications() {
 
   /* ---------------- render ---------------- */
   return (
-    <div className="p-4 md:p-6 lg:p-8 text-black dark:text-white">
+    <div className={ui.container}>
       {/* header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Add Loan</h1>
           <p className="text-sm">Follow the steps below. Start by selecting a borrower, then continue down the page.</p>
         </div>
-        <Link to="/loans" className="text-black underline text-sm font-semibold">
+        <Link to="/loans" className={ui.link}>
           Back to Loans
         </Link>
       </div>
@@ -457,17 +474,17 @@ export default function LoanApplications() {
       {/* single-column guided form */}
       <form onSubmit={onSubmit} className="max-w-6xl mx-auto space-y-5 md:space-y-6">
         {/* 1) Borrower & Product */}
-        <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Wallet className="h-5 w-5 text-black dark:text-white" />
+        <section className={ui.card}>
+          <div className={ui.sectionHeader}>
+            <Wallet className={ui.icon} />
             <h2 className="font-bold text-lg">1) Borrower & Product</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold">Borrower</label>
+              <label className={ui.label}>Borrower</label>
               <div className="flex gap-2">
                 <select
-                  className={`${clsInput} flex-1`}
+                  className={`${ui.input} flex-1`}
                   value={form.borrowerId}
                   onChange={(e) => setForm({ ...form, borrowerId: e.target.value })}
                   required
@@ -479,20 +496,16 @@ export default function LoanApplications() {
                     </option>
                   ))}
                 </select>
-                <Link
-                  target="_blank"
-                  to="/borrowers/add"
-                  className={`px-3 py-2 rounded-lg hover:bg-gray-50 inline-flex items-center gap-2 ${strongBorder}`}
-                >
+                <Link target="_blank" to="/borrowers/add" className={ui.btn}>
                   <PlusCircle className="h-4 w-4" /> Add
                 </Link>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold">Loan Product</label>
+              <label className={ui.label}>Loan Product</label>
               <select
-                className={clsInput}
+                className={ui.input}
                 value={form.productId}
                 onChange={(e) => onSelectProduct(e.target.value)}
                 required
@@ -507,25 +520,25 @@ export default function LoanApplications() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold">Loan # (auto)</label>
-              <input className={clsInput} value={loadingCounts ? "…" : form.loanNumber || "—"} readOnly />
+              <label className={ui.label}>Loan # (auto)</label>
+              <input className={ui.input} value={loadingCounts ? "…" : form.loanNumber || "—"} readOnly />
             </div>
           </div>
         </section>
 
         {/* 2) Loan Terms */}
-        <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Building2 className="h-5 w-5 text-black dark:text-white" />
+        <section className={ui.card}>
+          <div className={ui.sectionHeader}>
+            <Building2 className={ui.icon} />
             <h2 className="font-bold text-lg">2) Loan Terms</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold">Principal Amount</label>
+              <label className={ui.label}>Principal Amount</label>
               <input
                 type="text"
                 inputMode="numeric"
-                className={clsInput}
+                className={ui.input}
                 value={form.principal}
                 onChange={(e) => setForm({ ...form, principal: formatMoney(e.target.value) })}
                 placeholder="e.g. 1,000,000"
@@ -533,21 +546,21 @@ export default function LoanApplications() {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold flex items-center gap-1">
+              <label className={`${ui.label} flex items-center gap-1`}>
                 <Calendar className="h-3.5 w-3.5" /> Loan Release Date
               </label>
               <input
                 type="date"
-                className={clsInput}
+                className={ui.input}
                 value={form.releaseDate}
                 onChange={(e) => setForm({ ...form, releaseDate: e.target.value })}
                 required
               />
             </div>
             <div>
-              <label className="text-xs font-semibold">Collateral Type</label>
+              <label className={ui.label}>Collateral Type</label>
               <select
-                className={clsInput}
+                className={ui.input}
                 value={form.collateralType}
                 onChange={(e) => setForm({ ...form, collateralType: e.target.value })}
               >
@@ -559,7 +572,7 @@ export default function LoanApplications() {
               {form.collateralType === "Other" && (
                 <div className="mt-2">
                   <input
-                    className={clsInput}
+                    className={ui.input}
                     placeholder="Specify collateral"
                     value={form.collateralOther}
                     onChange={(e) => setForm({ ...form, collateralOther: e.target.value })}
@@ -569,22 +582,22 @@ export default function LoanApplications() {
               )}
             </div>
             <div>
-              <label className="text-xs font-semibold">Collateral Amount</label>
+              <label className={ui.label}>Collateral Amount</label>
               <input
                 type="text"
                 inputMode="numeric"
-                className={clsInput}
+                className={ui.input}
                 value={form.collateralAmount}
                 onChange={(e) => setForm({ ...form, collateralAmount: formatMoney(e.target.value) })}
                 placeholder="e.g. 500,000"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold">Loan Duration (months)</label>
+              <label className={ui.label}>Loan Duration (months)</label>
               <input
                 type="number"
                 inputMode="numeric"
-                className={clsInput}
+                className={ui.input}
                 value={form.durationMonths}
                 onChange={(e) => setForm({ ...form, durationMonths: e.target.value })}
                 required
@@ -594,16 +607,16 @@ export default function LoanApplications() {
         </section>
 
         {/* 3) Interest */}
-        <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Landmark className="h-5 w-5 text-black dark:text-white" />
+        <section className={ui.card}>
+          <div className={ui.sectionHeader}>
+            <Landmark className={ui.icon} />
             <h2 className="font-bold text-lg">3) Interest</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
-              <label className="text-xs font-semibold">Interest Method</label>
+              <label className={ui.label}>Interest Method</label>
               <select
-                className={clsInput}
+                className={ui.input}
                 value={form.interestMethod}
                 onChange={(e) => setForm({ ...form, interestMethod: e.target.value })}
               >
@@ -613,27 +626,27 @@ export default function LoanApplications() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold">Interest Rate (%)</label>
+              <label className={ui.label}>Interest Rate (%)</label>
               <input
                 type="number"
                 step="0.01"
                 inputMode="decimal"
-                className={clsInput}
+                className={ui.input}
                 value={form.interestRate}
                 onChange={(e) => setForm({ ...form, interestRate: e.target.value })}
                 placeholder={selectedProduct?.interestRate ? String(selectedProduct.interestRate) : "e.g. 3"}
                 readOnly={selectedProduct?.interestRate != null}
               />
               {selectedProduct?.interestRate != null && (
-                <p className="text-[11px] mt-1">Auto-picked from product.</p>
+                <p className={ui.note}>Auto-picked from product.</p>
               )}
             </div>
             <div>
-              <label className="text-xs font-semibold">Interest Amount (optional)</label>
+              <label className={ui.label}>Interest Amount (optional)</label>
               <input
                 type="text"
                 inputMode="numeric"
-                className={clsInput}
+                className={ui.input}
                 value={form.interestAmount}
                 onChange={(e) => setForm({ ...form, interestAmount: formatMoney(e.target.value) })}
                 placeholder="e.g. 120,000"
@@ -643,16 +656,16 @@ export default function LoanApplications() {
         </section>
 
         {/* 4) Repayments */}
-        <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Calendar className="h-5 w-5 text-black dark:text-white" />
+        <section className={ui.card}>
+          <div className={ui.sectionHeader}>
+            <Calendar className={ui.icon} />
             <h2 className="font-bold text-lg">4) Repayments</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
             <div>
-              <label className="text-xs font-semibold">Repayment Cycle</label>
+              <label className={ui.label}>Repayment Cycle</label>
               <select
-                className={clsInput}
+                className={ui.input}
                 value={form.repaymentCycle}
                 onChange={(e) => setForm({ ...form, repaymentCycle: e.target.value })}
               >
@@ -662,19 +675,19 @@ export default function LoanApplications() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold"># of Repayments</label>
+              <label className={ui.label}># of Repayments</label>
               <input
                 type="number"
                 inputMode="numeric"
-                className={clsInput}
+                className={ui.input}
                 value={form.numberOfRepayments}
                 onChange={(e) => setForm({ ...form, numberOfRepayments: e.target.value })}
               />
             </div>
             <div>
-              <label className="text-xs font-semibold">Loan Status (label)</label>
+              <label className={ui.label}>Loan Status (label)</label>
               <select
-                className={clsInput}
+                className={ui.input}
                 value={form.statusLabel}
                 onChange={(e) => setForm({ ...form, statusLabel: e.target.value })}
               >
@@ -682,23 +695,19 @@ export default function LoanApplications() {
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
-              <p className="text-[11px] mt-1">DB status stays “pending” on create.</p>
+              <p className={ui.note}>DB status stays “pending” on create.</p>
             </div>
           </div>
         </section>
 
         {/* 5) Fees */}
-        <section className={card}>
-          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
+        <section className={ui.card}>
+          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-[var(--border)]">
             <div className="flex items-center gap-2">
-              <FileUp className="h-5 w-5 text-black dark:text-white" />
+              <FileUp className={ui.icon} />
               <h2 className="font-bold text-lg">5) Loan Fees</h2>
             </div>
-            <button
-              type="button"
-              onClick={addFee}
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 ${strongBorder}`}
-            >
+            <button type="button" onClick={addFee} className={ui.btn}>
               <PlusCircle className="h-4 w-4" /> Add Fee
             </button>
           </div>
@@ -706,9 +715,9 @@ export default function LoanApplications() {
           {form.fees.length === 0 ? (
             <p className="text-sm">No fees added.</p>
           ) : (
-            <div className={listShell}>
+            <div className={ui.listShell}>
               {/* head */}
-              <div className={`${listHead} grid-cols-[2fr_1fr_1fr_1fr_40px] ${strongBorder}`}>
+              <div className={`${ui.listHead} grid-cols-[2fr_1fr_1fr_1fr_40px]`}>
                 <div>Fee Name</div>
                 <div>Amount</div>
                 <div>Way of payment</div>
@@ -716,11 +725,11 @@ export default function LoanApplications() {
                 <div className="text-right pr-1">—</div>
               </div>
               {/* body */}
-              <div className={listBody}>
+              <div className={ui.listBody}>
                 {form.fees.map((fee, i) => (
-                  <div key={i} className={`${rowShell} grid-cols-[2fr_1fr_1fr_1fr_40px]`}>
+                  <div key={i} className={`${ui.rowShell} grid-cols-[2fr_1fr_1fr_1fr_40px]`}>
                     <input
-                      className={clsInput}
+                      className={ui.input}
                       placeholder="Fee name (e.g. Processing)"
                       value={fee.name}
                       onChange={(e) => updateFee(i, { name: e.target.value })}
@@ -728,13 +737,13 @@ export default function LoanApplications() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      className={clsInput}
+                      className={ui.input}
                       placeholder="Amount"
                       value={fee.amount}
                       onChange={(e) => updateFee(i, { amount: e.target.value })}
                     />
                     <select
-                      className={clsInput}
+                      className={ui.input}
                       value={fee.paymentMode}
                       onChange={(e) => updateFee(i, { paymentMode: e.target.value })}
                     >
@@ -743,7 +752,7 @@ export default function LoanApplications() {
                       ))}
                     </select>
                     <select
-                      className={clsInput}
+                      className={ui.input}
                       value={fee.paid ? "paid" : "not_paid"}
                       onChange={(e) => updateFee(i, { paid: e.target.value === "paid" })}
                     >
@@ -753,7 +762,7 @@ export default function LoanApplications() {
                     <button
                       type="button"
                       onClick={() => removeFee(i)}
-                      className="p-2 rounded hover:bg-gray-50"
+                      className={ui.btnIcon}
                       aria-label="Remove fee"
                     >
                       <X className="h-4 w-4" />
@@ -767,17 +776,12 @@ export default function LoanApplications() {
         </section>
 
         {/* 6) Guarantors */}
-        <section className={card}>
-          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
+        <section className={ui.card}>
+          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-[var(--border)]">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-black dark:text-white" />
+              <ShieldCheck className={ui.icon} />
               <h2 className="font-bold text-lg">6) Guarantors</h2>
             </div>
-            <button
-              type="button"
-              onClick={addFee /* intentionally left as addFee? no – should NOT. This is a different button */ }
-              className="hidden"
-            />
             <button
               type="button"
               onClick={() =>
@@ -789,7 +793,7 @@ export default function LoanApplications() {
                   ],
                 }))
               }
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 ${strongBorder}`}
+              className={ui.btn}
             >
               <PlusCircle className="h-4 w-4" /> Add Guarantor
             </button>
@@ -800,7 +804,7 @@ export default function LoanApplications() {
           ) : (
             <div className="space-y-4">
               {form.guarantors.map((g, i) => (
-                <div key={i} className={`rounded-xl p-3 md:p-4 space-y-3 ${strongBorder}`}>
+                <div key={i} className="rounded-xl p-3 md:p-4 space-y-3 border-2 border-[var(--border-strong)] bg-[var(--card)]">
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-bold">Guarantor #{i + 1}</div>
                     <button
@@ -808,7 +812,7 @@ export default function LoanApplications() {
                       onClick={() =>
                         setForm((f) => ({ ...f, guarantors: f.guarantors.filter((_, idx) => idx !== i) }))
                       }
-                      className="p-1 rounded hover:bg-gray-50"
+                      className={ui.btnIcon}
                       aria-label="Remove guarantor"
                     >
                       <X className="h-4 w-4" />
@@ -817,9 +821,9 @@ export default function LoanApplications() {
 
                   <div className="grid gap-3">
                     <div>
-                      <label className="text-xs font-semibold">Source</label>
+                      <label className={ui.label}>Source</label>
                       <select
-                        className={clsInput}
+                        className={ui.input}
                         value={g.type}
                         onChange={(e) =>
                           setForm((f) => ({
@@ -837,9 +841,9 @@ export default function LoanApplications() {
 
                     {g.type === "existing" ? (
                       <div>
-                        <label className="text-xs font-semibold">Borrower</label>
+                        <label className={ui.label}>Borrower</label>
                         <select
-                          className={clsInput}
+                          className={ui.input}
                           value={g.borrowerId || ""}
                           onChange={(e) =>
                             setForm((f) => ({
@@ -861,7 +865,7 @@ export default function LoanApplications() {
                     ) : (
                       <div className="grid md:grid-cols-2 gap-3">
                         <input
-                          className={clsInput}
+                          className={ui.input}
                           placeholder="Full name"
                           value={g.name}
                           onChange={(e) =>
@@ -874,7 +878,7 @@ export default function LoanApplications() {
                           }
                         />
                         <input
-                          className={clsInput}
+                          className={ui.input}
                           placeholder="Occupation"
                           value={g.occupation}
                           onChange={(e) =>
@@ -887,7 +891,7 @@ export default function LoanApplications() {
                           }
                         />
                         <input
-                          className={clsInput}
+                          className={ui.input}
                           placeholder="Residence"
                           value={g.residence}
                           onChange={(e) =>
@@ -900,7 +904,7 @@ export default function LoanApplications() {
                           }
                         />
                         <input
-                          className={clsInput}
+                          className={ui.input}
                           placeholder="Contacts"
                           value={g.contacts}
                           onChange={(e) =>
@@ -913,7 +917,7 @@ export default function LoanApplications() {
                           }
                         />
                         <input
-                          className={clsInput}
+                          className={ui.input}
                           placeholder="Verification (ID #, etc.)"
                           value={g.verification}
                           onChange={(e) =>
@@ -935,10 +939,10 @@ export default function LoanApplications() {
         </section>
 
         {/* 7) Attachments */}
-        <section className={card}>
-          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
+        <section className={ui.card}>
+          <div className="flex items-center justify-between pb-4 mb-5 border-b-2 border-[var(--border)]">
             <div className="flex items-center gap-2">
-              <Upload className="h-5 w-5 text-black dark:text-white" />
+              <Upload className={ui.icon} />
               <h2 className="font-bold text-lg">7) Attachments</h2>
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -961,7 +965,7 @@ export default function LoanApplications() {
                   key={lbl}
                   type="button"
                   onClick={() => addAttachment(lbl)}
-                  className={`text-xs px-2 py-1 rounded hover:bg-gray-50 ${strongBorder}`}
+                  className={`${ui.btn} text-xs px-2 py-1`}
                 >
                   + {lbl.replace(/Borrower: |Guarantor: |Spouse: /g, "")}
                 </button>
@@ -972,20 +976,20 @@ export default function LoanApplications() {
           {form.attachmentsMeta.length === 0 ? (
             <p className="text-sm">No files attached.</p>
           ) : (
-            <div className={listShell}>
+            <div className={ui.listShell}>
               {/* head */}
-              <div className={`${listHead} grid-cols-[2fr_1fr_40px] ${strongBorder}`}>
+              <div className={`${ui.listHead} grid-cols-[2fr_1fr_40px]`}>
                 <div>Type & Note</div>
                 <div>File</div>
                 <div className="text-right pr-1">—</div>
               </div>
               {/* body */}
-              <div className={listBody}>
+              <div className={ui.listBody}>
                 {form.attachmentsMeta.map((a, i) => (
-                  <div key={a.fileKey} className={`${rowShell} grid-cols-[2fr_1fr_40px]`}>
+                  <div key={a.fileKey} className={`${ui.rowShell} grid-cols-[2fr_1fr_40px]`}>
                     <div className="grid gap-2">
                       <input
-                        className={clsInput}
+                        className={ui.input}
                         value={a.type}
                         onChange={(e) =>
                           setForm((f) => ({
@@ -997,7 +1001,7 @@ export default function LoanApplications() {
                         }
                       />
                       <input
-                        className={clsInput}
+                        className={ui.input}
                         placeholder="Note (optional)"
                         value={a.note}
                         onChange={(e) =>
@@ -1013,13 +1017,13 @@ export default function LoanApplications() {
                     <input
                       type="file"
                       accept="application/pdf,image/*"
-                      className={clsInput}
+                      className={ui.input}
                       onChange={(e) => setFile(a.fileKey, e.target.files?.[0])}
                     />
                     <button
                       type="button"
                       onClick={() => removeAttachment(i)}
-                      className="p-2 rounded hover:bg-gray-50"
+                      className={ui.btnIcon}
                       aria-label="Remove attachment"
                     >
                       <X className="h-4 w-4" />
@@ -1033,16 +1037,16 @@ export default function LoanApplications() {
         </section>
 
         {/* 8) Disbursement */}
-        <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <Wallet className="h-5 w-5 text-black dark:text-white" />
+        <section className={ui.card}>
+          <div className={ui.sectionHeader}>
+            <Wallet className={ui.icon} />
             <h2 className="font-bold text-lg">8) Disbursement</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold">Method</label>
+              <label className={ui.label}>Method</label>
               <select
-                className={clsInput}
+                className={ui.input}
                 value={form.disbursementMethod}
                 onChange={(e) => {
                   const method = e.target.value;
@@ -1065,9 +1069,9 @@ export default function LoanApplications() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold">Reference (optional)</label>
+              <label className={ui.label}>Reference (optional)</label>
               <input
-                className={clsInput}
+                className={ui.input}
                 value={form.disbursementReference}
                 onChange={(e) => setForm({ ...form, disbursementReference: e.target.value })}
                 placeholder="Txn ref / slip #"
@@ -1076,10 +1080,10 @@ export default function LoanApplications() {
 
             {form.disbursementMethod === "bank" && (
               <div className="md:col-span-2">
-                <label className="text-xs font-semibold">Bank</label>
+                <label className={ui.label}>Bank</label>
                 <div className="flex gap-2">
                   <select
-                    className={`${clsInput} flex-1`}
+                    className={`${ui.input} flex-1`}
                     value={form.disbursementBankId}
                     onChange={(e) => setForm({ ...form, disbursementBankId: e.target.value })}
                   >
@@ -1088,23 +1092,15 @@ export default function LoanApplications() {
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
-                  <Link
-                    to="/banks/add"
-                    target="_blank"
-                    className={`px-3 py-2 rounded-lg hover:bg-gray-50 inline-flex items-center gap-2 ${strongBorder}`}
-                  >
+                  <Link to="/banks/add" target="_blank" className={ui.btn}>
                     <PlusCircle className="h-4 w-4" /> Add
                   </Link>
-                  <Link
-                    to="/banks"
-                    target="_blank"
-                    className={`px-3 py-2 rounded-lg hover:bg-gray-50 ${strongBorder}`}
-                  >
+                  <Link to="/banks" target="_blank" className={ui.btn}>
                     Manage
                   </Link>
                 </div>
                 {banks.length === 0 && (
-                  <p className="text-[11px] mt-1">
+                  <p className={ui.note}>
                     No banks found. Use “Add” to register banks; this list is tenant-scoped via your API.
                   </p>
                 )}
@@ -1114,9 +1110,9 @@ export default function LoanApplications() {
             {form.disbursementMethod === "mobile_money" && (
               <>
                 <div>
-                  <label className="text-xs font-semibold">Provider</label>
+                  <label className={ui.label}>Provider</label>
                   <select
-                    className={clsInput}
+                    className={ui.input}
                     value={form.mobileProvider}
                     onChange={(e) => setForm({ ...form, mobileProvider: e.target.value })}
                   >
@@ -1128,7 +1124,7 @@ export default function LoanApplications() {
                   {form.mobileProvider === "other" && (
                     <div className="mt-2">
                       <input
-                        className={clsInput}
+                        className={ui.input}
                         placeholder="Specify provider"
                         value={form.mobileProviderOther}
                         onChange={(e) => setForm({ ...form, mobileProviderOther: e.target.value })}
@@ -1138,9 +1134,9 @@ export default function LoanApplications() {
                   )}
                 </div>
                 <div>
-                  <label className="text-xs font-semibold">Phone Number</label>
+                  <label className={ui.label}>Phone Number</label>
                   <input
-                    className={clsInput}
+                    className={ui.input}
                     placeholder="e.g. 07xxxxxxxx or +2557xxxxxxxx"
                     value={form.mobilePhone}
                     onChange={(e) => setForm({ ...form, mobilePhone: e.target.value })}
@@ -1152,9 +1148,9 @@ export default function LoanApplications() {
             {form.disbursementMethod === "other" && (
               <>
                 <div>
-                  <label className="text-xs font-semibold">Specify method</label>
+                  <label className={ui.label}>Specify method</label>
                   <input
-                    className={clsInput}
+                    className={ui.input}
                     placeholder="e.g., cheque, voucher, petty cash"
                     value={form.disbursementOther}
                     onChange={(e) => setForm({ ...form, disbursementOther: e.target.value })}
@@ -1162,9 +1158,9 @@ export default function LoanApplications() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold">Details (optional)</label>
+                  <label className={ui.label}>Details (optional)</label>
                   <input
-                    className={clsInput}
+                    className={ui.input}
                     placeholder="Instructions / place of collection"
                     value={form.disbursementOtherDetails}
                     onChange={(e) => setForm({ ...form, disbursementOtherDetails: e.target.value })}
@@ -1176,16 +1172,16 @@ export default function LoanApplications() {
         </section>
 
         {/* 9) Marital status & Spouse */}
-        <section className={card}>
-          <div className="flex items-center gap-2 pb-4 mb-5 border-b-2 border-black/20 dark:border-white/20">
-            <User className="h-5 w-5 text-black dark:text-white" />
+        <section className={ui.card}>
+          <div className={ui.sectionHeader}>
+            <User className={ui.icon} />
             <h2 className="font-bold text-lg">9) Marital Status & Spouse</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold">Marital Status</label>
+              <label className={ui.label}>Marital Status</label>
               <select
-                className={clsInput}
+                className={ui.input}
                 value={form.maritalStatus}
                 onChange={(e) => setForm({ ...form, maritalStatus: e.target.value })}
               >
@@ -1198,37 +1194,37 @@ export default function LoanApplications() {
             {form.maritalStatus === "married" && (
               <>
                 <input
-                  className={clsInput}
+                  className={ui.input}
                   placeholder="Spouse Name"
                   value={form.spouseName}
                   onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
                 />
                 <input
-                  className={clsInput}
+                  className={ui.input}
                   placeholder="Spouse Occupation"
                   value={form.spouseOccupation}
                   onChange={(e) => setForm({ ...form, spouseOccupation: e.target.value })}
                 />
                 <input
-                  className={clsInput}
+                  className={ui.input}
                   placeholder="Spouse ID Number"
                   value={form.spouseIdNumber}
                   onChange={(e) => setForm({ ...form, spouseIdNumber: e.target.value })}
                 />
                 <input
-                  className={clsInput}
+                  className={ui.input}
                   placeholder="Spouse Phone"
                   value={form.spousePhone}
                   onChange={(e) => setForm({ ...form, spousePhone: e.target.value })}
                 />
 
-                <div className={`md:col-span-2 rounded-xl p-3 ${strongBorder}`}>
+                <div className="md:col-span-2 rounded-xl p-3 border-2 border-[var(--border-strong)] bg-[var(--card)]">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm font-bold">Spouse Consent Declaration (signed)</div>
                     <button
                       type="button"
                       onClick={ensureSpouseConsentAttachment}
-                      className={`text-xs px-2 py-1 rounded hover:bg-gray-50 ${strongBorder}`}
+                      className={`${ui.btn} text-xs px-2 py-1`}
                     >
                       + Add consent upload
                     </button>
@@ -1236,15 +1232,15 @@ export default function LoanApplications() {
                   {(() => {
                     const idx = findSpouseConsentMetaIndex();
                     if (idx === -1) {
-                      return <p className="text-xs">Click “Add consent upload” to attach the signed declaration.</p>;
+                      return <p className={ui.note}>Click “Add consent upload” to attach the signed declaration.</p>;
                     }
                     const meta = form.attachmentsMeta[idx];
                     return (
-                      <div className={`${rowShell} grid-cols-[2fr_1fr_40px] p-0`}>
+                      <div className={`${ui.rowShell} grid-cols-[2fr_1fr_40px] p-0`}>
                         <div className="grid gap-2 p-3">
-                          <input className={clsInput} value={meta.type} readOnly />
+                          <input className={ui.input} value={meta.type} readOnly />
                           <input
-                            className={clsInput}
+                            className={ui.input}
                             placeholder="Note (optional)"
                             value={meta.note}
                             onChange={(e) => updateAttachment(idx, { note: e.target.value })}
@@ -1254,7 +1250,7 @@ export default function LoanApplications() {
                           <input
                             type="file"
                             accept="application/pdf,image/*"
-                            className={clsInput}
+                            className={ui.input}
                             onChange={(e) => setFile(meta.fileKey, e.target.files?.[0])}
                           />
                         </div>
@@ -1262,7 +1258,7 @@ export default function LoanApplications() {
                           <button
                             type="button"
                             onClick={() => removeAttachment(idx)}
-                            className="p-2 rounded hover:bg-gray-50"
+                            className={ui.btnIcon}
                             aria-label="Remove spouse consent"
                           >
                             <X className="h-4 w-4" />
@@ -1271,7 +1267,7 @@ export default function LoanApplications() {
                       </div>
                     );
                   })()}
-                  <p className="text-[11px] mt-2">This replaces the old text field. Upload the signed consent form here.</p>
+                  <p className={ui.note}>This replaces the old text field. Upload the signed consent form here.</p>
                 </div>
               </>
             )}
@@ -1279,16 +1275,12 @@ export default function LoanApplications() {
         </section>
 
         {/* sticky bottom actions */}
-        <div className="sticky bottom-0 inset-x-0 z-20 bg-white/90 backdrop-blur border-t-2 border-black/20">
+        <div className="sticky bottom-0 inset-x-0 z-20 backdrop-blur border-t-2 border-[var(--border)] bg-[var(--card)]">
           <div className="max-w-6xl mx-auto px-4 py-3 flex justify-end gap-3">
-            <Link to="/loans" className={`px-4 py-2 rounded-xl hover:bg-gray-50 ${strongBorder}`}>
+            <Link to="/loans" className={ui.btn}>
               Cancel
             </Link>
-            <button
-              disabled={submitting}
-              type="submit"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-            >
+            <button disabled={submitting} type="submit" className={ui.primary}>
               <Save className="h-4 w-4" />
               {submitting ? "Submitting…" : "Submit"}
             </button>

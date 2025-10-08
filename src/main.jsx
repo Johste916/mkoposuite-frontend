@@ -4,35 +4,43 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
-import "./styles/tailwind.css";
+import ThemeProvider from "./providers/ThemeProvider";
 
-// Optional impersonation bootstrap: if ?token=... present, store it then clean URL.
-// Harmless if unused; does not affect normal sign-in flows.
+// (If you import vendor CSS like bootstrap/flowbite, import them first)
+// import "bootstrap/dist/css/bootstrap.css";
+
+import "./styles/tailwind.css";
+import "./styles/theme.css"; // ← keep this LAST so tokens override vendor styles
+
+// Optional impersonation bootstrap
 (function bootstrapImpersonation() {
   try {
     const url = new URL(window.location.href);
     const token = url.searchParams.get("token");
     if (token) {
       localStorage.setItem("token", token);
-      localStorage.setItem("authToken", token); // common alias
+      localStorage.setItem("authToken", token);
       url.searchParams.delete("token");
       window.history.replaceState({}, "", url.toString());
     }
   } catch {}
 })();
 
-// Use Vite's BASE_URL if set (falls back to "/")
 const basename = (import.meta?.env?.BASE_URL ?? "/") || "/";
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("Missing <div id='root'> in index.html");
 
-createRoot(document.getElementById("root")).render(
+createRoot(rootEl).render(
   <React.StrictMode>
-    <BrowserRouter
-      basename={basename}
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-    >
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AuthProvider>
+          {/* Bold skin + legacy neutralizer scopes (see theme.css section below) */}
+          <div className="app-theme-bold legacy-compat">
+            <App />
+          </div>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   </React.StrictMode>
 );

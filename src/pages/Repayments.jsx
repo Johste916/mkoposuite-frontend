@@ -59,7 +59,6 @@ export default function Repayments() {
 
   // filters
   const [branches, setBranches] = useState([]);
-  the
   const [officers, setOfficers] = useState([]);
   const [branchId, setBranchId] = useState("");
   const [officerId, setOfficerId] = useState("");

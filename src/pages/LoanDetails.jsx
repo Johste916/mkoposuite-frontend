@@ -14,22 +14,59 @@ import {
   downloadSchedulePDF,
 } from "../utils/loanSchedule";
 
-/* ---------- status & UI helpers ---------- */
-const statusColors = {
-  pending: "bg-yellow-100 text-yellow-900 ring-yellow-300",
-  approved: "bg-blue-100 text-blue-900 ring-blue-300",
-  rejected: "bg-gray-200 text-gray-900 ring-gray-300",
-  disbursed: "bg-indigo-100 text-indigo-900 ring-indigo-300",
-  active: "bg-emerald-100 text-emerald-900 ring-emerald-300",
-  closed: "bg-slate-200 text-slate-900 ring-slate-300",
+/* ---------- token-aware UI ---------- */
+const ui = {
+  page: "w-full px-4 md:px-6 py-6 space-y-6 bg-[var(--bg)] text-[var(--fg)]",
+  h1: "text-4xl font-extrabold tracking-tight",
+  sub: "text-sm text-[var(--muted)]",
+  card:
+    "card rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow",
+  cardHead:
+    "px-6 py-4 border-b-2 border-[var(--border)] bg-[var(--table-head-bg)] flex items-center justify-between rounded-t-2xl",
+  cardBody: "px-6 py-6",
+  cardBodyDense: "px-6 py-4",
+  label: "text-[12px] uppercase tracking-wide text-[var(--muted)] font-semibold",
+  actionLink:
+    "inline-flex items-center gap-1 font-extrabold text-[var(--primary)] underline underline-offset-4 decoration-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  chip:
+    "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase ring-2 ring-[var(--border)] bg-[var(--badge-bg)] text-[var(--badge-fg)]",
+  btn:
+    "inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-semibold " +
+    "border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
+  primary:
+    "inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-semibold " +
+    "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-60",
+  input:
+    "w-full rounded-lg border-2 px-3 py-2 outline-none " +
+    "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
+    "placeholder:text-[var(--input-placeholder)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
+  tableWrap:
+    "overflow-x-auto rounded-xl border-2 border-[var(--border-strong)] bg-[var(--card)]",
+  th:
+    "bg-[var(--table-head-bg)] text-left text-[12px] uppercase tracking-wide font-semibold " +
+    "px-3 py-2 border border-[var(--border)] text-[var(--fg)]/90",
+  td: "px-3 py-2 border border-[var(--border)] text-sm text-[var(--fg)]",
 };
 
-const chip =
-  "inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase ring-2 ring-inset";
+/* Section shell */
+const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
+  <div className={ui.card}>
+    {(title || subtitle || right) && (
+      <div className={ui.cardHead}>
+        <div className="min-w-0">
+          {title && <h3 className="text-xl md:text-2xl font-extrabold tracking-tight">{title}</h3>}
+          {subtitle && <p className={ui.sub}>{subtitle}</p>}
+        </div>
+        {right}
+      </div>
+    )}
+    <div className={dense ? ui.cardBodyDense : ui.cardBody}>{children}</div>
+  </div>
+);
 
-/* highly-visible link */
-const actionLink =
-  "inline-flex items-center gap-1 text-blue-700 font-bold underline underline-offset-4 decoration-2 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded";
+const Label = ({ children }) => <div className={ui.label}>{children}</div>;
 
 /* role helpers */
 const roleOf = () => {
@@ -55,33 +92,6 @@ function deriveStageFromStatus(status) {
   return "";
 }
 
-/* -------------- light UI helpers (no external deps) -------------- */
-const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
-  <div className="bg-white border-2 border-slate-400 rounded-2xl shadow-lg w-full">
-    <div
-      className={`px-6 ${
-        dense ? "py-3" : "py-4"
-      } border-b-2 border-slate-300 bg-slate-100 flex items-center justify-between`}
-    >
-      <div className="min-w-0">
-        {title && (
-          <h3 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">
-            {title}
-          </h3>
-        )}
-        {subtitle && <p className="text-sm text-slate-800 mt-0.5">{subtitle}</p>}
-      </div>
-      {right}
-    </div>
-    <div className={`px-6 ${dense ? "py-4" : "py-6"} text-[15px] text-slate-900`}>{children}</div>
-  </div>
-);
-
-const Label = ({ children }) => (
-  <div className="text-[12px] uppercase tracking-wide text-slate-900 font-semibold">{children}</div>
-);
-
-/* --------------------------- component --------------------------- */
 export default function LoanDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -140,7 +150,7 @@ export default function LoanDetails() {
   const [savingReschedule, setSavingReschedule] = useState(false);
 
   const currency = loan?.currency || "TZS";
-  const statusBadge = statusColors[loan?.status] || "bg-slate-100 text-slate-900 ring-slate-300";
+  const statusBadge = ui.chip; // neutral, tokenized badge
 
   const role = roleOf();
   const canBM = isBM(role);
@@ -190,10 +200,7 @@ export default function LoanDetails() {
         api
           .get(`/comments/loan/${id}`)
           .then((r) => setComments(Array.isArray(r.data) ? r.data : []))
-          .catch((e) => {
-            console.warn("Comments fetch failed:", e?.response?.data || e?.message);
-            setComments([]);
-          })
+          .catch(() => setComments([]))
           .finally(() => setLoadingComments(false)),
       ];
 
@@ -514,24 +521,20 @@ export default function LoanDetails() {
   const canPostRepayment = loan?.status !== "closed" && Number(outstanding || 0) > 0;
 
   /* ---------- render ---------- */
-  if (loading) return <div className="w-full px-6 py-6">Loading loan…</div>;
-  if (errs) return <div className="w-full px-6 py-6 text-red-700 font-semibold">{errs}</div>;
-  if (!loan) return <div className="w-full px-6 py-6">Loan not found.</div>;
+  if (loading) return <div className="w-full px-6 py-6 text-[var(--fg)]">Loading loan…</div>;
+  if (errs) return <div className="w-full px-6 py-6 text-[var(--fg)]">{errs}</div>;
+  if (!loan) return <div className="w-full px-6 py-6 text-[var(--fg)]">Loan not found.</div>;
 
   return (
-    <div className="w-full px-4 md:px-6 py-6 space-y-6">
+    <div className={ui.page}>
       {/* HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Loan Details</h2>
-          <span className={`${chip} ${statusBadge}`}>{loan.status}</span>
-          {workflowStage && (
-            <span className={`${chip} bg-indigo-50 text-indigo-900 ring-indigo-300`}>
-              Stage: {workflowStage.replaceAll("_", " ")}
-            </span>
-          )}
+          <h2 className={ui.h1}>Loan Details</h2>
+          <span className={statusBadge}>{loan.status}</span>
+          {workflowStage && <span className={ui.chip}>Stage: {workflowStage.replaceAll("_", " ")}</span>}
         </div>
-        <button onClick={() => navigate(-1)} className={actionLink}>
+        <button onClick={() => navigate(-1)} className={ui.actionLink}>
           &larr; Back
         </button>
       </div>
@@ -542,7 +545,7 @@ export default function LoanDetails() {
           <div className="col-span-2 min-w-0">
             <Label>Borrower</Label>
             <Link
-              className={`${actionLink} text-lg md:text-xl truncate`}
+              className={`${ui.actionLink} text-lg md:text-xl truncate`}
               to={`/borrowers/${loan.borrowerId}`}
               title={loan.Borrower?.name || loan.borrowerName || "N/A"}
             >
@@ -559,7 +562,7 @@ export default function LoanDetails() {
             <Label>Interest</Label>
             <div className="text-base">
               <span className="font-bold">{loan.interestRate}%</span>{" "}
-              <span className="text-slate-900">· {loan.interestMethod || "—"}</span>
+              <span>· {loan.interestMethod || "—"}</span>
             </div>
           </div>
 
@@ -606,7 +609,7 @@ export default function LoanDetails() {
                   {product.name}
                   {product.code ? ` (${product.code})` : ""}
                 </span>
-                <div className="text-slate-900 text-sm mt-0.5">
+                <div className="text-sm mt-0.5">
                   Defaults: {product.interestMethod} @{" "}
                   {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
                   {fmtMoney(product.minPrincipal, currency)} –{" "}
@@ -630,11 +633,9 @@ export default function LoanDetails() {
           ].map(([label, val]) => (
             <div
               key={label}
-              className="rounded-xl border-2 border-slate-400 p-3 bg-white shadow-sm"
+              className="rounded-xl border-2 border-[var(--border-strong)] p-3 bg-[var(--card)] shadow-sm"
             >
-              <div className="text-[11px] uppercase tracking-wide text-slate-900 font-semibold">
-                {label}
-              </div>
+              <div className={ui.label}>{label}</div>
               <div className="font-bold text-lg">
                 {scheduleReady ? fmtMoney(val, currency) : "—"}
               </div>
@@ -649,29 +650,29 @@ export default function LoanDetails() {
           {showLOTB && (
             <>
               <h3 className="text-lg font-extrabold">Changes Requested</h3>
-              <p className="text-sm text-slate-900">
+              <p className="text-sm">
                 Update the application and attach missing documents, then{" "}
                 <strong>Resubmit</strong>. Add a short note if helpful.
               </p>
-              <label className="block text-xs text-slate-900 font-semibold">Comment (optional)</label>
+              <label className="block text-xs font-semibold">Comment (optional)</label>
               <textarea
                 value={reviewComment}
                 onChange={(e) => setReviewComment(e.target.value)}
-                className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full min-h-[44px]"
+                className={`${ui.input} min-h-[44px]`}
                 placeholder="What did you fix / add?"
               />
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => workflowAction("resubmit")}
                   disabled={acting}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60 font-semibold shadow-sm"
+                  className={ui.primary}
                   title="Send for review again"
                 >
                   {acting ? "Submitting…" : "Resubmit for Review"}
                 </button>
                 <Link
                   to="/loans/applications"
-                  className="px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
+                  className={ui.btn}
                   title="Open applications to edit details/attachments"
                 >
                   Edit Application
@@ -690,25 +691,25 @@ export default function LoanDetails() {
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-slate-900 font-semibold">
+                  <label className="block text-xs font-semibold">
                     Suggested Principal
                   </label>
                   <input
                     type="number"
-                    className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                    className={ui.input}
                     value={suggestedAmount}
                     onChange={(e) => setSuggestedAmount(e.target.value)}
                     min="0"
                     step="0.01"
                   />
-                  <p className="text-[11px] text-slate-700 mt-1">
+                  <p className="text-[11px] text-[var(--muted)] mt-1">
                     Save a suggestion or approve with a different amount.
                   </p>
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-900 font-semibold">Comment</label>
+                  <label className="block text-xs font-semibold">Comment</label>
                   <textarea
-                    className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full min-h-[44px]"
+                    className={`${ui.input} min-h-[44px]`}
                     placeholder="Why approving / changes / rejection?"
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
@@ -724,14 +725,14 @@ export default function LoanDetails() {
                     })
                   }
                   disabled={acting}
-                  className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60 font-semibold shadow-sm"
+                  className={ui.primary}
                 >
                   {acting ? "Working…" : "Approve"}
                 </button>
                 <button
                   onClick={() => workflowAction("request_changes")}
                   disabled={acting}
-                  className="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-60 font-semibold shadow-sm"
+                  className={ui.btn}
                   title="Send back to Loan Officer with requested changes"
                 >
                   {acting ? "Working…" : "Request Changes"}
@@ -739,15 +740,11 @@ export default function LoanDetails() {
                 <button
                   onClick={() => workflowAction("reject")}
                   disabled={acting}
-                  className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 disabled:opacity-60 font-semibold shadow-sm"
+                  className={ui.btn}
                 >
                   {acting ? "Working…" : "Reject"}
                 </button>
-                <button
-                  onClick={saveSuggestion}
-                  disabled={acting}
-                  className="px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 disabled:opacity-60 font-semibold"
-                >
+                <button onClick={saveSuggestion} disabled={acting} className={ui.btn}>
                   {acting ? "Saving…" : "Save Suggestion"}
                 </button>
               </div>
@@ -756,13 +753,8 @@ export default function LoanDetails() {
 
           {showDisburse && (
             <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-900">
-                This loan is approved. Proceed to disbursement to finalize payout.
-              </p>
-              <Link
-                to={`/loans/${id}/disburse`}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-semibold shadow-sm"
-              >
+              <p className="text-sm">This loan is approved. Proceed to disbursement to finalize payout.</p>
+              <Link to={`/loans/${id}/disburse`} className={ui.primary}>
                 Disburse
               </Link>
             </div>
@@ -772,72 +764,54 @@ export default function LoanDetails() {
 
       {/* QUICK ACTIONS */}
       <div className="flex flex-wrap gap-3">
-        <Link
-          to={`/loans`}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
-        >
+        <Link to={`/loans`} className={ui.btn}>
           Back to Loans
         </Link>
 
-        <button
-          onClick={() => setOpenSchedule(true)}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
-        >
+        <button onClick={() => setOpenSchedule(true)} className={ui.btn}>
           View Schedule
         </button>
 
         <button
           onClick={() => downloadScheduleCSV({ loan, schedule: schedule || [], currency })}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
+          className={ui.btn}
           disabled={!Array.isArray(schedule) || !schedule.length}
         >
           Export CSV
         </button>
         <button
           onClick={() => downloadSchedulePDF({ loan, schedule: schedule || [], currency })}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
+          className={ui.btn}
           disabled={!Array.isArray(schedule) || !schedule.length}
         >
           Export PDF
         </button>
 
         {canPostRepayment && (
-          <button
-            onClick={() => setOpenRepay(true)}
-            className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
-          >
+          <button onClick={() => setOpenRepay(true)} className={ui.btn}>
             Post Repayment
           </button>
         )}
 
         {canEdit && (
           <>
-            <button
-              onClick={openEditModal}
-              className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
-            >
+            <button onClick={openEditModal} className={ui.btn}>
               Edit Loan
             </button>
-            <button
-              onClick={openRescheduleModal}
-              className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
-            >
+            <button onClick={openRescheduleModal} className={ui.btn}>
               Reschedule
             </button>
           </>
         )}
 
-        <button
-          onClick={reissueLoan}
-          className="px-3 md:px-4 py-2 rounded-lg border-2 border-slate-400 hover:bg-slate-50 font-semibold"
-        >
+        <button onClick={reissueLoan} className={ui.btn}>
           Reissue
         </button>
 
         {canDelete && (
           <button
             onClick={deleteLoan}
-            className="bg-red-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-red-700 font-semibold shadow-sm"
+            className="px-3 md:px-4 py-2 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 shadow-sm"
           >
             Delete
           </button>
@@ -846,7 +820,7 @@ export default function LoanDetails() {
         {loan.status !== "closed" && (
           <button
             onClick={closeLoan}
-            className="bg-red-50 text-red-700 px-3 md:px-4 py-2 rounded-lg border-2 border-red-300 hover:bg-red-100 font-semibold"
+            className={ui.btn}
           >
             Close Loan
           </button>
@@ -857,7 +831,7 @@ export default function LoanDetails() {
       <SectionCard
         title="Repayments"
         right={
-          <div className="text-sm text-slate-900 font-semibold">
+          <div className="text-sm font-semibold">
             {repayTotals.count} record{repayTotals.count === 1 ? "" : "s"} · Total{" "}
             <span className="font-extrabold">{fmtMoney(repayTotals.sum, currency)}</span>
           </div>
@@ -866,17 +840,14 @@ export default function LoanDetails() {
         {loadingRepayments ? (
           <p>Loading repayments…</p>
         ) : repayments.length === 0 ? (
-          <div className="text-sm text-slate-900">No repayments found.</div>
+          <div className="text-sm">No repayments found.</div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border-2 border-slate-400">
+          <div className={ui.tableWrap}>
             <table className="min-w-full table-fixed">
-              <thead className="bg-slate-100 sticky top-0 z-10">
-                <tr className="text-left">
+              <thead>
+                <tr className="text-left sticky top-0 z-10">
                   {["#", "Date", "Amount", "Method", "Notes"].map((h) => (
-                    <th
-                      key={h}
-                      className="px-3 py-3 border border-slate-400 font-bold text-slate-900"
-                    >
+                    <th key={h} className={ui.th}>
                       {h}
                     </th>
                   ))}
@@ -884,32 +855,35 @@ export default function LoanDetails() {
               </thead>
               <tbody>
                 {repayments.map((r, i) => (
-                  <tr key={r.id || i} className={i % 2 ? "bg-slate-50" : "bg-white"}>
-                    <td className="px-3 py-2 border border-slate-300 whitespace-nowrap">{i + 1}</td>
-                    <td className="px-3 py-2 border border-slate-300 whitespace-nowrap">
-                      {asDate(r.date)}
-                    </td>
-                    <td className="px-3 py-2 border border-slate-300 text-right whitespace-nowrap">
+                  <tr
+                    key={r.id || i}
+                    className={`${
+                      i % 2 === 0 ? "bg-[var(--table-row-even)]" : "bg-[var(--table-row-odd)]"
+                    } hover:bg-[var(--chip-soft)] transition-colors`}
+                  >
+                    <td className={ui.td}>{i + 1}</td>
+                    <td className={ui.td}>{asDate(r.date)}</td>
+                    <td className={`${ui.td} text-right tabular-nums`}>
                       {fmtMoney(r.amount, currency)}
                     </td>
-                    <td className="px-3 py-2 border border-slate-300 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-900 ring-1 ring-slate-300">
+                    <td className={ui.td}>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--badge-bg)] text-[var(--badge-fg)] ring-1 ring-[var(--border)]">
                         {r.method || "—"}
                       </span>
                     </td>
-                    <td className="px-3 py-2 border border-slate-300 break-words">{r.notes || "—"}</td>
+                    <td className={`${ui.td} break-words`}>{r.notes || "—"}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-100">
-                  <td className="px-3 py-3 border-t-2 border-slate-400 text-sm font-bold" colSpan={2}>
+                <tr>
+                  <td className={`${ui.td} font-bold`} colSpan={2}>
                     Total
                   </td>
-                  <td className="px-3 py-3 border-t-2 border-slate-400 text-right text-base font-extrabold">
+                  <td className={`${ui.td} text-right text-base font-extrabold`}>
                     {fmtMoney(repayTotals.sum, currency)}
                   </td>
-                  <td className="px-3 py-3 border-t-2 border-slate-400" colSpan={2}></td>
+                  <td className={ui.td} colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>
@@ -922,17 +896,17 @@ export default function LoanDetails() {
         {loadingComments ? (
           <p>Loading comments…</p>
         ) : comments.length === 0 ? (
-          <div className="text-sm text-slate-900">No comments yet.</div>
+          <div className="text-sm">No comments yet.</div>
         ) : (
           <div className="space-y-3 max-h-72 overflow-auto pr-1">
             {comments.map((c, i) => (
               <div key={c.id || i} className="flex gap-3">
-                <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-900 flex items-center justify-center text-xs font-extrabold select-none">
+                <div className="h-8 w-8 rounded-full bg-[var(--badge-bg)] text-[var(--badge-fg)] flex items-center justify-center text-xs font-extrabold select-none">
                   {(c.author?.name || "U").slice(0, 1).toUpperCase()}
                 </div>
-                <div className="flex-1 border-b-2 border-slate-300 pb-2">
-                  <div className="flex justify-between text-xs text-slate-700">
-                    <span className="font-bold text-slate-900">{c.author?.name || "User"}</span>
+                <div className="flex-1 border-b-2 border-[var(--border)] pb-2">
+                  <div className="flex justify-between text-xs text-[var(--muted)]">
+                    <span className="font-bold text-[var(--fg)]">{c.author?.name || "User"}</span>
                     <span>{asDateTime(c.createdAt)}</span>
                   </div>
                   <p className="text-sm mt-0.5 break-words">{c.content}</p>
@@ -946,13 +920,10 @@ export default function LoanDetails() {
           <textarea
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full min-h-[44px]"
+            className={`${ui.input} min-h-[44px]`}
             placeholder="Add a comment"
           />
-          <button
-            onClick={addComment}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold shadow-sm"
-          >
+          <button onClick={addComment} className={ui.primary}>
             Post
           </button>
         </div>
@@ -961,40 +932,40 @@ export default function LoanDetails() {
       {/* REPAYMENT MODAL */}
       {openRepay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-6 border-2 border-slate-400">
+          <div className="rounded-2xl shadow-2xl w-full max-w-3xl p-6 border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)]">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-2xl font-extrabold">Post Repayment</h4>
-              <button onClick={() => setOpenRepay(false)} className="text-slate-700 hover:text-slate-900">
+              <button onClick={() => setOpenRepay(false)} className={ui.actionLink}>
                 ✕
               </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">Amount</label>
+                <label className="block text-sm font-semibold">Amount</label>
                 <input
                   type="number"
                   value={repForm.amount}
                   onChange={(e) => setRepForm((s) => ({ ...s, amount: e.target.value }))}
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                   min="0"
                   step="0.01"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">Date</label>
+                <label className="block text-sm font-semibold">Date</label>
                 <input
                   type="date"
                   value={repForm.date}
                   onChange={(e) => setRepForm((s) => ({ ...s, date: e.target.value }))}
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">Method</label>
+                <label className="block text-sm font-semibold">Method</label>
                 <select
                   value={repForm.method}
                   onChange={(e) => setRepForm((s) => ({ ...s, method: e.target.value }))}
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                 >
                   <option value="cash">Cash</option>
                   <option value="mobile">Mobile Money</option>
@@ -1002,28 +973,21 @@ export default function LoanDetails() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">Notes (optional)</label>
+                <label className="block text-sm font-semibold">Notes (optional)</label>
                 <input
                   type="text"
                   value={repForm.notes}
                   onChange={(e) => setRepForm((s) => ({ ...s, notes: e.target.value }))}
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                   placeholder="Receipt no., reference, etc."
                 />
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setOpenRepay(false)}
-                className="px-4 py-2 rounded-lg border-2 border-slate-400 font-semibold"
-              >
+              <button onClick={() => setOpenRepay(false)} className={ui.btn}>
                 Cancel
               </button>
-              <button
-                onClick={handlePostRepayment}
-                disabled={postLoading}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60 font-semibold shadow-sm"
-              >
+              <button onClick={handlePostRepayment} disabled={postLoading} className={ui.primary}>
                 {postLoading ? "Posting…" : "Post"}
               </button>
             </div>
@@ -1034,13 +998,10 @@ export default function LoanDetails() {
       {/* SCHEDULE MODAL */}
       {openSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl p-6 border-2 border-slate-400">
+          <div className="rounded-2xl shadow-2xl w-full max-w-6xl p-6 border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)]">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-2xl font-extrabold">Repayment Schedule</h4>
-              <button
-                onClick={() => setOpenSchedule(false)}
-                className="text-slate-700 hover:text-slate-900"
-              >
+              <button onClick={() => setOpenSchedule(false)} className={ui.actionLink}>
                 ✕
               </button>
             </div>
@@ -1052,7 +1013,7 @@ export default function LoanDetails() {
             ) : (
               <>
                 {/* Disbursed/Start & Next due */}
-                <div className="mb-3 text-sm text-slate-900 space-y-1">
+                <div className="mb-3 text-sm space-y-1">
                   <div>
                     <b>Disbursed:</b> {asDate(loan?.releaseDate || loan?.startDate) || "—"}
                   </div>
@@ -1069,17 +1030,14 @@ export default function LoanDetails() {
                   </div>
                 </div>
 
-                <div className="max-h-[75vh] overflow-auto rounded-xl border-2 border-slate-400">
+                <div className="max-h-[75vh] overflow-auto rounded-xl border-2 border-[var(--border-strong)]">
                   <ScheduleTable schedule={schedule || []} currency={currency} />
                 </div>
               </>
             )}
 
             <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setOpenSchedule(false)}
-                className="px-4 py-2 rounded-lg border-2 border-slate-400 font-semibold"
-              >
+              <button onClick={() => setOpenSchedule(false)} className={ui.btn}>
                 Close
               </button>
             </div>
@@ -1090,66 +1048,59 @@ export default function LoanDetails() {
       {/* EDIT MODAL */}
       {openEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-slate-400">
+          <div className="rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)]">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-2xl font-extrabold">Edit Loan</h4>
-              <button onClick={() => setOpenEdit(false)} className="text-slate-700 hover:text-slate-900">
+              <button onClick={() => setOpenEdit(false)} className={ui.actionLink}>
                 ✕
               </button>
             </div>
             <div className="grid gap-3">
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">Amount</label>
+                <label className="block text-sm font-semibold">Amount</label>
                 <input
                   type="number"
                   value={editForm.amount}
                   onChange={(e) => setEditForm((s) => ({ ...s, amount: e.target.value }))}
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                   min="0"
                   step="0.01"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">Interest Rate (%)</label>
+                <label className="block text-sm font-semibold">Interest Rate (%)</label>
                 <input
                   type="number"
                   value={editForm.interestRate}
                   onChange={(e) => setEditForm((s) => ({ ...s, interestRate: e.target.value }))}
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                   step="0.01"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">Term (months)</label>
+                <label className="block text-sm font-semibold">Term (months)</label>
                 <input
                   type="number"
                   value={editForm.termMonths}
                   onChange={(e) => setEditForm((s) => ({ ...s, termMonths: e.target.value }))}
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">Start Date</label>
+                <label className="block text-sm font-semibold">Start Date</label>
                 <input
                   type="date"
                   value={editForm.startDate}
                   onChange={(e) => setEditForm((s) => ({ ...s, startDate: e.target.value }))}
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                 />
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setOpenEdit(false)}
-                className="px-4 py-2 rounded-lg border-2 border-slate-400 font-semibold"
-              >
+              <button onClick={() => setOpenEdit(false)} className={ui.btn}>
                 Cancel
               </button>
-              <button
-                onClick={saveEdit}
-                disabled={savingEdit}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60 font-semibold shadow-sm"
-              >
+              <button onClick={saveEdit} disabled={savingEdit} className={ui.primary}>
                 {savingEdit ? "Saving…" : "Save"}
               </button>
             </div>
@@ -1160,41 +1111,38 @@ export default function LoanDetails() {
       {/* RESCHEDULE MODAL */}
       {openReschedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-slate-400">
+          <div className="rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)]">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-2xl font-extrabold">Reschedule Loan</h4>
-              <button
-                onClick={() => setOpenReschedule(false)}
-                className="text-slate-700 hover:text-slate-900"
-              >
+              <button onClick={() => setOpenReschedule(false)} className={ui.actionLink}>
                 ✕
               </button>
             </div>
             <div className="grid gap-3">
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">New Term (months)</label>
+                <label className="block text-sm font-semibold">New Term (months)</label>
                 <input
                   type="number"
                   value={rescheduleForm.termMonths}
                   onChange={(e) =>
                     setRescheduleForm((s) => ({ ...s, termMonths: e.target.value }))
                   }
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                   min="1"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-900 font-semibold">New Start Date</label>
+                <label className="block text-sm font-semibold">New Start Date</label>
                 <input
                   type="date"
                   value={rescheduleForm.startDate}
                   onChange={(e) =>
                     setRescheduleForm((s) => ({ ...s, startDate: e.target.value }))
                   }
-                  className="border-2 border-slate-400 rounded-lg px-3 py-2 w-full"
+                  className={ui.input}
                 />
               </div>
-              <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <label className="inline-flex items-center gap-2 text-sm font-semibold">
                 <input
                   type="checkbox"
                   checked={rescheduleForm.previewOnly}
@@ -1206,16 +1154,13 @@ export default function LoanDetails() {
               </label>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setOpenReschedule(false)}
-                className="px-4 py-2 rounded-lg border-2 border-slate-400 font-semibold"
-              >
+              <button onClick={() => setOpenReschedule(false)} className={ui.btn}>
                 Cancel
               </button>
               <button
                 onClick={submitReschedule}
                 disabled={savingReschedule}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-60 font-semibold shadow-sm"
+                className={ui.primary}
               >
                 {savingReschedule ? "Working…" : rescheduleForm.previewOnly ? "Preview" : "Reschedule"}
               </button>

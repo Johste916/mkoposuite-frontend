@@ -8,7 +8,6 @@ function apiVariants(p) {
   const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
   return Array.from(new Set([noApi, withApi]));
 }
-
 async function tryPOST(paths = [], body, opts = {}) {
   let lastErr;
   for (const p of paths) {
@@ -17,6 +16,18 @@ async function tryPOST(paths = [], body, opts = {}) {
   }
   throw lastErr || new Error("No endpoint succeeded");
 }
+
+const ui = {
+  container: "max-w-2xl p-4 space-y-4 bg-[var(--bg)] text-[var(--fg)]",
+  card: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] p-4 shadow",
+  muted: "text-xs text-[var(--muted)]",
+  primary:
+    "px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  btn:
+    "px-3 py-2 rounded border-2 border-[var(--border-strong)] bg-[var(--card)] hover:bg-[var(--kpi-bg)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+};
 
 const GroupImports = () => {
   const [file, setFile] = useState(null);
@@ -69,9 +80,9 @@ const GroupImports = () => {
   };
 
   return (
-    <div className="max-w-2xl p-4 space-y-4 bg-[var(--bg)] text-[var(--fg)]">
+    <div className={ui.container}>
       <h1 className="text-2xl font-semibold">Group Imports</h1>
-      <div className="card p-4 space-y-4">
+      <div className={ui.card}>
         <form onSubmit={handleImport} className="space-y-3">
           <input
             type="file"
@@ -79,7 +90,7 @@ const GroupImports = () => {
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             className="block w-full"
           />
-          <div className="text-xs muted">
+          <div className={ui.muted}>
             Accepted: CSV/XLSX. Columns: <b>name, branchId, officerId, meetingDay, notes, members</b>{" "}
             (meetingDay must be lowercase: monday…sunday; members can be a semicolon-separated list).
           </div>
@@ -87,14 +98,14 @@ const GroupImports = () => {
             <button
               type="submit"
               disabled={!file || importing}
-              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60"
+              className={ui.primary}
             >
               {importing ? "Uploading…" : "Upload"}
             </button>
             <button
               type="button"
               onClick={downloadSample}
-              className="px-3 py-2 border rounded border-[var(--border)] hover:bg-gray-50 dark:hover:bg-slate-800"
+              className={ui.btn}
             >
               Download Sample
             </button>

@@ -11,25 +11,24 @@ import {
 } from 'recharts';
 import api from '../api';
 
-// =================== CONFIGURE THESE ROUTES IF NEEDED ===================
+/* =================== CONFIGURE THESE ROUTES IF NEEDED =================== */
 const ROUTE_PATHS = {
   borrowers: '/borrowers',
   loans: '/loans',
-  repayments: '/repayments',         // total paid / total repaid
-  expectedRepayments: '/repayments', // add ?tab=expected
+  repayments: '/repayments',
+  expectedRepayments: '/repayments',
   deposits: '/deposits',
   withdrawals: '/withdrawals',
   savings: '/savings',
-  defaultedLoans: '/loans',          // add ?tab=defaulted
-  defaultedInterest: '/loans',       // add ?tab=defaulted-interest
-  outstandingLoan: '/loans',         // add ?tab=outstanding
-  outstandingInterest: '/loans',     // add ?tab=outstanding-interest
-  writtenOff: '/loans',              // add ?tab=written-off
-  par: '/loans',                     // add ?tab=par
+  defaultedLoans: '/loans',
+  defaultedInterest: '/loans',
+  outstandingLoan: '/loans',
+  outstandingInterest: '/loans',
+  writtenOff: '/loans',
+  par: '/loans',
 };
-// ========================================================================
+/* ======================================================================== */
 
-// Local storage keys
 const LS_KEY = 'ms_dash_filters_v1';
 const LS_AUTO = 'ms_dash_auto_refresh_v1';
 
@@ -41,7 +40,7 @@ function apiVariants(p) {
   return Array.from(new Set([noApi, withApi]));
 }
 
-/** Canceled request guard (axios & fetch flavors) */
+/** Canceled request guard */
 function isAbort(err) {
   return err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || /abort|cancell?ed/i.test(err?.message || '');
 }
@@ -53,9 +52,7 @@ async function tryGET(paths = [], opts = {}) {
     try {
       const res = await api.get(p, opts);
       return res?.data;
-    } catch (e) {
-      lastErr = e;
-    }
+    } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error('No endpoint succeeded');
 }
@@ -127,9 +124,7 @@ const useIsDarkMode = () => {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const el = document.documentElement;
-    const obs = new MutationObserver(() => {
-      setIsDark(el.classList.contains('dark'));
-    });
+    const obs = new MutationObserver(() => setIsDark(el.classList.contains('dark')));
     obs.observe(el, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
@@ -138,34 +133,34 @@ const useIsDarkMode = () => {
 
 const TZS = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
-/* ---------- Shared UI tokens for the bold, high-contrast look ---------- */
+/* ---------- Token-aware UI helpers (no hardcoded slate/white) ---------- */
 const ui = {
-  container: 'w-full px-4 md:px-6 lg:px-8 py-6 text-slate-900',
+  container: 'w-full px-4 md:px-6 lg:px-8 py-6',
   h1: 'text-3xl font-extrabold tracking-tight',
-  card: 'rounded-2xl border-2 border-slate-300 bg-white shadow',
-  btn: 'inline-flex items-center justify-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50',
-  primary: 'inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700',
-  tableWrap: 'overflow-x-auto rounded-2xl border-2 border-slate-300 bg-white shadow',
-  th: 'bg-slate-100 text-left text-[13px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200',
-  td: 'px-3 py-2 border-2 border-slate-200 text-sm',
+  card: 'card', // uses theme.css -> upgraded by .app-theme-bold
+  btn: 'inline-flex items-center justify-center rounded-lg px-3 py-2 font-semibold transition border-2 ' +
+       'border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)]',
+  primary: 'inline-flex items-center rounded-lg px-3 py-2 font-semibold ' +
+           'bg-[var(--primary)] text-[var(--primary-contrast)] hover:brightness-95',
+  tableWrap: 'overflow-x-auto rounded-2xl border-2 shadow ' +
+             'bg-[var(--card)] border-[var(--border-strong)]',
+  th: 'bg-[var(--table-head-bg)] text-left text-[13px] uppercase tracking-wide font-semibold px-3 py-2 ' +
+      'border border-[var(--border)] text-[var(--fg)] opacity-90',
+  td: 'px-3 py-2 border border-[var(--border)] text-sm text-[var(--fg)]',
 };
 
-/* ---------- Unified field components ---------- */
+/* ---------- Unified field components (token colors) ---------- */
 const baseInput =
-  'h-10 w-full rounded-lg border-2 text-sm outline-none transition ' +
-  'bg-white text-slate-900 border-slate-300 focus:ring-2 focus:ring-indigo-500/40';
+  'h-10 w-full rounded-lg text-sm outline-none transition border-2 ' +
+  'bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] focus:ring-2 focus:ring-[var(--ring)]';
 
 const SelectField = ({ className = '', children, ...props }) => (
   <div className={`relative ${className}`}>
-    <select
-      {...props}
-      className={`${baseInput} pr-9 appearance-none bg-none ms-select`}
-      style={{ backgroundImage: 'none' }}
-    >
+    <select {...props} className={`${baseInput} pr-9 appearance-none bg-none ms-select`}>
       {children}
     </select>
     <ChevronDown
-      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600"
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]"
       aria-hidden="true"
     />
   </div>
@@ -173,14 +168,9 @@ const SelectField = ({ className = '', children, ...props }) => (
 
 const DateField = ({ className = '', ...props }) => (
   <div className={`relative ${className}`}>
-    <input
-      type="date"
-      {...props}
-      className={`${baseInput} pr-9 appearance-none bg-none ms-date`}
-      style={{ backgroundImage: 'none' }}
-    />
+    <input type="date" {...props} className={`${baseInput} pr-9 appearance-none bg-none ms-date`} />
     <Calendar
-      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600"
+      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]"
       aria-hidden="true"
     />
   </div>
@@ -193,10 +183,9 @@ const TextField = ({ className = '', ...props }) => (
 const Dashboard = () => {
   const isDark = useIsDarkMode();
 
-  // ======= STATE =======
+  /* ======= STATE ======= */
   const [summary, setSummary] = useState(null);
 
-  // Global filters (restore from LS if present)
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [branchId, setBranchId] = useState('');
@@ -204,16 +193,13 @@ const Dashboard = () => {
   const [timeRange, setTimeRange] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(0); // minutes
 
-  // For UX: last update + next auto refresh countdown
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [nextRefreshAt, setNextRefreshAt] = useState(null);
   const [now, setNow] = useState(Date.now());
 
-  // General communications (single ribbon)
   const [comms, setComms] = useState([]);
   const [loadingComms, setLoadingComms] = useState(false);
 
-  // Activity (RIGHT sidebar)
   const [activity, setActivity] = useState([]);
   const [activityTotal, setActivityTotal] = useState(0);
   const [activityPage, setActivityPage] = useState(1);
@@ -224,19 +210,15 @@ const Dashboard = () => {
   const [assignDraft, setAssignDraft] = useState({});
   const [submitting, setSubmitting] = useState({});
 
-  // Monthly trends (mini charts)
   const [trends, setTrends] = useState(null);
 
-  // Optional tables/charts (hydrate automatically if API provides arrays)
   const [topBorrowers, setTopBorrowers] = useState([]);
   const [upcomingRepayments, setUpcomingRepayments] = useState([]);
   const [branchPerformance, setBranchPerformance] = useState([]);
   const [officerPerformance, setOfficerPerformance] = useState([]);
 
-  // Loading
   const [loading, setLoading] = useState(true);
 
-  // Toasts
   const [toasts, setToasts] = useState([]);
   const pushToast = (msg, type = 'info') => {
     const id = Math.random().toString(36).slice(2);
@@ -244,7 +226,6 @@ const Dashboard = () => {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   };
 
-  // ---------- helpers ----------
   const n = (v) => {
     const num = Number(v);
     return Number.isFinite(num) ? num : 0;
@@ -254,7 +235,6 @@ const Dashboard = () => {
     return Number.isNaN(num) ? 'TZS —' : `TZS ${TZS.format(num)}`;
   };
 
-  // Build "to" with current filters appended as query params
   const makeTo = (base, extra = {}) => {
     try {
       const qs = new URLSearchParams();
@@ -274,7 +254,7 @@ const Dashboard = () => {
   const branchNameById = (id) =>
     branches.find((b) => String(b.id) === String(id))?.name || (id ? `Branch #${id}` : 'All branches');
 
-  // Persist + restore filters
+  /* Persist + restore filters */
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
@@ -298,7 +278,7 @@ const Dashboard = () => {
     localStorage.setItem(LS_AUTO, String(autoRefresh || 0));
   }, [autoRefresh]);
 
-  // ---------- Data fetchers ----------
+  /* ---------- Data fetchers ---------- */
   const fetchFilters = useCallback(async (signal) => {
     try {
       const [branchesRaw, officersRaw] = await Promise.all([
@@ -387,14 +367,10 @@ const Dashboard = () => {
     }
   }, []);
 
-  // ---------- Effects ----------
+  /* ---------- Effects ---------- */
   useEffect(() => {
     const ac = new AbortController();
-    (async () => {
-      try {
-        await fetchFilters(ac.signal);
-      } catch {}
-    })();
+    (async () => { try { await fetchFilters(ac.signal); } catch {} })();
     return () => ac.abort();
   }, [fetchFilters]);
 
@@ -424,7 +400,6 @@ const Dashboard = () => {
     return () => ac.abort();
   }, [loadAll]);
 
-  // load communications after summary
   useEffect(() => {
     if (!summary) return;
     const ac = new AbortController();
@@ -437,7 +412,6 @@ const Dashboard = () => {
     return () => ac.abort();
   }, [summary, fetchCommunications]);
 
-  // hydrate optional tables/charts if backend starts sending them on summary
   useEffect(() => {
     if (!summary) return;
     if (Array.isArray(summary.topBorrowers)) setTopBorrowers(summary.topBorrowers);
@@ -446,7 +420,6 @@ const Dashboard = () => {
     if (Array.isArray(summary.officerPerformance)) setOfficerPerformance(summary.officerPerformance);
   }, [summary]);
 
-  // Auto-refresh (minutes) + visible countdown
   useEffect(() => {
     if (!autoRefresh || autoRefresh <= 0) {
       setNextRefreshAt(null);
@@ -463,13 +436,12 @@ const Dashboard = () => {
     return () => clearInterval(id);
   }, [autoRefresh, loadAll, fetchCommunications]);
 
-  // 1s heartbeat for countdown text
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // ---------- Activity actions ----------
+  /* ---------- Activity actions ---------- */
   const submitComment = async (activityId) => {
     const key = `c-${activityId}`;
     setSubmitting((s) => ({ ...s, [key]: true }));
@@ -510,18 +482,18 @@ const Dashboard = () => {
     }
   };
 
-  // ---------- Mini bar ----------
+  /* ---------- Mini bar ---------- */
   const MiniBar = ({ label, value, max }) => {
     const v = n(value);
     const m = n(max);
     const pct = m > 0 ? Math.round((v / m) * 100) : 0;
     return (
       <div className="space-y-1">
-        <div className="flex justify-between text-xs text-slate-600">
+        <div className="flex justify-between text-xs text-[var(--muted)]">
           <span>{label}</span>
-          <span className="tabular-nums">{v.toLocaleString()}</span>
+          <span className="tabular-nums text-[var(--fg)]/80">{v.toLocaleString()}</span>
         </div>
-        <div className="h-2 w-full bg-slate-100 rounded">
+        <div className="h-2 w-full rounded bg-[var(--table-head-bg)]">
           <div
             className="h-2 rounded transition-[width] duration-500"
             style={{ width: `${pct}%`, backgroundColor: 'currentColor' }}
@@ -532,10 +504,9 @@ const Dashboard = () => {
   };
 
   const Skeleton = ({ className = '' }) => (
-    <div className={`animate-pulse bg-slate-100 rounded ${className}`} />
+    <div className={`animate-pulse rounded bg-[var(--table-head-bg)] ${className}`} />
   );
 
-  // Download all attachments from ticker
   const downloadAllAttachments = () => {
     const files = comms.flatMap((c) => (c.attachments || []).map((a) => a.fileUrl)).filter(Boolean);
     if (files.length === 0) return;
@@ -545,7 +516,6 @@ const Dashboard = () => {
     pushToast(`Opening ${files.length} attachment${files.length > 1 ? 's' : ''}…`, 'info');
   };
 
-  // Chart palette that adapts to theme
   const chartColors = isDark
     ? {
         grid: '#334155',
@@ -566,36 +536,19 @@ const Dashboard = () => {
         bar2: '#10b981',
       };
 
-  // ---------- RENDER ----------
   const secsLeft = nextRefreshAt ? Math.max(0, Math.floor((nextRefreshAt - now) / 1000)) : 0;
   const mm = String(Math.floor(secsLeft / 60)).padStart(2, '0');
   const ss = String(secsLeft % 60).padStart(2, '0');
 
   return (
     <div className={ui.container}>
-      <div className="space-y-6">
-        {/* Scoped CSS to remove native dropdown/calendar icons (prevents double arrows) */}
+      <div className="space-y-6" style={{ color: 'var(--fg)' }}>
+        {/* Remove native dropdown/calendar icons */}
         <style>{`
-          /* Select: remove native arrow across browsers */
-          select.ms-select {
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            background-image: none !important;
-          }
-          /* Legacy Edge/IE */
-          select.ms-select::-ms-expand { display: none; }
-
-          /* Date input: hide native calendar button so our icon is the only one */
-          input.ms-date[type="date"] {
-            -webkit-appearance: none;
-            appearance: none;
-            background-image: none !important;
-          }
-          input.ms-date[type="date"]::-webkit-calendar-picker-indicator {
-            opacity: 0;
-            display: none;
-          }
+          select.ms-select{ -webkit-appearance:none; -moz-appearance:none; appearance:none; background-image:none!important; }
+          select.ms-select::-ms-expand{ display:none; }
+          input.ms-date[type="date"]{ -webkit-appearance:none; appearance:none; background-image:none!important; }
+          input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; display:none; }
         `}</style>
 
         {/* Top bar */}
@@ -603,15 +556,15 @@ const Dashboard = () => {
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
               <h1 className={ui.h1}>Dashboard</h1>
-              <p className="text-sm text-slate-700 mt-1">
+              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
                 Quick snapshot of borrowers, loans, repayments and savings.
               </p>
-              <p className="text-xs text-slate-600 mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
                 {lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleString()}` : 'Loading…'}
               </p>
             </div>
 
-            {/* Filters (wrap as needed) */}
+            {/* Filters */}
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <SelectField
                 aria-label="Filter by branch"
@@ -621,9 +574,7 @@ const Dashboard = () => {
               >
                 <option value="">All Branches</option>
                 {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
+                  <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </SelectField>
 
@@ -635,9 +586,7 @@ const Dashboard = () => {
               >
                 <option value="">All Loan Officers</option>
                 {officers.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name || o.email}
-                  </option>
+                  <option key={o.id} value={o.id}>{o.name || o.email}</option>
                 ))}
               </SelectField>
 
@@ -695,7 +644,8 @@ const Dashboard = () => {
           </div>
 
           {autoRefresh > 0 && nextRefreshAt && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border-2 border-slate-300 px-2.5 py-1 text-xs text-slate-800">
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs"
+                 style={{ border: '2px solid var(--border-strong)', color: 'var(--fg)' }}>
               Auto-refresh in {mm}:{ss}
             </div>
           )}
@@ -715,11 +665,14 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* === Communications ribbon === */}
+        {/* Communications ribbon */}
         {(comms?.length ?? 0) > 0 && (
           <div className={`${ui.card} overflow-hidden`}>
-            <div className="flex items-center justify-between px-3 py-2 border-b-2 border-slate-200 bg-slate-50">
-              <div className="text-xs font-semibold text-slate-700">General Communications</div>
+            <div className="flex items-center justify-between px-3 py-2 border-b"
+                 style={{ borderColor: 'var(--border)', background: 'var(--table-head-bg)' }}>
+              <div className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                General Communications
+              </div>
               {comms.some((c) => Array.isArray(c.attachments) && c.attachments.length > 0) && (
                 <button
                   onClick={downloadAllAttachments}
@@ -734,28 +687,32 @@ const Dashboard = () => {
             <div className="relative h-10">
               <style>{`@keyframes ms-marquee{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
               <div
-                className="absolute whitespace-nowrap will-change-transform text-sm text-slate-900 flex items-center gap-8 px-3"
-                style={{ animation: 'ms-marquee 18s linear infinite' }}
+                className="absolute whitespace-nowrap will-change-transform text-sm flex items-center gap-8 px-3"
+                style={{ animation: 'ms-marquee 18s linear infinite', color: 'var(--fg)' }}
               >
                 {comms.map((c, idx) => (
                   <span key={c.id || c.text || idx} className="inline-flex items-center gap-2">
                     {c.type && (
-                      <span className="text-[11px] px-1.5 py-0.5 border-2 rounded bg-white border-slate-300">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded border"
+                            style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                         {c.type}
                       </span>
                     )}
                     {c.priority && (
-                      <span className="text-[11px] px-1.5 py-0.5 border-2 rounded bg-white border-slate-300">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded border"
+                            style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                         {c.priority}
                       </span>
                     )}
                     {c.audienceRole && (
-                      <span className="text-[11px] px-1.5 py-0.5 border-2 rounded bg-white border-slate-300">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded border"
+                            style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                         role: {c.audienceRole}
                       </span>
                     )}
                     {typeof c.audienceBranchId !== 'undefined' && c.audienceBranchId !== null && (
-                      <span className="text-[11px] px-1.5 py-0.5 border-2 rounded bg-white border-slate-300">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded border"
+                            style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
                         {branchNameById(c.audienceBranchId)}
                       </span>
                     )}
@@ -787,98 +744,23 @@ const Dashboard = () => {
               </div>
             ) : (
               <>
-                {/* Summary Cards (auto-fit) */}
+                {/* Summary Cards */}
                 <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
-                  <SummaryCard
-                    tone="indigo" title="Total Borrowers"
-                    value={n(summary?.totalBorrowers).toLocaleString()}
-                    icon={<Users className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.borrowers)}
-                  />
-                  <SummaryCard
-                    tone="sky" title="Total Loans"
-                    value={n(summary?.totalLoans).toLocaleString()}
-                    icon={<CreditCard className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.loans)}
-                  />
-                  <SummaryCard
-                    tone="blue" title="Total Disbursed"
-                    value={money(summary?.totalDisbursed)}
-                    icon={<CreditCard className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })}
-                  />
-                  <SummaryCard
-                    tone="emerald" title="Total Paid"
-                    value={money(summary?.totalPaid)}
-                    icon={<DollarSign className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })}
-                  />
-                  <SummaryCard
-                    tone="emerald" title="Total Repaid"
-                    value={money(summary?.totalRepaid)}
-                    icon={<DollarSign className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })}
-                  />
-                  <SummaryCard
-                    tone="indigo" title="Expected Repayments"
-                    value={money(summary?.totalExpectedRepayments)}
-                    icon={<ClipboardList className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })}
-                  />
-                  <SummaryCard
-                    tone="cyan" title="Total Deposits"
-                    value={money(summary?.totalDeposits)}
-                    icon={<DollarSign className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.deposits)}
-                  />
-                  <SummaryCard
-                    tone="amber" title="Total Withdrawals"
-                    value={money(summary?.totalWithdrawals)}
-                    icon={<DollarSign className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.withdrawals)}
-                  />
-                  <SummaryCard
-                    tone="blue" title="Net Savings"
-                    value={money(summary?.netSavings)}
-                    icon={<DollarSign className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.savings)}
-                  />
-                  <SummaryCard
-                    tone="rose" title="Defaulted Loan"
-                    value={money(summary?.defaultedLoan)}
-                    icon={<AlertTriangle className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })}
-                  />
-                  <SummaryCard
-                    tone="rose" title="Defaulted Interest"
-                    value={money(summary?.defaultedInterest)}
-                    icon={<AlertTriangle className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })}
-                  />
-                  <SummaryCard
-                    tone="violet" title="Outstanding Loan"
-                    value={money(summary?.outstandingLoan)}
-                    icon={<CreditCard className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })}
-                  />
-                  <SummaryCard
-                    tone="violet" title="Outstanding Interest"
-                    value={money(summary?.outstandingInterest)}
-                    icon={<DollarSign className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })}
-                  />
-                  <SummaryCard
-                    tone="slate" title="Written Off"
-                    value={money(summary?.writtenOff)}
-                    icon={<ThumbsDown className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })}
-                  />
-                  <SummaryCard
-                    tone="indigo" title="PAR (Portfolio at Risk)"
-                    value={`${n(summary?.parPercent)}%`}
-                    icon={<BarChart2 className="w-6 h-6" />}
-                    to={makeTo(ROUTE_PATHS.par, { tab: 'par' })}
-                  />
+                  <SummaryCard tone="indigo"  title="Total Borrowers"        value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />}           to={makeTo(ROUTE_PATHS.borrowers)} />
+                  <SummaryCard tone="sky"     title="Total Loans"            value={n(summary?.totalLoans).toLocaleString()}     icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans)} />
+                  <SummaryCard tone="blue"    title="Total Disbursed"        value={money(summary?.totalDisbursed)}              icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })} />
+                  <SummaryCard tone="emerald" title="Total Paid"             value={money(summary?.totalPaid)}                   icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
+                  <SummaryCard tone="emerald" title="Total Repaid"           value={money(summary?.totalRepaid)}                 icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
+                  <SummaryCard tone="indigo"  title="Expected Repayments"    value={money(summary?.totalExpectedRepayments)}     icon={<ClipboardList className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })} />
+                  <SummaryCard tone="cyan"    title="Total Deposits"         value={money(summary?.totalDeposits)}               icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.deposits)} />
+                  <SummaryCard tone="amber"   title="Total Withdrawals"      value={money(summary?.totalWithdrawals)}            icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.withdrawals)} />
+                  <SummaryCard tone="blue"    title="Net Savings"            value={money(summary?.netSavings)}                  icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.savings)} />
+                  <SummaryCard tone="rose"    title="Defaulted Loan"         value={money(summary?.defaultedLoan)}               icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })} />
+                  <SummaryCard tone="rose"    title="Defaulted Interest"     value={money(summary?.defaultedInterest)}           icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })} />
+                  <SummaryCard tone="violet"  title="Outstanding Loan"       value={money(summary?.outstandingLoan)}             icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })} />
+                  <SummaryCard tone="violet"  title="Outstanding Interest"   value={money(summary?.outstandingInterest)}         icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })} />
+                  <SummaryCard tone="slate"   title="Written Off"            value={money(summary?.writtenOff)}                  icon={<ThumbsDown className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })} />
+                  <SummaryCard tone="indigo"  title="PAR (Portfolio at Risk)"value={`${n(summary?.parPercent)}%`}                 icon={<BarChart2 className="w-6 h-6" />}        to={makeTo(ROUTE_PATHS.par, { tab: 'par' })} />
                 </div>
 
                 {/* Monthly Trends */}
@@ -886,9 +768,9 @@ const Dashboard = () => {
                   <div className={`${ui.card} p-4`}>
                     <div className="flex items-center gap-2 mb-3">
                       <BarChart2 className="w-5 h-5 text-indigo-600" />
-                      <h3 className="text-lg font-semibold text-slate-900">
-                        {`Monthly Trends${(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}`}
-                      </h3>
+                      <h3 className="text-lg font-semibold">{
+                        `Monthly Trends${(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}`
+                      }</h3>
                     </div>
 
                     <div className="mb-4">
@@ -903,10 +785,7 @@ const Dashboard = () => {
                           <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
                           <XAxis dataKey="name" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
                           <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
-                            wrapperStyle={{ outline: 'none' }}
-                          />
+                          <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
                           <Legend wrapperStyle={{ color: chartColors.legend }} />
                           <Bar dataKey="value" fill={chartColors.bar1} />
                         </BarChart>
@@ -918,15 +797,9 @@ const Dashboard = () => {
                       const max = Math.max(...vals);
                       return (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="text-indigo-600">
-                            <MiniBar label="Loans (count)" value={n(trends.monthlyLoans)} max={max} />
-                          </div>
-                          <div className="text-emerald-600">
-                            <MiniBar label="Deposits (TZS)" value={n(trends.monthlyDeposits)} max={max} />
-                          </div>
-                          <div className="text-blue-600">
-                            <MiniBar label="Repayments (TZS)" value={n(trends.monthlyRepayments)} max={max} />
-                          </div>
+                          <div className="text-indigo-600"><MiniBar label="Loans (count)" value={n(trends.monthlyLoans)} max={max} /></div>
+                          <div className="text-emerald-600"><MiniBar label="Deposits (TZS)" value={n(trends.monthlyDeposits)} max={max} /></div>
+                          <div className="text-blue-600"><MiniBar label="Repayments (TZS)" value={n(trends.monthlyRepayments)} max={max} /></div>
                         </div>
                       );
                     })()}
@@ -936,11 +809,11 @@ const Dashboard = () => {
                 {/* Top Borrowers / Upcoming Repayments */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className={ui.tableWrap}>
-                    <div className="p-4 border-b-2 border-slate-200">
-                      <h3 className="text-lg font-semibold text-slate-900">Top Borrowers</h3>
+                    <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                      <h3 className="text-lg font-semibold">Top Borrowers</h3>
                     </div>
                     {topBorrowers.length === 0 ? (
-                      <div className="p-4 text-sm text-slate-700">No data available.</div>
+                      <div className="p-4 text-sm" style={{ color: 'var(--muted)' }}>No data available.</div>
                     ) : (
                       <table className="min-w-full">
                         <thead>
@@ -962,11 +835,11 @@ const Dashboard = () => {
                   </div>
 
                   <div className={ui.tableWrap}>
-                    <div className="p-4 border-b-2 border-slate-200">
-                      <h3 className="text-lg font-semibold text-slate-900">Upcoming Repayments</h3>
+                    <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                      <h3 className="text-lg font-semibold">Upcoming Repayments</h3>
                     </div>
                     {upcomingRepayments.length === 0 ? (
-                      <div className="p-4 text-sm text-slate-700">No data available.</div>
+                      <div className="p-4 text-sm" style={{ color: 'var(--muted)' }}>No data available.</div>
                     ) : (
                       <table className="min-w-full">
                         <thead>
@@ -993,19 +866,16 @@ const Dashboard = () => {
                 {/* Performance charts */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className={`${ui.card} p-4`}>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Branch Performance</h3>
+                    <h3 className="text-lg font-semibold mb-2">Branch Performance</h3>
                     {branchPerformance.length === 0 ? (
-                      <p className="text-slate-700 text-sm">No data available.</p>
+                      <p className="text-sm" style={{ color: 'var(--muted)' }}>No data available.</p>
                     ) : (
                       <ResponsiveContainer width="100%" height={260}>
                         <BarChart data={branchPerformance}>
                           <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
                           <XAxis dataKey="branch" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
                           <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
-                            wrapperStyle={{ outline: 'none' }}
-                          />
+                          <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
                           <Legend wrapperStyle={{ color: chartColors.legend }} />
                           <Bar dataKey="disbursed" fill={chartColors.bar1} />
                           <Bar dataKey="repayments" fill={chartColors.bar2} />
@@ -1015,19 +885,16 @@ const Dashboard = () => {
                   </div>
 
                   <div className={`${ui.card} p-4`}>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Officer Performance</h3>
+                    <h3 className="text-lg font-semibold mb-2">Officer Performance</h3>
                     {officerPerformance.length === 0 ? (
-                      <p className="text-slate-700 text-sm">No data available.</p>
+                      <p className="text-sm" style={{ color: 'var(--muted)' }}>No data available.</p>
                     ) : (
                       <ResponsiveContainer width="100%" height={260}>
                         <BarChart data={officerPerformance}>
                           <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
                           <XAxis dataKey="officer" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
                           <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }}
-                            wrapperStyle={{ outline: 'none' }}
-                          />
+                          <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
                           <Legend wrapperStyle={{ color: chartColors.legend }} />
                           <Bar dataKey="loans" fill={chartColors.bar1} />
                           <Bar dataKey="collections" fill={chartColors.bar2} />
@@ -1045,7 +912,7 @@ const Dashboard = () => {
             <div className={`${ui.card} p-4`}>
               <div className="flex items-center gap-2 mb-3">
                 <ClipboardList className="w-5 h-5 text-indigo-600" />
-                <h2 className="text-lg font-semibold text-slate-900">Recent Activity</h2>
+                <h2 className="text-lg font-semibold">Recent Activity</h2>
               </div>
 
               {/* Date search */}
@@ -1065,29 +932,29 @@ const Dashboard = () => {
 
               {/* Scroll list with fade */}
               <div className="relative">
-                <div className="absolute inset-x-0 top-0 h-6 pointer-events-none bg-gradient-to-b from-white to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-white to-transparent" />
+                <div className="absolute inset-x-0 top-0 h-6 pointer-events-none bg-gradient-to-b from-[var(--card)] to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-[var(--card)] to-transparent" />
                 <div className="max-h-[520px] overflow-y-auto pr-1 space-y-3">
                   {activity.length === 0 ? (
-                    <p className="text-slate-700 text-sm">No activity.</p>
+                    <p className="text-sm" style={{ color: 'var(--muted)' }}>No activity.</p>
                   ) : (
                     activity.map((a) => (
-                      <div key={a.id} className="rounded-xl border-2 border-slate-200 p-3">
-                        <p className="text-sm font-semibold text-slate-900">
+                      <div key={a.id} className="rounded-xl p-3 border-2" style={{ borderColor: 'var(--border)' }}>
+                        <p className="text-sm font-semibold">
                           {a.type} • {a.entityType} #{a.entityId}
                         </p>
-                        <p className="text-xs text-slate-800 break-words">{a.message}</p>
-                        <p className="text-[11px] text-slate-600 mt-1">
+                        <p className="text-xs break-words" style={{ color: 'var(--fg)' }}>{a.message}</p>
+                        <p className="text-[11px] mt-1" style={{ color: 'var(--muted)' }}>
                           by {a.createdBy?.name || a.createdBy?.email} • {new Date(a.createdAt).toLocaleString()}
                         </p>
 
-                        {/* latest comments preview */}
                         {Array.isArray(a.comments) && a.comments.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {a.comments.map((c) => (
-                              <div key={c.id} className="bg-slate-50 border-2 border-slate-200 rounded p-2">
-                                <p className="text-xs text-slate-900 break-words">{c.comment}</p>
-                                <p className="text-[11px] text-slate-600 mt-0.5">
+                              <div key={c.id} className="rounded p-2 border-2"
+                                   style={{ background: 'var(--table-row-even)', borderColor: 'var(--border)' }}>
+                                <p className="text-xs break-words" style={{ color: 'var(--fg)' }}>{c.comment}</p>
+                                <p className="text-[11px] mt-0.5" style={{ color: 'var(--muted)' }}>
                                   — {c.createdBy?.name || c.createdBy?.email} • {new Date(c.createdAt).toLocaleString()}
                                 </p>
                               </div>
@@ -1122,9 +989,7 @@ const Dashboard = () => {
                           >
                             <option value="">Assign to…</option>
                             {officers.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.name || o.email}
-                              </option>
+                              <option key={o.id} value={o.id}>{o.name || o.email}</option>
                             ))}
                           </SelectField>
                           <DateField
@@ -1158,7 +1023,7 @@ const Dashboard = () => {
 
               {/* pagination */}
               {activityTotal > activityPageSize && (
-                <div className="flex justify-between items-center mt-3 text-xs text-slate-800">
+                <div className="flex justify-between items-center mt-3 text-xs" style={{ color: 'var(--fg)' }}>
                   <span>{Math.min(activityPage * activityPageSize, activityTotal)} of {activityTotal}</span>
                   <div className="flex gap-2">
                     <button
@@ -1196,7 +1061,7 @@ const Dashboard = () => {
   );
 };
 
-/** Bold, high-contrast KPI card (strong borders, punchy headings) */
+/** Bold KPI card with tokenized surfaces/borders */
 const SummaryCard = ({
   title,
   value,
@@ -1209,18 +1074,17 @@ const SummaryCard = ({
 }) => {
   const palette =
     ({
-      indigo: 'text-indigo-700 ring-indigo-200',
-      sky: 'text-sky-700 ring-sky-200',
-      blue: 'text-blue-700 ring-blue-200',
-      emerald: 'text-emerald-700 ring-emerald-200',
-      cyan: 'text-cyan-700 ring-cyan-200',
-      amber: 'text-amber-700 ring-amber-200',
-      violet: 'text-violet-700 ring-violet-200',
-      rose: 'text-rose-700 ring-rose-200',
-      slate: 'text-slate-700 ring-slate-200',
-    }[tone]) || 'text-slate-700 ring-slate-200';
+      indigo: 'text-indigo-600',
+      sky: 'text-sky-600',
+      blue: 'text-blue-600',
+      emerald: 'text-emerald-600',
+      cyan: 'text-cyan-600',
+      amber: 'text-amber-600',
+      violet: 'text-violet-600',
+      rose: 'text-rose-600',
+      slate: 'text-slate-500',
+    }[tone]) || 'text-slate-500';
 
-  // tiny sparkline (optional)
   const Spark = () => {
     if (!Array.isArray(spark) || spark.length < 2) return null;
     const w = 96, h = 28, pad = 2;
@@ -1255,16 +1119,20 @@ const SummaryCard = ({
       {to && (
         <Link
           to={to}
-          className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           aria-label={`View ${title} details`}
           title={`View ${title} details`}
         />
       )}
 
-      <div className="relative rounded-2xl border-2 border-slate-300 bg-white p-5 min-h-[10.5rem] shadow transition-all group-hover:shadow-md group-hover:-translate-y-0.5">
+      <div
+        className="relative rounded-2xl p-5 min-h-[10.5rem] shadow transition-all group-hover:shadow-md group-hover:-translate-y-0.5 border-2"
+        style={{ background: 'var(--card)', borderColor: 'var(--border-strong)', color: 'var(--fg)' }}
+      >
         <div className="relative flex items-start justify-between gap-3">
-          {/* icon badge */}
-          <div className={`p-3 rounded-full bg-white ring-2 ${palette}`}>{icon}</div>
+          <div className={`p-3 rounded-full ring-2 ${palette}`} style={{ background: 'var(--card)', boxShadow: '0 1px 0 rgba(0,0,0,.04)' }}>
+            {icon}
+          </div>
 
           {delta != null && (
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${deltaColor}`}>
@@ -1275,13 +1143,13 @@ const SummaryCard = ({
         </div>
 
         <div className="relative mt-3 min-w-0">
-          <h3 className={`text-sm font-semibold ${palette.split(' ')[0]} truncate`}>{title}</h3>
-          <p className="text-[28px] md:text-[32px] leading-tight font-semibold text-slate-900 font-mono tabular-nums break-words">
+          <h3 className={`text-sm font-semibold truncate ${palette}`}>{title}</h3>
+          <p className="text-[28px] md:text-[32px] leading-tight font-semibold font-mono tabular-nums break-words">
             {value ?? '—'}
           </p>
         </div>
 
-        <div className="relative text-slate-400">
+        <div className={`relative ${palette}`}>
           <Spark />
         </div>
       </div>

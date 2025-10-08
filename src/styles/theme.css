@@ -1,86 +1,174 @@
-/* =========================================================
-   TOKENS (light / dark)
-   ========================================================= */
-:root {
+/* src/styles/theme.css */
+
+/* ==========================================================================
+   MkopoSuite theme tokens (light/dark)
+   ========================================================================== */
+
+/* ---------- LIGHT ---------- */
+:root,
+:root[data-theme="light"] {
   /* Surfaces & text */
-  --bg: #ffffff;
-  --fg: #0b0f14;
-  --muted: #6b7280;
-  --card: #ffffff;
+  --bg:            #f7f9fc;   /* app background */
+  --panel:         #ffffff;   /* header/sidebar/top bars */
+  --card:          #ffffff;   /* cards & modules */
+  --fg:            #0f172a;   /* primary text */
+  --muted:         #475569;   /* secondary text */
+
+  /* Compatibility aliases */
+  --muted-fg:      var(--muted);
+  --on-accent:     var(--primary-contrast);
+  --input-ph:      var(--input-placeholder);
 
   /* Borders / grid */
-  --border: #cbd5e1;         /* slate-300 (inner grid) */
-  --border-strong: #94a3b8;  /* slate-400 (outer frames) */
+  --border:        #e5e7eb;
+  --border-strong: #cbd5e1;
 
-  /* Focus ring / brand blue */
-  --ring: #60a5fa;           /* blue-400/500ish */
+  /* Focus / brand */
+  --ring:                rgba(37,99,235,.25);
+  --primary:             #2563eb;
+  --primary-contrast:    #ffffff;
 
   /* Inputs & menus */
-  --input-bg: #ffffff;
-  --input-fg: var(--fg);
-  --input-placeholder: var(--muted);
-  --input-border: var(--border);
-  --menu-bg: #ffffff;
-  --menu-fg: var(--fg);
-  --menu-shadow: 0 10px 28px rgba(0,0,0,.12);
+  --input-bg:      #ffffff;
+  --input-fg:      var(--fg);
+  --input-placeholder: #94a3b8;
+  --input-border:  var(--border);
+  --menu-bg:       var(--panel);
+  --menu-fg:       var(--fg);
+  --menu-shadow:   0 10px 28px rgba(0,0,0,.12);
 
-  /* Table/KPI helpers */
-  --table-head-bg: #f1f5f9;  /* slate-100 */
+  /* Table / KPI helpers */
+  --table-head-bg: #f1f5f9;
   --table-foot-bg: #f1f5f9;
   --table-row-odd: #ffffff;
-  --table-row-even: #fbfdff;
-  --kpi-bg: #f8fafc;
+  --table-row-even:#fbfdff;
+  --kpi-bg:        #f8fafc;
 
-  /* Generic badge */
-  --badge-bg: #e2e8f0;
-  --badge-fg: #334155;
+  /* Badges */
+  --badge-bg:      #e2e8f0;
+  --badge-fg:      #334155;
+
+  /* Navigation tokens */
+  --nav-item:              #334155;
+  --nav-item-hover-bg:     #f1f5f9;
+  --nav-item-active-bg:    #e7f0ff;
+  --nav-item-active-fg:    #1e3a8a;
+
+  /* Soft selection chip / row hover */
+  --chip-soft:     #eef5ff;
+
+  /* Sidebar container */
+  --sidebar-bg:    var(--panel);
+  --sidebar-border:#e5e7eb;
 }
 
+/* ---------- DARK (system preference) ---------- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b0f14;           /* near-slate-950 */
-    --fg: #edf1f7;
-    --muted: #9aa4b2;
-    --card: #0f141c;
+    --bg:            #0b1220;  /* deep navy, not pure black */
+    --panel:         #0e172a;
+    --card:          #0f1b31;
+    --fg:            #e6edf3;
+    --muted:         #a9b4c2;
 
-    /* Dark borders */
-    --border: #273244;        /* inner grid (deep navy/blue-gray) */
-    --border-strong: #334155; /* slate-700 (outer frames) */
+    --muted-fg:      var(--muted);
+    --on-accent:     var(--primary-contrast);
+    --input-ph:      var(--input-placeholder);
 
-    --ring: #60a5fa;
+    --border:        #1f2a44;
+    --border-strong: #2a3a5b;
 
-    /* Inputs & menus */
-    --input-bg: #111827;
-    --input-fg: var(--fg);
-    --input-placeholder: var(--muted);
-    --input-border: var(--border);
-    --menu-bg: #0f141c;
-    --menu-fg: var(--fg);
+    --ring:          rgba(99,102,241,.35);
+    --primary:       #60a5fa;
+    --primary-contrast:#0b1220;
 
-    /* Table helpers */
+    --input-bg:      #0e1a2b;
+    --input-fg:      var(--fg);
+    --input-placeholder:#8aa0b8;
+    --input-border:  var(--border);
+    --menu-bg:       #0e172a;
+    --menu-fg:       var(--fg);
+
     --table-head-bg: #111927;
     --table-foot-bg: #111927;
     --table-row-odd: #0f172a;
-    --table-row-even: #0e1526;
-    --kpi-bg: #0e1526;
+    --table-row-even:#0e1526;
+    --kpi-bg:        #0e1526;
 
-    --badge-bg: #1f2937;
-    --badge-fg: #cbd5e1;
+    --badge-bg:      #1f2937;
+    --badge-fg:      #cbd5e1;
+
+    --nav-item:              #cbd5e1;
+    --nav-item-hover-bg:     #0f1f3a;
+    --nav-item-active-bg:    #172554;
+    --nav-item-active-fg:    #e5edff;
+
+    --chip-soft:     #122b55;
+
+    --sidebar-bg:    #0c152c;
+    --sidebar-border:#132036;
   }
 }
 
-/* Optional forced theme via data attribute:
-   [data-theme="light"] / [data-theme="dark"] can override the above if your ThemeProvider uses them. */
+/* ---------- Forced theme via Provider ---------- */
+:root[data-theme="dark"], .dark {
+  color-scheme: dark;
+  /* mirror dark tokens to ensure hard override */
+  --bg:            #0b1220;
+  --panel:         #0e172a;
+  --card:          #0f1b31;
+  --fg:            #e6edf3;
+  --muted:         #a9b4c2;
 
-/* =========================================================
+  --muted-fg:      var(--muted);
+  --on-accent:     var(--primary-contrast);
+  --input-ph:      var(--input-placeholder);
+
+  --border:        #1f2a44;
+  --border-strong: #2a3a5b;
+
+  --ring:          rgba(99,102,241,.35);
+  --primary:       #60a5fa;
+  --primary-contrast:#0b1220;
+
+  --input-bg:      #0e1a2b;
+  --input-fg:      var(--fg);
+  --input-placeholder:#8aa0b8;
+  --input-border:  var(--border);
+  --menu-bg:       #0e172a;
+  --menu-fg:       var(--fg);
+
+  --table-head-bg: #111927;
+  --table-foot-bg: #111927;
+  --table-row-odd: #0f172a;
+  --table-row-even:#0e1526;
+  --kpi-bg:        #0e1526;
+
+  --badge-bg:      #1f2937;
+  --badge-fg:      #cbd5e1;
+
+  --nav-item:              #cbd5e1;
+  --nav-item-hover-bg:     #0f1f3a;
+  --nav-item-active-bg:    #172554;
+  --nav-item-active-fg:    #e5edff;
+
+  --chip-soft:     #122b55;
+
+  --sidebar-bg:    #0c152c;
+  --sidebar-border:#132036;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+
+/* ==========================================================================
    GLOBAL BASE
-   ========================================================= */
+   ========================================================================== */
 html { font-size: 15px; color-scheme: light dark; }
 body { background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; }
 
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
-/* Inputs (neutral base) */
+/* Inputs */
 .input,
 input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="date"],
 select, textarea {
@@ -94,11 +182,11 @@ select, textarea {
 .input::placeholder, input::placeholder, textarea::placeholder { color: var(--input-placeholder); }
 select, option { color: var(--input-fg); background-color: var(--input-bg); }
 
-/* Simple card + muted helper (base) */
+/* Cards & muted text */
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; }
 .muted { color: var(--muted); }
 
-/* Menus / dropdowns (base) */
+/* Menus / dropdowns */
 .menu {
   background: var(--menu-bg);
   color: var(--menu-fg);
@@ -107,39 +195,35 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
   border-radius: .75rem;
 }
 
-/* Ensure filter dropdowns float above sticky headers/tables */
+/* Keep filter dropdowns above sticky stuff */
 .filter-field { position: relative; z-index: 50; }
 
-/* =========================================================
-   BOLD / HIGH-CONTRAST (Loan Details look)
-   Scope with .app-theme-bold so you can opt-in globally.
-   ========================================================= */
-.app-theme-bold {
-  color: var(--fg);
-  background: var(--bg);
-}
+/* ==========================================================================
+   BOLD / HIGH-CONTRAST skin (opt in with .app-theme-bold)
+   ========================================================================== */
+.app-theme-bold { color: var(--fg); background: var(--bg); }
 
-/* Punchy headings */
+/* Headlines */
 .app-theme-bold h1 { font-size: 2rem;   line-height: 2.25rem; font-weight: 800; letter-spacing: -0.01em; }
 .app-theme-bold h2 { font-size: 1.5rem; line-height: 2rem;   font-weight: 800; letter-spacing: -0.01em; }
 .app-theme-bold h3 { font-size: 1.125rem; line-height: 1.75rem; font-weight: 700; letter-spacing: -0.005em; }
 .app-theme-bold .muted { color: var(--muted); }
 
-/* Upgrade existing "card-like" blocks: stronger frames, soft shadow */
+/* Stronger framed cards */
 .app-theme-bold .card {
   background: var(--card);
   border: 2px solid var(--border-strong);
   border-radius: 1rem;
   box-shadow: 0 10px 20px rgba(0,0,0,.08);
 }
-/* Any pre-styled box with both border + rounded becomes “clean card” automatically */
+/* Auto-upgrade bordered rounded blocks into “clean cards” */
 .app-theme-bold :is(div,section,article)[class*="border"][class*="rounded"] {
   border-color: var(--border-strong);
   border-width: 2px;
   border-radius: 1rem;
 }
 
-/* Inputs — thicker borders for clarity */
+/* Inputs (bold skin) */
 .app-theme-bold .input,
 .app-theme-bold input[type="text"], .app-theme-bold input[type="search"], .app-theme-bold input[type="number"],
 .app-theme-bold input[type="email"], .app-theme-bold input[type="date"],
@@ -156,35 +240,35 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
 .app-theme-bold textarea::placeholder { color: var(--input-placeholder); }
 .app-theme-bold select, .app-theme-bold option { color: var(--input-fg); background-color: var(--input-bg); }
 
-/* Buttons — quiet + primary */
+/* Buttons */
 .app-theme-bold button {
   border: 2px solid var(--border-strong);
   border-radius: .625rem;
   padding: .5rem .75rem;
   font-weight: 600;
-  background: #fff;
+  background: var(--card);
   color: var(--fg);
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
-.app-theme-bold button:hover { background: #f8fafc; }
+.app-theme-bold button:hover { background: var(--chip-soft); }
 .app-theme-bold .btn-primary {
-  background: #4f46e5;   /* indigo-600 */
-  color: #fff;
-  border-color: #4f46e5;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border-color: var(--primary);
 }
-.app-theme-bold .btn-primary:hover { background: #4338ca; }
+.app-theme-bold .btn-primary:hover { filter: brightness(.95); }
 
-/* Action link (bold + underlined) */
+/* Action links */
 .app-theme-bold .action-link {
   display: inline-flex; align-items: center; gap: .25rem;
   font-weight: 800;
-  color: #1d4ed8; /* blue-700 */
+  color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 4px;
   text-decoration-thickness: 2px;
   border-radius: .25rem;
 }
-.app-theme-bold .action-link:hover { color: #1e40af; } /* blue-800 */
+.app-theme-bold .action-link:hover { filter: brightness(.9); }
 .app-theme-bold .action-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* Badges */
@@ -197,10 +281,10 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
   border: 2px solid var(--border);
 }
 
-/* CRISP TABLES (full grid) */
+/* Tables */
 .app-theme-bold .table-wrap { overflow-x: auto; }
 
-/* Outer table frame (use .table-frame on the container around <table>) */
+/* Outer table frame */
 .app-theme-bold .table-frame {
   border: 2px solid var(--border-strong);
   border-radius: .75rem;
@@ -211,34 +295,35 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
 /* Base table look */
 .app-theme-bold table {
   width: 100%;
-  border-collapse: collapse;   /* single grid lines */
-  font-size: .9375rem;         /* 15px */
+  border-collapse: collapse;
+  font-size: .9375rem;
 }
 .app-theme-bold thead th {
   background: var(--table-head-bg);
-  color: #334155;              /* slate-700 */
+  color: var(--fg);
+  opacity: .9;
   text-transform: uppercase;
   letter-spacing: .04em;
   font-weight: 700;
 }
 .app-theme-bold :is(th, td) {
-  border: 1px solid var(--border);   /* inner grid lines */
+  border: 1px solid var(--border);
   padding: .5rem .75rem;
   vertical-align: top;
 }
 .app-theme-bold tbody tr:nth-child(odd)  td { background: var(--table-row-odd); }
 .app-theme-bold tbody tr:nth-child(even) td { background: var(--table-row-even); }
-.app-theme-bold tbody tr:hover td { background: #f1f5f9; } /* slate-100 hover (light); readable in dark as well */
+.app-theme-bold tbody tr:hover td { background: var(--chip-soft); }
 .app-theme-bold tfoot td {
   background: var(--table-foot-bg);
   font-weight: 700;
   border-top: 2px solid var(--border-strong);
 }
 
-/* Sticky header helper: add .sticky-head to a table wrapper */
+/* Sticky header helper */
 .app-theme-bold .sticky-head thead th { position: sticky; top: 0; z-index: 1; }
 
-/* Menus/Dropdowns — stronger frame */
+/* Menus (bold skin) */
 .app-theme-bold .menu {
   background: var(--menu-bg);
   color: var(--menu-fg);
@@ -247,7 +332,7 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
   border-radius: .75rem;
 }
 
-/* “Full-width” section so nothing feels cramped (optional) */
+/* Full-bleed helper */
 .app-theme-bold .full-bleed {
   width: 100vw;
   position: relative;
@@ -260,3 +345,490 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
 /* Opt-out for special tables */
 .app-theme-bold table.no-grid { border-collapse: separate; }
 .app-theme-bold table.no-grid :is(th,td) { border: 0; }
+
+/* ==========================================================================
+   SIDEBAR SKIN (desktop + mobile drawer)
+   ========================================================================== */
+.app-sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+}
+.app-sidebar .nav-accent { background: rgba(255,255,255,.6); }
+.dark .app-sidebar .nav-accent,
+:root[data-theme="dark"] .app-sidebar .nav-accent { background: rgba(255,255,255,.06); }
+.app-sidebar .nav-section-border { border-left-color: var(--sidebar-border) !important; }
+.app-sidebar .sidebar-scroll { backdrop-filter: saturate(120%) blur(0px); }
+
+/* ==========================================================================
+   HARDENERS FOR THIRD-PARTY "WHITE" DEFAULTS (safe, scoped)
+   ========================================================================== */
+.app-theme-bold .card,
+.app-theme-bold .table-frame,
+.app-theme-bold .table-wrap {
+  background: var(--card) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--fg) !important;
+}
+.app-theme-bold thead th {
+  background: var(--table-head-bg) !important;
+  color: var(--fg) !important;
+}
+.app-theme-bold tbody tr:nth-child(odd)  td { background: var(--table-row-odd) !important; }
+.app-theme-bold tbody tr:nth-child(even) td { background: var(--table-row-even) !important; }
+.app-theme-bold tbody tr:hover td        { background: var(--chip-soft) !important; }
+
+.app-theme-bold button {
+  background: var(--card);
+  color: var(--fg);
+  border: 2px solid var(--border-strong);
+}
+.app-theme-bold .btn-primary {
+  background: var(--primary) !important;
+  color: var(--primary-contrast) !important;
+  border-color: var(--primary) !important;
+}
+
+/* Keep custom selects/dates clean (icons hidden so token colors show) */
+select.ms-select{ -webkit-appearance:none; -moz-appearance:none; appearance:none; background-image:none!important; }
+select.ms-select::-ms-expand{ display:none; }
+input.ms-date[type="date"]{ -webkit-appearance:none; appearance:none; background-image:none!important; }
+input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; display:none; }
+
+/* ==========================================================================
+   OPTIONAL: LEGACY UTILITY NEUTRALIZER
+   Wrap subtree with class="legacy-compat" to map old utilities to tokens.
+   ========================================================================== */
+.legacy-compat .bg-white         { background-color: var(--card) !important; }
+.legacy-compat .bg-gray-50,
+.legacy-compat .bg-slate-50      { background-color: var(--table-row-even) !important; }
+.legacy-compat .bg-gray-100,
+.legacy-compat .bg-slate-100     { background-color: var(--table-head-bg) !important; }
+
+.legacy-compat .text-black       { color: var(--fg) !important; }
+.legacy-compat .text-gray-700,
+.legacy-compat .text-slate-700   { color: var(--muted) !important; }
+.legacy-compat .text-gray-800,
+.legacy-compat .text-slate-800,
+.legacy-compat .text-gray-900,
+.legacy-compat .text-slate-900   { color: var(--fg) !important; }
+
+/* NEW: lift faded legacy text to our token colors */
+.legacy-compat .text-gray-400,
+.legacy-compat .text-gray-500,
+.legacy-compat .text-slate-400,
+.legacy-compat .text-slate-500,
+.legacy-compat .text-muted { color: var(--muted) !important; }
+
+.legacy-compat small,
+.legacy-compat .form-text { color: var(--muted) !important; }
+.legacy-compat label { color: var(--muted) !important; font-weight: 600; }
+.legacy-compat legend { color: var(--fg) !important; font-weight: 800; }
+
+/* Map Bootstrap-like form controls to tokens */
+.legacy-compat .form-control,
+.legacy-compat .form-select {
+  background: var(--input-bg) !important;
+  color: var(--input-fg) !important;
+  border: 2px solid var(--input-border) !important;
+  border-radius: .625rem !important;
+  padding: .625rem .75rem !important;
+  box-shadow: none !important;
+}
+.legacy-compat .form-control::placeholder { color: var(--input-placeholder) !important; }
+.legacy-compat .form-control:focus,
+.legacy-compat .form-select:focus {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Checkboxes/radios */
+.legacy-compat .form-check-input {
+  background: var(--input-bg) !important;
+  border: 2px solid var(--input-border) !important;
+}
+.legacy-compat .form-check-label { color: var(--fg) !important; }
+
+/* Outline-ish buttons that were low-contrast */
+.legacy-compat .btn-outline-secondary,
+.legacy-compat .btn-outline-dark {
+  background: var(--card) !important;
+  color: var(--fg) !important;
+  border: 2px solid var(--border-strong) !important;
+}
+
+/* Borders */
+.legacy-compat .border-gray-200,
+.legacy-compat .border-slate-200 { border-color: var(--border) !important; }
+.legacy-compat .border-gray-300,
+.legacy-compat .border-slate-300 { border-color: var(--border-strong) !important; }
+
+/* common "black border" utilities used in older pages */
+.legacy-compat .border-black,
+.legacy-compat .border-black\/5,
+.legacy-compat .border-black\/10,
+.legacy-compat .border-black\/20,
+.legacy-compat .border-black\/30 { border-color: var(--border) !important; }
+
+/* ring helpers from older pages */
+.legacy-compat .ring-black\/10,
+.legacy-compat .ring-black\/20   { --tw-ring-color: var(--ring) !important; }
+
+/* tables with thead.bg-white patterns */
+.legacy-compat thead.bg-white    { background-color: var(--table-head-bg) !important; }
+
+/* ==========================================================================
+   EXTRA HARDENERS: Pagination, dropdowns, scrollbars
+   ========================================================================== */
+.app-theme-bold .btn,
+.app-theme-bold [class*="btn-"],
+.app-theme-bold .pagination .page-link,
+.app-theme-bold .pagination .page-item > a,
+.app-theme-bold .pagination .page-item > button,
+.app-theme-bold .pager a,
+.app-theme-bold .pager button,
+.app-theme-bold .dataTables_paginate .paginate_button {
+  background: var(--card) !important;
+  color: var(--fg) !important;
+  border: 2px solid var(--border-strong) !important;
+  border-radius: .625rem !important;
+  box-shadow: none !important;
+}
+.app-theme-bold .pagination .page-link:hover,
+.app-theme-bold .pager a:hover,
+.app-theme-bold .pager button:hover,
+.app-theme-bold .btn:hover,
+.app-theme-bold [class*="btn-"]:hover,
+.app-theme-bold .dataTables_paginate .paginate_button:hover {
+  background: var(--chip-soft) !important;
+}
+.app-theme-bold .page-item.active .page-link,
+.app-theme-bold .pagination .active > .page-link,
+.app-theme-bold .dataTables_paginate .paginate_button.current {
+  background: var(--primary) !important;
+  color: var(--primary-contrast) !important;
+  border-color: var(--primary) !important;
+}
+.app-theme-bold .pagination .page-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Generic dropdowns from libs (Bootstrap, rc-dropdown, headless, etc.) */
+.app-theme-bold .dropdown-menu,
+.app-theme-bold [role="menu"],
+.app-theme-bold .rc-dropdown,
+.app-theme-bold .menu-root {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  border: 2px solid var(--input-border) !important;
+  box-shadow: var(--menu-shadow) !important;
+  border-radius: .75rem !important;
+}
+.app-theme-bold .dropdown-item { color: var(--menu-fg) !important; }
+.app-theme-bold .dropdown-item:hover { background: var(--chip-soft) !important; }
+
+/* Scrollbar theming (webkit) */
+@supports selector(::-webkit-scrollbar) {
+  .app-theme-bold *::-webkit-scrollbar { height: 10px; width: 10px; }
+  .app-theme-bold *::-webkit-scrollbar-track { background: var(--bg); }
+  .app-theme-bold *::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 8px;
+    border: 2px solid var(--bg);
+  }
+}
+
+/* ==========================================================================
+   Ant Design / rc-* adapters (pagination, selects, pickers)
+   ========================================================================== */
+.app-theme-bold .ant-pagination,
+.app-theme-bold .rc-pagination { color: var(--fg); }
+
+.app-theme-bold .ant-pagination-item,
+.app-theme-bold .rc-pagination-item,
+.app-theme-bold .ant-pagination-prev .ant-pagination-item-link,
+.app-theme-bold .ant-pagination-next .ant-pagination-item-link,
+.app-theme-bold .rc-pagination-prev .rc-pagination-item-link,
+.app-theme-bold .rc-pagination-next .rc-pagination-item-link {
+  background: var(--card) !important;
+  color: var(--fg) !important;
+  border: 2px solid var(--border-strong) !important;
+  border-radius: .625rem !important;
+  box-shadow: none !important;
+}
+.app-theme-bold .ant-pagination-item a,
+.app-theme-bold .rc-pagination-item a { color: var(--fg) !important; }
+
+.app-theme-bold .ant-pagination-item:hover,
+.app-theme-bold .rc-pagination-item:hover,
+.app-theme-bold .ant-pagination-item-link:hover,
+.app-theme-bold .rc-pagination-item-link:hover {
+  background: var(--chip-soft) !important;
+}
+
+.app-theme-bold .ant-pagination-item-active,
+.app-theme-bold .rc-pagination-item-active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+.app-theme-bold .ant-pagination-item-active a,
+.app-theme-bold .rc-pagination-item-active a {
+  color: var(--primary-contrast) !important;
+}
+.app-theme-bold .ant-pagination-disabled .ant-pagination-item-link,
+.app-theme-bold .rc-pagination-disabled .rc-pagination-item-link {
+  color: var(--muted) !important;
+  opacity: .6 !important;
+  background: var(--card) !important;
+}
+
+/* “25 / page” select area */
+.app-theme-bold .ant-pagination-options,
+.app-theme-bold .rc-pagination-options { color: var(--fg); }
+.app-theme-bold .ant-pagination-options .ant-select-selector,
+.app-theme-bold .rc-pagination-options .rc-select-selector {
+  background: var(--input-bg) !important;
+  color: var(--input-fg) !important;
+  border: 2px solid var(--input-border) !important;
+  border-radius: .625rem !important;
+}
+
+/* ---- Select / dropdown -------------------------------------------------- */
+.app-theme-bold .ant-select-selector {
+  background: var(--input-bg) !important;
+  color: var(--input-fg) !important;
+  border: 2px solid var(--input-border) !important;
+}
+.app-theme-bold .ant-select-arrow,
+.app-theme-bold .ant-select-clear { color: var(--muted) !important; }
+.app-theme-bold .ant-select-dropdown {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  border: 2px solid var(--input-border) !important;
+  box-shadow: var(--menu-shadow) !important;
+  border-radius: .75rem !important;
+}
+.app-theme-bold .ant-select-item { color: var(--menu-fg) !important; }
+.app-theme-bold .ant-select-item-option-active { background: var(--chip-soft) !important; }
+.app-theme-bold .ant-select-item-option-selected {
+  background: var(--primary) !important;
+  color: var(--primary-contrast) !important;
+}
+
+/* ---- Date picker (if used) --------------------------------------------- */
+.app-theme-bold .ant-picker {
+  background: var(--input-bg) !important;
+  color: var(--input-fg) !important;
+  border: 2px solid var(--input-border) !important;
+}
+.app-theme-bold .ant-picker-panel,
+.app-theme-bold .ant-picker-dropdown {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  border: 2px solid var(--input-border) !important;
+  box-shadow: var(--menu-shadow) !important;
+  border-radius: .75rem !important;
+}
+.app-theme-bold .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner,
+.app-theme-bold .ant-picker-now-btn {
+  background: var(--primary) !important;
+  color: var(--primary-contrast) !important;
+}
+
+/* RC dropdown generic */
+.app-theme-bold .rc-dropdown {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  border: 2px solid var(--input-border) !important;
+  box-shadow: var(--menu-shadow) !important;
+  border-radius: .75rem !important;
+}
+
+/* ===== Unscoped fallbacks for portal-mounted UI (outside .app-theme-bold) ===== */
+.ant-select-dropdown,
+.ant-picker-dropdown,
+.ant-dropdown,
+.rc-dropdown {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  border: 2px solid var(--input-border) !important;
+  box-shadow: var(--menu-shadow) !important;
+  border-radius: .75rem !important;
+}
+
+.ant-pagination-item,
+.ant-pagination-prev .ant-pagination-item-link,
+.ant-pagination-next .ant-pagination-item-link,
+.rc-pagination-item,
+.rc-pagination-prev .rc-pagination-item-link,
+.rc-pagination-next .rc-pagination-item-link,
+.dataTables_paginate .paginate_button {
+  background: var(--card) !important;
+  color: var(--fg) !important;
+  border: 2px solid var(--border-strong) !important;
+  border-radius: .625rem !important;
+}
+
+.ant-pagination-item a,
+.rc-pagination-item a { color: var(--fg) !important; }
+
+.ant-pagination-item:hover,
+.rc-pagination-item:hover,
+.ant-pagination-item-link:hover,
+.rc-pagination-item-link:hover,
+.dataTables_paginate .paginate_button:hover {
+  background: var(--chip-soft) !important;
+}
+
+.ant-pagination-item-active,
+.rc-pagination-item-active,
+.dataTables_paginate .paginate_button.current {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+.ant-pagination-item-active a,
+.rc-pagination-item-active a {
+  color: var(--primary-contrast) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Standard page container (shared by all modules)
+   -------------------------------------------------------------------------- */
+.ms-page { padding: 1.5rem 1rem; } /* y x */
+@media (min-width: 768px)  { .ms-page { padding-left: 1.5rem; padding-right: 1.5rem; } }
+@media (min-width: 1024px) { .ms-page { padding-left: 2rem;   padding-right: 2rem;   } }
+
+/* Make regular links readable across themes (dashboard-like) */
+.app-theme-bold a:not(.btn):not([role="button"]) {
+  color: var(--primary);
+  text-underline-offset: 4px;
+}
+.app-theme-bold a:not(.btn):hover { filter: brightness(.95); }
+.app-theme-bold a:not(.btn):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* --------------------------------------------------------------------------
+   NEW: Page header + actions alignment helpers
+   -------------------------------------------------------------------------- */
+.ms-page .page-head,
+.legacy-compat .page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+  margin-bottom: .75rem;
+}
+.ms-page .page-head :is(h1,h2,h3){ margin:0; }
+.ms-page .page-head .lede{ color:var(--muted); }
+
+.ms-page .page-actions,
+.legacy-compat .page-actions,
+.ms-page [data-page-actions],
+.legacy-compat [data-page-actions] {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.ms-page .page-actions > *{ height:auto; }
+
+/* Unfloat actions if a page set absolute positioning */
+.app-theme-bold .page-actions[style*="position:absolute"],
+.app-theme-bold [data-page-actions][style*="position:absolute"] {
+  position: static !important;
+  right: auto !important;
+  top: auto !important;
+}
+
+/* --------------------------------------------------------------------------
+   NEW: Filters toolbar + grid (keeps Clear all inside the card)
+   -------------------------------------------------------------------------- */
+.app-theme-bold .filters-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.app-theme-bold .filters-toolbar .clear-all,
+.app-theme-bold .filters-toolbar [data-clear-all] {
+  margin-left: auto;
+  position: static !important;
+}
+
+/* Flexible grid for filters (opt-in classes) */
+.app-theme-bold .filters-grid{
+  display: grid;
+  grid-template-columns: repeat(12,minmax(0,1fr));
+  gap: .5rem;
+}
+@media (min-width:640px){ .app-theme-bold .filters-grid{ gap:.75rem; } }
+@media (min-width:1024px){ .app-theme-bold .filters-grid{ gap:1rem; } }
+
+/* Simple span helpers (only if you use these classnames on fields) */
+.app-theme-bold .filters-grid > .col-12{ grid-column: span 12; }
+.app-theme-bold .filters-grid > .col-6 { grid-column: span 6; }
+.app-theme-bold .filters-grid > .col-4 { grid-column: span 4; }
+.app-theme-bold .filters-grid > .col-3 { grid-column: span 3; }
+@media (max-width:767.98px){
+  .app-theme-bold .filters-grid > [class*="col-"]{ grid-column: span 12; }
+}
+
+/* ==========================================================================
+   FIX: responsive form rows & selects at 100% zoom
+   ========================================================================== */
+
+/* 1) Let any “row-like” container wrap and avoid overflow */
+:where(.row,.form-row,.form-inline,.ms-form-row) {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  gap:.5rem;
+}
+
+/* 2) Columns inside rows shrink correctly */
+:where(.row,.form-row,.ms-form-row) > [class^="col"],
+:where(.row,.form-row,.ms-form-row) > [class*=" col"],
+:where(.row,.form-row,.ms-form-row) > .col,
+:where(.row,.form-row,.ms-form-row) > .col-sm,
+:where(.row,.form-row,.ms-form-row) > .col-md,
+:where(.row,.form-row,.ms-form-row) > .col-lg {
+  min-width:0;                 /* critical */
+  flex:1 1 16rem;              /* grow, but can shrink */
+}
+
+/* 3) Auto-sized column for tiny controls (e.g., the “Add” button) */
+:where(.row,.form-row,.ms-form-row) > .col-auto { flex:0 0 auto; }
+
+/* 4) Generic flex containers: children can shrink; buttons stay natural */
+:where(.flex,.inline-flex,[style*="display:flex"]) > * { min-width:0; }
+:where(.flex,.inline-flex,[style*="display:flex"]) > :is(button,.btn,.ant-btn) {
+  flex:0 0 auto; white-space:nowrap;
+}
+:where(.flex,.inline-flex,[style*="display:flex"],.grid)
+  > :is(.input,input,select,textarea,.ant-select,.ant-picker,.ant-input) {
+  flex:1 1 16rem;
+  max-width:100%;
+  min-width:0;
+}
+
+/* 5) Ant Design controls should respect container width */
+.ant-select, .ant-picker, .ant-input { width:100%; max-width:100%; }
+
+/* 6) Classic Bootstrap input groups (if present) */
+.input-group { display:flex; align-items:stretch; }
+.input-group > .form-control { flex:1 1 auto; min-width:0; }
+.input-group > :is(.btn,.input-group-text) { flex:0 0 auto; }
+
+/* 7) Optional helper you can wrap around those three fields */
+.ms-input-group { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.ms-input-group :is(.input,input,select,.ant-select,.ant-picker) { flex:1 1 16rem; min-width:0; }
+.ms-input-group :is(button,.btn,.ant-btn) { flex:0 0 auto; }
+
+/* 8) Prevent 1px horizontal scroll caused by 100vw at some zooms */
+@supports (overflow: clip) {
+  .app-theme-bold .full-bleed { overflow-x: clip; }
+}
+@supports not (overflow: clip) {
+  .app-theme-bold .full-bleed { overflow-x: hidden; }
+}

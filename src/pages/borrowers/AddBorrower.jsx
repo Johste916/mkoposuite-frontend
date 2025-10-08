@@ -17,14 +17,31 @@ import {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-/* ---------- Shared visual language (matches Loan/Borrower details) ---------- */
-const classInput =
-  "w-full text-sm border-2 border-slate-400 rounded-lg px-3 py-2 bg-white text-slate-900 placeholder-slate-500 " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400";
-const sectionCard = "rounded-2xl border-2 border-slate-400 bg-white shadow-lg p-4 md:p-6";
-const strongLink =
-  "inline-flex items-center gap-1 text-indigo-700 font-bold underline decoration-2 underline-offset-4 " +
-  "hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded";
+/* ---------- Token-based UI (shares language with dashboard/sidebar) ---------- */
+const ui = {
+  page: "w-full px-4 md:px-6 lg:px-8 py-6 min-h-screen bg-[var(--bg)] text-[var(--fg)]",
+  section: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4 md:p-6",
+  input:
+    "w-full text-sm rounded-lg px-3 py-2 border-2 " +
+    "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
+    "placeholder:text-[var(--input-placeholder)] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  btn:
+    "inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold " +
+    "border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] " +
+    "hover:bg-[var(--kpi-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  primary:
+    "inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold shadow-sm " +
+    "bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  link:
+    "inline-flex items-center gap-1 font-bold underline decoration-2 underline-offset-4 rounded " +
+    "text-[var(--ring)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  label: "text-[12px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1",
+  iconAccent: "h-5 w-5 text-[var(--ring)]",
+  iconMuted: "h-3.5 w-3.5 text-[var(--muted)]",
+  muted: "text-[var(--muted)]",
+};
 
 export default function AddBorrower() {
   const navigate = useNavigate();
@@ -186,16 +203,16 @@ export default function AddBorrower() {
   };
 
   return (
-    <div className="w-full px-4 md:px-6 lg:px-8 py-6 min-h-screen bg-white text-slate-900">
+    <div className={ui.page}>
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div className="min-w-0">
           <h1 className="text-3xl font-extrabold tracking-tight">Add Borrower</h1>
-          <p className="text-sm text-slate-700">
+          <p className={`text-sm ${ui.muted}`}>
             Capture full KYC and assign the borrower to a branch/officer.
           </p>
         </div>
-        <Link to="/borrowers" className={strongLink}>
+        <Link to="/borrowers" className={ui.link}>
           ← Back to Borrowers
         </Link>
       </div>
@@ -209,13 +226,13 @@ export default function AddBorrower() {
         {/* LEFT: identity + address + ID + kin */}
         <div className="xl:col-span-2 space-y-6 min-w-0">
           {/* Profile photo */}
-          <section className={sectionCard}>
+          <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
-              <Camera className="h-5 w-5 text-indigo-600" />
+              <Camera className={ui.iconAccent} />
               <h2 className="font-extrabold text-lg tracking-tight">Profile Photo</h2>
             </div>
             <div className="flex items-center gap-4">
-              <div className="w-28 h-28 rounded-2xl overflow-hidden border-2 border-slate-400 bg-white flex items-center justify-center">
+              <div className="w-28 h-28 rounded-2xl overflow-hidden border-2 border-[var(--border-strong)] bg-[var(--card)] flex items-center justify-center">
                 {photoPreview ? (
                   <img
                     src={photoPreview}
@@ -223,11 +240,11 @@ export default function AddBorrower() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <User className="h-10 w-10 text-slate-500" />
+                  <User className="h-10 w-10 text-[var(--muted)]" />
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-slate-400 bg-white hover:bg-slate-50 cursor-pointer font-semibold">
+                <label className={`${ui.btn} cursor-pointer`}>
                   <Upload className="h-4 w-4" />
                   <span>Upload</span>
                   <input
@@ -243,7 +260,7 @@ export default function AddBorrower() {
                   <button
                     type="button"
                     onClick={removePhoto}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-slate-400 bg-white hover:bg-slate-50 font-semibold"
+                    className={ui.btn}
                   >
                     <X className="h-4 w-4" />
                     Remove
@@ -254,15 +271,15 @@ export default function AddBorrower() {
           </section>
 
           {/* Identity */}
-          <section className={sectionCard}>
+          <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
-              <User className="h-5 w-5 text-indigo-600" />
+              <User className={ui.iconAccent} />
               <h2 className="font-extrabold text-lg tracking-tight">Identity</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <Field label="First Name">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.firstName}
                   onChange={(e) => setForm({ ...form, firstName: e.target.value })}
                   required
@@ -270,7 +287,7 @@ export default function AddBorrower() {
               </Field>
               <Field label="Last Name">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.lastName}
                   onChange={(e) => setForm({ ...form, lastName: e.target.value })}
                   required
@@ -278,7 +295,7 @@ export default function AddBorrower() {
               </Field>
               <Field label={<LabelWithIcon Icon={Phone} text="Phone" />}>
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="e.g. +2557…"
@@ -287,7 +304,7 @@ export default function AddBorrower() {
               </Field>
               <Field label="Secondary #">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.secondaryPhone}
                   onChange={(e) => setForm({ ...form, secondaryPhone: e.target.value })}
                   placeholder="Optional"
@@ -296,7 +313,7 @@ export default function AddBorrower() {
               <Field label="Email">
                 <input
                   type="email"
-                  className={classInput}
+                  className={ui.input}
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder="name@email.com"
@@ -304,7 +321,7 @@ export default function AddBorrower() {
               </Field>
               <Field label="Business / Occupation">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.occupation}
                   onChange={(e) => setForm({ ...form, occupation: e.target.value })}
                   placeholder="e.g. Retail shop"
@@ -312,7 +329,7 @@ export default function AddBorrower() {
               </Field>
               <Field label="Gender">
                 <select
-                  className={classInput}
+                  className={ui.input}
                   value={form.gender}
                   onChange={(e) => setForm({ ...form, gender: e.target.value })}
                   required
@@ -328,7 +345,7 @@ export default function AddBorrower() {
               <Field label={<LabelWithIcon Icon={Calendar} text="Birth date" />}>
                 <input
                   type="date"
-                  className={classInput}
+                  className={ui.input}
                   value={form.birthDate}
                   onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
                 />
@@ -336,7 +353,7 @@ export default function AddBorrower() {
               <div className="md:col-span-2">
                 <Field label="Employment / Working Status">
                   <select
-                    className={classInput}
+                    className={ui.input}
                     value={form.employmentStatus}
                     onChange={(e) => setForm({ ...form, employmentStatus: e.target.value })}
                   >
@@ -353,16 +370,16 @@ export default function AddBorrower() {
           </section>
 
           {/* Address */}
-          <section className={sectionCard}>
+          <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
-              <MapPin className="h-5 w-5 text-indigo-600" />
+              <MapPin className={ui.iconAccent} />
               <h2 className="font-extrabold text-lg tracking-tight">Address</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <Field label="Address Line">
                   <input
-                    className={classInput}
+                    className={ui.input}
                     value={form.addressLine}
                     onChange={(e) => setForm({ ...form, addressLine: e.target.value })}
                   />
@@ -370,35 +387,35 @@ export default function AddBorrower() {
               </div>
               <Field label="City">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
                 />
               </Field>
               <Field label="District">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.district}
                   onChange={(e) => setForm({ ...form, district: e.target.value })}
                 />
               </Field>
               <Field label="Ward">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.ward}
                   onChange={(e) => setForm({ ...form, ward: e.target.value })}
                 />
               </Field>
               <Field label="Street">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.street}
                   onChange={(e) => setForm({ ...form, street: e.target.value })}
                 />
               </Field>
               <Field label="House #">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.houseNumber}
                   onChange={(e) => setForm({ ...form, houseNumber: e.target.value })}
                 />
@@ -407,15 +424,15 @@ export default function AddBorrower() {
           </section>
 
           {/* Identity docs */}
-          <section className={sectionCard}>
+          <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
-              <IdCard className="h-5 w-5 text-indigo-600" />
+              <IdCard className={ui.iconAccent} />
               <h2 className="font-extrabold text-lg tracking-tight">ID Document</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <Field label="ID Type">
                 <select
-                  className={classInput}
+                  className={ui.input}
                   value={form.idType}
                   onChange={(e) => setForm({ ...form, idType: e.target.value })}
                 >
@@ -429,7 +446,7 @@ export default function AddBorrower() {
               </Field>
               <Field label="ID Number">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.idNumber}
                   onChange={(e) => setForm({ ...form, idNumber: e.target.value })}
                 />
@@ -437,7 +454,7 @@ export default function AddBorrower() {
               <Field label="Issued on">
                 <input
                   type="date"
-                  className={classInput}
+                  className={ui.input}
                   value={form.idIssuedDate}
                   onChange={(e) => setForm({ ...form, idIssuedDate: e.target.value })}
                 />
@@ -445,7 +462,7 @@ export default function AddBorrower() {
               <Field label="Expiry date">
                 <input
                   type="date"
-                  className={classInput}
+                  className={ui.input}
                   value={form.idExpiryDate}
                   onChange={(e) => setForm({ ...form, idExpiryDate: e.target.value })}
                 />
@@ -454,22 +471,22 @@ export default function AddBorrower() {
           </section>
 
           {/* Next of kin */}
-          <section className={sectionCard}>
+          <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
-              <UserPlus className="h-5 w-5 text-indigo-600" />
+              <UserPlus className={ui.iconAccent} />
               <h2 className="font-extrabold text-lg tracking-tight">Next of Kin</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <Field label="Full Name">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.nextKinName}
                   onChange={(e) => setForm({ ...form, nextKinName: e.target.value })}
                 />
               </Field>
               <Field label="Phone">
                 <input
-                  className={classInput}
+                  className={ui.input}
                   value={form.nextKinPhone}
                   onChange={(e) => setForm({ ...form, nextKinPhone: e.target.value })}
                 />
@@ -480,15 +497,15 @@ export default function AddBorrower() {
 
         {/* RIGHT: assignment */}
         <div className="space-y-6 min-w-0">
-          <section className={sectionCard}>
+          <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
-              <Building2 className="h-5 w-5 text-indigo-600" />
+              <Building2 className={ui.iconAccent} />
               <h2 className="font-extrabold text-lg tracking-tight">Assignment & Loan Type</h2>
             </div>
             <div className="grid gap-4">
               <Field label="Branch">
                 <select
-                  className={classInput}
+                  className={ui.input}
                   value={form.branchId}
                   onChange={(e) => setForm({ ...form, branchId: e.target.value })}
                   required
@@ -504,7 +521,7 @@ export default function AddBorrower() {
 
               <Field label="Loan Officer">
                 <select
-                  className={classInput}
+                  className={ui.input}
                   value={form.loanOfficerId}
                   onChange={(e) => setForm({ ...form, loanOfficerId: e.target.value })}
                 >
@@ -519,7 +536,7 @@ export default function AddBorrower() {
 
               <Field label="Loan Type">
                 <select
-                  className={classInput}
+                  className={ui.input}
                   value={form.loanType}
                   onChange={(e) => setForm({ ...form, loanType: e.target.value })}
                 >
@@ -534,7 +551,7 @@ export default function AddBorrower() {
               {form.loanType === "group" && (
                 <Field label="Group ID">
                   <input
-                    className={classInput}
+                    className={ui.input}
                     value={form.groupId}
                     onChange={(e) => setForm({ ...form, groupId: e.target.value })}
                     placeholder="Enter group identifier"
@@ -545,7 +562,7 @@ export default function AddBorrower() {
               <Field label={<LabelWithIcon Icon={Calendar} text="Registration Date" />}>
                 <input
                   type="date"
-                  className={classInput}
+                  className={ui.input}
                   value={form.regDate}
                   onChange={(e) => setForm({ ...form, regDate: e.target.value })}
                 />
@@ -556,19 +573,15 @@ export default function AddBorrower() {
 
         {/* Sticky bottom action bar */}
         <div className="col-span-full">
-          <div className="sticky bottom-0 inset-x-0 z-20 border-t-2 border-slate-400 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+          <div
+            className="sticky bottom-0 inset-x-0 z-20 border-t-2 backdrop-blur"
+            style={{ borderColor: "var(--border-strong)", background: "var(--card)" }}
+          >
             <div className="max-w-screen-2xl mx-auto px-4 py-3 flex justify-end gap-3">
-              <Link
-                to="/borrowers"
-                className="px-4 py-2 rounded-lg border-2 border-slate-400 bg-white hover:bg-slate-50 font-semibold"
-              >
+              <Link to="/borrowers" className={ui.btn}>
                 Cancel
               </Link>
-              <button
-                disabled={submitting}
-                type="submit"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed font-semibold shadow-sm"
-              >
+              <button disabled={submitting} type="submit" className={ui.primary}>
                 <Save className="h-4 w-4" />
                 {submitting ? "Saving…" : "Save"}
               </button>
@@ -584,9 +597,7 @@ export default function AddBorrower() {
 function Field({ label, children }) {
   return (
     <div className="min-w-0">
-      <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-900 mb-1">
-        {label}
-      </div>
+      <div className={ui.label}>{label}</div>
       <div className="min-w-0">{children}</div>
     </div>
   );
@@ -595,7 +606,7 @@ function Field({ label, children }) {
 function LabelWithIcon({ Icon, text }) {
   return (
     <span className="inline-flex items-center gap-1">
-      <Icon className="h-3.5 w-3.5 text-slate-700" />
+      <Icon className={ui.iconMuted} />
       {text}
     </span>
   );

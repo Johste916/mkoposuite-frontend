@@ -1,4 +1,3 @@
-// src/api/settings.js
 import api from "./index";
 
 // Build path helpers that never double-append /api
@@ -6,118 +5,130 @@ const base = (() => {
   const b = api?.defaults?.baseURL || "";
   return b && b.endsWith("/api") ? "" : "/api";
 })();
-const P = (p) => `${base}/settings/${p}`;     // /api/settings/*
-const C = (p) => `${base}/settings/${p}`;     // alias (communications live under /settings too)
+const P = (p) => `${base}/settings/${p}`;
 
-// NOTE: This file mirrors server/routes/settingRoutes.js exactly.
+/** helper to try both /settings/* and top-level fallbacks */
+const tryBoth = (paths, method = "get", body, config) => {
+  const list = Array.isArray(paths) ? paths : [paths];
+  const expanded = list.flatMap((p) => [P(p), `/${p}`]); // e.g. ["settings/communications", "/communications"]
+  switch (method) {
+    case "get": return api.getFirst(expanded, config);
+    case "post": return api.postFirst(expanded, body, config);
+    case "put": return api.putFirst(expanded, body, config);
+    case "patch": return api.patchFirst(expanded, body, config);
+    case "delete": return api.deleteFirst(expanded, config);
+    default: return api.getFirst(expanded, config);
+  }
+};
+
 export const SettingsAPI = {
-  /* ------------------------------ Loan Categories ------------------------------ */
-  getLoanCategories: () => api.get(P("loan-categories")).then(r => r.data),
-  createLoanCategory: (payload) => api.post(P("loan-categories"), payload).then(r => r.data),
-  updateLoanCategory: (id, payload) => api.put(P(`loan-categories/${id}`), payload).then(r => r.data),
-  deleteLoanCategory: (id) => api.delete(P(`loan-categories/${id}`)).then(r => r.data),
+  /* Loan Categories */
+  getLoanCategories: () => api.getJSON(P("loan-categories")),
+  createLoanCategory: (payload) => api.postJSON(P("loan-categories"), payload),
+  updateLoanCategory: (id, payload) => api.putJSON(P(`loan-categories/${id}`), payload),
+  deleteLoanCategory: (id) => api.deleteJSON(P(`loan-categories/${id}`)),
 
-  /* --------------------------------- Loans ------------------------------------ */
-  getLoanSettings:     () => api.get(P("loan-settings")).then(r => r.data),
-  saveLoanSettings:    (v) => api.put(P("loan-settings"), v).then(r => r.data),
+  /* Loans */
+  getLoanSettings: () => api.getJSON(P("loan-settings")),
+  saveLoanSettings: (v) => api.putJSON(P("loan-settings"), v),
 
-  getPenaltySettings:  () => api.get(P("penalty-settings")).then(r => r.data),
-  savePenaltySettings: (v) => api.put(P("penalty-settings"), v).then(r => r.data),
+  getPenaltySettings: () => api.getJSON(P("penalty-settings")),
+  savePenaltySettings: (v) => api.putJSON(P("penalty-settings"), v),
 
-  getLoanFees:         () => api.get(P("loan-fees")).then(r => r.data),
-  saveLoanFees:        (v) => api.put(P("loan-fees"), v).then(r => r.data),
+  getLoanFees: () => api.getJSON(P("loan-fees")),
+  saveLoanFees: (v) => api.putJSON(P("loan-fees"), v),
 
-  getLoanReminders:    () => api.get(P("loan-reminders")).then(r => r.data),
-  saveLoanReminders:   (v) => api.put(P("loan-reminders"), v).then(r => r.data),
+  getLoanReminders: () => api.getJSON(P("loan-reminders")),
+  saveLoanReminders: (v) => api.putJSON(P("loan-reminders"), v),
 
-  getLoanCycles:       () => api.get(P("loan-repayment-cycles")).then(r => r.data),
-  saveLoanCycles:      (v) => api.put(P("loan-repayment-cycles"), v).then(r => r.data),
+  getLoanCycles: () => api.getJSON(P("loan-repayment-cycles")),
+  saveLoanCycles: (v) => api.putJSON(P("loan-repayment-cycles"), v),
 
-  getLoanTemplates:    () => api.get(P("loan-templates")).then(r => r.data),
-  saveLoanTemplates:   (v) => api.put(P("loan-templates"), v).then(r => r.data),
+  getLoanTemplates: () => api.getJSON(P("loan-templates")),
+  saveLoanTemplates: (v) => api.putJSON(P("loan-templates"), v),
 
-  getLoanApprovals:    () => api.get(P("loan-approvals")).then(r => r.data),
-  saveLoanApprovals:   (v) => api.put(P("loan-approvals"), v).then(r => r.data),
+  getLoanApprovals: () => api.getJSON(P("loan-approvals")),
+  saveLoanApprovals: (v) => api.putJSON(P("loan-approvals"), v),
 
-  /* ------------------------------ System/General ------------------------------- */
-  // Backend exposes BOTH "system-settings" (legacy) and "general" (current, used by dashboard)
-  getSystemSettings:   () => api.get(P("system-settings")).then(r => r.data),
-  saveSystemSettings:  (v) => api.put(P("system-settings"), v).then(r => r.data),
+  /* System/General */
+  getSystemSettings: () => api.getJSON(P("system-settings")),
+  saveSystemSettings: (v) => api.putJSON(P("system-settings"), v),
 
-  getGeneral:          () => api.get(P("general")).then(r => r.data),
-  saveGeneral:         (v) => api.put(P("general"), v).then(r => r.data),
+  getGeneral: () => api.getJSON(P("general")),
+  saveGeneral: (v) => api.putJSON(P("general"), v),
 
-  /* -------------------------------- Integrations ------------------------------- */
-  getIntegrationSettings:  () => api.get(P("integration-settings")).then(r => r.data),
-  saveIntegrationSettings: (v) => api.put(P("integration-settings"), v).then(r => r.data),
+  /* Integrations */
+  getIntegrationSettings: () => api.getJSON(P("integration-settings")),
+  saveIntegrationSettings: (v) => api.putJSON(P("integration-settings"), v),
 
-  /* --------------------------------- Branches --------------------------------- */
-  getBranchSettings:   () => api.get(P("branch-settings")).then(r => r.data),
-  updateBranch:        (id, v) => api.put(P(`branch-settings/${id}`), v).then(r => r.data),
+  /* Branches */
+  getBranchSettings: () => api.getJSON(P("branch-settings")),
+  updateBranch: (id, v) => api.putJSON(P(`branch-settings/${id}`), v),
 
-  /* -------------------------------- Borrowers --------------------------------- */
-  getBorrowerSettings: () => api.get(P("borrower-settings")).then(r => r.data),
-  saveBorrowerSettings:(v) => api.put(P("borrower-settings"), v).then(r => r.data),
+  /* Borrowers */
+  getBorrowerSettings: () => api.getJSON(P("borrower-settings")),
+  saveBorrowerSettings: (v) => api.putJSON(P("borrower-settings"), v),
 
-  /* --------------------------------- Users/ACL -------------------------------- */
-  getUsersSettings:    () => api.get(P("user-management")).then(r => r.data),
-  saveUsersSettings:   (v) => api.put(P("user-management"), v).then(r => r.data),
+  /* Users/ACL */
+  getUsersSettings: () => api.getJSON(P("user-management")),
+  saveUsersSettings: (v) => api.putJSON(P("user-management"), v),
 
-  /* ----------------------------------- SMS ------------------------------------ */
-  getSms:      () => api.get(P("sms")).then(r => r.data),
-  saveSms:     (v) => api.put(P("sms"), v).then(r => r.data),
-  getBulkSms:  () => api.get(P("bulk-sms-settings")).then(r => r.data),
-  saveBulkSms: (v) => api.put(P("bulk-sms-settings"), v).then(r => r.data),
+  /* SMS */
+  getSms: () => api.getJSON(P("sms")),
+  saveSms: (v) => api.putJSON(P("sms"), v),
+  getBulkSms: () => api.getJSON(P("bulk-sms-settings")),
+  saveBulkSms: (v) => api.putJSON(P("bulk-sms-settings"), v),
 
-  /* ---------------------------------- Email ----------------------------------- */
-  getEmail: () => api.get(P("email")).then(r => r.data),
-  saveEmail:(v) => api.put(P("email"), v).then(r => r.data),
+  /* Email */
+  getEmail: () => api.getJSON(P("email")),
+  saveEmail: (v) => api.putJSON(P("email"), v),
 
-  /* --------------------------------- Savings ---------------------------------- */
-  getSavingSettings: () => api.get(P("saving-settings")).then(r => r.data),
-  saveSavingSettings:(v) => api.put(P("saving-settings"), v).then(r => r.data),
+  /* Savings */
+  getSavingSettings: () => api.getJSON(P("saving-settings")),
+  saveSavingSettings: (v) => api.putJSON(P("saving-settings"), v),
 
-  /* --------------------------------- Payroll ---------------------------------- */
-  getPayrollSettings: () => api.get(P("payroll-settings")).then(r => r.data),
-  savePayrollSettings:(v) => api.put(P("payroll-settings"), v).then(r => r.data),
+  /* Payroll */
+  getPayrollSettings: () => api.getJSON(P("payroll-settings")),
+  savePayrollSettings: (v) => api.putJSON(P("payroll-settings"), v),
 
-  /* --------------------------------- Payment ---------------------------------- */
-  getPaymentSettings: () => api.get(P("payment-settings")).then(r => r.data),
-  savePaymentSettings:(v) => api.put(P("payment-settings"), v).then(r => r.data),
+  /* Payment */
+  getPaymentSettings: () => api.getJSON(P("payment-settings")),
+  savePaymentSettings: (v) => api.putJSON(P("payment-settings"), v),
 
-  /* --------------------------------- Comments --------------------------------- */
-  getCommentSettings: () => api.get(P("comment-settings")).then(r => r.data),
-  saveCommentSettings:(v) => api.put(P("comment-settings"), v).then(r => r.data),
+  /* Comments */
+  getCommentSettings: () => api.getJSON(P("comment-settings")),
+  saveCommentSettings: (v) => api.putJSON(P("comment-settings"), v),
 
-  /* -------------------------------- Dashboard --------------------------------- */
-  getDashboardSettings: () => api.get(P("dashboard-settings")).then(r => r.data),
-  saveDashboardSettings:(v) => api.put(P("dashboard-settings"), v).then(r => r.data),
+  /* Dashboard */
+  getDashboardSettings: () => api.getJSON(P("dashboard-settings")),
+  saveDashboardSettings: (v) => api.putJSON(P("dashboard-settings"), v),
 
-  /* ------------------------------ Loan Sectors -------------------------------- */
-  getLoanSectorSettings: () => api.get(P("loan-sector-settings")).then(r => r.data),
-  saveLoanSectorSettings:(v) => api.put(P("loan-sector-settings"), v).then(r => r.data),
+  /* Loan Sectors */
+  getLoanSectorSettings: () => api.getJSON(P("loan-sector-settings")),
+  saveLoanSectorSettings: (v) => api.putJSON(P("loan-sector-settings"), v),
 
-  /* ---------------------------- Income Source --------------------------------- */
-  getIncomeSourceSettings: () => api.get(P("income-source-settings")).then(r => r.data),
-  saveIncomeSourceSettings:(v) => api.put(P("income-source-settings"), v).then(r => r.data),
+  /* Income Source */
+  getIncomeSourceSettings: () => api.getJSON(P("income-source-settings")),
+  saveIncomeSourceSettings: (v) => api.putJSON(P("income-source-settings"), v),
 
-  /* -------------------------------- Holidays ---------------------------------- */
-  getHolidaySettings: () => api.get(P("holiday-settings")).then(r => r.data),
-  saveHolidaySettings:(v) => api.put(P("holiday-settings"), v).then(r => r.data),
+  /* Holidays */
+  getHolidaySettings: () => api.getJSON(P("holiday-settings")),
+  saveHolidaySettings: (v) => api.putJSON(P("holiday-settings"), v),
 
-  /* ---------------------------- Communications CRUD --------------------------- */
-  listComms:        () => api.get(C("communications")).then(r => r.data),
-  createComm:       (v) => api.post(C("communications"), v).then(r => r.data),
-  getComm:          (id) => api.get(C(`communications/${id}`)).then(r => r.data),
-  updateComm:       (id, v) => api.put(C(`communications/${id}`), v).then(r => r.data),
-  deleteComm:       (id) => api.delete(C(`communications/${id}`)).then(r => r.data),
-  addCommAttachment:(id, formData) => api.post(C(`communications/${id}/attachments`), formData).then(r => r.data),
-  removeCommAttachment:(id, attId) => api.delete(C(`communications/${id}/attachments/${attId}`)).then(r => r.data),
+  /* Communications (try /settings/communications AND /communications) */
+  listComms: () => tryBoth("communications", "get"),
+  createComm: (v) => tryBoth("communications", "post", v),
+  getComm: (id) => tryBoth(`communications/${id}`, "get"),
+  updateComm: (id, v) => tryBoth(`communications/${id}`, "put", v),
+  deleteComm: (id) => tryBoth(`communications/${id}`, "delete"),
 
-  /* ------------------------------ KV helpers ---------------------------------- */
-  kvGet:   (key) => api.get(P(`kv/${encodeURIComponent(key)}`)).then(r => r.data),
-  kvSave:  (key, value) => api.put(P(`kv/${encodeURIComponent(key)}`), value).then(r => r.data),
-  kvPatch: (key, patch) => api.patch(P(`kv/${encodeURIComponent(key)}`), patch).then(r => r.data),
+  addCommAttachment: (id, formData) => tryBoth(`communications/${id}/attachments`, "post", formData),
+  removeCommAttachment: (id, attId) => tryBoth(`communications/${id}/attachments/${attId}`, "delete"),
+
+  /* KV helpers (try /settings/kv/:key AND /kv/:key) */
+  kvGet: (key) => tryBoth(`kv/${encodeURIComponent(key)}`, "get"),
+  kvSave: (key, value) => tryBoth(`kv/${encodeURIComponent(key)}`, "put", value),
+  kvPatch: (key, patch) => tryBoth(`kv/${encodeURIComponent(key)}`, "patch", patch),
 };
 
 export default SettingsAPI;

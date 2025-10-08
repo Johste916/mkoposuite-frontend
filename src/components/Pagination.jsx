@@ -9,7 +9,7 @@ export default function Pagination({ page, setPage, limit, setLimit, total }) {
         <label className="flex items-center gap-2">
           <span>Rows:</span>
           <select
-            className="border rounded px-2 py-1"
+            className="border border-[var(--border)] bg-[var(--input-bg)] text-[var(--input-fg)] rounded px-2 py-1"
             value={limit}
             onChange={(e) => { setPage(1); setLimit(parseInt(e.target.value, 10)); }}
             aria-label="Rows per page"
@@ -20,7 +20,7 @@ export default function Pagination({ page, setPage, limit, setLimit, total }) {
       </div>
       <div className="flex items-center gap-2">
         <button
-          className="px-3 py-1 border rounded disabled:opacity-50"
+          className="px-3 py-1 border border-[var(--border)] bg-[var(--card)] rounded disabled:opacity-50 hover:bg-[var(--chip-soft)]"
           onClick={() => setPage(Math.max(1, page - 1))}
           disabled={page <= 1}
           aria-label="Previous page"
@@ -29,7 +29,7 @@ export default function Pagination({ page, setPage, limit, setLimit, total }) {
         </button>
         <span aria-live="polite">Page {page} / {totalPages}</span>
         <button
-          className="px-3 py-1 border rounded disabled:opacity-50"
+          className="px-3 py-1 border border-[var(--border)] bg-[var(--card)] rounded disabled:opacity-50 hover:bg-[var(--chip-soft)]"
           onClick={() => setPage(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages}
           aria-label="Next page"

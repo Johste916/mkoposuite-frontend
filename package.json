@@ -11,6 +11,7 @@
     "dupes:code": "jscpd --min-lines 18 --reporters console --exclude \"**/{dist,build,node_modules,.cache}/**\" .",
     "analyze": "cross-env ANALYZE=1 vite build"
   },
+  
   "dependencies": {
     "axios": "^1.6.7",
     "chart.js": "^4.5.0",
