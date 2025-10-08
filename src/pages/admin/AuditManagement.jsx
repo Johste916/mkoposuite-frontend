@@ -1,3 +1,4 @@
+// src/pages/admin/AuditManagement.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
@@ -7,26 +8,40 @@ export default function AuditManagement() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const normalizeList = (payload) => {
+    // Accept either an array or { items: [...] }
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.items)) return payload.items;
+    return [];
+  };
+
   const load = async () => {
-    setLoading(true); setErr("");
+    setLoading(true);
+    setErr("");
     try {
-      // Canonical backend path
       const r = await api.get("/admin/audit");
-      setRows(r.data || []);
+      setRows(normalizeList(r.data));
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || "Failed to load audits");
       setRows([]);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const filtered = rows.filter((x) => {
+  const list = normalizeList(rows);
+
+  const filtered = list.filter((x) => {
     const term = q.toLowerCase().trim();
     if (!term) return true;
-    return [
-      x?.User?.name, x?.Branch?.name, x?.category, x?.message, x?.ip, x?.action,
-    ].some((v) => String(v || "").toLowerCase().includes(term));
+    return [x?.User?.name, x?.Branch?.name, x?.category, x?.message, x?.ip, x?.action].some((v) =>
+      String(v || "").toLowerCase().includes(term)
+    );
   });
 
   const reverse = async (id) => {
@@ -60,7 +75,7 @@ export default function AuditManagement() {
         <input
           className="rounded border px-3 py-2 text-sm"
           value={q}
-          onChange={(e)=>setQ(e.target.value)}
+          onChange={(e) => setQ(e.target.value)}
           placeholder="Search audit…"
         />
       </header>
@@ -90,7 +105,9 @@ export default function AuditManagement() {
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.id} className="border-b last:border-0">
-                    <td className="py-2 pr-3">{new Date(r.createdAt || r.ts || Date.now()).toLocaleString()}</td>
+                    <td className="py-2 pr-3">
+                      {new Date(r.createdAt || r.ts || Date.now()).toLocaleString()}
+                    </td>
                     <td className="py-2 pr-3">{r?.Branch?.name || "-"}</td>
                     <td className="py-2 pr-3">{r?.User?.name || "-"}</td>
                     <td className="py-2 pr-3">{r.category || "-"}</td>
@@ -99,8 +116,15 @@ export default function AuditManagement() {
                     <td className="py-2 pr-3">{r.ip || "-"}</td>
                     <td className="py-2 pr-3">
                       <div className="flex gap-2">
-                        <button className="px-2 py-1 rounded bg-slate-100" onClick={()=>reverse(r.id)}>Reverse</button>
-                        <button className="px-2 py-1 rounded bg-rose-50 text-rose-700" onClick={()=>remove(r.id)}>Delete</button>
+                        <button className="px-2 py-1 rounded bg-slate-100" onClick={() => reverse(r.id)}>
+                          Reverse
+                        </button>
+                        <button
+                          className="px-2 py-1 rounded bg-rose-50 text-rose-700"
+                          onClick={() => remove(r.id)}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
