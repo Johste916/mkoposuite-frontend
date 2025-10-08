@@ -29,6 +29,7 @@ import {
   FiUserCheck,
   FiUsers,
   FiX,
+  FiInfo, // ⬅️ added for ticker label icon
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
@@ -219,7 +220,7 @@ const NAV = () => [
     icon: <FiDatabase />,
     to: "/accounting",
     children: [
-      { label: "Chart of Accounts", to: "/accounting/chart-of-accounts" },
+      { label: "Chart Of Accounts", to: "/accounting/chart-of-accounts" },
       { label: "Trial Balance", to: "/accounting/trial-balance" },
       { label: "Profit & Loss", to: "/accounting/profit-loss" },
       { label: "Cashflow", to: "/accounting/cashflow" },
@@ -867,6 +868,107 @@ const SidebarLayout = () => {
     })();
   }, [activeBranchId, logoutAndGo]);
 
+  // ------------------------ Communications ticker -------------------------
+  const [ticker, setTicker] = useState([]);
+  const [loadingTicker, setLoadingTicker] = useState(false);
+
+  // normalize + filter by flags/time window/role/branch
+  const normalizeTicker = useCallback(
+    (raw) => {
+      const arr = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.items)
+        ? raw.items
+        : Array.isArray(raw?.rows)
+        ? raw.rows
+        : [];
+      const now = Date.now();
+      const roleName = (user?.role || "").toString().toLowerCase();
+
+      return arr
+        .map((c) => ({
+          id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
+          title: c.title ?? "",
+          text: c.text ?? c.body ?? "",
+          type: (c.type || "notice").toString().toLowerCase(),
+          priority: (c.priority || "normal").toString().toLowerCase(),
+          channel: (c.channel || "inapp").toString().toLowerCase(),
+          isActive: Boolean(c.isActive ?? c.active ?? c.enabled ?? true),
+          showInTicker: Boolean(c.showInTicker ?? c.ticker ?? c.showTicker ?? false),
+          startAt: c.startAt ? new Date(c.startAt).getTime() : null,
+          endAt: c.endAt ? new Date(c.endAt).getTime() : null,
+          audienceRole: c.audienceRole ? String(c.audienceRole).toLowerCase() : null,
+          audienceBranchId:
+            c.audienceBranchId != null ? String(c.audienceBranchId) : null,
+        }))
+        .filter((c) => c.isActive && c.channel === "inapp" && c.showInTicker)
+        .filter((c) => (c.startAt ? now >= c.startAt : true))
+        .filter((c) => (c.endAt ? now <= c.endAt : true))
+        .filter((c) => (c.audienceRole ? c.audienceRole === roleName : true))
+        .filter((c) =>
+          c.audienceBranchId && activeBranchId
+            ? String(c.audienceBranchId) === String(activeBranchId)
+            : true
+        )
+        .sort((a, b) => {
+          const rank = { critical: 4, high: 3, normal: 2, low: 1 };
+          const ra = rank[a.priority] || 0;
+          const rb = rank[b.priority] || 0;
+          if (ra !== rb) return rb - ra;
+          return 0;
+        });
+    },
+    [activeBranchId, user]
+  );
+
+  const tryGet = async (paths, opts) => {
+    let lastErr;
+    for (const p of paths) {
+      try {
+        const res = await api.get(p, opts);
+        return res?.data;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error("No endpoint succeeded");
+  };
+
+  const fetchTicker = useCallback(
+    async (signal) => {
+      setLoadingTicker(true);
+      try {
+        // Prefer dashboard endpoint; fall back to admin if needed
+        const data = await tryGet(
+          [
+            "/dashboard/communications",
+            "/api/dashboard/communications",
+            "/admin/communications?activeOnly=1&channel=inapp",
+            "/api/admin/communications?activeOnly=1&channel=inapp",
+          ],
+          { signal }
+        );
+        setTicker(normalizeTicker(data));
+      } catch {
+        setTicker([]);
+      } finally {
+        setLoadingTicker(false);
+      }
+    },
+    [normalizeTicker]
+  );
+
+  // load + light auto-refresh
+  useEffect(() => {
+    const ac = new AbortController();
+    fetchTicker(ac.signal);
+    const id = setInterval(() => fetchTicker(ac.signal), 60_000); // 60s
+    return () => {
+      clearInterval(id);
+      ac.abort();
+    };
+  }, [fetchTicker]);
+
   const userRole = (user?.role || "").toLowerCase();
 
   // Build full NAV, then apply feature filters
@@ -1097,6 +1199,58 @@ const SidebarLayout = () => {
             </div>
           </div>
         </div>
+
+        {/* Global communications ticker */}
+        {!loadingTicker && ticker.length > 0 && (
+          <>
+            <style>{`
+              @keyframes ms-marquee { 0% { transform: translateX(100%) } 100% { transform: translateX(-100%) } }
+            `}</style>
+            <div
+              className="border-t border-[var(--border)]"
+              style={{ background: "var(--table-head-bg)" }}
+              aria-live="polite"
+              aria-label="Organization announcements"
+            >
+              <div className="relative h-9 overflow-hidden">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-2 text-[11px] font-semibold opacity-70"
+                     style={{ color: "var(--muted)" }}>
+                  <FiInfo className="w-3.5 h-3.5 mr-1" /> Announcements
+                </div>
+                <div
+                  className="absolute whitespace-nowrap will-change-transform flex items-center gap-8 h-9"
+                  style={{
+                    animation: "ms-marquee 18s linear infinite",
+                    left: "120px",
+                    color: "var(--fg)",
+                  }}
+                >
+                  {ticker.map((c) => (
+                    <span key={c.id} className="inline-flex items-center gap-2 text-xs">
+                      <span
+                        className="px-1.5 py-0.5 rounded border"
+                        style={{ borderColor: "var(--border)", background: "var(--card)" }}
+                        title={c.priority}
+                      >
+                        {c.type}
+                      </span>
+                      {c.priority !== "normal" && (
+                        <span
+                          className="px-1.5 py-0.5 rounded border"
+                          style={{ borderColor: "var(--border)", background: "var(--card)" }}
+                        >
+                          {c.priority}
+                        </span>
+                      )}
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600" />
+                      <span className="truncate max-w-[56rem]">{c.text || c.title}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </header>
 
       {/* Shell: left sidebar + main content */}

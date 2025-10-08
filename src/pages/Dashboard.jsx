@@ -3,8 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, CreditCard, DollarSign, AlertTriangle, ClipboardList,
-  ThumbsDown, BarChart2, MessageSquare, UserPlus, Download, PlusCircle,
-  ChevronDown, Calendar
+  ThumbsDown, BarChart2, Download, PlusCircle, ChevronDown
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -113,6 +112,7 @@ function toSummary(raw) {
     upcomingRepayments: Array.isArray(s.upcomingRepayments) ? s.upcomingRepayments : [],
     branchPerformance: Array.isArray(s.branchPerformance) ? s.branchPerformance : [],
     officerPerformance: Array.isArray(s.officerPerformance) ? s.officerPerformance : [],
+    generalCommunications: Array.isArray(s.generalCommunications) ? s.generalCommunications : [],
   };
 }
 
@@ -137,7 +137,7 @@ const TZS = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const ui = {
   container: 'w-full px-4 md:px-6 lg:px-8 py-6',
   h1: 'text-3xl font-extrabold tracking-tight',
-  card: 'card', // uses theme.css -> upgraded by .app-theme-bold
+  card: 'card',
   btn: 'inline-flex items-center justify-center rounded-lg px-3 py-2 font-semibold transition border-2 ' +
        'border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)]',
   primary: 'inline-flex items-center rounded-lg px-3 py-2 font-semibold ' +
@@ -149,7 +149,7 @@ const ui = {
   td: 'px-3 py-2 border border-[var(--border)] text-sm text-[var(--fg)]',
 };
 
-/* ---------- Unified field components (token colors) ---------- */
+/* ---------- Unified select component ---------- */
 const baseInput =
   'h-10 w-full rounded-lg text-sm outline-none transition border-2 ' +
   'bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] focus:ring-2 focus:ring-[var(--ring)]';
@@ -164,20 +164,6 @@ const SelectField = ({ className = '', children, ...props }) => (
       aria-hidden="true"
     />
   </div>
-);
-
-const DateField = ({ className = '', ...props }) => (
-  <div className={`relative ${className}`}>
-    <input type="date" {...props} className={`${baseInput} pr-9 appearance-none bg-none ms-date`} />
-    <Calendar
-      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]"
-      aria-hidden="true"
-    />
-  </div>
-);
-
-const TextField = ({ className = '', ...props }) => (
-  <input {...props} className={`${baseInput} ${className}`} />
 );
 
 const Dashboard = () => {
@@ -199,16 +185,6 @@ const Dashboard = () => {
 
   const [comms, setComms] = useState([]);
   const [loadingComms, setLoadingComms] = useState(false);
-
-  const [activity, setActivity] = useState([]);
-  const [activityTotal, setActivityTotal] = useState(0);
-  const [activityPage, setActivityPage] = useState(1);
-  const activityPageSize = 10;
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [commentDraft, setCommentDraft] = useState({});
-  const [assignDraft, setAssignDraft] = useState({});
-  const [submitting, setSubmitting] = useState({});
 
   const [trends, setTrends] = useState(null);
 
@@ -250,9 +226,6 @@ const Dashboard = () => {
       return base;
     }
   };
-
-  const branchNameById = (id) =>
-    branches.find((b) => String(b.id) === String(id))?.name || (id ? `Branch #${id}` : 'All branches');
 
   /* Persist + restore filters */
   useEffect(() => {
@@ -331,30 +304,6 @@ const Dashboard = () => {
     [summary]
   );
 
-  const fetchActivity = useCallback(
-    async (opts = {}, signal) => {
-      try {
-        const res = await api.get('/dashboard/activity', {
-          params: {
-            page: opts.page ?? activityPage,
-            pageSize: activityPageSize,
-            dateFrom: dateFrom || undefined,
-            dateTo: dateTo || undefined,
-          },
-          signal,
-        });
-        setActivity(res.data?.items || []);
-        setActivityTotal(res.data?.total || 0);
-      } catch (err) {
-        if (!isAbort(err)) {
-          console.error('Activity fetch error:', err?.message || err);
-          pushToast('Failed to load activity', 'error');
-        }
-      }
-    },
-    [activityPage, dateFrom, dateTo]
-  );
-
   const fetchTrends = useCallback(async (signal) => {
     try {
       const res = await api.get('/dashboard/monthly-trends', { signal });
@@ -376,11 +325,11 @@ const Dashboard = () => {
 
   const loadAll = useCallback(
     async (signal) => {
-      await Promise.all([fetchSummary(signal), fetchActivity({}, signal), fetchTrends(signal)]);
+      await Promise.all([fetchSummary(signal), fetchTrends(signal)]);
       setLastUpdatedAt(new Date());
       if (autoRefresh > 0) setNextRefreshAt(Date.now() + autoRefresh * 60000);
     },
-    [fetchSummary, fetchActivity, fetchTrends, autoRefresh]
+    [fetchSummary, fetchTrends, autoRefresh]
   );
 
   useEffect(() => {
@@ -440,47 +389,6 @@ const Dashboard = () => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-
-  /* ---------- Activity actions ---------- */
-  const submitComment = async (activityId) => {
-    const key = `c-${activityId}`;
-    setSubmitting((s) => ({ ...s, [key]: true }));
-    try {
-      const text = (commentDraft[activityId] || '').trim();
-      if (!text) return;
-      await api.post(`/dashboard/activity/${activityId}/comment`, { comment: text });
-      setCommentDraft((d) => ({ ...d, [activityId]: '' }));
-      await fetchActivity();
-      pushToast('Reply posted', 'success');
-    } catch (err) {
-      console.error('Add comment error:', err?.message || err);
-      pushToast('Failed to post reply', 'error');
-    } finally {
-      setSubmitting((s) => ({ ...s, [key]: false }));
-    }
-  };
-
-  const submitAssignment = async (activityId) => {
-    const key = `a-${activityId}`;
-    setSubmitting((s) => ({ ...s, [key]: true }));
-    try {
-      const draft = assignDraft[activityId] || {};
-      if (!draft.assigneeId) return;
-      await api.post(`/dashboard/activity/${activityId}/assign`, {
-        assigneeId: draft.assigneeId,
-        dueDate: draft.dueDate || null,
-        note: draft.note || '',
-      });
-      setAssignDraft((d) => ({ ...d, [activityId]: { assigneeId: '', dueDate: '', note: '' } }));
-      await fetchActivity();
-      pushToast('Task assigned', 'success');
-    } catch (err) {
-      console.error('Assign task error:', err?.message || err);
-      pushToast('Failed to assign task', 'error');
-    } finally {
-      setSubmitting((s) => ({ ...s, [key]: false }));
-    }
-  };
 
   /* ---------- Mini bar ---------- */
   const MiniBar = ({ label, value, max }) => {
@@ -543,12 +451,10 @@ const Dashboard = () => {
   return (
     <div className={ui.container}>
       <div className="space-y-6" style={{ color: 'var(--fg)' }}>
-        {/* Remove native dropdown/calendar icons */}
+        {/* Remove native dropdown icons */}
         <style>{`
           select.ms-select{ -webkit-appearance:none; -moz-appearance:none; appearance:none; background-image:none!important; }
           select.ms-select::-ms-expand{ display:none; }
-          input.ms-date[type="date"]{ -webkit-appearance:none; appearance:none; background-image:none!important; }
-          input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; display:none; }
         `}</style>
 
         {/* Top bar */}
@@ -623,12 +529,10 @@ const Dashboard = () => {
                   const ac = new AbortController();
                   Promise.all([
                     fetchSummary(ac.signal),
-                    fetchActivity({ page: 1 }, ac.signal),
                     fetchTrends(ac.signal),
                     fetchCommunications(ac.signal),
                   ])
                     .then(() => {
-                      setActivityPage(1);
                       setLastUpdatedAt(new Date());
                       if (autoRefresh > 0) setNextRefreshAt(Date.now() + autoRefresh * 60000);
                       pushToast('Dashboard refreshed', 'success');
@@ -704,16 +608,10 @@ const Dashboard = () => {
                         {c.priority}
                       </span>
                     )}
-                    {c.audienceRole && (
-                      <span className="text-[11px] px-1.5 py-0.5 rounded border"
-                            style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-                        role: {c.audienceRole}
-                      </span>
-                    )}
                     {typeof c.audienceBranchId !== 'undefined' && c.audienceBranchId !== null && (
                       <span className="text-[11px] px-1.5 py-0.5 rounded border"
                             style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-                        {branchNameById(c.audienceBranchId)}
+                        {branches.find(b => String(b.id) === String(c.audienceBranchId))?.name || `Branch #${c.audienceBranchId}`}
                       </span>
                     )}
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600" />
@@ -732,330 +630,178 @@ const Dashboard = () => {
           <Link to="/repayments/new" className={ui.btn}><PlusCircle className="w-4 h-4" /> Record Repayment</Link>
         </div>
 
-        {/* Main + Right Sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-          {/* Main */}
-          <main className="space-y-6">
-            {loading ? (
+        {/* Main content (full width) */}
+        <main className="space-y-6">
+          {loading ? (
+            <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-32" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Summary Cards */}
               <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <Skeleton key={i} className="h-32" />
-                ))}
-              </div>
-            ) : (
-              <>
-                {/* Summary Cards */}
-                <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
-                  <SummaryCard tone="indigo"  title="Total Borrowers"        value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />}           to={makeTo(ROUTE_PATHS.borrowers)} />
-                  <SummaryCard tone="sky"     title="Total Loans"            value={n(summary?.totalLoans).toLocaleString()}     icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans)} />
-                  <SummaryCard tone="blue"    title="Total Disbursed"        value={money(summary?.totalDisbursed)}              icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })} />
-                  <SummaryCard tone="emerald" title="Total Paid"             value={money(summary?.totalPaid)}                   icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
-                  <SummaryCard tone="emerald" title="Total Repaid"           value={money(summary?.totalRepaid)}                 icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
-                  <SummaryCard tone="indigo"  title="Expected Repayments"    value={money(summary?.totalExpectedRepayments)}     icon={<ClipboardList className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })} />
-                  <SummaryCard tone="cyan"    title="Total Deposits"         value={money(summary?.totalDeposits)}               icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.deposits)} />
-                  <SummaryCard tone="amber"   title="Total Withdrawals"      value={money(summary?.totalWithdrawals)}            icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.withdrawals)} />
-                  <SummaryCard tone="blue"    title="Net Savings"            value={money(summary?.netSavings)}                  icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.savings)} />
-                  <SummaryCard tone="rose"    title="Defaulted Loan"         value={money(summary?.defaultedLoan)}               icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })} />
-                  <SummaryCard tone="rose"    title="Defaulted Interest"     value={money(summary?.defaultedInterest)}           icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })} />
-                  <SummaryCard tone="violet"  title="Outstanding Loan"       value={money(summary?.outstandingLoan)}             icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })} />
-                  <SummaryCard tone="violet"  title="Outstanding Interest"   value={money(summary?.outstandingInterest)}         icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })} />
-                  <SummaryCard tone="slate"   title="Written Off"            value={money(summary?.writtenOff)}                  icon={<ThumbsDown className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })} />
-                  <SummaryCard tone="indigo"  title="PAR (Portfolio at Risk)"value={`${n(summary?.parPercent)}%`}                 icon={<BarChart2 className="w-6 h-6" />}        to={makeTo(ROUTE_PATHS.par, { tab: 'par' })} />
-                </div>
-
-                {/* Monthly Trends */}
-                {trends && (
-                  <div className={`${ui.card} p-4`}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <BarChart2 className="w-5 h-5 text-indigo-600" />
-                      <h3 className="text-lg font-semibold">{
-                        `Monthly Trends${(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}`
-                      }</h3>
-                    </div>
-
-                    <div className="mb-4">
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart
-                          data={[
-                            { name: 'Loans', value: n(trends.monthlyLoans) },
-                            { name: 'Deposits', value: n(trends.monthlyDeposits) },
-                            { name: 'Repayments', value: n(trends.monthlyRepayments) },
-                          ]}
-                        >
-                          <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
-                          <XAxis dataKey="name" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
-                          <Legend wrapperStyle={{ color: chartColors.legend }} />
-                          <Bar dataKey="value" fill={chartColors.bar1} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    {(() => {
-                      const vals = [n(trends.monthlyLoans), n(trends.monthlyDeposits), n(trends.monthlyRepayments)];
-                      const max = Math.max(...vals);
-                      return (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="text-indigo-600"><MiniBar label="Loans (count)" value={n(trends.monthlyLoans)} max={max} /></div>
-                          <div className="text-emerald-600"><MiniBar label="Deposits (TZS)" value={n(trends.monthlyDeposits)} max={max} /></div>
-                          <div className="text-blue-600"><MiniBar label="Repayments (TZS)" value={n(trends.monthlyRepayments)} max={max} /></div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* Top Borrowers / Upcoming Repayments */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className={ui.tableWrap}>
-                    <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-                      <h3 className="text-lg font-semibold">Top Borrowers</h3>
-                    </div>
-                    {topBorrowers.length === 0 ? (
-                      <div className="p-4 text-sm" style={{ color: 'var(--muted)' }}>No data available.</div>
-                    ) : (
-                      <table className="min-w-full">
-                        <thead>
-                          <tr>
-                            <th className={ui.th}>Name</th>
-                            <th className={ui.th}>Outstanding</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {topBorrowers.map((b) => (
-                            <tr key={b.id}>
-                              <td className={ui.td}>{b.name}</td>
-                              <td className={ui.td}>{money(b.outstanding)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  <div className={ui.tableWrap}>
-                    <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-                      <h3 className="text-lg font-semibold">Upcoming Repayments</h3>
-                    </div>
-                    {upcomingRepayments.length === 0 ? (
-                      <div className="p-4 text-sm" style={{ color: 'var(--muted)' }}>No data available.</div>
-                    ) : (
-                      <table className="min-w-full">
-                        <thead>
-                          <tr>
-                            <th className={ui.th}>Borrower</th>
-                            <th className={ui.th}>Due Date</th>
-                            <th className={ui.th}>Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {upcomingRepayments.map((r) => (
-                            <tr key={r.id}>
-                              <td className={ui.td}>{r.borrower}</td>
-                              <td className={ui.td}>{r.dueDate}</td>
-                              <td className={ui.td}>{money(r.amount)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-
-                {/* Performance charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className={`${ui.card} p-4`}>
-                    <h3 className="text-lg font-semibold mb-2">Branch Performance</h3>
-                    {branchPerformance.length === 0 ? (
-                      <p className="text-sm" style={{ color: 'var(--muted)' }}>No data available.</p>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={branchPerformance}>
-                          <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
-                          <XAxis dataKey="branch" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
-                          <Legend wrapperStyle={{ color: chartColors.legend }} />
-                          <Bar dataKey="disbursed" fill={chartColors.bar1} />
-                          <Bar dataKey="repayments" fill={chartColors.bar2} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-
-                  <div className={`${ui.card} p-4`}>
-                    <h3 className="text-lg font-semibold mb-2">Officer Performance</h3>
-                    {officerPerformance.length === 0 ? (
-                      <p className="text-sm" style={{ color: 'var(--muted)' }}>No data available.</p>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={officerPerformance}>
-                          <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
-                          <XAxis dataKey="officer" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
-                          <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
-                          <Legend wrapperStyle={{ color: chartColors.legend }} />
-                          <Bar dataKey="loans" fill={chartColors.bar1} />
-                          <Bar dataKey="collections" fill={chartColors.bar2} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </main>
-
-          {/* RIGHT Sidebar: Recent Activity */}
-          <aside className="lg:sticky lg:top-4 self-start">
-            <div className={`${ui.card} p-4`}>
-              <div className="flex items-center gap-2 mb-3">
-                <ClipboardList className="w-5 h-5 text-indigo-600" />
-                <h2 className="text-lg font-semibold">Recent Activity</h2>
+                <SummaryCard tone="indigo"  title="Total Borrowers"        value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />}           to={makeTo(ROUTE_PATHS.borrowers)} />
+                <SummaryCard tone="sky"     title="Total Loans"            value={n(summary?.totalLoans).toLocaleString()}     icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans)} />
+                <SummaryCard tone="blue"    title="Total Disbursed"        value={money(summary?.totalDisbursed)}              icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })} />
+                <SummaryCard tone="emerald" title="Total Paid"             value={money(summary?.totalPaid)}                   icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
+                <SummaryCard tone="emerald" title="Total Repaid"           value={money(summary?.totalRepaid)}                 icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
+                <SummaryCard tone="indigo"  title="Expected Repayments"    value={money(summary?.totalExpectedRepayments)}     icon={<ClipboardList className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })} />
+                <SummaryCard tone="cyan"    title="Total Deposits"         value={money(summary?.totalDeposits)}               icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.deposits)} />
+                <SummaryCard tone="amber"   title="Total Withdrawals"      value={money(summary?.totalWithdrawals)}            icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.withdrawals)} />
+                <SummaryCard tone="blue"    title="Net Savings"            value={money(summary?.netSavings)}                  icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.savings)} />
+                <SummaryCard tone="rose"    title="Defaulted Loan"         value={money(summary?.defaultedLoan)}               icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })} />
+                <SummaryCard tone="rose"    title="Defaulted Interest"     value={money(summary?.defaultedInterest)}           icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })} />
+                <SummaryCard tone="violet"  title="Outstanding Loan"       value={money(summary?.outstandingLoan)}             icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })} />
+                <SummaryCard tone="violet"  title="Outstanding Interest"   value={money(summary?.outstandingInterest)}         icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })} />
+                <SummaryCard tone="slate"   title="Written Off"            value={money(summary?.writtenOff)}                  icon={<ThumbsDown className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })} />
+                <SummaryCard tone="indigo"  title="PAR (Portfolio at Risk)"value={`${n(summary?.parPercent)}%`}                 icon={<BarChart2 className="w-6 h-6" />}        to={makeTo(ROUTE_PATHS.par, { tab: 'par' })} />
               </div>
 
-              {/* Date search */}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <DateField value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
-                <DateField value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
-                <button
-                  className={`${ui.btn} col-span-2 h-9 text-sm`}
-                  onClick={() => {
-                    setActivityPage(1);
-                    fetchActivity({ page: 1 });
-                  }}
-                >
-                  Search by date
-                </button>
-              </div>
+              {/* Monthly Trends */}
+              {trends && (
+                <div className={`${ui.card} p-4`}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <BarChart2 className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-lg font-semibold">{
+                      `Monthly Trends${(trends.month || trends.year) ? ` — ${trends.month || ''} ${trends.year || ''}` : ''}`
+                    }</h3>
+                  </div>
 
-              {/* Scroll list with fade */}
-              <div className="relative">
-                <div className="absolute inset-x-0 top-0 h-6 pointer-events-none bg-gradient-to-b from-[var(--card)] to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 h-6 pointer-events-none bg-gradient-to-t from-[var(--card)] to-transparent" />
-                <div className="max-h-[520px] overflow-y-auto pr-1 space-y-3">
-                  {activity.length === 0 ? (
-                    <p className="text-sm" style={{ color: 'var(--muted)' }}>No activity.</p>
-                  ) : (
-                    activity.map((a) => (
-                      <div key={a.id} className="rounded-xl p-3 border-2" style={{ borderColor: 'var(--border)' }}>
-                        <p className="text-sm font-semibold">
-                          {a.type} • {a.entityType} #{a.entityId}
-                        </p>
-                        <p className="text-xs break-words" style={{ color: 'var(--fg)' }}>{a.message}</p>
-                        <p className="text-[11px] mt-1" style={{ color: 'var(--muted)' }}>
-                          by {a.createdBy?.name || a.createdBy?.email} • {new Date(a.createdAt).toLocaleString()}
-                        </p>
+                  <div className="mb-4">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart
+                        data={[
+                          { name: 'Loans', value: n(trends.monthlyLoans) },
+                          { name: 'Deposits', value: n(trends.monthlyDeposits) },
+                          { name: 'Repayments', value: n(trends.monthlyRepayments) },
+                        ]}
+                      >
+                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                        <XAxis dataKey="name" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
+                        <Legend wrapperStyle={{ color: chartColors.legend }} />
+                        <Bar dataKey="value" fill={chartColors.bar1} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
 
-                        {Array.isArray(a.comments) && a.comments.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {a.comments.map((c) => (
-                              <div key={c.id} className="rounded p-2 border-2"
-                                   style={{ background: 'var(--table-row-even)', borderColor: 'var(--border)' }}>
-                                <p className="text-xs break-words" style={{ color: 'var(--fg)' }}>{c.comment}</p>
-                                <p className="text-[11px] mt-0.5" style={{ color: 'var(--muted)' }}>
-                                  — {c.createdBy?.name || c.createdBy?.email} • {new Date(c.createdAt).toLocaleString()}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* reply + assign */}
-                        <div className="mt-2 flex gap-2">
-                          <TextField
-                            value={commentDraft[a.id] || ''}
-                            onChange={(e) => setCommentDraft((d) => ({ ...d, [a.id]: e.target.value }))}
-                            placeholder="Reply…"
-                            className="flex-1 h-9 text-xs"
-                          />
-                          <button
-                            onClick={() => submitComment(a.id)}
-                            disabled={submitting[`c-${a.id}`]}
-                            className={`${ui.btn} h-9 px-2 text-xs disabled:opacity-50 gap-1`}
-                          >
-                            <MessageSquare className="w-3 h-3" /> Reply
-                          </button>
-                        </div>
-
-                        <div className="mt-2 grid grid-cols-4 gap-2">
-                          <SelectField
-                            value={assignDraft[a.id]?.assigneeId || ''}
-                            onChange={(e) =>
-                              setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), assigneeId: e.target.value } }))
-                            }
-                            className="col-span-2 h-9 text-xs"
-                          >
-                            <option value="">Assign to…</option>
-                            {officers.map((o) => (
-                              <option key={o.id} value={o.id}>{o.name || o.email}</option>
-                            ))}
-                          </SelectField>
-                          <DateField
-                            value={assignDraft[a.id]?.dueDate || ''}
-                            onChange={(e) =>
-                              setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), dueDate: e.target.value } }))
-                            }
-                            className="h-9 text-xs"
-                          />
-                          <button
-                            onClick={() => submitAssignment(a.id)}
-                            disabled={submitting[`a-${a.id}`]}
-                            className={`${ui.btn} h-9 px-2 text-xs disabled:opacity-50 gap-1`}
-                          >
-                            <UserPlus className="w-3 h-3" /> Assign
-                          </button>
-                          <TextField
-                            value={assignDraft[a.id]?.note || ''}
-                            onChange={(e) =>
-                              setAssignDraft((d) => ({ ...d, [a.id]: { ...(d[a.id] || {}), note: e.target.value } }))
-                            }
-                            placeholder="Note…"
-                            className="col-span-4 h-9 text-xs"
-                          />
-                        </div>
+                  {(() => {
+                    const vals = [n(trends.monthlyLoans), n(trends.monthlyDeposits), n(trends.monthlyRepayments)];
+                    const max = Math.max(...vals);
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="text-indigo-600"><MiniBar label="Loans (count)" value={n(trends.monthlyLoans)} max={max} /></div>
+                        <div className="text-emerald-600"><MiniBar label="Deposits (TZS)" value={n(trends.monthlyDeposits)} max={max} /></div>
+                        <div className="text-blue-600"><MiniBar label="Repayments (TZS)" value={n(trends.monthlyRepayments)} max={max} /></div>
                       </div>
-                    ))
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Top Borrowers / Upcoming Repayments */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className={ui.tableWrap}>
+                  <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                    <h3 className="text-lg font-semibold">Top Borrowers</h3>
+                  </div>
+                  {topBorrowers.length === 0 ? (
+                    <div className="p-4 text-sm" style={{ color: 'var(--muted)' }}>No data available.</div>
+                  ) : (
+                    <table className="min-w-full">
+                      <thead>
+                        <tr>
+                          <th className={ui.th}>Name</th>
+                          <th className={ui.th}>Outstanding</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {topBorrowers.map((b) => (
+                          <tr key={b.id}>
+                            <td className={ui.td}>{b.name}</td>
+                            <td className={ui.td}>{money(b.outstanding)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className={ui.tableWrap}>
+                  <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                    <h3 className="text-lg font-semibold">Upcoming Repayments</h3>
+                  </div>
+                  {upcomingRepayments.length === 0 ? (
+                    <div className="p-4 text-sm" style={{ color: 'var(--muted)' }}>No data available.</div>
+                  ) : (
+                    <table className="min-w-full">
+                      <thead>
+                        <tr>
+                          <th className={ui.th}>Borrower</th>
+                          <th className={ui.th}>Due Date</th>
+                          <th className={ui.th}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {upcomingRepayments.map((r) => (
+                          <tr key={r.id}>
+                            <td className={ui.td}>{r.borrower}</td>
+                            <td className={ui.td}>{r.dueDate}</td>
+                            <td className={ui.td}>{money(r.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   )}
                 </div>
               </div>
 
-              {/* pagination */}
-              {activityTotal > activityPageSize && (
-                <div className="flex justify-between items-center mt-3 text-xs" style={{ color: 'var(--fg)' }}>
-                  <span>{Math.min(activityPage * activityPageSize, activityTotal)} of {activityTotal}</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        const p = Math.max(activityPage - 1, 1);
-                        setActivityPage(p);
-                        fetchActivity({ page: p });
-                      }}
-                      disabled={activityPage === 1}
-                      className={`${ui.btn} px-2 py-1 disabled:opacity-50`}
-                    >
-                      Prev
-                    </button>
-                    <button
-                      onClick={() => {
-                        const next = activityPage * activityPageSize < activityTotal ? activityPage + 1 : activityPage;
-                        if (next !== activityPage) {
-                          setActivityPage(next);
-                          fetchActivity({ page: next });
-                        }
-                      }}
-                      disabled={activityPage * activityPageSize >= activityTotal}
-                      className={`${ui.btn} px-2 py-1 disabled:opacity-50`}
-                    >
-                      Next
-                    </button>
-                  </div>
+              {/* Performance charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className={`${ui.card} p-4`}>
+                  <h3 className="text-lg font-semibold mb-2">Branch Performance</h3>
+                  {branchPerformance.length === 0 ? (
+                    <p className="text-sm" style={{ color: 'var(--muted)' }}>No data available.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={branchPerformance}>
+                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                        <XAxis dataKey="branch" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
+                        <Legend wrapperStyle={{ color: chartColors.legend }} />
+                        <Bar dataKey="disbursed" fill={chartColors.bar1} />
+                        <Bar dataKey="repayments" fill={chartColors.bar2} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
-              )}
-            </div>
-          </aside>
-        </div>
+
+                <div className={`${ui.card} p-4`}>
+                  <h3 className="text-lg font-semibold mb-2">Officer Performance</h3>
+                  {officerPerformance.length === 0 ? (
+                    <p className="text-sm" style={{ color: 'var(--muted)' }}>No data available.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={officerPerformance}>
+                        <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
+                        <XAxis dataKey="officer" tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <YAxis tick={{ fill: chartColors.axis }} axisLine={{ stroke: chartColors.axis }} tickLine={{ stroke: chartColors.axis }} />
+                        <Tooltip contentStyle={{ backgroundColor: chartColors.tooltipBg, borderColor: chartColors.grid, color: chartColors.tooltipText }} wrapperStyle={{ outline: 'none' }} />
+                        <Legend wrapperStyle={{ color: chartColors.legend }} />
+                        <Bar dataKey="loans" fill={chartColors.bar1} />
+                        <Bar dataKey="collections" fill={chartColors.bar2} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </main>
       </div>
     </div>
   );
