@@ -116,6 +116,44 @@ function toSummary(raw) {
   };
 }
 
+/** General communications normalizer (active, in-app, ticker, within window, branch-aware) */
+function toComms(raw, { branchId } = {}) {
+  const arr = Array.isArray(raw)
+    ? raw
+    : raw?.items || raw?.rows || raw?.data || [];
+
+  const now = Date.now();
+  const rank = { critical: 4, high: 3, normal: 2, low: 1 };
+
+  return arr
+    .map((c, i) => ({
+      id: c.id ?? c._id ?? c.uuid ?? `comm_${i}`,
+      title: c.title ?? '',
+      text: c.text ?? c.body ?? '',
+      type: (c.type || 'notice').toString().toLowerCase(),
+      priority: (c.priority || 'normal').toString().toLowerCase(),
+      channel: (c.channel || 'inapp').toString().toLowerCase(),
+      isActive: Boolean(c.isActive ?? c.active ?? c.enabled ?? true),
+      showInTicker: Boolean(c.showInTicker ?? c.ticker ?? c.showTicker ?? false),
+      showOnDashboard: Boolean(c.showOnDashboard ?? c.dashboard ?? false),
+      startAt: c.startAt ? new Date(c.startAt).getTime() : null,
+      endAt: c.endAt ? new Date(c.endAt).getTime() : null,
+      audienceBranchId:
+        c.audienceBranchId != null ? String(c.audienceBranchId) : null,
+      attachments: Array.isArray(c.attachments) ? c.attachments : [],
+    }))
+    .filter((c) => c.isActive && c.channel === 'inapp')
+    .filter((c) => c.showInTicker)
+    .filter((c) => (c.startAt ? now >= c.startAt : true))
+    .filter((c) => (c.endAt ? now <= c.endAt : true))
+    .filter((c) =>
+      c.audienceBranchId && branchId
+        ? String(c.audienceBranchId) === String(branchId)
+        : true
+    )
+    .sort((a, b) => (rank[b.priority] || 0) - (rank[a.priority] || 0));
+}
+
 /** Observe the <html> class list so charts can re-theme instantly */
 const useIsDarkMode = () => {
   const [isDark, setIsDark] = useState(() =>
@@ -291,17 +329,33 @@ const Dashboard = () => {
     async (signal) => {
       setLoadingComms(true);
       try {
-        const res = await api.get('/dashboard/communications', { signal }).catch(() => null);
-        if (res?.data && Array.isArray(res.data)) {
-          setComms(res.data);
-        } else {
-          setComms(Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : []);
+        // Try multiple endpoints; accept many response shapes
+        const data = await tryGET(
+          [
+            ...apiVariants('dashboard/communications'),
+            ...apiVariants('admin/communications?activeOnly=1&channel=inapp'),
+            ...apiVariants('settings/communications?activeOnly=1&channel=inapp'),
+          ],
+          { signal, params: { branchId } }
+        );
+
+        let list = toComms(data, { branchId });
+
+        // Fallback to summary payload if direct endpoint is empty
+        if (!list.length && Array.isArray(summary?.generalCommunications)) {
+          list = toComms(summary.generalCommunications, { branchId });
         }
+
+        setComms(list);
+      } catch {
+        // Final fallback to whatever came in the summary (if any)
+        const list = toComms(summary?.generalCommunications || [], { branchId });
+        setComms(list);
       } finally {
         setLoadingComms(false);
       }
     },
-    [summary]
+    [branchId, summary]
   );
 
   const fetchTrends = useCallback(async (signal) => {
@@ -615,7 +669,7 @@ const Dashboard = () => {
                       </span>
                     )}
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600" />
-                    <span className="truncate">{c.text}</span>
+                    <span className="truncate">{c.text || c.title}</span>
                   </span>
                 ))}
               </div>
