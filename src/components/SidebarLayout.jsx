@@ -29,7 +29,7 @@ import {
   FiUserCheck,
   FiUsers,
   FiX,
-  FiInfo, // label icon for ticker
+  FiInfo,
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
@@ -45,17 +45,15 @@ const isUuid = (v) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(v || "")
   );
-const isNumericId = (v) => /^\d+$/.test(String(v || ""));
-
 const isEditableTarget = (el) => {
   if (!el) return false;
   const tag = (el.tagName || "").toLowerCase();
-  const editable =
+  return (
     tag === "input" ||
     tag === "textarea" ||
     el.isContentEditable ||
-    ((el.getAttribute && el.getAttribute("role")) === "textbox");
-  return editable;
+    ((el.getAttribute && el.getAttribute("role")) === "textbox")
+  );
 };
 
 /** ===== Helpers aligned with Dashboard ===== */
@@ -69,19 +67,6 @@ const isAbort = (err) =>
   err?.name === "CanceledError" ||
   err?.code === "ERR_CANCELED" ||
   /abort|cancell?ed/i.test(err?.message || "");
-
-const tryGET = async (paths = [], opts = {}) => {
-  let lastErr;
-  for (const p of paths) {
-    try {
-      const res = await api.get(p, opts);
-      return res?.data;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error("No endpoint succeeded");
-};
 
 /* ------------------------------- NAV CONFIG -------------------------------- */
 const NAV = () => [
@@ -307,64 +292,35 @@ const HeaderGlobalSearch = ({ branchId }) => {
   const inputRef = useRef(null);
   const rootRef = useRef(null);
 
-  // Deep-link routes
   const ENTITY_ROUTES = useMemo(
     () => ({
       borrower: (h) => ({ to: `/borrowers/${h.id}` }),
       borrowers: (h) => ({ to: `/borrowers/${h.id}` }),
       group: (h) => ({ to: `/borrowers/groups/${h.id}` }),
       borrower_group: (h) => ({ to: `/borrowers/groups/${h.id}` }),
-
       loan: (h) => ({ to: `/loans/${h.id}` }),
       loans: (h) => ({ to: `/loans/${h.id}` }),
-
       repayment: (h) => ({ to: `/repayments/${h.id}` }),
-      repayments: (h) => ({
-        to: `/repayments?q=${encodeURIComponent(h.meta?.receiptNo || h.id)}`,
-      }),
-      receipt: (h) => ({
-        to: `/repayments/receipts?q=${encodeURIComponent(
-          h.meta?.receiptNo || h.id
-        )}`,
-      }),
-
-      saving: (h) => ({
-        to: `/savings?q=${encodeURIComponent(h.meta?.accountNo || h.id)}`,
-      }),
+      repayments: (h) => ({ to: `/repayments?q=${encodeURIComponent(h.meta?.receiptNo || h.id)}` }),
+      receipt: (h) => ({ to: `/repayments/receipts?q=${encodeURIComponent(h.meta?.receiptNo || h.id)}` }),
+      saving: (h) => ({ to: `/savings?q=${encodeURIComponent(h.meta?.accountNo || h.id)}` }),
       deposit: (h) => ({ to: `/deposits?q=${encodeURIComponent(h.id)}` }),
       withdrawal: (h) => ({ to: `/withdrawals?q=${encodeURIComponent(h.id)}` }),
       bank: (h) => ({ to: `/banks/${h.id}` }),
-      bank_transaction: (h) => ({
-        to: `/banks/transactions?q=${encodeURIComponent(h.id)}`,
-      }),
-      cash_transaction: (h) => ({
-        to: `/cash/transactions?q=${encodeURIComponent(h.id)}`,
-      }),
-
-      collateral: (h) => ({
-        to: `/collateral?q=${encodeURIComponent(h.id)}`,
-      }),
+      bank_transaction: (h) => ({ to: `/banks/transactions?q=${encodeURIComponent(h.id)}` }),
+      cash_transaction: (h) => ({ to: `/cash/transactions?q=${encodeURIComponent(h.id)}` }),
+      collateral: (h) => ({ to: `/collateral?q=${encodeURIComponent(h.id)}` }),
       expense: (h) => ({ to: `/expenses?q=${encodeURIComponent(h.id)}` }),
       income: (h) => ({ to: `/other-income?q=${encodeURIComponent(h.id)}` }),
       asset: (h) => ({ to: `/assets/${h.id}` }),
-
       user: (h) => ({ to: `/users/${h.id}` }),
-      staff: (h) => ({
-        to: `/user-management?userId=${encodeURIComponent(h.id)}`,
-      }),
-      role: (h) => ({
-        to: `/user-management/roles?q=${encodeURIComponent(h.title || h.id)}`,
-      }),
-      permission: (h) => ({
-        to: `/user-management/permissions?q=${encodeURIComponent(
-          h.title || h.id
-        )}`,
-      }),
+      staff: (h) => ({ to: `/user-management?userId=${encodeURIComponent(h.id)}` }),
+      role: (h) => ({ to: `/user-management/roles?q=${encodeURIComponent(h.title || h.id)}` }),
+      permission: (h) => ({ to: `/user-management/permissions?q=${encodeURIComponent(h.title || h.id)}` }),
       investor: (h) => ({ to: `/investors/${h.id}` }),
       employee: (h) => ({ to: `/hr/employees/${h.id}` }),
       payroll: (h) => ({ to: `/payroll?q=${encodeURIComponent(h.id)}` }),
       branch: (h) => ({ to: `/branches/${h.id}` }),
-
       default: (h) => ({ to: `/?q=${encodeURIComponent(h.title || q)}` }),
     }),
     [q]
@@ -389,9 +345,7 @@ const HeaderGlobalSearch = ({ branchId }) => {
         const norm = arr
           .map((h) => ({
             id: h.id ?? h._id ?? h.uuid,
-            type: (h.type || h.entity || h.module || "default")
-              .toString()
-              .toLowerCase(),
+            type: (h.type || h.entity || h.module || "default").toString().toLowerCase(),
             title:
               h.title ||
               h.name ||
@@ -425,14 +379,12 @@ const HeaderGlobalSearch = ({ branchId }) => {
     [branchId]
   );
 
-  // Debounced querying
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => fetchHits(q), 220);
     return () => debounceRef.current && clearTimeout(debounceRef.current);
   }, [q, fetchHits]);
 
-  // Click outside to close
   useEffect(() => {
     if (typeof document === "undefined") return;
     const onDoc = (e) => {
@@ -443,7 +395,6 @@ const HeaderGlobalSearch = ({ branchId }) => {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  // Global shortcuts: "/" and ⌘K / Ctrl+K
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onKey = (e) => {
@@ -453,13 +404,9 @@ const HeaderGlobalSearch = ({ branchId }) => {
         inputRef.current?.focus();
         setOpen(true);
       }
-      const plat =
-        (typeof navigator !== "undefined" && navigator.platform) || "";
+      const plat = (typeof navigator !== "undefined" && navigator.platform) || "";
       const isMac = /mac/i.test(plat);
-      if (
-        (isMac && e.metaKey && e.key.toLowerCase() === "k") ||
-        (!isMac && e.ctrlKey && e.key.toLowerCase() === "k")
-      ) {
+      if ((isMac && e.metaKey && e.key.toLowerCase() === "k") || (!isMac && e.ctrlKey && e.key.toLowerCase() === "k")) {
         e.preventDefault();
         inputRef.current?.focus();
         setOpen(true);
@@ -522,12 +469,10 @@ const HeaderGlobalSearch = ({ branchId }) => {
   return (
     <div ref={rootRef} className="relative w-full">
       <div className="relative">
-        {/* Left icon */}
         <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
           <FiSearch className="w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
         </span>
 
-        {/* Input — fixed height and paddings so it never overlaps */}
         <input
           ref={inputRef}
           type="text"
@@ -547,7 +492,6 @@ const HeaderGlobalSearch = ({ branchId }) => {
           aria-label="Global search"
         />
 
-        {/* Clear button */}
         {q && (
           <button
             onClick={() => {
@@ -564,7 +508,6 @@ const HeaderGlobalSearch = ({ branchId }) => {
         )}
       </div>
 
-      {/* Results */}
       {open && q?.length >= 2 && (
         <div
           className="absolute z-[60] mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-lg overflow-hidden"
@@ -622,7 +565,6 @@ const HeaderGlobalSearch = ({ branchId }) => {
         </div>
       )}
 
-      {/* External Search button (never overlaps the input) */}
       <button
         type="button"
         onClick={onSearchClick}
@@ -745,7 +687,6 @@ const SidebarLayout = () => {
   const featureCtx = useFeatureConfig();
   const { loading: featuresLoading, features } = featureCtx;
 
-  // Avatar menu
   const [avatarOpen, setAvatarOpen] = useState(false);
   const avatarRef = useRef(null);
   useEffect(() => {
@@ -838,7 +779,7 @@ const SidebarLayout = () => {
     if (storedBranch) setActiveBranchId(String(storedBranch));
   }, []);
 
-  // sync API headers with tenant & branch changes
+  // sync API headers with tenant & branch changes (accept UUIDs or any string)
   useEffect(() => {
     if (tenant?.id && isUuid(tenant.id)) {
       api.defaults.headers.common["x-tenant-id"] = tenant.id;
@@ -848,7 +789,7 @@ const SidebarLayout = () => {
   }, [tenant?.id]);
 
   useEffect(() => {
-    if (activeBranchId && isNumericId(activeBranchId)) {
+    if (activeBranchId) {
       api.defaults.headers.common["x-branch-id"] = String(activeBranchId);
       localStorage.setItem("activeBranchId", String(activeBranchId));
     } else {
@@ -857,12 +798,12 @@ const SidebarLayout = () => {
     }
   }, [activeBranchId]);
 
-  // Branch changes triggered by external pages (optional)
+  // Branch changes fired elsewhere
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onBranch = (e) => {
       const id = String(e?.detail?.id || "");
-      if (id && isNumericId(id)) setActiveBranchId(id);
+      if (id) setActiveBranchId(id);
     };
     window.addEventListener("ms:branch-changed", onBranch);
     return () => window.removeEventListener("ms:branch-changed", onBranch);
@@ -881,7 +822,7 @@ const SidebarLayout = () => {
     })();
   }, [logoutAndGo]);
 
-  // Branch list
+  // Branch list (first branch auto-select if none; allow any ID shape)
   useEffect(() => {
     (async () => {
       try {
@@ -894,7 +835,7 @@ const SidebarLayout = () => {
         setBranches(list);
         if (list.length && !activeBranchId) {
           const firstId = String(list[0]?.id ?? "");
-          if (isNumericId(firstId)) setActiveBranchId(firstId);
+          if (firstId) setActiveBranchId(firstId);
         }
       } catch (e) {
         if (e?.response?.status === 401) logoutAndGo();
@@ -906,7 +847,6 @@ const SidebarLayout = () => {
   const [ticker, setTicker] = useState([]);
   const [loadingTicker, setLoadingTicker] = useState(false);
 
-  // normalize + filter by flags/time window/role/branch (supports arrays)
   const normalizeTicker = useCallback(
     (raw) => {
       const arr = Array.isArray(raw)
@@ -931,8 +871,7 @@ const SidebarLayout = () => {
         return Array.from(new Set([primary, ...extras].filter(Boolean)));
       })();
 
-      const toArray = (v) =>
-        Array.isArray(v) ? v : v == null ? [] : [v];
+      const toArray = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
 
       return arr
         .map((c) => {
@@ -942,7 +881,9 @@ const SidebarLayout = () => {
           const audienceRoles = toArray(c.audienceRoles || c.roles || c.role)
             .map((r) => (r ?? "").toString().toLowerCase())
             .filter(Boolean);
-          const audienceBranchIds = toArray(c.audienceBranchIds || c.branchIds || c.audienceBranchId || c.branchId)
+          const audienceBranchIds = toArray(
+            c.audienceBranchIds || c.branchIds || c.audienceBranchId || c.branchId
+          )
             .map((b) => (b != null ? String(b) : null))
             .filter(Boolean);
 
@@ -961,22 +902,17 @@ const SidebarLayout = () => {
             audienceBranchIds,
           };
         })
-        // active + channel + flag
         .filter((c) => c.isActive && c.channel === "inapp" && c.showInTicker)
-        // window
         .filter((c) => (c.startAt ? now >= c.startAt : true))
         .filter((c) => (c.endAt ? now <= c.endAt : true))
-        // role targeting (match any of the user's roles OR if none specified)
         .filter((c) =>
           c.audienceRoles?.length ? c.audienceRoles.some((r) => roleNames.includes(r)) : true
         )
-        // branch targeting (match active branch OR if none specified)
         .filter((c) =>
           activeBranchId && c.audienceBranchIds?.length
             ? c.audienceBranchIds.map(String).includes(String(activeBranchId))
             : true
         )
-        // sort by priority
         .sort((a, b) => {
           const rank = { critical: 4, high: 3, normal: 2, low: 1 };
           const ra = rank[a.priority] || 0;
@@ -992,8 +928,7 @@ const SidebarLayout = () => {
     async (signal) => {
       setLoadingTicker(true);
       try {
-        // Prefer dashboard endpoint; fall back to admin if needed (with and without /api)
-        const data = await tryGET(
+        const data = await api.getFirst(
           [
             ...apiVariants("dashboard/communications"),
             ...apiVariants("admin/communications?activeOnly=1&channel=inapp&showInTicker=1"),
@@ -1004,7 +939,6 @@ const SidebarLayout = () => {
         setTicker(normalizeTicker(data));
       } catch (err) {
         if (!isAbort(err)) {
-          // optional console, but don't spam UI
           // console.error("Ticker fetch error:", err?.message || err);
         }
         setTicker([]);
@@ -1015,21 +949,19 @@ const SidebarLayout = () => {
     [normalizeTicker]
   );
 
-  // initial load + interval refresh
   useEffect(() => {
     const ac = new AbortController();
     fetchTicker(ac.signal);
     const id = setInterval(() => {
       const ac2 = new AbortController();
       fetchTicker(ac2.signal).finally(() => ac2.abort());
-    }, 60_000); // 60s
+    }, 60_000);
     return () => {
       clearInterval(id);
       ac.abort();
     };
   }, [fetchTicker]);
 
-  // immediate refresh on branch change (align with Dashboard behavior)
   useEffect(() => {
     const ac = new AbortController();
     fetchTicker(ac.signal).finally(() => ac.abort());
@@ -1037,24 +969,20 @@ const SidebarLayout = () => {
 
   const userRole = (user?.role || "").toLowerCase();
 
-  // Build full NAV, then apply feature filters
   const computedNav = useMemo(() => {
     const base = NAV();
     return filterNavByFeatures(base, features, userRole, featureCtx);
   }, [features, userRole, featureCtx]);
 
-  // close mobile + avatar when route changes
   useEffect(() => {
     setMobileOpen(false);
     setAvatarOpen(false);
   }, [location.pathname]);
 
   const initial =
-    (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() ||
-    "U";
+    (user?.displayName || user?.name || user?.email || "").charAt(0)?.toUpperCase() || "U";
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
-  // Derive org/company label for sidebar header
   const orgName =
     (tenant?.name || "").trim() ||
     (user?.tenant?.name || "").trim() ||
@@ -1064,7 +992,6 @@ const SidebarLayout = () => {
     "Workspace";
 
   return (
-    /* app-theme-bold enables token hardeners globally */
     <div className="app-theme-bold min-h-screen bg-[var(--bg)] text-[var(--fg)]">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-[var(--panel)] border-[var(--border)]">
@@ -1078,12 +1005,9 @@ const SidebarLayout = () => {
               >
                 {mobileOpen ? <FiX /> : <FiMenu />}
               </button>
-
-              {/* Brand word-mark only */}
               <BrandMark size={28} />
             </div>
 
-            {/* Centered search area on desktop */}
             <div className="hidden md:flex flex-1 justify-center">
               <div className="relative w-full max-w-[720px]">
                 <HeaderGlobalSearch branchId={activeBranchId} />
@@ -1114,7 +1038,7 @@ const SidebarLayout = () => {
                 {isDark ? <FiSun /> : <FiMoon />}
               </button>
 
-              {/* Avatar dropdown */}
+              {/* Avatar */}
               <div className="relative" ref={avatarRef}>
                 <button
                   onClick={() => setAvatarOpen((v) => !v)}
@@ -1178,86 +1102,33 @@ const SidebarLayout = () => {
                       </span>
                     </NavLink>
 
-                    {hasAnyRole(
-                      "system_admin",
-                      "super_admin",
-                      "admin",
-                      "director",
-                      "developer"
-                    ) && (
+                    {hasAnyRole("system_admin", "super_admin", "admin", "director", "developer") && (
                       <>
-                        <NavLink
-                          to="/subscription"
-                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            <FiSettings /> Subscription
-                          </span>
+                        <NavLink to="/subscription" className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm" onClick={() => setAvatarOpen(false)}>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Subscription</span>
                         </NavLink>
-                        <NavLink
-                          to="/support-tickets"
-                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            <FiSettings /> Support Tickets
-                          </span>
+                        <NavLink to="/support-tickets" className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm" onClick={() => setAvatarOpen(false)}>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Support Tickets</span>
                         </NavLink>
-                        <NavLink
-                          to="/impersonate-tenant"
-                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            <FiUsers /> Impersonate
-                          </span>
+                        <NavLink to="/impersonate-tenant" className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm" onClick={() => setAvatarOpen(false)}>
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Impersonate</span>
                         </NavLink>
-                        <NavLink
-                          to="/tenants-admin"
-                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            <FiUsers /> Tenants (New)
-                          </span>
+                        <NavLink to="/tenants-admin" className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm" onClick={() => setAvatarOpen(false)}>
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (New)</span>
                         </NavLink>
-                        <NavLink
-                          to="/account/organization"
-                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            <FiSettings /> Organization
-                          </span>
+                        <NavLink to="/account/organization" className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm" onClick={() => setAvatarOpen(false)}>
+                          <span className="inline-flex items-center gap-2"><FiSettings /> Organization</span>
                         </NavLink>
-                        <NavLink
-                          to="/admin/tenants"
-                          className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
-                          onClick={() => setAvatarOpen(false)}
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            <FiUsers /> Tenants (SysAdmin)
-                          </span>
+                        <NavLink to="/admin/tenants" className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm" onClick={() => setAvatarOpen(false)}>
+                          <span className="inline-flex items-center gap-2"><FiUsers /> Tenants (SysAdmin)</span>
                         </NavLink>
                       </>
                     )}
-                    <NavLink
-                      to="/admin"
-                      className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm"
-                      onClick={() => setAvatarOpen(false)}
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <FiSettings /> Admin
-                      </span>
+                    <NavLink to="/admin" className="block px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm" onClick={() => setAvatarOpen(false)}>
+                      <span className="inline-flex items-center gap-2"><FiSettings /> Admin</span>
                     </NavLink>
-                    <button
-                      onClick={logoutAndGo}
-                      className="w-full text-left px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm text-rose-400"
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <FiLogOut /> Logout
-                      </span>
+                    <button onClick={logoutAndGo} className="w-full text-left px-3 py-2 rounded hover:bg-[var(--nav-item-hover-bg)] text-sm text-rose-400">
+                      <span className="inline-flex items-center gap-2"><FiLogOut /> Logout</span>
                     </button>
                   </div>
                 )}
@@ -1266,12 +1137,10 @@ const SidebarLayout = () => {
           </div>
         </div>
 
-        {/* Global communications ticker */}
+        {/* Global communications ticker (aligned with Dashboard rules) */}
         {!loadingTicker && ticker.length > 0 && (
           <>
-            <style>{`
-              @keyframes ms-marquee { 0% { transform: translateX(100%) } 100% { transform: translateX(-100%) } }
-            `}</style>
+            <style>{`@keyframes ms-marquee{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
             <div
               className="border-t border-[var(--border)]"
               style={{ background: "var(--table-head-bg)" }}
@@ -1287,26 +1156,15 @@ const SidebarLayout = () => {
                 </div>
                 <div
                   className="absolute whitespace-nowrap will-change-transform flex items-center gap-8 h-9"
-                  style={{
-                    animation: "ms-marquee 18s linear infinite",
-                    left: "120px",
-                    color: "var(--fg)",
-                  }}
+                  style={{ animation: "ms-marquee 18s linear infinite", left: "120px", color: "var(--fg)" }}
                 >
                   {ticker.map((c) => (
                     <span key={c.id} className="inline-flex items-center gap-2 text-xs">
-                      <span
-                        className="px-1.5 py-0.5 rounded border"
-                        style={{ borderColor: "var(--border)", background: "var(--card)" }}
-                        title={c.priority}
-                      >
+                      <span className="px-1.5 py-0.5 rounded border" style={{ borderColor: "var(--border)", background: "var(--card)" }} title={c.priority}>
                         {c.type}
                       </span>
                       {c.priority !== "normal" && (
-                        <span
-                          className="px-1.5 py-0.5 rounded border"
-                          style={{ borderColor: "var(--border)", background: "var(--card)" }}
-                        >
+                        <span className="px-1.5 py-0.5 rounded border" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
                           {c.priority}
                         </span>
                       )}
@@ -1321,16 +1179,11 @@ const SidebarLayout = () => {
         )}
       </header>
 
-      {/* Shell: left sidebar + main content */}
+      {/* Shell */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
-        {/* Sidebar */}
         <aside className="app-sidebar hidden lg:block">
           <div className="sidebar-scroll h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
-            {/* Single place to show org/user/company */}
-            <div
-              className="px-3 pb-2 text-xs font-semibold tracking-tight text-[var(--muted)] truncate"
-              title={orgName}
-            >
+            <div className="px-3 pb-2 text-xs font-semibold tracking-tight text-[var(--muted)] truncate" title={orgName}>
               {orgName}
             </div>
 
@@ -1352,7 +1205,6 @@ const SidebarLayout = () => {
           </div>
         </aside>
 
-        {/* Main content */}
         <main className="legacy-compat min-h-[calc(100vh-56px)]">
           <div className="ms-page">
             <Outlet />
@@ -1366,18 +1218,11 @@ const SidebarLayout = () => {
           <div className="app-sidebar w-72 max-w-[80vw] h-full shadow-xl flex flex-col">
             <div className="h-14 flex items-center justify-between px-3 border-b border-[var(--border)]">
               <BrandMark size={24} />
-              <button
-                className="p-2 rounded hover:bg-[var(--nav-item-hover-bg)]"
-                onClick={closeMobile}
-                aria-label="Close"
-              >
+              <button className="p-2 rounded hover:bg-[var(--nav-item-hover-bg)]" onClick={closeMobile} aria-label="Close">
                 <FiX />
               </button>
             </div>
-            <div
-              className="px-3 pt-2 pb-1 text-xs font-semibold text-[var(--muted)] truncate"
-              title={orgName}
-            >
+            <div className="px-3 pt-2 pb-1 text-xs font-semibold text-[var(--muted)] truncate" title={orgName}>
               {orgName}
             </div>
             <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -1397,11 +1242,7 @@ const SidebarLayout = () => {
               )}
             </div>
           </div>
-          <button
-            className="flex-1 bg-black/40"
-            aria-label="Close overlay"
-            onClick={closeMobile}
-          />
+          <button className="flex-1 bg-black/40" aria-label="Close overlay" onClick={closeMobile} />
         </div>
       )}
     </div>

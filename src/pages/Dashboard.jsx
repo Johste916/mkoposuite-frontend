@@ -116,6 +116,77 @@ function toSummary(raw) {
   };
 }
 
+/* ---------- Communications helpers (normalize + filter like header ticker, but broader) ---------- */
+function getCurrentUserRole() {
+  try {
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    return (u?.role || u?.Roles?.[0]?.name || '').toString().toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/** Normalize then apply rules:
+ *  - in-app only
+ *  - active = true
+ *  - within start/end time window (if provided)
+ *  - audienceRole match (if provided)
+ *  - audienceBranchId match or global
+ * Dashboard ribbon does NOT require showInTicker.
+ */
+function normalizeComms(raw, { branchId, role }) {
+  const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
+  const now = Date.now();
+  const roleName = (role || '').toString().toLowerCase();
+
+  return arr
+    .map((c) => {
+      const attachmentsRaw = Array.isArray(c.attachments)
+        ? c.attachments
+        : Array.isArray(c.files)
+        ? c.files
+        : [];
+
+      const attachments = attachmentsRaw
+        .map((a) => ({
+          ...a,
+          fileUrl: a?.fileUrl || a?.url || a?.href || a?.path || '',
+        }))
+        .filter((a) => a.fileUrl);
+
+      return {
+        id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
+        title: c.title ?? '',
+        text: c.text ?? c.body ?? c.title ?? '',
+        type: (c.type || 'notice').toString().toLowerCase(),
+        priority: (c.priority || 'normal').toString().toLowerCase(),
+        channel: (c.channel || 'inapp').toString().toLowerCase(),
+        isActive: Boolean(c.isActive ?? c.active ?? c.enabled ?? true),
+        showInTicker: Boolean(c.showInTicker ?? c.ticker ?? c.showTicker ?? false),
+        startAt: c.startAt ? new Date(c.startAt).getTime() : null,
+        endAt: c.endAt ? new Date(c.endAt).getTime() : null,
+        audienceRole: c.audienceRole ? String(c.audienceRole).toLowerCase() : null,
+        audienceBranchId:
+          c.audienceBranchId != null
+            ? String(c.audienceBranchId)
+            : c.branchId != null
+            ? String(c.branchId)
+            : c.targetBranchId != null
+            ? String(c.targetBranchId)
+            : null,
+        attachments,
+      };
+    })
+    .filter((c) => c.text) // must have something to show
+    .filter((c) => c.isActive && c.channel === 'inapp')
+    .filter((c) => (c.startAt ? now >= c.startAt : true))
+    .filter((c) => (c.endAt ? now <= c.endAt : true))
+    .filter((c) => (c.audienceRole ? c.audienceRole === roleName : true))
+    .filter((c) =>
+      branchId ? (c.audienceBranchId ? String(c.audienceBranchId) === String(branchId) : true) : true
+    );
+}
+
 /** Observe the <html> class list so charts can re-theme instantly */
 const useIsDarkMode = () => {
   const [isDark, setIsDark] = useState(() =>
@@ -287,97 +358,39 @@ const Dashboard = () => {
     }
   }, [branchId, officerId, timeRange]);
 
-  /** UPDATED: robust communications fetch + normalization + branch filtering + fallback */
+  /** UPDATED: robust communications fetch + normalization + filters + fallback */
   const fetchCommunications = useCallback(
     async (signal) => {
       setLoadingComms(true);
+      const role = getCurrentUserRole();
       try {
-        const raw = await tryGET(
-          [
-            ...apiVariants('dashboard/communications'),
-            ...apiVariants('admin/communications?activeOnly=1'),
-            ...apiVariants('admin/communications?activeOnly=1&channel=inapp'),
-          ],
-          { signal }
-        );
+        // Try dashboard comms first, then admin; prefer server-side active/channel filters when available.
+        const endpoints = [
+          ...apiVariants('dashboard/communications'),
+          ...apiVariants('admin/communications?activeOnly=1&channel=inapp'),
+          ...apiVariants('admin/communications?activeOnly=1'),
+        ];
+        const raw = await api.getFirst(endpoints, { signal });
 
-        const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
-        const normalized = arr
-          .map((c) => {
-            const attachmentsRaw = Array.isArray(c.attachments)
-              ? c.attachments
-              : Array.isArray(c.files)
-              ? c.files
-              : [];
-            const attachments = attachmentsRaw
-              .map((a) => ({
-                ...a,
-                fileUrl: a?.fileUrl || a?.url || a?.href || a?.path || '',
-              }))
-              .filter((a) => a.fileUrl);
-
-            return {
-              id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
-              text: c.text ?? c.title ?? c.body ?? '',
-              type: (c.type ?? '').toString(),
-              priority: (c.priority ?? '').toString(),
-              audienceBranchId: c.audienceBranchId ?? c.branchId ?? c.targetBranchId ?? null,
-              attachments,
-            };
-          })
-          .filter((c) => c.text);
-
-        // Respect branch filter (show global or matching branch)
-        const byBranch = normalized.filter((c) =>
-          branchId ? (c.audienceBranchId == null || String(c.audienceBranchId) === String(branchId)) : true
-        );
-
-        if (byBranch.length) {
-          setComms(byBranch);
+        const normalized = normalizeComms(raw, { branchId, role });
+        if (normalized.length) {
+          setComms(normalized);
         } else {
-          // Fallback to summary.generalCommunications if endpoints empty
-          const fallback =
-            (Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : []) || [];
-          const normFallback = fallback
-            .map((c) => ({
-              id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
-              text: c.text ?? c.title ?? c.body ?? '',
-              type: (c.type ?? '').toString(),
-              priority: (c.priority ?? '').toString(),
-              audienceBranchId: c.audienceBranchId ?? c.branchId ?? c.targetBranchId ?? null,
-              attachments: Array.isArray(c.attachments)
-                ? c.attachments.map((a) => ({ ...a, fileUrl: a?.fileUrl || a?.url || '' })).filter((a) => a.fileUrl)
-                : [],
-            }))
-            .filter((c) => c.text)
-            .filter((c) =>
-              branchId ? (c.audienceBranchId == null || String(c.audienceBranchId) === String(branchId)) : true
-            );
-
-          setComms(normFallback);
+          // fallback to whatever was bundled inside summary (if any)
+          const fallback = Array.isArray(summary?.generalCommunications)
+            ? normalizeComms(summary.generalCommunications, { branchId, role })
+            : [];
+          setComms(fallback);
         }
       } catch (err) {
         if (!isAbort(err)) {
           console.error('Comms fetch error:', err?.message || err);
           pushToast('Failed to load communications', 'error');
         }
-        const fallback = Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : [];
-        setComms(
-          fallback
-            .map((c) => ({
-              id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
-              text: c.text ?? c.title ?? c.body ?? '',
-              type: (c.type ?? '').toString(),
-              priority: (c.priority ?? '').toString(),
-              audienceBranchId: c.audienceBranchId ?? c.branchId ?? c.targetBranchId ?? null,
-              attachments: Array.isArray(c.attachments)
-                ? c.attachments.map((a) => ({ ...a, fileUrl: a?.fileUrl || a?.url || '' })).filter((a) => a.fileUrl)
-                : [],
-            }))
-            .filter((c) =>
-              branchId ? (c.audienceBranchId == null || String(c.audienceBranchId) === String(branchId)) : true
-            )
-        );
+        const fallback = Array.isArray(summary?.generalCommunications)
+          ? normalizeComms(summary.generalCommunications, { branchId, role })
+          : [];
+        setComms(fallback);
       } finally {
         setLoadingComms(false);
       }
