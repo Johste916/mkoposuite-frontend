@@ -871,6 +871,42 @@ const SidebarLayout = () => {
   // ------------------------ Communications ticker -------------------------
   const [ticker, setTicker] = useState([]);
   const [loadingTicker, setLoadingTicker] = useState(false);
+  // Dashboard messages from General Settings
+const [dashMsgs, setDashMsgs] = useState({
+  importantNotice: "",
+  companyMessage: "",
+  showTicker: true, // if false, we'll hide the grey scrolling ticker
+});
+// Load "Dashboard Messages" from General Settings
+const fetchGeneralMessages = useCallback(async (signal) => {
+  // reuse tryGet above
+  try {
+    const data = await tryGet(
+      [
+        "/settings/general",
+        "/api/settings/general",
+        "/admin/settings/general",
+        "/api/admin/settings/general",
+      ],
+      { signal }
+    );
+
+    // support a few shapes: {dashboard:{...}} or {settings:{dashboard:{...}}}
+    const d =
+      data?.dashboard ||
+      data?.settings?.dashboard ||
+      {};
+
+    setDashMsgs({
+      importantNotice: d.importantNotice || "",
+      companyMessage: d.companyMessage || "",
+      showTicker: d.showTicker !== false, // default true
+    });
+  } catch {
+    setDashMsgs({ importantNotice: "", companyMessage: "", showTicker: true });
+  }
+}, []);
+
 
   // normalize + filter by flags/time window/role/branch
   const normalizeTicker = useCallback(
@@ -959,15 +995,18 @@ const SidebarLayout = () => {
   );
 
   // load + light auto-refresh
-  useEffect(() => {
-    const ac = new AbortController();
-    fetchTicker(ac.signal);
-    const id = setInterval(() => fetchTicker(ac.signal), 60_000); // 60s
-    return () => {
-      clearInterval(id);
-      ac.abort();
-    };
-  }, [fetchTicker]);
+useEffect(() => {
+  const ac = new AbortController();
+  fetchTicker(ac.signal);
+  fetchGeneralMessages(ac.signal);
+  const id1 = setInterval(() => fetchTicker(ac.signal), 60_000);   // ticker every 60s
+  const id2 = setInterval(() => fetchGeneralMessages(ac.signal), 300_000); // messages every 5m
+  return () => {
+    clearInterval(id1);
+    clearInterval(id2);
+    ac.abort();
+  };
+}, [fetchTicker, fetchGeneralMessages]);
 
   const userRole = (user?.role || "").toLowerCase();
 
@@ -1201,7 +1240,7 @@ const SidebarLayout = () => {
         </div>
 
         {/* Global communications ticker */}
-        {!loadingTicker && ticker.length > 0 && (
+        {dashMsgs.showTicker !== false && !loadingTicker && ticker.length > 0 && (
           <>
             <style>{`
               @keyframes ms-marquee { 0% { transform: translateX(100%) } 100% { transform: translateX(-100%) } }
@@ -1252,6 +1291,21 @@ const SidebarLayout = () => {
           </>
         )}
       </header>
+{/* Dashboard Messages (amber + blue) from General Settings */}
+{(dashMsgs.importantNotice || dashMsgs.companyMessage) && (
+  <div className="border-t border-[var(--border)]">
+    {dashMsgs.importantNotice && (
+      <div className="px-3 md:px-4 py-2 text-sm bg-amber-50 text-amber-900 border-b border-amber-200">
+        {dashMsgs.importantNotice}
+      </div>
+    )}
+    {dashMsgs.companyMessage && (
+      <div className="px-3 md:px-4 py-2 text-sm bg-blue-50 text-blue-900 border-b border-blue-200">
+        {dashMsgs.companyMessage}
+      </div>
+    )}
+  </div>
+)}
 
       {/* Shell: left sidebar + main content */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">

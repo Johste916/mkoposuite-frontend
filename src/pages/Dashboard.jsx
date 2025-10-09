@@ -307,6 +307,25 @@ const Dashboard = () => {
         console.error('Filter fetch error:', err?.message || err);
         pushToast('Failed to load filters', 'error');
       }
+      const fetchGeneral = useCallback(async (signal) => {
+  try {
+    const data = await tryGET(
+      [...apiVariants('settings/general'), ...apiVariants('admin/settings/general')],
+      { signal }
+    );
+    // support shapes {dashboard:{}} or {settings:{dashboard:{}}}
+    const d = data?.dashboard || data?.settings?.dashboard || {};
+    const c = d?.curatedMessage;
+    // Expect structure: { title, text, attachments?: [{fileName,fileUrl}] }
+    if (c && (c.title || c.text || (Array.isArray(c.attachments) && c.attachments.length))) {
+      setCurated(c);
+    } else {
+      setCurated(null);
+    }
+  } catch {
+    setCurated(null);
+  }
+}, []);
     }
   }, []);
 
@@ -585,6 +604,7 @@ const Dashboard = () => {
                     fetchSummary(ac.signal),
                     fetchTrends(ac.signal),
                     fetchCommunications(ac.signal),
+                      fetchGeneral(ac.signal),
                   ])
                     .then(() => {
                       setLastUpdatedAt(new Date());
@@ -676,6 +696,34 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+{/* Curated message card (from General Settings) */}
+{curated && (
+  <div className={`${ui.card} p-4`}>
+    <h3 className="text-lg font-semibold">
+      {curated.title || 'Notice'}
+    </h3>
+    {curated.text && (
+      <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+        {curated.text}
+      </p>
+    )}
+    {Array.isArray(curated.attachments) && curated.attachments.length > 0 && (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {curated.attachments.map((a, i) => (
+          <a
+            key={i}
+            href={a.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={ui.btn}
+          >
+            <Download className="w-4 h-4" /> {a.fileName || 'Attachment'}
+          </a>
+        ))}
+      </div>
+    )}
+  </div>
+)}
 
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-3">
