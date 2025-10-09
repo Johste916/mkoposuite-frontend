@@ -116,44 +116,6 @@ function toSummary(raw) {
   };
 }
 
-/** General communications normalizer (active, in-app, ticker, within window, branch-aware) */
-function toComms(raw, { branchId } = {}) {
-  const arr = Array.isArray(raw)
-    ? raw
-    : raw?.items || raw?.rows || raw?.data || [];
-
-  const now = Date.now();
-  const rank = { critical: 4, high: 3, normal: 2, low: 1 };
-
-  return arr
-    .map((c, i) => ({
-      id: c.id ?? c._id ?? c.uuid ?? `comm_${i}`,
-      title: c.title ?? '',
-      text: c.text ?? c.body ?? '',
-      type: (c.type || 'notice').toString().toLowerCase(),
-      priority: (c.priority || 'normal').toString().toLowerCase(),
-      channel: (c.channel || 'inapp').toString().toLowerCase(),
-      isActive: Boolean(c.isActive ?? c.active ?? c.enabled ?? true),
-      showInTicker: Boolean(c.showInTicker ?? c.ticker ?? c.showTicker ?? false),
-      showOnDashboard: Boolean(c.showOnDashboard ?? c.dashboard ?? false),
-      startAt: c.startAt ? new Date(c.startAt).getTime() : null,
-      endAt: c.endAt ? new Date(c.endAt).getTime() : null,
-      audienceBranchId:
-        c.audienceBranchId != null ? String(c.audienceBranchId) : null,
-      attachments: Array.isArray(c.attachments) ? c.attachments : [],
-    }))
-    .filter((c) => c.isActive && c.channel === 'inapp')
-    .filter((c) => c.showInTicker)
-    .filter((c) => (c.startAt ? now >= c.startAt : true))
-    .filter((c) => (c.endAt ? now <= c.endAt : true))
-    .filter((c) =>
-      c.audienceBranchId && branchId
-        ? String(c.audienceBranchId) === String(branchId)
-        : true
-    )
-    .sort((a, b) => (rank[b.priority] || 0) - (rank[a.priority] || 0));
-}
-
 /** Observe the <html> class list so charts can re-theme instantly */
 const useIsDarkMode = () => {
   const [isDark, setIsDark] = useState(() =>
@@ -307,25 +269,6 @@ const Dashboard = () => {
         console.error('Filter fetch error:', err?.message || err);
         pushToast('Failed to load filters', 'error');
       }
-      const fetchGeneral = useCallback(async (signal) => {
-  try {
-    const data = await tryGET(
-      [...apiVariants('settings/general'), ...apiVariants('admin/settings/general')],
-      { signal }
-    );
-    // support shapes {dashboard:{}} or {settings:{dashboard:{}}}
-    const d = data?.dashboard || data?.settings?.dashboard || {};
-    const c = d?.curatedMessage;
-    // Expect structure: { title, text, attachments?: [{fileName,fileUrl}] }
-    if (c && (c.title || c.text || (Array.isArray(c.attachments) && c.attachments.length))) {
-      setCurated(c);
-    } else {
-      setCurated(null);
-    }
-  } catch {
-    setCurated(null);
-  }
-}, []);
     }
   }, []);
 
@@ -348,33 +291,17 @@ const Dashboard = () => {
     async (signal) => {
       setLoadingComms(true);
       try {
-        // Try multiple endpoints; accept many response shapes
-        const data = await tryGET(
-          [
-            ...apiVariants('dashboard/communications'),
-            ...apiVariants('admin/communications?activeOnly=1&channel=inapp'),
-            ...apiVariants('settings/communications?activeOnly=1&channel=inapp'),
-          ],
-          { signal, params: { branchId } }
-        );
-
-        let list = toComms(data, { branchId });
-
-        // Fallback to summary payload if direct endpoint is empty
-        if (!list.length && Array.isArray(summary?.generalCommunications)) {
-          list = toComms(summary.generalCommunications, { branchId });
+        const res = await api.get('/dashboard/communications', { signal }).catch(() => null);
+        if (res?.data && Array.isArray(res.data)) {
+          setComms(res.data);
+        } else {
+          setComms(Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : []);
         }
-
-        setComms(list);
-      } catch {
-        // Final fallback to whatever came in the summary (if any)
-        const list = toComms(summary?.generalCommunications || [], { branchId });
-        setComms(list);
       } finally {
         setLoadingComms(false);
       }
     },
-    [branchId, summary]
+    [summary]
   );
 
   const fetchTrends = useCallback(async (signal) => {
@@ -604,7 +531,6 @@ const Dashboard = () => {
                     fetchSummary(ac.signal),
                     fetchTrends(ac.signal),
                     fetchCommunications(ac.signal),
-                      fetchGeneral(ac.signal),
                   ])
                     .then(() => {
                       setLastUpdatedAt(new Date());
@@ -689,41 +615,13 @@ const Dashboard = () => {
                       </span>
                     )}
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600" />
-                    <span className="truncate">{c.text || c.title}</span>
+                    <span className="truncate">{c.text}</span>
                   </span>
                 ))}
               </div>
             </div>
           </div>
         )}
-{/* Curated message card (from General Settings) */}
-{curated && (
-  <div className={`${ui.card} p-4`}>
-    <h3 className="text-lg font-semibold">
-      {curated.title || 'Notice'}
-    </h3>
-    {curated.text && (
-      <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-        {curated.text}
-      </p>
-    )}
-    {Array.isArray(curated.attachments) && curated.attachments.length > 0 && (
-      <div className="mt-3 flex flex-wrap gap-2">
-        {curated.attachments.map((a, i) => (
-          <a
-            key={i}
-            href={a.fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={ui.btn}
-          >
-            <Download className="w-4 h-4" /> {a.fileName || 'Attachment'}
-          </a>
-        ))}
-      </div>
-    )}
-  </div>
-)}
 
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-3">
@@ -744,21 +642,21 @@ const Dashboard = () => {
             <>
               {/* Summary Cards */}
               <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
-                <SummaryCard tone="indigo"  title="Total Borrowers"        value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />}           to={makeTo(ROUTE_PATHS.borrowers)} />
-                <SummaryCard tone="sky"     title="Total Loans"            value={n(summary?.totalLoans).toLocaleString()}     icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans)} />
-                <SummaryCard tone="blue"    title="Total Disbursed"        value={money(summary?.totalDisbursed)}              icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })} />
-                <SummaryCard tone="emerald" title="Total Paid"             value={money(summary?.totalPaid)}                   icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
-                <SummaryCard tone="emerald" title="Total Repaid"           value={money(summary?.totalRepaid)}                 icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
-                <SummaryCard tone="indigo"  title="Expected Repayments"    value={money(summary?.totalExpectedRepayments)}     icon={<ClipboardList className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })} />
-                <SummaryCard tone="cyan"    title="Total Deposits"         value={money(summary?.totalDeposits)}               icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.deposits)} />
-                <SummaryCard tone="amber"   title="Total Withdrawals"      value={money(summary?.totalWithdrawals)}            icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.withdrawals)} />
-                <SummaryCard tone="blue"    title="Net Savings"            value={money(summary?.netSavings)}                  icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.savings)} />
-                <SummaryCard tone="rose"    title="Defaulted Loan"         value={money(summary?.defaultedLoan)}               icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })} />
-                <SummaryCard tone="rose"    title="Defaulted Interest"     value={money(summary?.defaultedInterest)}           icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })} />
-                <SummaryCard tone="violet"  title="Outstanding Loan"       value={money(summary?.outstandingLoan)}             icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })} />
-                <SummaryCard tone="violet"  title="Outstanding Interest"   value={money(summary?.outstandingInterest)}         icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })} />
-                <SummaryCard tone="slate"   title="Written Off"            value={money(summary?.writtenOff)}                  icon={<ThumbsDown className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })} />
-                <SummaryCard tone="indigo"  title="PAR (Portfolio at Risk)"value={`${n(summary?.parPercent)}%`}                 icon={<BarChart2 className="w-6 h-6" />}        to={makeTo(ROUTE_PATHS.par, { tab: 'par' })} />
+                <SummaryCard tone="indigo"  title="Total Borrowers"         value={n(summary?.totalBorrowers).toLocaleString()} icon={<Users className="w-6 h-6" />}           to={makeTo(ROUTE_PATHS.borrowers)} />
+                <SummaryCard tone="sky"     title="Total Loans"             value={n(summary?.totalLoans).toLocaleString()}     icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans)} />
+                <SummaryCard tone="blue"    title="Total Disbursed"         value={money(summary?.totalDisbursed)}              icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.loans, { tab: 'disbursed' })} />
+                <SummaryCard tone="emerald" title="Total Paid"              value={money(summary?.totalPaid)}                   icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
+                <SummaryCard tone="emerald" title="Total Repaid"            value={money(summary?.totalRepaid)}                 icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.repayments, { tab: 'paid' })} />
+                <SummaryCard tone="indigo"  title="Expected Repayments"     value={money(summary?.totalExpectedRepayments)}     icon={<ClipboardList className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.expectedRepayments, { tab: 'expected' })} />
+                <SummaryCard tone="cyan"    title="Total Deposits"          value={money(summary?.totalDeposits)}               icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.deposits)} />
+                <SummaryCard tone="amber"   title="Total Withdrawals"       value={money(summary?.totalWithdrawals)}            icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.withdrawals)} />
+                <SummaryCard tone="blue"    title="Net Savings"             value={money(summary?.netSavings)}                  icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.savings)} />
+                <SummaryCard tone="rose"    title="Defaulted Loan"          value={money(summary?.defaultedLoan)}               icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedLoans, { tab: 'defaulted' })} />
+                <SummaryCard tone="rose"    title="Defaulted Interest"      value={money(summary?.defaultedInterest)}           icon={<AlertTriangle className="w-6 h-6" />}    to={makeTo(ROUTE_PATHS.defaultedInterest, { tab: 'defaulted-interest' })} />
+                <SummaryCard tone="violet"  title="Outstanding Loan"        value={money(summary?.outstandingLoan)}             icon={<CreditCard className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingLoan, { tab: 'outstanding' })} />
+                <SummaryCard tone="violet"  title="Outstanding Interest"    value={money(summary?.outstandingInterest)}         icon={<DollarSign className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.outstandingInterest, { tab: 'outstanding-interest' })} />
+                <SummaryCard tone="slate"   title="Written Off"             value={money(summary?.writtenOff)}                  icon={<ThumbsDown className="w-6 h-6" />}       to={makeTo(ROUTE_PATHS.writtenOff, { tab: 'written-off' })} />
+                <SummaryCard tone="indigo"  title="PAR (Portfolio at Risk)" value={`${n(summary?.parPercent)}%`}               icon={<BarChart2 className="w-6 h-6" />}        to={makeTo(ROUTE_PATHS.par, { tab: 'par' })} />
               </div>
 
               {/* Monthly Trends */}

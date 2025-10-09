@@ -29,7 +29,7 @@ import {
   FiUserCheck,
   FiUsers,
   FiX,
-  FiInfo, // ⬅️ added for ticker label icon
+  FiInfo, // label icon for ticker
 } from "react-icons/fi";
 import { BsBank } from "react-icons/bs";
 import api from "../api";
@@ -54,7 +54,7 @@ const isEditableTarget = (el) => {
     tag === "input" ||
     tag === "textarea" ||
     el.isContentEditable ||
-    el.getAttribute?.("role") === "textbox";
+    ((el.getAttribute && el.getAttribute("role")) === "textbox");
   return editable;
 };
 
@@ -269,6 +269,8 @@ const pathIsIn = (pathname, base) =>
   pathname === base || pathname.startsWith(base + "/");
 
 /* --------------------------- Header Global Search -------------------------- */
+const CURRENCY = new Intl.NumberFormat();
+
 const HeaderGlobalSearch = ({ branchId }) => {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
@@ -407,6 +409,7 @@ const HeaderGlobalSearch = ({ branchId }) => {
 
   // Click outside to close
   useEffect(() => {
+    if (typeof document === "undefined") return;
     const onDoc = (e) => {
       if (!rootRef.current) return;
       if (!rootRef.current.contains(e.target)) setOpen(false);
@@ -417,6 +420,7 @@ const HeaderGlobalSearch = ({ branchId }) => {
 
   // Global shortcuts: "/" and ⌘K / Ctrl+K
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const onKey = (e) => {
       if (isEditableTarget(e.target)) return;
       if (e.key === "/") {
@@ -424,7 +428,9 @@ const HeaderGlobalSearch = ({ branchId }) => {
         inputRef.current?.focus();
         setOpen(true);
       }
-      const isMac = navigator.platform.toUpperCase().includes("MAC");
+      const plat =
+        (typeof navigator !== "undefined" && navigator.platform) || "";
+      const isMac = /mac/i.test(plat);
       if (
         (isMac && e.metaKey && e.key.toLowerCase() === "k") ||
         (!isMac && e.ctrlKey && e.key.toLowerCase() === "k")
@@ -468,7 +474,8 @@ const HeaderGlobalSearch = ({ branchId }) => {
     const g = {};
     hits.forEach((h) => {
       const k = (h.type || "other").toString();
-      (g[k] ||= []).push(h);
+      if (!g[k]) g[k] = [];
+      g[k].push(h);
     });
     return g;
   }, [hits]);
@@ -492,7 +499,7 @@ const HeaderGlobalSearch = ({ branchId }) => {
       <div className="relative">
         {/* Left icon */}
         <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-          <FiSearch className="w-4 h-4 text-[var(--muted)]" aria-hidden />
+          <FiSearch className="w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
         </span>
 
         {/* Input — fixed height and paddings so it never overlaps */}
@@ -576,7 +583,7 @@ const HeaderGlobalSearch = ({ branchId }) => {
                           </div>
                           {Number.isFinite(h.amount) && (
                             <div className="text-xs opacity-80 whitespace-nowrap">
-                              TZS {new Intl.NumberFormat().format(h.amount)}
+                              TZS {CURRENCY.format(h.amount)}
                             </div>
                           )}
                         </div>
@@ -717,6 +724,7 @@ const SidebarLayout = () => {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const avatarRef = useRef(null);
   useEffect(() => {
+    if (typeof document === "undefined") return;
     const onDoc = (e) => {
       if (!avatarRef.current) return;
       if (!avatarRef.current.contains(e.target)) setAvatarOpen(false);
@@ -826,6 +834,7 @@ const SidebarLayout = () => {
 
   // Branch changes triggered by external pages (optional)
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const onBranch = (e) => {
       const id = String(e?.detail?.id || "");
       if (id && isNumericId(id)) setActiveBranchId(id);
@@ -871,42 +880,6 @@ const SidebarLayout = () => {
   // ------------------------ Communications ticker -------------------------
   const [ticker, setTicker] = useState([]);
   const [loadingTicker, setLoadingTicker] = useState(false);
-  // Dashboard messages from General Settings
-const [dashMsgs, setDashMsgs] = useState({
-  importantNotice: "",
-  companyMessage: "",
-  showTicker: true, // if false, we'll hide the grey scrolling ticker
-});
-// Load "Dashboard Messages" from General Settings
-const fetchGeneralMessages = useCallback(async (signal) => {
-  // reuse tryGet above
-  try {
-    const data = await tryGet(
-      [
-        "/settings/general",
-        "/api/settings/general",
-        "/admin/settings/general",
-        "/api/admin/settings/general",
-      ],
-      { signal }
-    );
-
-    // support a few shapes: {dashboard:{...}} or {settings:{dashboard:{...}}}
-    const d =
-      data?.dashboard ||
-      data?.settings?.dashboard ||
-      {};
-
-    setDashMsgs({
-      importantNotice: d.importantNotice || "",
-      companyMessage: d.companyMessage || "",
-      showTicker: d.showTicker !== false, // default true
-    });
-  } catch {
-    setDashMsgs({ importantNotice: "", companyMessage: "", showTicker: true });
-  }
-}, []);
-
 
   // normalize + filter by flags/time window/role/branch
   const normalizeTicker = useCallback(
@@ -995,18 +968,15 @@ const fetchGeneralMessages = useCallback(async (signal) => {
   );
 
   // load + light auto-refresh
-useEffect(() => {
-  const ac = new AbortController();
-  fetchTicker(ac.signal);
-  fetchGeneralMessages(ac.signal);
-  const id1 = setInterval(() => fetchTicker(ac.signal), 60_000);   // ticker every 60s
-  const id2 = setInterval(() => fetchGeneralMessages(ac.signal), 300_000); // messages every 5m
-  return () => {
-    clearInterval(id1);
-    clearInterval(id2);
-    ac.abort();
-  };
-}, [fetchTicker, fetchGeneralMessages]);
+  useEffect(() => {
+    const ac = new AbortController();
+    fetchTicker(ac.signal);
+    const id = setInterval(() => fetchTicker(ac.signal), 60_000); // 60s
+    return () => {
+      clearInterval(id);
+      ac.abort();
+    };
+  }, [fetchTicker]);
 
   const userRole = (user?.role || "").toLowerCase();
 
@@ -1240,7 +1210,7 @@ useEffect(() => {
         </div>
 
         {/* Global communications ticker */}
-        {dashMsgs.showTicker !== false && !loadingTicker && ticker.length > 0 && (
+        {!loadingTicker && ticker.length > 0 && (
           <>
             <style>{`
               @keyframes ms-marquee { 0% { transform: translateX(100%) } 100% { transform: translateX(-100%) } }
@@ -1252,9 +1222,11 @@ useEffect(() => {
               aria-label="Organization announcements"
             >
               <div className="relative h-9 overflow-hidden">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-2 text-[11px] font-semibold opacity-70"
-                     style={{ color: "var(--muted)" }}>
-                  <FiInfo className="w-3.5 h-3.5 mr-1" /> Announcements
+                <div
+                  className="absolute inset-y-0 left-0 flex items-center pl-2 text-[11px] font-semibold opacity-70"
+                  style={{ color: "var(--muted)" }}
+                >
+                  <FiInfo className="w-3.5 h-3.5 mr-1" aria-hidden="true" /> Announcements
                 </div>
                 <div
                   className="absolute whitespace-nowrap will-change-transform flex items-center gap-8 h-9"
@@ -1291,21 +1263,6 @@ useEffect(() => {
           </>
         )}
       </header>
-{/* Dashboard Messages (amber + blue) from General Settings */}
-{(dashMsgs.importantNotice || dashMsgs.companyMessage) && (
-  <div className="border-t border-[var(--border)]">
-    {dashMsgs.importantNotice && (
-      <div className="px-3 md:px-4 py-2 text-sm bg-amber-50 text-amber-900 border-b border-amber-200">
-        {dashMsgs.importantNotice}
-      </div>
-    )}
-    {dashMsgs.companyMessage && (
-      <div className="px-3 md:px-4 py-2 text-sm bg-blue-50 text-blue-900 border-b border-blue-200">
-        {dashMsgs.companyMessage}
-      </div>
-    )}
-  </div>
-)}
 
       {/* Shell: left sidebar + main content */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
