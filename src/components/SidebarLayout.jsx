@@ -581,6 +581,7 @@ const HeaderGlobalSearch = ({ branchId }) => {
 };
 
 /* ------------------------------- Section item ------------------------------ */
+/* ------------------------------- Section item ------------------------------ */
 const Section = memo(({ item, currentPath, onNavigate }) => {
   const hasChildren = !!item.children?.length;
   const isActiveSection = pathIsIn(currentPath, item.to);
@@ -590,64 +591,54 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
     if (isActiveSection) setOpen(true);
   }, [isActiveSection]);
 
-  const baseItem =
-    "flex items-center gap-2 px-3 py-2 rounded-md text-[13px] leading-5 transition";
-
   if (!hasChildren) {
     return (
       <NavLink
         to={item.to}
-        className={({ isActive }) =>
-          `${baseItem} ${
-            isActive
-              ? "bg-[var(--nav-item-active-bg)] text-[var(--nav-item-active-fg)] shadow-sm"
-              : "text-[var(--nav-item)] hover:bg-[var(--nav-item-hover-bg)]"
-          }`
-        }
+        className={({ isActive }) => `ms-item ${isActive ? "is-active" : ""}`}
         onClick={onNavigate}
       >
-        <span className="shrink-0">{item.icon}</span>
-        <span className="truncate">{item.label}</span>
+        <span className="inline-flex items-center gap-2 min-w-0">
+          <span className="shrink-0 ms-icon">{item.icon}</span>
+          <span className="truncate text-sm font-medium">{item.label}</span>
+        </span>
       </NavLink>
     );
   }
 
   const panelId = `nav-${item.to.replace(/[^\w-]/g, "_")}`;
-
-  const toggle = useCallback(() => setOpen((v) => !v), []);
-  const onKeyDown = useCallback(
-    (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        toggle();
-      }
-    },
-    [toggle]
-  );
+  const toggle = useCallback(() => setOpen(v => !v), []);
+  const onKeyDown = useCallback((e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle();
+    }
+  }, [toggle]);
 
   return (
-    <div className="rounded-md">
+    <div>
       <button
         type="button"
         onClick={toggle}
         onKeyDown={onKeyDown}
-        className={`${baseItem} ${
-          isActiveSection
-            ? "bg-[var(--nav-item-active-bg)] text-[var(--nav-item-active-fg)]"
-            : "text-[var(--nav-item)] hover:bg-[var(--nav-item-hover-bg)]"
-        } w-full justify-between`}
+        className={`ms-item w-full justify-between ${isActiveSection ? "is-active" : ""}`}
         aria-expanded={open}
         aria-controls={panelId}
       >
-        <span className="inline-flex items-center gap-2">
-          <span className="shrink-0">{item.icon}</span>
-          <span className="truncate">{item.label}</span>
+        <span className="inline-flex items-center gap-2 min-w-0">
+          <span className="shrink-0 ms-icon">{item.icon}</span>
+          <span className="truncate text-sm font-medium">{item.label}</span>
         </span>
-        {open ? <FiChevronUp /> : <FiChevronDown />}
+        <FiChevronDown className={`ms-caret ${open ? "open" : ""}`} />
       </button>
 
-      <div id={panelId} hidden={!open} className="mt-1 ml-2 border-l border-[var(--border)]">
-        <div className="pl-3 py-1 space-y-1">
+      {open && (
+        <div
+          id={panelId}
+          className="ms-sub"
+          role="region"
+          aria-label={`${item.label} submenu`}
+        >
           {item.children.map((c) => (
             <NavLink
               key={c.to}
@@ -655,7 +646,7 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
               className={({ isActive }) =>
                 `block px-2 py-1.5 rounded text-[13px] ${
                   isActive
-                    ? "bg-[var(--nav-item-active-bg)] text-[var(--nav-item-active-fg)] shadow-sm"
+                    ? "bg-[var(--nav-item-active-bg)] text-[var(--nav-item-active-fg)] font-semibold"
                     : "text-[var(--nav-item)] hover:bg-[var(--nav-item-hover-bg)]"
                 }`
               }
@@ -665,7 +656,7 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
             </NavLink>
           ))}
         </div>
-      </div>
+      )}
     </div>
   );
 });
@@ -1169,7 +1160,7 @@ const SidebarLayout = () => {
                         </span>
                       )}
                       <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600" />
-                      <span className="truncate max-w-[56rem]">{c.text || c.title}</span>
+                      <span className="inline-block truncate max-w-[56rem]">{c.text || c.title}</span>
                     </span>
                   ))}
                 </div>
@@ -1181,9 +1172,13 @@ const SidebarLayout = () => {
 
       {/* Shell */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
-        <aside className="app-sidebar hidden lg:block">
+        {/* DESKTOP SIDEBAR */}
+        <aside className="ms-sidebar app-sidebar sidebar-soft hidden lg:block">
           <div className="sidebar-scroll h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto px-2 py-3">
-            <div className="px-3 pb-2 text-xs font-semibold tracking-tight text-[var(--muted)] truncate" title={orgName}>
+            <div
+              className="ms-heading truncate"
+              title={orgName}
+            >
               {orgName}
             </div>
 
@@ -1215,14 +1210,14 @@ const SidebarLayout = () => {
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-[70] flex">
-          <div className="app-sidebar w-72 max-w-[80vw] h-full shadow-xl flex flex-col">
+          <div className="ms-sidebar app-sidebar sidebar-soft w-72 max-w-[80vw] h-full shadow-xl flex flex-col">
             <div className="h-14 flex items-center justify-between px-3 border-b border-[var(--border)]">
               <BrandMark size={24} />
               <button className="p-2 rounded hover:bg-[var(--nav-item-hover-bg)]" onClick={closeMobile} aria-label="Close">
                 <FiX />
               </button>
             </div>
-            <div className="px-3 pt-2 pb-1 text-xs font-semibold text-[var(--muted)] truncate" title={orgName}>
+            <div className="ms-heading truncate" title={orgName}>
               {orgName}
             </div>
             <div className="flex-1 overflow-y-auto px-2 py-2">

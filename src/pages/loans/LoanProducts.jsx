@@ -178,19 +178,32 @@ export default function LoanProducts() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold">Loan Products</h1>
+
+        {/* Search + CTA */}
         <div className="flex items-center gap-2">
           <div className="relative">
-            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <FiSearch
+              className="absolute left-3 top-1/2 -translate-y-1/2"
+              style={{ color: "var(--muted)" }}
+              aria-hidden="true"
+            />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search products…"
-              className="w-56 pl-9 pr-3 py-2 rounded-md text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+              aria-label="Search products"
+              className="w-56 h-10 pl-9 pr-3 rounded-md text-sm
+                         bg-[var(--input-bg)] text-[var(--input-fg)]
+                         border border-[var(--input-border)]
+                         placeholder:text-[var(--input-placeholder)]
+                         focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
             />
           </div>
+
           <Link
             to="/loans/products/new"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+            className="btn-primary inline-flex items-center gap-2 h-10 px-3 rounded-md"
+            title="Add Product"
           >
             <FiPlus /> Add Product
           </Link>
@@ -390,7 +403,7 @@ export default function LoanProducts() {
                 setPageSize(Number(e.target.value));
                 setPage(1);
               }}
-              className="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm"
+              className="rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--input-fg)] px-2 py-1 text-sm"
               aria-label="Rows per page"
             >
               {[10, 20, 50].map((n) => (
@@ -403,7 +416,7 @@ export default function LoanProducts() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="px-2 py-1 rounded-md border border-slate-300 dark:border-slate-700 disabled:opacity-50"
+                className="px-2 py-1 rounded-md border border-[var(--input-border)] disabled:opacity-50"
               >
                 Prev
               </button>
@@ -411,7 +424,7 @@ export default function LoanProducts() {
               <button
                 onClick={() => setPage((p) => Math.min(pages, p + 1))}
                 disabled={page >= pages}
-                className="px-2 py-1 rounded-md border border-slate-300 dark:border-slate-700 disabled:opacity-50"
+                className="px-2 py-1 rounded-md border border-[var(--input-border)] disabled:opacity-50"
               >
                 Next
               </button>

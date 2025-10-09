@@ -60,12 +60,13 @@
   /* Sidebar container */
   --sidebar-bg:    var(--panel);
   --sidebar-border:#e5e7eb;
+  --sidebar-sub-bg:#f1f5f9;   /* NEW: soft rail for submenu panels */
 }
 
 /* ---------- DARK (system preference) ---------- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:            #0b1220;  /* deep navy, not pure black */
+    --bg:            #0b1220;  /* deep navy */
     --panel:         #0e172a;
     --card:          #0f1b31;
     --fg:            #e6edf3;
@@ -107,13 +108,14 @@
 
     --sidebar-bg:    #0c152c;
     --sidebar-border:#132036;
+    --sidebar-sub-bg: rgba(20,32,60,.35); /* NEW */
   }
 }
 
 /* ---------- Forced theme via Provider ---------- */
 :root[data-theme="dark"], .dark {
   color-scheme: dark;
-  /* mirror dark tokens to ensure hard override */
+
   --bg:            #0b1220;
   --panel:         #0e172a;
   --card:          #0f1b31;
@@ -156,9 +158,14 @@
 
   --sidebar-bg:    #0c152c;
   --sidebar-border:#132036;
+  --sidebar-sub-bg: rgba(20,32,60,.35); /* NEW */
 }
 
 :root[data-theme="light"] { color-scheme: light; }
+
+/* Stronger frame keyline used across components (declare before usage) */
+:root { --frame: #9aa7b6; }                            /* light */
+:root[data-theme="dark"], .dark { --frame: #2a3a5b; }  /* dark */
 
 /* ==========================================================================
    GLOBAL BASE
@@ -177,13 +184,13 @@ select, textarea {
   padding: .5rem .75rem;
   background: var(--input-bg);
   color: var(--input-fg);
-  border: 1px solid var(--input-border);
+  border: 2px solid var(--input-border); /* match buttons */
 }
 .input::placeholder, input::placeholder, textarea::placeholder { color: var(--input-placeholder); }
 select, option { color: var(--input-fg); background-color: var(--input-bg); }
 
 /* Cards & muted text */
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; }
+.card { background: var(--card); border: 2px solid var(--border-strong); border-radius: 1rem; }
 .muted { color: var(--muted); }
 
 /* Menus / dropdowns */
@@ -191,7 +198,7 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
   background: var(--menu-bg);
   color: var(--menu-fg);
   box-shadow: var(--menu-shadow);
-  border: 1px solid var(--input-border);
+  border: 2px solid var(--input-border); /* visual parity with inputs */
   border-radius: .75rem;
 }
 
@@ -216,7 +223,6 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
   border-radius: 1rem;
   box-shadow: 0 10px 20px rgba(0,0,0,.08);
 }
-
 /* Auto-upgrade bordered rounded blocks into “clean cards” */
 .app-theme-bold :is(div,section,article)[class*="border"][class*="rounded"] {
   border-color: var(--border-strong);
@@ -352,7 +358,7 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
    ========================================================================== */
 .app-sidebar {
   background: var(--sidebar-bg);
-  border-right: 1px solid var(--sidebar-border);
+  border-right: 2px solid var(--sidebar-border); /* upgraded from 1px */
 }
 .app-sidebar .nav-accent { background: rgba(255,255,255,.6); }
 .dark .app-sidebar .nav-accent,
@@ -397,13 +403,10 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 
 /* ==========================================================================
    OPTIONAL: LEGACY UTILITY NEUTRALIZER
-   Wrap subtree with class="legacy-compat" to map old utilities to tokens.
    ========================================================================== */
 .legacy-compat .bg-white         { background-color: var(--card) !important; }
 .legacy-compat .bg-gray-50,
 .legacy-compat .bg-slate-50      { background-color: var(--table-row-even) !important; }
-.legacy-compat .bg-gray-100,
-.legacy-compat .bg-slate-100     { background-color: var(--table-head-bg) !important; }
 
 .legacy-compat .text-black       { color: var(--fg) !important; }
 .legacy-compat .text-gray-700,
@@ -413,7 +416,6 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 .legacy-compat .text-gray-900,
 .legacy-compat .text-slate-900   { color: var(--fg) !important; }
 
-/* NEW: lift faded legacy text to our token colors */
 .legacy-compat .text-gray-400,
 .legacy-compat .text-gray-500,
 .legacy-compat .text-slate-400,
@@ -425,7 +427,6 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 .legacy-compat label { color: var(--muted) !important; font-weight: 600; }
 .legacy-compat legend { color: var(--fg) !important; font-weight: 800; }
 
-/* Map Bootstrap-like form controls to tokens */
 .legacy-compat .form-control,
 .legacy-compat .form-select {
   background: var(--input-bg) !important;
@@ -442,14 +443,14 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
   outline-offset: 2px !important;
 }
 
-/* Checkboxes/radios */
+/* Checkboxes/radios default look inside legacy areas */
 .legacy-compat .form-check-input {
   background: var(--input-bg) !important;
   border: 2px solid var(--input-border) !important;
 }
 .legacy-compat .form-check-label { color: var(--fg) !important; }
 
-/* Outline-ish buttons that were low-contrast */
+/* Outline-ish buttons */
 .legacy-compat .btn-outline-secondary,
 .legacy-compat .btn-outline-dark {
   background: var(--card) !important;
@@ -463,14 +464,7 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 .legacy-compat .border-gray-300,
 .legacy-compat .border-slate-300 { border-color: var(--border-strong) !important; }
 
-/* common "black border" utilities used in older pages */
-.legacy-compat .border-black,
-.legacy-compat .border-black\/5,
-.legacy-compat .border-black\/10,
-.legacy-compat .border-black\/20,
-.legacy-compat .border-black\/30 { border-color: var(--border) !important; }
-
-/* ring helpers from older pages */
+/* ring helpers */
 .legacy-compat .ring-black\/10,
 .legacy-compat .ring-black\/20   { --tw-ring-color: var(--ring) !important; }
 
@@ -514,7 +508,7 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
   outline-offset: 2px;
 }
 
-/* Generic dropdowns from libs (Bootstrap, rc-dropdown, headless, etc.) */
+/* Generic dropdowns */
 .app-theme-bold .dropdown-menu,
 .app-theme-bold [role="menu"],
 .app-theme-bold .rc-dropdown,
@@ -525,11 +519,9 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
   box-shadow: var(--menu-shadow) !important;
   border-radius: .75rem !important;
 }
-.app-theme-bold .dropdown-item { color: var(--menu-fg) !important; }
-.app-theme-bold .dropdown-item:hover { background: var(--chip-soft) !important; }
 
-/* Scrollbar theming (webkit) */
-@supports selector(::-webkit-scrollbar) {
+/* WebKit scrollbar skin (fallback-safe) */
+@media screen and (min-width:0) {
   .app-theme-bold *::-webkit-scrollbar { height: 10px; width: 10px; }
   .app-theme-bold *::-webkit-scrollbar-track { background: var(--bg); }
   .app-theme-bold *::-webkit-scrollbar-thumb {
@@ -616,7 +608,7 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
   color: var(--primary-contrast) !important;
 }
 
-/* ---- Date picker (if used) --------------------------------------------- */
+/* ---- Date picker -------------------------------------------------------- */
 .app-theme-bold .ant-picker {
   background: var(--input-bg) !important;
   color: var(--input-fg) !important;
@@ -645,7 +637,7 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
   border-radius: .75rem !important;
 }
 
-/* ===== Unscoped fallbacks for portal-mounted UI (outside .app-theme-bold) ===== */
+/* ===== Unscoped fallbacks for portal-mounted UI ===== */
 .ant-select-dropdown,
 .ant-picker-dropdown,
 .ant-dropdown,
@@ -695,11 +687,10 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 /* --------------------------------------------------------------------------
    Standard page container (shared by all modules)
    -------------------------------------------------------------------------- */
-.ms-page { padding: 1.5rem 1rem; } /* y x */
+.ms-page { padding: 1.5rem 1rem; }
 @media (min-width: 768px)  { .ms-page { padding-left: 1.5rem; padding-right: 1.5rem; } }
 @media (min-width: 1024px) { .ms-page { padding-left: 2rem;   padding-right: 2rem;   } }
 
-/* Make regular links readable across themes (dashboard-like) */
 .app-theme-bold a:not(.btn):not([role="button"]) {
   color: var(--primary);
   text-underline-offset: 4px;
@@ -708,7 +699,7 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 .app-theme-bold a:not(.btn):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* --------------------------------------------------------------------------
-   NEW: Page header + actions alignment helpers
+   Page header + actions alignment helpers
    -------------------------------------------------------------------------- */
 .ms-page .page-head,
 .legacy-compat .page-head {
@@ -743,7 +734,7 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 }
 
 /* --------------------------------------------------------------------------
-   NEW: Filters toolbar + grid (keeps Clear all inside the card)
+   Filters toolbar + grid
    -------------------------------------------------------------------------- */
 .app-theme-bold .filters-toolbar {
   display: flex;
@@ -757,7 +748,6 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
   position: static !important;
 }
 
-/* Flexible grid for filters (opt-in classes) */
 .app-theme-bold .filters-grid{
   display: grid;
   grid-template-columns: repeat(12,minmax(0,1fr));
@@ -766,7 +756,6 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 @media (min-width:640px){ .app-theme-bold .filters-grid{ gap:.75rem; } }
 @media (min-width:1024px){ .app-theme-bold .filters-grid{ gap:1rem; } }
 
-/* Simple span helpers (only if you use these classnames on fields) */
 .app-theme-bold .filters-grid > .col-12{ grid-column: span 12; }
 .app-theme-bold .filters-grid > .col-6 { grid-column: span 6; }
 .app-theme-bold .filters-grid > .col-4 { grid-column: span 4; }
@@ -776,32 +765,25 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 }
 
 /* ==========================================================================
-   FIX: responsive form rows & selects at 100% zoom
+   FIX: responsive/zoom safety
    ========================================================================== */
-
-/* 1) Let any “row-like” container wrap and avoid overflow */
 :where(.row,.form-row,.form-inline,.ms-form-row) {
   display:flex;
   flex-wrap:wrap;
   align-items:flex-start;
   gap:.5rem;
 }
-
-/* 2) Columns inside rows shrink correctly */
 :where(.row,.form-row,.ms-form-row) > [class^="col"],
 :where(.row,.form-row,.ms-form-row) > [class*=" col"],
 :where(.row,.form-row,.ms-form-row) > .col,
 :where(.row,.form-row,.ms-form-row) > .col-sm,
 :where(.row,.form-row,.ms-form-row) > .col-md,
 :where(.row,.form-row,.ms-form-row) > .col-lg {
-  min-width:0;                 /* critical */
-  flex:1 1 16rem;              /* grow, but can shrink */
+  min-width:0;
+  flex:1 1 16rem;
 }
-
-/* 3) Auto-sized column for tiny controls (e.g., the “Add” button) */
 :where(.row,.form-row,.ms-form-row) > .col-auto { flex:0 0 auto; }
 
-/* 4) Generic flex containers: children can shrink; buttons stay natural */
 :where(.flex,.inline-flex,[style*="display:flex"]) > * { min-width:0; }
 :where(.flex,.inline-flex,[style*="display:flex"]) > :is(button,.btn,.ant-btn) {
   flex:0 0 auto; white-space:nowrap;
@@ -813,20 +795,16 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
   min-width:0;
 }
 
-/* 5) Ant Design controls should respect container width */
 .ant-select, .ant-picker, .ant-input { width:100%; max-width:100%; }
 
-/* 6) Classic Bootstrap input groups (if present) */
 .input-group { display:flex; align-items:stretch; }
 .input-group > .form-control { flex:1 1 auto; min-width:0; }
 .input-group > :is(.btn,.input-group-text) { flex:0 0 auto; }
 
-/* 7) Optional helper you can wrap around those three fields */
 .ms-input-group { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 .ms-input-group :is(.input,input,select,.ant-select,.ant-picker) { flex:1 1 16rem; min-width:0; }
 .ms-input-group :is(button,.btn,.ant-btn) { flex:0 0 auto; }
 
-/* 8) Prevent 1px horizontal scroll caused by 100vw at some zooms */
 @supports (overflow: clip) {
   .app-theme-bold .full-bleed { overflow-x: clip; }
 }
@@ -834,60 +812,192 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
   .app-theme-bold .full-bleed { overflow-x: hidden; }
 }
 
-/* ========================================================================== */
-/* === ZOOM-SAFE ADDITIONS (fix overlaps & tall checkboxes at 80% zoom)  ==== */
-/* ========================================================================== */
-
-/* A) Cards & tables should never force overflow when content shrinks */
+/* Cards/tables shouldn't force overflow */
 .card { min-width: 0; overflow: hidden; }
 .card * { min-width: 0; }
 .table-wrap, .table-frame { min-width: 0; }
 
-/* B) Normalize button/inputs height & line-height so containers don’t stretch */
+/* Normalize control line-heights */
 button, .btn, .ant-btn,
 input, select, textarea, .ant-input, .ant-select-selector, .ant-picker {
   line-height: 1.25;
 }
 
-/* C) Checkboxes & radios: consistent size, no vertical “stretch” */
-input[type="checkbox"], input[type="radio"],
-.form-check-input[type="checkbox"], .form-check-input[type="radio"] {
-  width: 1.05rem;
-  height: 1.05rem;
-  min-width: 1.05rem;
-  min-height: 1.05rem;
-  line-height: 1;
+/* ==========================================================================
+   NATIVE, CLICKABLE CHECKBOXES (fixes “can’t check” + faint look)
+   ========================================================================== */
+.ms-checkbox {
+  appearance: auto !important;
+  -webkit-appearance: checkbox !important;
+  width: 1.1rem;
+  height: 1.1rem;
+  min-width: 1.1rem;
+  min-height: 1.1rem;
+  border: 2px solid var(--input-border);
+  border-radius: .25rem;
+  background: var(--input-bg);
   vertical-align: middle;
+  cursor: pointer;
+}
+.ms-checkbox:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.ms-checkbox:checked {
   accent-color: var(--primary);
+  background-color: var(--primary);
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 2px var(--primary-contrast);
 }
-.form-check,
-.form-check-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: .5rem;
-}
-.form-check-label { line-height: 1.25; }
 
-/* D) Page action bar (search + button) should wrap cleanly */
-.page-actions, [data-page-actions] {
-  flex-wrap: wrap;
-  gap: .5rem;
-}
-.page-actions > :is(.btn,button,.ant-btn,.ant-input, input, select) { min-width: 0; }
-
-/* E) When three inline fields + “Add” button live inside one row (screenshot 1) */
-.ms-inline-add { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
-.ms-inline-add > :is(.ant-picker,.ant-select,select,input) { flex:1 1 16rem; min-width:0; }
-.ms-inline-add > :is(button,.btn,.ant-btn) { flex:0 0 auto; white-space:nowrap; }
-
-/* F) Defensive: prevent extra-tall controls introduced by nested .h-full utilities */
+/* Defensive: nested h-full utilities shouldn't stretch inputs */
 [class*="h-full"] :is(input, select, textarea, .ant-input, .ant-select-selector, .ant-picker) {
   height: auto;
 }
 
-/* G) Search areas on list pages (screenshot 2) */
+/* Search areas on list pages */
 .ms-searchbar { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 .ms-searchbar > :is(input,.ant-input) { flex:1 1 20rem; min-width:0; }
 .ms-searchbar > :is(button,.btn,.ant-btn) { flex:0 0 auto; }
 
-/* ========================================================================== */
+/* Inline Start/End/Add */
+.ms-inline-add { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+.ms-inline-add > :is(.ant-picker,.ant-select,select,input) { flex:1 1 16rem; min-width:0; }
+.ms-inline-add > :is(button,.btn,.ant-btn) { flex:0 0 auto; white-space:nowrap; }
+
+/* ==========================================================================
+   STRONG FRAMES: make cards/tables clearly visible in both themes
+   ========================================================================== */
+/* Cards: clearer border + a touch more elevation */
+.app-theme-bold .card {
+  border-color: var(--frame) !important;
+  box-shadow:
+    0 8px 24px rgba(2, 6, 23, 0.08),
+    0 1px 0 rgba(2, 6, 23, 0.04);
+}
+
+/* Auto-upgraded bordered blocks should also use the stronger frame */
+.app-theme-bold :is(div,section,article)[class*="border"][class*="rounded"] {
+  border-color: var(--frame) !important;
+}
+
+/* Table frame & sticky headers get the stronger frame */
+.app-theme-bold .table-frame {
+  border-color: var(--frame) !important;
+}
+.app-theme-bold .sticky-head thead th {
+  box-shadow: inset 0 -1px 0 var(--frame);
+}
+
+/* Buttons: outline-style get a clearer edge */
+.app-theme-bold button,
+.app-theme-bold .btn,
+.app-theme-bold [class*="btn-"] {
+  border-color: var(--frame) !important;
+}
+
+/* Optional helper: use on any especially important container */
+.ms-card-strong {
+  border: 2px solid var(--frame) !important;
+  box-shadow:
+    0 10px 28px rgba(2, 6, 23, 0.10),
+    0 1px 0 rgba(2, 6, 23, 0.06) !important;
+}
+
+/* Tabs bar rails & pills */
+.app-theme-bold .tabs-bar,
+.app-theme-bold .nav-tabs,
+.app-theme-bold [role="tablist"] {
+  background: var(--card);
+  border: 2px solid var(--frame);
+  border-radius: .75rem;
+}
+.app-theme-bold .tabs-bar [role="tab"],
+.app-theme-bold .nav-tabs .nav-link {
+  border-right: 1px solid var(--border);
+}
+.app-theme-bold .tabs-bar [role="tab"][aria-selected="true"],
+.app-theme-bold .nav-tabs .nav-link.active {
+  background: var(--chip-soft);
+  border-color: transparent;
+}
+
+/* Inputs: keyline a hair stronger */
+.app-theme-bold .input,
+.app-theme-bold input,
+.app-theme-bold select,
+.app-theme-bold textarea {
+  border-color: var(--frame);
+}
+
+/* ==========================================================================
+   MkopoSuite Sidebar (light = white panel, dark = softened navy)
+   ========================================================================== */
+.ms-sidebar {
+  width: 16rem;                 /* w-64 */
+  background: var(--sidebar-bg);
+  border-right: 2px solid var(--frame);
+}
+:root[data-theme="light"] .ms-sidebar { background: #ffffff; } /* original look */
+
+/* Section heading */
+.ms-sidebar .ms-heading {
+  padding: .75rem 1rem .5rem 1rem;
+  font-weight: 700;
+  font-size: .75rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* List */
+.ms-sidebar .ms-nav {
+  padding: .25rem .5rem .75rem .5rem;
+  display: flex; flex-direction: column; gap: .25rem;
+}
+
+/* Top-level item (borderless pill) */
+.ms-sidebar .ms-item {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:.625rem; padding:.55rem .75rem; border-radius:.75rem;
+  background: transparent; border: 0; width:100%;
+  color: var(--nav-item);
+  transition: background .15s ease, color .15s ease, transform .04s ease;
+}
+
+/* Hover / Active */
+.ms-sidebar .ms-item:hover {
+  background: var(--nav-item-hover-bg);
+  color: var(--nav-item);
+}
+.ms-sidebar .ms-item.is-active {
+  background: var(--nav-item-active-bg);
+  color: var(--nav-item-active-fg);
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1px rgba(2,6,23,.05);
+}
+
+/* Caret */
+.ms-sidebar .ms-caret { transition: transform .2s ease; opacity:.8; margin-left:auto; }
+.ms-sidebar .ms-caret.open { transform: rotate(180deg); }
+
+/* Submenu “panel” — simple token, no color-mix / no @supports */
+.ms-sidebar .ms-sub {
+  margin: .25rem 0 .5rem 2.25rem;   /* indent under icon/text */
+  display:flex; flex-direction:column; gap:.125rem;
+  padding:.35rem .25rem; border-radius:.75rem;
+  background: var(--sidebar-sub-bg);
+}
+
+/* Sub-item link */
+.ms-sidebar .ms-sub a {
+  display:block; padding:.45rem .5rem; border-radius:.5rem;
+  color: var(--muted); text-decoration:none; font-size:.875rem;
+}
+.ms-sidebar .ms-sub a:hover { background: var(--nav-item-hover-bg); color: var(--nav-item); }
+.ms-sidebar .ms-sub a[aria-current="page"] {
+  background: var(--nav-item-active-bg); color: var(--nav-item-active-fg); font-weight:700;
+}
+
+/* Icons normalized */
+.ms-sidebar .ms-icon { width:18px; height:18px; }
+
+/* Focus (keyboard) */
+.ms-sidebar :is(button,a):focus-visible { outline:2px solid var(--ring); outline-offset:2px; }

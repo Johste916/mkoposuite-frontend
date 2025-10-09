@@ -6,11 +6,15 @@ import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import ThemeProvider from "./providers/ThemeProvider";
 
-// (If you import vendor CSS like bootstrap/flowbite, import them first)
+// If you use vendor CSS (bootstrap/flowbite), import them first.
 // import "bootstrap/dist/css/bootstrap.css";
 
+/**
+ * IMPORTANT:
+ * Only import Tailwind once. Our tailwind entry file already @imports theme tokens.
+ * Avoid importing theme.css twice to prevent order flicker.
+ */
 import "./styles/tailwind.css";
-import "./styles/theme.css"; // ← keep this LAST so tokens override vendor styles
 
 // Optional impersonation bootstrap
 (function bootstrapImpersonation() {
@@ -33,9 +37,12 @@ if (!rootEl) throw new Error("Missing <div id='root'> in index.html");
 createRoot(rootEl).render(
   <React.StrictMode>
     <ThemeProvider>
-      <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <BrowserRouter
+        basename={basename}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <AuthProvider>
-          {/* Bold skin + legacy neutralizer scopes (see theme.css section below) */}
+          {/* Bold skin + legacy compat so borders/inputs look crisp everywhere */}
           <div className="app-theme-bold legacy-compat">
             <App />
           </div>

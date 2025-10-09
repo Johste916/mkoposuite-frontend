@@ -13,7 +13,9 @@ const ui = {
   card:
     "card rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow",
   kpi: "p-4 rounded-xl border-2 border-[var(--border-strong)] bg-[var(--card)]",
-  input: "input",
+  input:
+    "input focus:outline-none focus:ring-2 focus:ring-[var(--ring)] " +
+    "border-2 border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--input-fg)]",
   btn:
     "inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold " +
     "border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)] " +
@@ -29,7 +31,8 @@ const ui = {
     "px-3 py-2 border border-[var(--border)] text-[var(--fg)]/90",
   td: "px-3 py-2 border border-[var(--border)] text-sm",
   actionLink:
-    "inline-flex items-center gap-1 font-extrabold text-[var(--primary)] underline underline-offset-4 decoration-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+    "inline-flex items-center gap-1 font-extrabold text-[var(--primary)] underline underline-offset-4 decoration-2 rounded " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
 };
 
 /* ---------------- helpers ---------------- */
@@ -63,7 +66,7 @@ const fmtDate = (d) => {
   return dt.toLocaleDateString();
 };
 
-// same logic as backend helper
+// add months (date-only, month-end safe)
 function addMonthsDateOnly(dateStr, months) {
   if (!dateStr) return "";
   const [y, m, d] = String(dateStr).split("-").map(Number);
@@ -186,8 +189,7 @@ const Loan = () => {
       0
     );
     const statusOf = (s) =>
-      filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === s)
-        .length;
+      filteredLoans.filter((l) => (l.status || l.loanStatus || "").toLowerCase() === s).length;
     return {
       total: filteredLoans.length,
       totalPrincipal,
@@ -278,7 +280,7 @@ const Loan = () => {
           "Product",
           "Principal",
           "Rate (%)",
-          "Term",
+          "Term (mo.)",
           "Start Date",
           "End Date",
           "Paid",
@@ -300,12 +302,14 @@ const Loan = () => {
         currency(r.outstanding),
         r.status,
       ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [20, 32, 60] },
     });
     doc.save("loans.pdf");
   };
 
   // neutral, tokenized status chip
-  const statusBadge = (statusRaw) =>
+  const statusBadge =
     "px-2 py-1 rounded text-xs font-semibold bg-[var(--badge-bg)] text-[var(--badge-fg)] ring-1 ring-[var(--border)]";
 
   /* ---------------- render ---------------- */
@@ -338,17 +342,22 @@ const Loan = () => {
 
       {/* Filters & Export */}
       <div className={`${ui.card} p-4 grid grid-cols-1 md:grid-cols-6 gap-3`}>
-        <input
-          type="text"
-          placeholder="Search borrower or loan ID…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className={`${ui.input} md:col-span-2`}
-        />
+        <div className="md:col-span-2">
+          <input
+            type="text"
+            placeholder="Search borrower or loan ID…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={`${ui.input} w-full`}
+            aria-label="Search borrower or loan ID"
+          />
+        </div>
+
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className={ui.input}
+          className={`${ui.input} ms-select`}
+          aria-label="Filter by status"
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
@@ -358,10 +367,12 @@ const Loan = () => {
           <option value="rejected">Rejected</option>
           <option value="closed">Closed</option>
         </select>
+
         <select
           value={branchFilter}
           onChange={(e) => setBranchFilter(e.target.value)}
-          className={ui.input}
+          className={`${ui.input} ms-select`}
+          aria-label="Filter by branch"
         >
           <option value="">All Branches</option>
           {branches.map((b) => (
@@ -370,10 +381,12 @@ const Loan = () => {
             </option>
           ))}
         </select>
+
         <select
           value={productFilter}
           onChange={(e) => setProductFilter(e.target.value)}
-          className={ui.input}
+          className={`${ui.input} ms-select`}
+          aria-label="Filter by product"
         >
           <option value="">All Products</option>
           {products.map((p) => (
@@ -382,18 +395,22 @@ const Loan = () => {
             </option>
           ))}
         </select>
+
         <input
           type="date"
           value={dateFrom}
           onChange={(e) => setDateFrom(e.target.value)}
-          className={ui.input}
+          className={`${ui.input} ms-date`}
+          aria-label="Start date"
         />
         <input
           type="date"
           value={dateTo}
           onChange={(e) => setDateTo(e.target.value)}
-          className={ui.input}
+          className={`${ui.input} ms-date`}
+          aria-label="End date"
         />
+
         <div className="md:col-span-6 flex justify-end gap-2">
           <CSVLink
             data={exportRows}
@@ -425,16 +442,21 @@ const Loan = () => {
                   "Branch",
                   "Product",
                   "Principal",
-                  "Interest Rate (%)",
-                  "Loan term",
+                  "Rate (%)",
+                  "Term (months)",
                   "Start Date",
                   "End Date",
                   "Paid Amount",
                   "Outstanding Amount",
                   "Status",
                   "Action",
-                ].map((h) => (
-                  <th key={h} className={ui.th}>
+                ].map((h, idx) => (
+                  <th
+                    key={h}
+                    className={`${ui.th} ${[4,5,6,9,10].includes(idx) ? "text-right" : ""} ${
+                      idx === 12 ? "text-right" : ""
+                    }`}
+                  >
                     {h}
                   </th>
                 ))}
@@ -458,7 +480,9 @@ const Loan = () => {
                 const start = fmtDate(startRaw);
                 const endRaw =
                   l.endDate ||
-                  (startRaw && term ? addMonthsDateOnly(String(startRaw).slice(0, 10), term) : "");
+                  (startRaw && Number.isFinite(Number(term))
+                    ? addMonthsDateOnly(String(startRaw).slice(0, 10), term)
+                    : "");
                 const end = fmtDate(endRaw);
 
                 const outstandingRaw =
@@ -483,17 +507,17 @@ const Loan = () => {
                     <td className={ui.td}>{borrowerName}</td>
                     <td className={ui.td}>{branchName}</td>
                     <td className={ui.td}>{productName}</td>
-                    <td className={ui.td}>{amount}</td>
-                    <td className={ui.td}>{rate}</td>
-                    <td className={ui.td}>{term}</td>
+                    <td className={`${ui.td} text-right`}>{amount}</td>
+                    <td className={`${ui.td} text-right`}>{rate}</td>
+                    <td className={`${ui.td} text-right`}>{term}</td>
                     <td className={ui.td}>{start}</td>
                     <td className={ui.td}>{end}</td>
-                    <td className={ui.td}>{paidGuess}</td>
-                    <td className={ui.td}>{outstanding}</td>
+                    <td className={`${ui.td} text-right`}>{paidGuess}</td>
+                    <td className={`${ui.td} text-right`}>{outstanding}</td>
                     <td className={ui.td}>
-                      <span className={statusBadge(status)}>{status}</span>
+                      <span className={statusBadge}>{status}</span>
                     </td>
-                    <td className={ui.td}>
+                    <td className={`${ui.td} text-right`}>
                       <button onClick={() => navigate(`/loans/${l.id}`)} className={ui.actionLink}>
                         View loan
                       </button>

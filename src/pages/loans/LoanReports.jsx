@@ -2,10 +2,12 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api";
 
+/* ---------- token UI (matches the new theme) ---------- */
 const ui = {
-  page: "p-4 space-y-4 bg-[var(--bg)] text-[var(--fg)]",
+  page: "p-4 md:p-6 lg:p-8 space-y-6 bg-[var(--bg)] text-[var(--fg)]",
   h1: "text-2xl font-extrabold tracking-tight",
-  card: "card p-4 rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)]",
+  card:
+    "card p-4 rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)]",
   alert:
     "mb-3 rounded-md border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] px-3 py-2 text-sm",
   tableWrap:
@@ -16,18 +18,37 @@ const ui = {
   td: "px-3 py-2 border border-[var(--border)] text-sm",
 };
 
+/* ---------- helpers ---------- */
 const toArray = (data) =>
-  Array.isArray(data) ? data
-  : Array.isArray(data?.items) ? data.items
-  : Array.isArray(data?.rows) ? data.rows
-  : Array.isArray(data?.results) ? data.results
-  : [];
+  Array.isArray(data)
+    ? data
+    : Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data?.rows)
+    ? data.rows
+    : Array.isArray(data?.results)
+    ? data.results
+    : Array.isArray(data?.data)
+    ? data.data
+    : [];
 
 const money = (n) => {
   const x = Number(n);
-  return Number.isFinite(x) ? x.toLocaleString() : n ?? "—";
+  return Number.isFinite(x)
+    ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(x)
+    : n ?? "—";
 };
 
+const fmtDate = (val) => {
+  if (!val) return "—";
+  const str = String(val);
+  // If already ISO-ish, fast truncate; else try Date()
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+  const d = new Date(str);
+  return Number.isNaN(+d) ? "—" : d.toISOString().slice(0, 10);
+};
+
+/* ---------- component ---------- */
 export default function LoanReports() {
   const [disbursed, setDisbursed] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +62,7 @@ export default function LoanReports() {
         const res = await api.get("/loans/reports/disbursements/list");
         setDisbursed(toArray(res.data));
       } catch (e) {
+        console.error(e);
         setErr("Failed to load disbursements");
         setDisbursed([]);
       } finally {
@@ -75,13 +97,19 @@ export default function LoanReports() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className={`${ui.td} text-center py-6 text-[var(--muted)]`} colSpan={4}>
+                  <td
+                    className={`${ui.td} text-center py-6 text-[var(--muted)]`}
+                    colSpan={4}
+                  >
                     Loading…
                   </td>
                 </tr>
               ) : disbursed.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className={`${ui.td} text-center py-6 text-[var(--muted)]`}>
+                  <td
+                    colSpan={4}
+                    className={`${ui.td} text-center py-6 text-[var(--muted)]`}
+                  >
                     No data
                   </td>
                 </tr>
@@ -90,14 +118,23 @@ export default function LoanReports() {
                   <tr
                     key={l.id}
                     className={`${
-                      i % 2 === 0 ? "bg-[var(--table-row-even)]" : "bg-[var(--table-row-odd)]"
+                      i % 2 === 0
+                        ? "bg-[var(--table-row-even)]"
+                        : "bg-[var(--table-row-odd)]"
                     } hover:bg-[var(--chip-soft)] transition-colors`}
                   >
                     <td className={ui.td}>{l.reference || `L-${l.id}`}</td>
-                    <td className={ui.td}>{l.Borrower?.name || "—"}</td>
+                    <td className={ui.td}>
+                      {l.Borrower?.name ||
+                        l.borrowerName ||
+                        l.borrower_name ||
+                        "—"}
+                    </td>
                     <td className={ui.td}>{money(l.amount)}</td>
                     <td className={ui.td}>
-                      {(l.disbursementDate || l.date || l.createdAt || "").slice(0, 10) || "—"}
+                      {fmtDate(
+                        l.disbursementDate || l.date || l.createdAt || ""
+                      )}
                     </td>
                   </tr>
                 ))

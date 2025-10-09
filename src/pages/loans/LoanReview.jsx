@@ -1,3 +1,4 @@
+// src/pages/loans/LoanReview.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api";
@@ -40,43 +41,47 @@ const ui = {
     "px-3 py-2 bg-[var(--card)] hover:bg-[var(--kpi-bg)] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
   btnIcon: "w-4 h-4",
+  /* FIX: use primary tokens, not undefined --accent */
   primary:
     "inline-flex items-center rounded-lg px-3 py-2 font-semibold " +
-    "bg-[var(--accent)] text-[var(--on-accent)] hover:opacity-90 " +
+    "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+  /* FIX: table head token + 1px inner borders */
   th:
-    "bg-[var(--kpi-bg)] text-left text-[12px] uppercase tracking-wide text-[var(--muted)] " +
-    "font-semibold px-3 py-2 border-2 border-[var(--border)] select-none",
-  td: "px-3 py-2 border-2 border-[var(--border)] text-sm",
+    "bg-[var(--table-head-bg)] text-left text-[12px] uppercase tracking-wide text-[var(--muted)] " +
+    "font-semibold px-3 py-2 border border-[var(--border)] select-none",
+  /* FIX: 1px inner borders */
+  td: "px-3 py-2 border border-[var(--border)] text-sm",
   chip: "px-2 py-0.5 text-[11px] rounded-full border",
+  /* placeholder uses input-placeholder token */
   fieldBase:
     "h-11 w-full rounded-lg border-2 text-sm outline-none px-3 " +
     "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
-    "placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--ring)]",
+    "placeholder:text-[var(--input-placeholder)] focus:ring-2 focus:ring-[var(--ring)]",
   fieldIcon:
     "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]",
 };
 
-/* status chip inline styles via tokens */
+/* status chip inline styles via tokens (with fallbacks so it still looks good) */
 const statusStyle = (stage) => {
   const s = (stage || "").toLowerCase();
   if (s === "approved")
     return {
-      background: "var(--success-bg)",
-      color: "var(--success-fg)",
-      borderColor: "var(--success-border)",
+      background: "var(--success, #22c55e)",
+      color: "var(--on-success, #06230f)",
+      borderColor: "var(--success-border, #16a34a)",
     };
   if (s === "rejected")
     return {
-      background: "var(--danger-bg)",
-      color: "var(--danger-fg)",
-      borderColor: "var(--danger-border)",
+      background: "var(--danger, #ef4444)",
+      color: "var(--on-danger, #2b0a0a)",
+      borderColor: "var(--danger-border, #dc2626)",
     };
   if (s === "returned_with_comment")
     return {
-      background: "var(--warn-bg)",
-      color: "var(--warn-fg)",
-      borderColor: "var(--warn-border)",
+      background: "var(--warn, #f59e0b)",
+      color: "var(--on-warn, #231803)",
+      borderColor: "var(--warn-border, #d97706)",
     };
   return {
     background: "var(--chip-soft)",
@@ -85,7 +90,7 @@ const statusStyle = (stage) => {
   };
 };
 
-/* ---------- tiny field components (clean, parallel) ---------- */
+/* ---------- tiny field components ---------- */
 const SelectField = ({ className = "", children, ...props }) => (
   <div className={`relative ${className}`}>
     <select
@@ -352,7 +357,7 @@ export default function LoanReview() {
         </Link>
       </div>
 
-      {/* Filters (clean, parallel layout) */}
+      {/* Filters */}
       <div className={`${ui.card} p-4 mb-5`}>
         <div className="flex items-center justify-between mb-3">
           <div className="inline-flex items-center gap-2 text-[var(--muted)] font-semibold">
@@ -366,7 +371,6 @@ export default function LoanReview() {
           </button>
         </div>
 
-        {/* One neat row on xl; stacks on small */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
           <TextField
             value={q}
@@ -512,9 +516,9 @@ export default function LoanReview() {
                               className={`px-2 py-1 text-xs rounded border-2 inline-flex items-center gap-1
                                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
                               style={{
-                                background: "var(--success)",
-                                color: "var(--on-success, var(--on-accent))",
-                                borderColor: "var(--success-strong, var(--success-border))",
+                                background: "var(--success, #22c55e)",
+                                color: "var(--on-success, var(--primary-contrast))",
+                                borderColor: "var(--success-strong, var(--success-border, #16a34a))",
                               }}
                               onClick={() => setModal({ type: "approve", row: r })}
                             >
@@ -526,9 +530,9 @@ export default function LoanReview() {
                               className={`px-2 py-1 text-xs rounded border-2 inline-flex items-center gap-1
                                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
                               style={{
-                                background: "var(--warn)",
-                                color: "var(--on-warn, var(--on-accent))",
-                                borderColor: "var(--warn-strong, var(--warn-border))",
+                                background: "var(--warn, #f59e0b)",
+                                color: "var(--on-warn, var(--primary-contrast))",
+                                borderColor: "var(--warn-strong, var(--warn-border, #d97706))",
                               }}
                               onClick={() => setModal({ type: "return", row: r })}
                             >
@@ -540,9 +544,9 @@ export default function LoanReview() {
                               className={`px-2 py-1 text-xs rounded border-2 inline-flex items-center gap-1
                                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]`}
                               style={{
-                                background: "var(--danger)",
-                                color: "var(--on-danger, var(--on-accent))",
-                                borderColor: "var(--danger-strong, var(--danger-border))",
+                                background: "var(--danger, #ef4444)",
+                                color: "var(--on-danger, var(--primary-contrast))",
+                                borderColor: "var(--danger-strong, var(--danger-border, #dc2626))",
                               }}
                               onClick={() => setModal({ type: "reject", row: r })}
                             >
@@ -634,7 +638,7 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
       ? "Reject Application"
       : "Return with Comment";
 
-  // FIX: removed stray parenthesis at end
+  // Branch managers can suggest amount on approve/return
   const showSuggestedAmount =
     role === "branch_manager" && (type === "approve" || type === "return");
 
@@ -709,9 +713,9 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
               onClick={() => onApprove(row, suggestedAmount)}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg disabled:opacity-60"
               style={{
-                background: "var(--success)",
-                color: "var(--on-success, var(--on-accent))",
-                border: "2px solid var(--success-strong, var(--success-border))",
+                background: "var(--success, #22c55e)",
+                color: "var(--on-success, var(--primary-contrast))",
+                border: "2px solid var(--success-strong, var(--success-border, #16a34a))",
               }}
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Approve
@@ -724,9 +728,9 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
               onClick={() => onReturn(row, comment, suggestedAmount)}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg disabled:opacity-60"
               style={{
-                background: "var(--warn)",
-                color: "var(--on-warn, var(--on-accent))",
-                border: "2px solid var(--warn-strong, var(--warn-border))",
+                background: "var(--warn, #f59e0b)",
+                color: "var(--on-warn, var(--primary-contrast))",
+                border: "2px solid var(--warn-strong, var(--warn-border, #d97706))",
               }}
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Return
@@ -739,9 +743,9 @@ function ActionModal({ type, row, role, busy, onClose, onApprove, onReject, onRe
               onClick={() => onReject(row, comment)}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg disabled:opacity-60"
               style={{
-                background: "var(--danger)",
-                color: "var(--on-danger, var(--on-accent))",
-                border: "2px solid var(--danger-strong, var(--danger-border))",
+                background: "var(--danger, #ef4444)",
+                color: "var(--on-danger, var(--primary-contrast))",
+                border: "2px solid var(--danger-strong, var(--danger-border, #dc2626))",
               }}
             >
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Reject

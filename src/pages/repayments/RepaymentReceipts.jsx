@@ -1,3 +1,4 @@
+// src/pages/repayments/RepaymentReceipts.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../api";
 import jsPDF from "jspdf";
@@ -12,7 +13,8 @@ const REPAYMENT_EVENTS = {
 };
 
 const money = (v) => Number(v || 0).toLocaleString();
-const toISO = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0,10);
+const toISO = (d) =>
+  new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const startDefault = () => {
   const d = new Date();
   d.setDate(d.getDate() - 30);
@@ -32,7 +34,7 @@ const buildApiUrl = (url, params = {}) => {
 export default function RepaymentReceipts() {
   // filters
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState("approved"); // approved|pending|rejected|all (client-side filter)
+  const [status, setStatus] = useState("approved"); // approved|pending|rejected|all
   const [dateFrom, setDateFrom] = useState(startDefault());
   const [dateTo, setDateTo] = useState(toISO(new Date()));
 
@@ -61,16 +63,16 @@ export default function RepaymentReceipts() {
       if (q.trim()) params.q = q.trim();
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
-
-      // Note: backend may ignore status; we filter client-side below
       if (status && status !== "all") params.status = status;
 
       const { data } = await api.get("/repayments", { params });
       let items = Array.isArray(data) ? data : data?.items || [];
 
-      // Client-side status filter to be safe
+      // Safe client-side status filter
       if (status && status !== "all") {
-        items = items.filter((r) => String(r.status || "").toLowerCase() === status);
+        items = items.filter(
+          (r) => String(r.status || "").toLowerCase() === status
+        );
       }
 
       setRows(items);
@@ -128,7 +130,7 @@ export default function RepaymentReceipts() {
         q: q || undefined,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
-        status: status !== "all" ? status : undefined, // backend may ignore
+        status: status !== "all" ? status : undefined,
       }),
     [q, dateFrom, dateTo, status]
   );
@@ -216,28 +218,43 @@ export default function RepaymentReceipts() {
 
   const displayDate = (r) =>
     (r.date || r.paymentDate || r.paidAt || r.createdAt || "").slice(0, 10);
-
   const displayAmount = (r) => Number(r.amount ?? r.amountPaid ?? 0);
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-5 flex items-center justify-between">
+      <div
+        className="rounded-lg p-5 flex items-center justify-between"
+        style={{
+          background: "var(--card)",
+          border: "2px solid var(--border-strong)",
+          boxShadow: "0 10px 20px rgba(0,0,0,.08)",
+        }}
+      >
         <div>
           <h2 className="text-xl font-semibold">Repayment Receipts</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
             View, print or export receipts. Export respects your current filters.
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={fetchData} disabled={loading} className="px-3 py-2 rounded border">
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="px-3 py-2 rounded"
+            style={{
+              background: "var(--card)",
+              color: "var(--fg)",
+              border: "2px solid var(--border-strong)",
+            }}
+          >
             {loading ? "Refreshing…" : "Refresh"}
           </button>
           <a
             href={exportHref}
             target="_blank"
             rel="noreferrer"
-            className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            className="btn-primary px-3 py-2 rounded inline-flex items-center justify-center"
             title="Export filtered receipts as CSV"
           >
             Export CSV
@@ -246,12 +263,27 @@ export default function RepaymentReceipts() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-5">
+      <div
+        className="rounded-lg p-5"
+        style={{
+          background: "var(--card)",
+          border: "2px solid var(--border-strong)",
+          boxShadow: "0 10px 20px rgba(0,0,0,.08)",
+        }}
+      >
         <form onSubmit={onSearch} className="grid md:grid-cols-7 gap-4">
           <div className="md:col-span-2">
-            <label className="block text-sm mb-1">Search</label>
+            <label className="block text-sm mb-1" style={{ color: "var(--muted)" }}>
+              Search
+            </label>
             <input
-              className="w-full border rounded px-3 py-2"
+              className="w-full rounded px-3 py-2 focus:outline-none focus:ring-2"
+              style={{
+                background: "var(--input-bg)",
+                color: "var(--input-fg)",
+                border: "2px solid var(--input-border)",
+                "--tw-ring-color": "var(--ring)",
+              }}
               placeholder="Borrower / Phone / Loan Ref / Method / Receipt"
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -259,9 +291,17 @@ export default function RepaymentReceipts() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">Status</label>
+            <label className="block text-sm mb-1" style={{ color: "var(--muted)" }}>
+              Status
+            </label>
             <select
-              className="w-full border rounded px-3 py-2"
+              className="w-full rounded px-3 py-2 focus:outline-none focus:ring-2"
+              style={{
+                background: "var(--input-bg)",
+                color: "var(--input-fg)",
+                border: "2px solid var(--input-border)",
+                "--tw-ring-color": "var(--ring)",
+              }}
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
@@ -276,28 +316,53 @@ export default function RepaymentReceipts() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">From</label>
+            <label className="block text-sm mb-1" style={{ color: "var(--muted)" }}>
+              From
+            </label>
             <input
               type="date"
-              className="w-full border rounded px-3 py-2"
+              className="w-full rounded px-3 py-2 focus:outline-none focus:ring-2"
+              style={{
+                background: "var(--input-bg)",
+                color: "var(--input-fg)",
+                border: "2px solid var(--input-border)",
+                "--tw-ring-color": "var(--ring)",
+              }}
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
             />
           </div>
+
           <div>
-            <label className="block text-sm mb-1">To</label>
+            <label className="block text-sm mb-1" style={{ color: "var(--muted)" }}>
+              To
+            </label>
             <input
               type="date"
-              className="w-full border rounded px-3 py-2"
+              className="w-full rounded px-3 py-2 focus:outline-none focus:ring-2"
+              style={{
+                background: "var(--input-bg)",
+                color: "var(--input-fg)",
+                border: "2px solid var(--input-border)",
+                "--tw-ring-color": "var(--ring)",
+              }}
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
             />
           </div>
 
           <div>
-            <label className="block text-sm mb-1">Page size</label>
+            <label className="block text-sm mb-1" style={{ color: "var(--muted)" }}>
+              Page size
+            </label>
             <select
-              className="w-full border rounded px-3 py-2"
+              className="w-full rounded px-3 py-2 focus:outline-none focus:ring-2"
+              style={{
+                background: "var(--input-bg)",
+                color: "var(--input-fg)",
+                border: "2px solid var(--input-border)",
+                "--tw-ring-color": "var(--ring)",
+              }}
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
@@ -315,7 +380,12 @@ export default function RepaymentReceipts() {
           <div className="md:col-span-2 flex items-end gap-2">
             <button
               type="button"
-              className="px-3 py-2 rounded border"
+              className="px-3 py-2 rounded"
+              style={{
+                background: "var(--card)",
+                color: "var(--fg)",
+                border: "2px solid var(--border-strong)",
+              }}
               onClick={() => {
                 setQ("");
                 setStatus("approved");
@@ -327,7 +397,10 @@ export default function RepaymentReceipts() {
             >
               Reset
             </button>
-            <button type="submit" className="px-3 py-2 rounded bg-blue-600 text-white">
+            <button
+              type="submit"
+              className="btn-primary px-3 py-2 rounded inline-flex items-center justify-center"
+            >
               Search
             </button>
           </div>
@@ -335,25 +408,47 @@ export default function RepaymentReceipts() {
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-0 overflow-hidden">
+      <div
+        className="rounded-lg overflow-hidden"
+        style={{
+          background: "var(--card)",
+          border: "2px solid var(--border-strong)",
+          boxShadow: "0 10px 20px rgba(0,0,0,.08)",
+        }}
+      >
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="bg-gray-100 dark:bg-gray-700 text-left">
-                <th className="p-3">Receipt No</th>
-                <th className="p-3">Date</th>
-                <th className="p-3">Loan Ref</th>
-                <th className="p-3">Borrower</th>
-                <th className="p-3">Method</th>
-                <th className="p-3">Amount</th>
-                <th className="p-3">Status</th>
-                <th className="p-3 text-right">Action</th>
+              <tr
+                style={{
+                  background: "var(--table-head-bg)",
+                  color: "var(--fg)",
+                }}
+              >
+                {[
+                  "Receipt No",
+                  "Date",
+                  "Loan Ref",
+                  "Borrower",
+                  "Method",
+                  "Amount",
+                  "Status",
+                  "Action",
+                ].map((h, i) => (
+                  <th
+                    key={h}
+                    className={`p-3 text-left ${i === 7 ? "text-right" : ""}`}
+                    style={{ borderBottom: "1px solid var(--border)" }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td className="p-4 text-gray-500" colSpan={8}>
+                  <td className="p-4" style={{ color: "var(--muted)" }} colSpan={8}>
                     No data.
                   </td>
                 </tr>
@@ -361,25 +456,42 @@ export default function RepaymentReceipts() {
               {rows.map((r) => {
                 const loan = r.Loan || r.loan || {};
                 const borrower = loan.Borrower || {};
-                const currency = r.currency || loan.currency || "TZS";
+                const currencyCode = r.currency || loan.currency || "TZS";
                 const amount = displayAmount(r);
 
                 return (
-                  <tr key={r.id} className="border-t">
+                  <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                     <td className="p-3">{r.receiptNo || `RCPT-${r.id}`}</td>
                     <td className="p-3">{displayDate(r)}</td>
-                    <td className="p-3">{loan.reference || `L-${loan.id || r.loanId || ""}`}</td>
+                    <td className="p-3">
+                      {loan.reference || `L-${loan.id || r.loanId || ""}`}
+                    </td>
                     <td className="p-3">{borrower.name || borrower.fullName || "—"}</td>
                     <td className="p-3 capitalize">{r.method || "cash"}</td>
-                    <td className="p-3">{currency} {money(amount)}</td>
+                    <td className="p-3">
+                      {currencyCode} {money(amount)}
+                    </td>
                     <td className="p-3">{(r.status || "").toUpperCase() || "—"}</td>
                     <td className="p-3 text-right">
                       <div className="flex gap-2 justify-end">
-                        <button className="px-3 py-1.5 rounded border" onClick={() => openReceipt(r)}>
+                        <button
+                          className="px-3 py-1.5 rounded"
+                          style={{
+                            background: "var(--card)",
+                            color: "var(--fg)",
+                            border: "2px solid var(--border-strong)",
+                          }}
+                          onClick={() => openReceipt(r)}
+                        >
                           View
                         </button>
                         <a
-                          className="px-3 py-1.5 rounded border"
+                          className="px-3 py-1.5 rounded"
+                          style={{
+                            background: "var(--card)",
+                            color: "var(--fg)",
+                            border: "2px solid var(--border-strong)",
+                          }}
                           href={`/repayments/receipts?id=${r.id}`}
                           target="_blank"
                           rel="noreferrer"
@@ -403,20 +515,33 @@ export default function RepaymentReceipts() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between p-3 border-t">
-          <p className="text-xs text-gray-500">
+        <div
+          className="flex items-center justify-between p-3"
+          style={{ borderTop: "1px solid var(--border)" }}
+        >
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
             Page {page} of {pages} • {total} total
           </p>
           <div className="flex gap-2">
             <button
-              className="px-3 py-1.5 rounded border"
+              className="px-3 py-1.5 rounded disabled:opacity-50"
+              style={{
+                background: "var(--card)",
+                color: "var(--fg)",
+                border: "2px solid var(--border-strong)",
+              }}
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               Prev
             </button>
             <button
-              className="px-3 py-1.5 rounded border"
+              className="px-3 py-1.5 rounded disabled:opacity-50"
+              style={{
+                background: "var(--card)",
+                color: "var(--fg)",
+                border: "2px solid var(--border-strong)",
+              }}
               disabled={page >= pages}
               onClick={() => setPage((p) => Math.min(pages, p + 1))}
             >
@@ -432,24 +557,54 @@ export default function RepaymentReceipts() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
           <div
             ref={receiptRef}
-            className="relative bg-white w-full max-w-2xl rounded-lg shadow-lg p-6 print:bg-white"
+            className="relative w-full max-w-2xl rounded-lg p-6 print:bg-white"
+            style={{
+              background: "var(--card)",
+              color: "var(--fg)",
+              border: "2px solid var(--border-strong)",
+              boxShadow: "0 10px 28px rgba(0,0,0,.12)",
+            }}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">
                 Receipt #{receipt.receiptNo || receipt.id}
               </h3>
               <div className="flex gap-2">
-                <button className="px-3 py-1.5 rounded border" onClick={() => window.print()}>
+                <button
+                  className="px-3 py-1.5 rounded"
+                  style={{
+                    background: "var(--card)",
+                    color: "var(--fg)",
+                    border: "2px solid var(--border-strong)",
+                  }}
+                  onClick={() => window.print()}
+                >
                   Print
                 </button>
-                <button className="px-3 py-1.5 rounded border" onClick={downloadPDF}>
+                <button
+                  className="px-3 py-1.5 rounded"
+                  style={{
+                    background: "var(--card)",
+                    color: "var(--fg)",
+                    border: "2px solid var(--border-strong)",
+                  }}
+                  onClick={downloadPDF}
+                >
                   Download PDF
                 </button>
-                <button className="px-3 py-1.5 rounded border" onClick={copyLink}>
+                <button
+                  className="px-3 py-1.5 rounded"
+                  style={{
+                    background: "var(--card)",
+                    color: "var(--fg)",
+                    border: "2px solid var(--border-strong)",
+                  }}
+                  onClick={copyLink}
+                >
                   Copy Link
                 </button>
                 <button
-                  className="px-3 py-1.5 rounded bg-blue-600 text-white"
+                  className="btn-primary px-3 py-1.5 rounded"
                   onClick={() => setOpen(false)}
                 >
                   Close
@@ -460,56 +615,79 @@ export default function RepaymentReceipts() {
             <div className="grid md:grid-cols-2 gap-4 text-sm">
               <div>
                 <p>
-                  <span className="text-gray-500">Date:</span> {(receipt.date || "").slice(0,10)}
+                  <span style={{ color: "var(--muted)" }}>Date:</span>{" "}
+                  {(receipt.date || "").slice(0, 10)}
                 </p>
                 <p>
-                  <span className="text-gray-500">Method:</span> {receipt.method || "cash"}
+                  <span style={{ color: "var(--muted)" }}>Method:</span>{" "}
+                  {receipt.method || "cash"}
                 </p>
                 {receipt.reference && (
                   <p>
-                    <span className="text-gray-500">Reference:</span> {receipt.reference}
+                    <span style={{ color: "var(--muted)" }}>Reference:</span>{" "}
+                    {receipt.reference}
                   </p>
                 )}
                 {receipt.notes && (
                   <p>
-                    <span className="text-gray-500">Notes:</span> {receipt.notes}
+                    <span style={{ color: "var(--muted)" }}>Notes:</span>{" "}
+                    {receipt.notes}
                   </p>
                 )}
               </div>
               <div className="text-right">
-                <p className="text-gray-500">Amount</p>
+                <p style={{ color: "var(--muted)" }}>Amount</p>
                 <p className="text-xl font-semibold">
                   {receipt.currency || "TZS"} {money(receipt.amount)}
                 </p>
               </div>
             </div>
 
-            <div className="my-4 border-t pt-4 text-sm">
+            <div
+              className="my-4 pt-4 text-sm"
+              style={{ borderTop: "1px solid var(--border)" }}
+            >
               <p>
-                <span className="text-gray-500">Loan:</span> {receipt.loan?.reference}
+                <span style={{ color: "var(--muted)" }}>Loan:</span>{" "}
+                {receipt.loan?.reference}
               </p>
               <p>
-                <span className="text-gray-500">Borrower:</span> {receipt.loan?.borrowerName}
+                <span style={{ color: "var(--muted)" }}>Borrower:</span>{" "}
+                {receipt.loan?.borrowerName}
               </p>
             </div>
 
             {!!receipt?.allocation?.length && (
               <div className="mt-3">
                 <p className="font-medium mb-2">Allocation</p>
-                <div className="overflow-x-auto border rounded">
+                <div
+                  className="overflow-x-auto rounded"
+                  style={{ border: "1px solid var(--border)" }}
+                >
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-2">Period</th>
-                        <th className="p-2">Principal</th>
-                        <th className="p-2">Interest</th>
-                        <th className="p-2">Fees</th>
-                        <th className="p-2">Penalties</th>
+                      <tr
+                        style={{
+                          background: "var(--table-head-bg)",
+                          color: "var(--fg)",
+                        }}
+                      >
+                        {["Period", "Principal", "Interest", "Fees", "Penalties"].map(
+                          (h) => (
+                            <th
+                              key={h}
+                              className="p-2 text-left"
+                              style={{ borderBottom: "1px solid var(--border)" }}
+                            >
+                              {h}
+                            </th>
+                          )
+                        )}
                       </tr>
                     </thead>
                     <tbody>
                       {receipt.allocation.map((a, idx) => (
-                        <tr key={idx} className="border-t">
+                        <tr key={idx} style={{ borderTop: "1px solid var(--border)" }}>
                           <td className="p-2">{a.period}</td>
                           <td className="p-2">
                             {receipt.currency || "TZS"} {money(a.principal)}
@@ -528,7 +706,10 @@ export default function RepaymentReceipts() {
                     </tbody>
                     {receipt.totals && (
                       <tfoot>
-                        <tr className="border-t font-medium">
+                        <tr
+                          className="font-medium"
+                          style={{ borderTop: "1px solid var(--border)" }}
+                        >
                           <td className="p-2">Totals</td>
                           <td className="p-2">
                             {receipt.currency || "TZS"} {money(receipt.totals.principal)}
@@ -551,7 +732,7 @@ export default function RepaymentReceipts() {
             )}
 
             {/* Footer */}
-            <div className="mt-6 text-xs text-gray-500">
+            <div className="mt-6 text-xs" style={{ color: "var(--muted)" }}>
               <p>
                 Posted by: {receipt.postedBy?.name || "—"}{" "}
                 {receipt.postedBy?.email ? `(${receipt.postedBy.email})` : ""}
