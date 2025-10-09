@@ -34,7 +34,6 @@ const api = axios.create({
   timeout: TIMEOUT_MS,
   headers: {
     Accept: "application/json",
-    // 'X-Requested-With': 'XMLHttpRequest', // uncomment if your server checks it
   },
 });
 
@@ -49,6 +48,14 @@ function normalizePath(input) {
   if (BASE_HAS_API && url.startsWith("/api/")) url = url.slice(4); // drop duplicate /api
   url = url.replace(/\/{2,}/g, "/");
   return url;
+}
+
+/** Create /api and non-/api variants for a path and dedupe */
+function variantsFor(p) {
+  const clean = normalizePath(p);
+  const noApi = clean.replace(/^\/api\//, "/");
+  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
+  return Array.from(new Set([noApi, withApi]));
 }
 
 /** Optional request-id */
@@ -117,12 +124,10 @@ api.interceptors.request.use((config) => {
 
   // If sending FormData, let the browser set the boundary automatically
   if (isFormData(config.data)) {
-    // Remove any pre-set content-type to avoid breaking multipart requests
     if (config.headers && "Content-Type" in config.headers) {
       delete config.headers["Content-Type"];
     }
   } else {
-    // X-Request-Id only for non-FormData (fine to add for both, but keeping light)
     if (!config.headers["x-request-id"]) {
       config.headers["x-request-id"] = makeReqId();
     }
@@ -212,11 +217,18 @@ api.patchForm = async (url, formData, config = {}) =>
 
 /**
  * Try a list of endpoints (first that works).
- * Example: await api.getFirst(['/api/support/tickets','/api/admin/tickets'])
+ * Accepts a string or array; for each path we auto-try both non-/api and /api variants.
+ * Example: await api.postFirst('admin/communications', payload)
  */
 async function firstOk(method, paths, payload, config) {
+  const inputList = Array.isArray(paths) ? paths : [paths];
+  // Build flattened list of variant candidates and dedupe
+  const candidates = Array.from(
+    new Set(inputList.flatMap((p) => variantsFor(p)))
+  );
+
   let lastErr;
-  for (const p of paths) {
+  for (const p of candidates) {
     try {
       const url = normalizePath(p);
       const res =
@@ -229,7 +241,7 @@ async function firstOk(method, paths, payload, config) {
       // continue to the next candidate
     }
   }
-  throw lastErr;
+  throw lastErr || new Error("No endpoint succeeded");
 }
 
 api.getFirst = (paths, config) => firstOk("get", paths, undefined, config);

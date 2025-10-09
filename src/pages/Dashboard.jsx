@@ -287,21 +287,102 @@ const Dashboard = () => {
     }
   }, [branchId, officerId, timeRange]);
 
+  /** UPDATED: robust communications fetch + normalization + branch filtering + fallback */
   const fetchCommunications = useCallback(
     async (signal) => {
       setLoadingComms(true);
       try {
-        const res = await api.get('/dashboard/communications', { signal }).catch(() => null);
-        if (res?.data && Array.isArray(res.data)) {
-          setComms(res.data);
+        const raw = await tryGET(
+          [
+            ...apiVariants('dashboard/communications'),
+            ...apiVariants('admin/communications?activeOnly=1'),
+            ...apiVariants('admin/communications?activeOnly=1&channel=inapp'),
+          ],
+          { signal }
+        );
+
+        const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
+        const normalized = arr
+          .map((c) => {
+            const attachmentsRaw = Array.isArray(c.attachments)
+              ? c.attachments
+              : Array.isArray(c.files)
+              ? c.files
+              : [];
+            const attachments = attachmentsRaw
+              .map((a) => ({
+                ...a,
+                fileUrl: a?.fileUrl || a?.url || a?.href || a?.path || '',
+              }))
+              .filter((a) => a.fileUrl);
+
+            return {
+              id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
+              text: c.text ?? c.title ?? c.body ?? '',
+              type: (c.type ?? '').toString(),
+              priority: (c.priority ?? '').toString(),
+              audienceBranchId: c.audienceBranchId ?? c.branchId ?? c.targetBranchId ?? null,
+              attachments,
+            };
+          })
+          .filter((c) => c.text);
+
+        // Respect branch filter (show global or matching branch)
+        const byBranch = normalized.filter((c) =>
+          branchId ? (c.audienceBranchId == null || String(c.audienceBranchId) === String(branchId)) : true
+        );
+
+        if (byBranch.length) {
+          setComms(byBranch);
         } else {
-          setComms(Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : []);
+          // Fallback to summary.generalCommunications if endpoints empty
+          const fallback =
+            (Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : []) || [];
+          const normFallback = fallback
+            .map((c) => ({
+              id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
+              text: c.text ?? c.title ?? c.body ?? '',
+              type: (c.type ?? '').toString(),
+              priority: (c.priority ?? '').toString(),
+              audienceBranchId: c.audienceBranchId ?? c.branchId ?? c.targetBranchId ?? null,
+              attachments: Array.isArray(c.attachments)
+                ? c.attachments.map((a) => ({ ...a, fileUrl: a?.fileUrl || a?.url || '' })).filter((a) => a.fileUrl)
+                : [],
+            }))
+            .filter((c) => c.text)
+            .filter((c) =>
+              branchId ? (c.audienceBranchId == null || String(c.audienceBranchId) === String(branchId)) : true
+            );
+
+          setComms(normFallback);
         }
+      } catch (err) {
+        if (!isAbort(err)) {
+          console.error('Comms fetch error:', err?.message || err);
+          pushToast('Failed to load communications', 'error');
+        }
+        const fallback = Array.isArray(summary?.generalCommunications) ? summary.generalCommunications : [];
+        setComms(
+          fallback
+            .map((c) => ({
+              id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
+              text: c.text ?? c.title ?? c.body ?? '',
+              type: (c.type ?? '').toString(),
+              priority: (c.priority ?? '').toString(),
+              audienceBranchId: c.audienceBranchId ?? c.branchId ?? c.targetBranchId ?? null,
+              attachments: Array.isArray(c.attachments)
+                ? c.attachments.map((a) => ({ ...a, fileUrl: a?.fileUrl || a?.url || '' })).filter((a) => a.fileUrl)
+                : [],
+            }))
+            .filter((c) =>
+              branchId ? (c.audienceBranchId == null || String(c.audienceBranchId) === String(branchId)) : true
+            )
+        );
       } finally {
         setLoadingComms(false);
       }
     },
-    [summary]
+    [summary, branchId]
   );
 
   const fetchTrends = useCallback(async (signal) => {
@@ -350,7 +431,6 @@ const Dashboard = () => {
   }, [loadAll]);
 
   useEffect(() => {
-    if (!summary) return;
     const ac = new AbortController();
     fetchCommunications(ac.signal).catch((err) => {
       if (!isAbort(err)) {
@@ -359,7 +439,7 @@ const Dashboard = () => {
       }
     });
     return () => ac.abort();
-  }, [summary, fetchCommunications]);
+  }, [summary, branchId, fetchCommunications]);
 
   useEffect(() => {
     if (!summary) return;
@@ -416,7 +496,9 @@ const Dashboard = () => {
   );
 
   const downloadAllAttachments = () => {
-    const files = comms.flatMap((c) => (c.attachments || []).map((a) => a.fileUrl)).filter(Boolean);
+    const files = comms
+      .flatMap((c) => (c.attachments || []).map((a) => a.fileUrl))
+      .filter(Boolean);
     if (files.length === 0) return;
     files.forEach((url, i) => {
       setTimeout(() => window.open(url, '_blank', 'noopener,noreferrer'), i * 150);
@@ -569,25 +651,34 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Communications ribbon */}
-        {(comms?.length ?? 0) > 0 && (
-          <div className={`${ui.card} overflow-hidden`}>
-            <div className="flex items-center justify-between px-3 py-2 border-b"
-                 style={{ borderColor: 'var(--border)', background: 'var(--table-head-bg)' }}>
-              <div className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                General Communications
-              </div>
-              {comms.some((c) => Array.isArray(c.attachments) && c.attachments.length > 0) && (
-                <button
-                  onClick={downloadAllAttachments}
-                  className={`${ui.btn} h-7 px-2 text-xs`}
-                  title="Open all attachments"
-                  disabled={loadingComms}
-                >
-                  <Download className="w-3 h-3" /> Download all
-                </button>
-              )}
+        {/* Communications ribbon — always render with loading/empty states */}
+        <div className={`${ui.card} overflow-hidden`}>
+          <div className="flex items-center justify-between px-3 py-2 border-b"
+               style={{ borderColor: 'var(--border)', background: 'var(--table-head-bg)' }}>
+            <div className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+              General Communications
             </div>
+            {comms.some((c) => Array.isArray(c.attachments) && c.attachments.length > 0) && (
+              <button
+                onClick={downloadAllAttachments}
+                className={`${ui.btn} h-7 px-2 text-xs`}
+                title="Open all attachments"
+                disabled={loadingComms}
+              >
+                <Download className="w-3 h-3" /> Download all
+              </button>
+            )}
+          </div>
+
+          {loadingComms ? (
+            <div className="p-3 text-sm" style={{ color: 'var(--muted)' }}>
+              Loading communications…
+            </div>
+          ) : (comms?.length ?? 0) === 0 ? (
+            <div className="p-3 text-sm" style={{ color: 'var(--muted)' }}>
+              No communications to display.
+            </div>
+          ) : (
             <div className="relative h-10">
               <style>{`@keyframes ms-marquee{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}`}</style>
               <div
@@ -620,8 +711,8 @@ const Dashboard = () => {
                 ))}
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-3">
@@ -880,7 +971,7 @@ const SummaryCard = ({
             {icon}
           </div>
 
-          {delta != null && (
+        {delta != null && (
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${deltaColor}`}>
               {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toLocaleString()}%
               {deltaLabel && <span className="opacity-70">&nbsp;{deltaLabel}</span>}

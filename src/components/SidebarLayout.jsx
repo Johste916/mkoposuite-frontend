@@ -58,6 +58,31 @@ const isEditableTarget = (el) => {
   return editable;
 };
 
+/** ===== Helpers aligned with Dashboard ===== */
+const apiVariants = (p) => {
+  const clean = p.startsWith("/") ? p : `/${p}`;
+  const noApi = clean.replace(/^\/api\//, "/");
+  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
+  return Array.from(new Set([noApi, withApi]));
+};
+const isAbort = (err) =>
+  err?.name === "CanceledError" ||
+  err?.code === "ERR_CANCELED" ||
+  /abort|cancell?ed/i.test(err?.message || "");
+
+const tryGET = async (paths = [], opts = {}) => {
+  let lastErr;
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, opts);
+      return res?.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+};
+
 /* ------------------------------- NAV CONFIG -------------------------------- */
 const NAV = () => [
   { label: "Dashboard", icon: <FiHome />, to: "/" },
@@ -763,7 +788,7 @@ const SidebarLayout = () => {
   const hasAnyRole = (...allowed) => {
     const primary = lower(user?.role);
     const list = Array.isArray(user?.roles)
-      ? user.roles.map(lower)
+      ? user.roles.map((r) => lower(r?.name || r))
       : Array.isArray(user?.Roles)
       ? user.Roles.map((r) => lower(r?.name || r))
       : [];
@@ -881,7 +906,7 @@ const SidebarLayout = () => {
   const [ticker, setTicker] = useState([]);
   const [loadingTicker, setLoadingTicker] = useState(false);
 
-  // normalize + filter by flags/time window/role/branch
+  // normalize + filter by flags/time window/role/branch (supports arrays)
   const normalizeTicker = useCallback(
     (raw) => {
       const arr = Array.isArray(raw)
@@ -890,35 +915,68 @@ const SidebarLayout = () => {
         ? raw.items
         : Array.isArray(raw?.rows)
         ? raw.rows
+        : Array.isArray(raw?.data)
+        ? raw.data
         : [];
+
       const now = Date.now();
-      const roleName = (user?.role || "").toString().toLowerCase();
+
+      const roleNames = (() => {
+        const primary = (user?.role || "").toString().toLowerCase();
+        const extras = Array.isArray(user?.roles)
+          ? user.roles.map((r) => (r?.name || r || "").toString().toLowerCase())
+          : Array.isArray(user?.Roles)
+          ? user.Roles.map((r) => (r?.name || r || "").toString().toLowerCase())
+          : [];
+        return Array.from(new Set([primary, ...extras].filter(Boolean)));
+      })();
+
+      const toArray = (v) =>
+        Array.isArray(v) ? v : v == null ? [] : [v];
 
       return arr
-        .map((c) => ({
-          id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
-          title: c.title ?? "",
-          text: c.text ?? c.body ?? "",
-          type: (c.type || "notice").toString().toLowerCase(),
-          priority: (c.priority || "normal").toString().toLowerCase(),
-          channel: (c.channel || "inapp").toString().toLowerCase(),
-          isActive: Boolean(c.isActive ?? c.active ?? c.enabled ?? true),
-          showInTicker: Boolean(c.showInTicker ?? c.ticker ?? c.showTicker ?? false),
-          startAt: c.startAt ? new Date(c.startAt).getTime() : null,
-          endAt: c.endAt ? new Date(c.endAt).getTime() : null,
-          audienceRole: c.audienceRole ? String(c.audienceRole).toLowerCase() : null,
-          audienceBranchId:
-            c.audienceBranchId != null ? String(c.audienceBranchId) : null,
-        }))
+        .map((c) => {
+          const type = (c.type || "notice").toString().toLowerCase();
+          const priority = (c.priority || c.severity || "normal").toString().toLowerCase();
+          const channel = (c.channel || "inapp").toString().toLowerCase();
+          const audienceRoles = toArray(c.audienceRoles || c.roles || c.role)
+            .map((r) => (r ?? "").toString().toLowerCase())
+            .filter(Boolean);
+          const audienceBranchIds = toArray(c.audienceBranchIds || c.branchIds || c.audienceBranchId || c.branchId)
+            .map((b) => (b != null ? String(b) : null))
+            .filter(Boolean);
+
+          return {
+            id: c.id ?? c._id ?? Math.random().toString(36).slice(2),
+            title: c.title ?? "",
+            text: c.text ?? c.body ?? c.message ?? "",
+            type,
+            priority,
+            channel,
+            isActive: Boolean(c.isActive ?? c.active ?? c.enabled ?? true),
+            showInTicker: Boolean(c.showInTicker ?? c.ticker ?? c.showTicker ?? false),
+            startAt: c.startAt ? new Date(c.startAt).getTime() : null,
+            endAt: c.endAt ? new Date(c.endAt).getTime() : null,
+            audienceRoles,
+            audienceBranchIds,
+          };
+        })
+        // active + channel + flag
         .filter((c) => c.isActive && c.channel === "inapp" && c.showInTicker)
+        // window
         .filter((c) => (c.startAt ? now >= c.startAt : true))
         .filter((c) => (c.endAt ? now <= c.endAt : true))
-        .filter((c) => (c.audienceRole ? c.audienceRole === roleName : true))
+        // role targeting (match any of the user's roles OR if none specified)
         .filter((c) =>
-          c.audienceBranchId && activeBranchId
-            ? String(c.audienceBranchId) === String(activeBranchId)
+          c.audienceRoles?.length ? c.audienceRoles.some((r) => roleNames.includes(r)) : true
+        )
+        // branch targeting (match active branch OR if none specified)
+        .filter((c) =>
+          activeBranchId && c.audienceBranchIds?.length
+            ? c.audienceBranchIds.map(String).includes(String(activeBranchId))
             : true
         )
+        // sort by priority
         .sort((a, b) => {
           const rank = { critical: 4, high: 3, normal: 2, low: 1 };
           const ra = rank[a.priority] || 0;
@@ -930,35 +988,25 @@ const SidebarLayout = () => {
     [activeBranchId, user]
   );
 
-  const tryGet = async (paths, opts) => {
-    let lastErr;
-    for (const p of paths) {
-      try {
-        const res = await api.get(p, opts);
-        return res?.data;
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    throw lastErr || new Error("No endpoint succeeded");
-  };
-
   const fetchTicker = useCallback(
     async (signal) => {
       setLoadingTicker(true);
       try {
-        // Prefer dashboard endpoint; fall back to admin if needed
-        const data = await tryGet(
+        // Prefer dashboard endpoint; fall back to admin if needed (with and without /api)
+        const data = await tryGET(
           [
-            "/dashboard/communications",
-            "/api/dashboard/communications",
-            "/admin/communications?activeOnly=1&channel=inapp",
-            "/api/admin/communications?activeOnly=1&channel=inapp",
+            ...apiVariants("dashboard/communications"),
+            ...apiVariants("admin/communications?activeOnly=1&channel=inapp&showInTicker=1"),
+            ...apiVariants("admin/communications?activeOnly=1&channel=inapp"),
           ],
           { signal }
         );
         setTicker(normalizeTicker(data));
-      } catch {
+      } catch (err) {
+        if (!isAbort(err)) {
+          // optional console, but don't spam UI
+          // console.error("Ticker fetch error:", err?.message || err);
+        }
         setTicker([]);
       } finally {
         setLoadingTicker(false);
@@ -967,16 +1015,25 @@ const SidebarLayout = () => {
     [normalizeTicker]
   );
 
-  // load + light auto-refresh
+  // initial load + interval refresh
   useEffect(() => {
     const ac = new AbortController();
     fetchTicker(ac.signal);
-    const id = setInterval(() => fetchTicker(ac.signal), 60_000); // 60s
+    const id = setInterval(() => {
+      const ac2 = new AbortController();
+      fetchTicker(ac2.signal).finally(() => ac2.abort());
+    }, 60_000); // 60s
     return () => {
       clearInterval(id);
       ac.abort();
     };
   }, [fetchTicker]);
+
+  // immediate refresh on branch change (align with Dashboard behavior)
+  useEffect(() => {
+    const ac = new AbortController();
+    fetchTicker(ac.signal).finally(() => ac.abort());
+  }, [activeBranchId, fetchTicker]);
 
   const userRole = (user?.role || "").toLowerCase();
 
