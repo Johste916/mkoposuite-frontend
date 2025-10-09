@@ -1,4 +1,3 @@
-// src/pages/admin/GeneralSettings.jsx
 import React from "react";
 import api from "../../api";
 import { useSettingsResource } from "../../hooks/useSettingsResource";
@@ -15,6 +14,14 @@ const svgPlaceholder = (w, h, text) =>
   )}`;
 const LOGO_PH  = svgPlaceholder(80, 80, "Logo");
 const IMAGE_PH = svgPlaceholder(80, 80, "Img");
+
+/** create /api and non-/api variants */
+const apiVariants = (p) => {
+  const clean = p.startsWith("/") ? p : `/${p}`;
+  const noApi = clean.replace(/^\/api\//, "/");
+  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
+  return Array.from(new Set([noApi, withApi]));
+};
 
 export default function GeneralSettings() {
   const { data, setData, loading, saving, error, success, save } =
@@ -51,11 +58,9 @@ export default function GeneralSettings() {
           landingWidgets: ["kpis", "recent-activity", "collections"],
           showTicker: true,
 
-          // These drive the top two lines on the dashboard:
           importantNotice: "",
           companyMessage: "",
 
-          // Optional curated block (white card under the blue line)
           curatedMessage: {
             title: "",
             text: "",
@@ -69,10 +74,17 @@ export default function GeneralSettings() {
     if (!file) return;
     const fd = new FormData();
     fd.append("file", file);
-    const res = await api.post("/uploads/image", fd, {
+
+    // Try several upload mounts so older/newer servers both work
+    const urlList = [
+      ...apiVariants("uploads/image"),
+      ...apiVariants("admin/uploads/image"),
+      ...apiVariants("files/upload"),
+    ];
+    const res = await api.postFirst(urlList, fd, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-    const url = res.data?.url || "";
+    const url = res?.url || res?.data?.url || "";
     setData((prev) => {
       const next = structuredClone(prev);
       const parts = fieldPath.split(".");

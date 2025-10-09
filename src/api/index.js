@@ -1,4 +1,3 @@
-// src/api/index.js
 import axios from "axios";
 
 /* ---------- Base URL (Vite/Node/browser safe) ---------- */
@@ -23,7 +22,7 @@ const origin =
 const rawBase = String(fromVite || fromNode || origin).replace(/\/+$/, "");
 const baseURL = /\/api$/i.test(rawBase) ? rawBase : `${rawBase}/api`;
 
-/* ---------- Optional knobs via Vite envs ---------- */
+/* ---------- Optional knobs via env ---------- */
 const WITH_CREDENTIALS =
   String(
     (typeof import.meta !== "undefined" &&
@@ -53,16 +52,24 @@ const api = axios.create({
   headers: { Accept: "application/json" },
 });
 
-/* ---------- Helpers ---------- */
+/* ---------- Path helpers ---------- */
 const BASE_HAS_API = /\/api$/i.test(baseURL);
+
 function normalizePath(url) {
   if (!url) return "/";
   if (/^https?:\/\//i.test(url)) return url;
   let u = String(url).trim();
   if (!u.startsWith("/")) u = `/${u}`;
-  if (BASE_HAS_API && u.startsWith("/api/")) u = u.slice(4);
+  if (BASE_HAS_API && u.startsWith("/api/")) u = u.slice(4); // avoid /api/api
   return u.replace(/\/{2,}/g, "/");
 }
+function variantsFor(p) {
+  const clean = normalizePath(p);
+  const noApi = clean.replace(/^\/api\//, "/");
+  const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
+  return Array.from(new Set([noApi, withApi]));
+}
+
 function isFormData(v) {
   return typeof FormData !== "undefined" && v instanceof FormData;
 }
@@ -122,7 +129,7 @@ api.interceptors.request.use((config) => {
   // Content headers + request id
   if (isFormData(config.data)) {
     if (config.headers && "Content-Type" in config.headers) {
-      delete config.headers["Content-Type"];
+      delete config.headers["Content-Type"]; // let browser set boundary
     }
   } else {
     config.headers["x-request-id"] ||= reqId();
@@ -180,7 +187,7 @@ api.interceptors.response.use(
       return Promise.reject(err);
     }
 
-    // Optional GET retries for transient errors
+    // Optional GET retries on transient errors
     const transient = status && [429, 502, 503, 504].includes(status);
     const isGet = (cfg.method || "get").toLowerCase() === "get";
     cfg.__retryCount = cfg.__retryCount || 0;
@@ -199,17 +206,50 @@ api.interceptors.response.use(
   }
 );
 
-/* ---------- Convenience methods ---------- */
+/* ---------- Convenience JSON helpers ---------- */
 api.getJSON = async (url, config) => (await api.get(normalizePath(url), config)).data;
 api.postJSON = async (url, data, config) => (await api.post(normalizePath(url), data, config)).data;
 api.putJSON = async (url, data, config) => (await api.put(normalizePath(url), data, config)).data;
 api.patchJSON = async (url, data, config) => (await api.patch(normalizePath(url), data, config)).data;
 api.deleteJSON = async (url, config) => (await api.delete(normalizePath(url), config)).data;
 
+/* ---------- “First endpoint that works” helpers ---------- */
+async function __firstOk(method, paths, payload, config) {
+  const list = Array.isArray(paths) ? paths : [paths];
+  const candidates = Array.from(new Set(list.flatMap((p) => variantsFor(p))));
+  let lastErr;
+  for (const p of candidates) {
+    try {
+      const url = normalizePath(p);
+      const res =
+        method === "get" || method === "delete"
+          ? await api[method](url, config)
+          : await api[method](url, payload, config);
+      return res.data;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+
+// Attach (polyfill-safe)
+api.getFirst    = api.getFirst    || ((paths, config)       => __firstOk("get", paths, undefined, config));
+api.postFirst   = api.postFirst   || ((paths, data, config) => __firstOk("post", paths, data, config));
+api.putFirst    = api.putFirst    || ((paths, data, config) => __firstOk("put", paths, data, config));
+api.patchFirst  = api.patchFirst  || ((paths, data, config) => __firstOk("patch", paths, data, config));
+api.deleteFirst = api.deleteFirst || ((paths, config)       => __firstOk("delete", paths, undefined, config));
+
+/* ---------- Misc helpers ---------- */
 api.setTenantId = (id) => { tenantOverride = id || null; };
 api.clearTenantId = () => { tenantOverride = null; };
 api.path = normalizePath;
 api.withAbort = () => { const ac = new AbortController(); return { signal: ac.signal, cancel: () => ac.abort() }; };
+
+// Also expose normalized verb wrappers if you want to opt-in
+["get", "post", "put", "patch", "delete"].forEach((m) => {
+  api[`_${m}`] = (url, ...rest) => api[m](normalizePath(url), ...rest);
+});
 
 export default api;
 export { api };

@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -116,7 +115,7 @@ function toSummary(raw) {
   };
 }
 
-/* ---------- Communications helpers (normalize + filter like header ticker, but broader) ---------- */
+/* ---------- Communications helpers ---------- */
 function getCurrentUserRole() {
   try {
     const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -125,15 +124,6 @@ function getCurrentUserRole() {
     return '';
   }
 }
-
-/** Normalize then apply rules:
- *  - in-app only
- *  - active = true
- *  - within start/end time window (if provided)
- *  - audienceRole match (if provided)
- *  - audienceBranchId match or global
- * Dashboard ribbon does NOT require showInTicker.
- */
 function normalizeComms(raw, { branchId, role }) {
   const arr = Array.isArray(raw) ? raw : raw?.items || raw?.rows || raw?.data || [];
   const now = Date.now();
@@ -146,12 +136,8 @@ function normalizeComms(raw, { branchId, role }) {
         : Array.isArray(c.files)
         ? c.files
         : [];
-
       const attachments = attachmentsRaw
-        .map((a) => ({
-          ...a,
-          fileUrl: a?.fileUrl || a?.url || a?.href || a?.path || '',
-        }))
+        .map((a) => ({ ...a, fileUrl: a?.fileUrl || a?.url || a?.href || a?.path || '' }))
         .filter((a) => a.fileUrl);
 
       return {
@@ -177,7 +163,7 @@ function normalizeComms(raw, { branchId, role }) {
         attachments,
       };
     })
-    .filter((c) => c.text) // must have something to show
+    .filter((c) => c.text)
     .filter((c) => c.isActive && c.channel === 'inapp')
     .filter((c) => (c.startAt ? now >= c.startAt : true))
     .filter((c) => (c.endAt ? now <= c.endAt : true))
@@ -187,10 +173,10 @@ function normalizeComms(raw, { branchId, role }) {
     );
 }
 
-/** Observe the <html> class list so charts can re-theme instantly */
+/** Observe <html> class list so charts can re-theme instantly */
 const useIsDarkMode = () => {
-  const [isDark, setIsDark] = useState(() =>
-    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
   );
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -204,19 +190,23 @@ const useIsDarkMode = () => {
 
 const TZS = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
-/* ---------- Token-aware UI helpers (no hardcoded slate/white) ---------- */
+/* ---------- Token-aware UI helpers ---------- */
 const ui = {
   container: 'w-full px-4 md:px-6 lg:px-8 py-6',
   h1: 'text-3xl font-extrabold tracking-tight',
   card: 'card',
-  btn: 'inline-flex items-center justify-center rounded-lg px-3 py-2 font-semibold transition border-2 ' +
-       'border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)]',
-  primary: 'inline-flex items-center rounded-lg px-3 py-2 font-semibold ' +
-           'bg-[var(--primary)] text-[var(--primary-contrast)] hover:brightness-95',
-  tableWrap: 'overflow-x-auto rounded-2xl border-2 shadow ' +
-             'bg-[var(--card)] border-[var(--border-strong)]',
-  th: 'bg-[var(--table-head-bg)] text-left text-[13px] uppercase tracking-wide font-semibold px-3 py-2 ' +
-      'border border-[var(--border)] text-[var(--fg)] opacity-90',
+  btn:
+    'inline-flex items-center justify-center rounded-lg px-3 py-2 font-semibold transition border-2 ' +
+    'border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)]',
+  primary:
+    'inline-flex items-center rounded-lg px-3 py-2 font-semibold ' +
+    'bg-[var(--primary)] text-[var(--primary-contrast)] hover:brightness-95',
+  tableWrap:
+    'overflow-x-auto rounded-2xl border-2 shadow ' +
+    'bg-[var(--card)] border-[var(--border-strong)]',
+  th:
+    'bg-[var(--table-head-bg)] text-left text-[13px] uppercase tracking-wide font-semibold px-3 py-2 ' +
+    'border border-[var(--border)] text-[var(--fg)] opacity-90',
   td: 'px-3 py-2 border border-[var(--border)] text-sm text-[var(--fg)]',
 };
 
@@ -343,28 +333,35 @@ const Dashboard = () => {
     }
   }, []);
 
+  // MORE ROBUST: try several endpoints so older servers still work
   const fetchSummary = useCallback(async (signal) => {
     try {
-      const data = await tryGET([...apiVariants('dashboard/summary')], {
-        signal,
-        params: { branchId, officerId, timeRange },
-      });
+      const data = await tryGET(
+        [
+          ...apiVariants('dashboard/summary'),
+          ...apiVariants('dashboard/stats'),
+          ...apiVariants('dashboard'),
+          ...apiVariants('reports/at-a-glance'),
+          ...apiVariants('reports/summary'),
+        ],
+        { signal, params: { branchId, officerId, timeRange } }
+      );
       setSummary(toSummary(data));
     } catch (err) {
       if (!isAbort(err)) {
         console.error('Dashboard summary error:', err?.message || err);
         pushToast('Failed to load summary', 'error');
       }
+      setSummary(toSummary({})); // keep UI responsive with zeros
     }
   }, [branchId, officerId, timeRange]);
 
-  /** UPDATED: robust communications fetch + normalization + filters + fallback */
+  /** Communications fetch + normalization + fallback */
   const fetchCommunications = useCallback(
     async (signal) => {
       setLoadingComms(true);
       const role = getCurrentUserRole();
       try {
-        // Try dashboard comms first, then admin; prefer server-side active/channel filters when available.
         const endpoints = [
           ...apiVariants('dashboard/communications'),
           ...apiVariants('admin/communications?activeOnly=1&channel=inapp'),
@@ -376,7 +373,6 @@ const Dashboard = () => {
         if (normalized.length) {
           setComms(normalized);
         } else {
-          // fallback to whatever was bundled inside summary (if any)
           const fallback = Array.isArray(summary?.generalCommunications)
             ? normalizeComms(summary.generalCommunications, { branchId, role })
             : [];
@@ -398,17 +394,26 @@ const Dashboard = () => {
     [summary, branchId]
   );
 
+  // MORE ROBUST: try multiple trend endpoints
   const fetchTrends = useCallback(async (signal) => {
     try {
-      const res = await api.get('/dashboard/monthly-trends', { signal });
-      setTrends(res.data || {});
+      const data = await tryGET(
+        [
+          ...apiVariants('dashboard/monthly-trends'),
+          ...apiVariants('reports/monthly-trends'),
+          ...apiVariants('reports/trends'),
+        ],
+        { signal, params: { branchId, officerId, timeRange } }
+      );
+      setTrends(data || {});
     } catch (err) {
       if (!isAbort(err)) {
         console.error('Monthly trends error:', err?.message || err);
         pushToast('Failed to load trends', 'error');
       }
+      setTrends({});
     }
-  }, []);
+  }, [branchId, officerId, timeRange]);
 
   /* ---------- Effects ---------- */
   useEffect(() => {
@@ -664,7 +669,7 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Communications ribbon — always render with loading/empty states */}
+        {/* Communications ribbon */}
         <div className={`${ui.card} overflow-hidden`}>
           <div className="flex items-center justify-between px-3 py-2 border-b"
                style={{ borderColor: 'var(--border)', background: 'var(--table-head-bg)' }}>
@@ -734,7 +739,7 @@ const Dashboard = () => {
           <Link to="/repayments/new" className={ui.btn}><PlusCircle className="w-4 h-4" /> Record Repayment</Link>
         </div>
 
-        {/* Main content (full width) */}
+        {/* Main content */}
         <main className="space-y-6">
           {loading ? (
             <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
@@ -911,7 +916,7 @@ const Dashboard = () => {
   );
 };
 
-/** Bold KPI card with tokenized surfaces/borders */
+/** Bold KPI card */
 const SummaryCard = ({
   title,
   value,
