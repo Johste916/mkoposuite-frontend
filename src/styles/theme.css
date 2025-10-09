@@ -216,6 +216,7 @@ select, option { color: var(--input-fg); background-color: var(--input-bg); }
   border-radius: 1rem;
   box-shadow: 0 10px 20px rgba(0,0,0,.08);
 }
+
 /* Auto-upgrade bordered rounded blocks into “clean cards” */
 .app-theme-bold :is(div,section,article)[class*="border"][class*="rounded"] {
   border-color: var(--border-strong);
@@ -832,3 +833,61 @@ input.ms-date[type="date"]::-webkit-calendar-picker-indicator{ opacity:0; displa
 @supports not (overflow: clip) {
   .app-theme-bold .full-bleed { overflow-x: hidden; }
 }
+
+/* ========================================================================== */
+/* === ZOOM-SAFE ADDITIONS (fix overlaps & tall checkboxes at 80% zoom)  ==== */
+/* ========================================================================== */
+
+/* A) Cards & tables should never force overflow when content shrinks */
+.card { min-width: 0; overflow: hidden; }
+.card * { min-width: 0; }
+.table-wrap, .table-frame { min-width: 0; }
+
+/* B) Normalize button/inputs height & line-height so containers don’t stretch */
+button, .btn, .ant-btn,
+input, select, textarea, .ant-input, .ant-select-selector, .ant-picker {
+  line-height: 1.25;
+}
+
+/* C) Checkboxes & radios: consistent size, no vertical “stretch” */
+input[type="checkbox"], input[type="radio"],
+.form-check-input[type="checkbox"], .form-check-input[type="radio"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  min-width: 1.05rem;
+  min-height: 1.05rem;
+  line-height: 1;
+  vertical-align: middle;
+  accent-color: var(--primary);
+}
+.form-check,
+.form-check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+.form-check-label { line-height: 1.25; }
+
+/* D) Page action bar (search + button) should wrap cleanly */
+.page-actions, [data-page-actions] {
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.page-actions > :is(.btn,button,.ant-btn,.ant-input, input, select) { min-width: 0; }
+
+/* E) When three inline fields + “Add” button live inside one row (screenshot 1) */
+.ms-inline-add { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+.ms-inline-add > :is(.ant-picker,.ant-select,select,input) { flex:1 1 16rem; min-width:0; }
+.ms-inline-add > :is(button,.btn,.ant-btn) { flex:0 0 auto; white-space:nowrap; }
+
+/* F) Defensive: prevent extra-tall controls introduced by nested .h-full utilities */
+[class*="h-full"] :is(input, select, textarea, .ant-input, .ant-select-selector, .ant-picker) {
+  height: auto;
+}
+
+/* G) Search areas on list pages (screenshot 2) */
+.ms-searchbar { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.ms-searchbar > :is(input,.ant-input) { flex:1 1 20rem; min-width:0; }
+.ms-searchbar > :is(button,.btn,.ant-btn) { flex:0 0 auto; }
+
+/* ========================================================================== */

@@ -13,9 +13,13 @@ const ThemeContext = createContext({
 });
 
 export function ThemeProvider({ children, defaultTheme = "system" }) {
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem(STORAGE_KEY) || defaultTheme
-  );
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) || defaultTheme;
+    } catch {
+      return defaultTheme;
+    }
+  });
 
   const systemPrefersDark =
     typeof window !== "undefined" &&
@@ -25,15 +29,18 @@ export function ThemeProvider({ children, defaultTheme = "system" }) {
 
   // Apply to <html>
   useEffect(() => {
+    if (typeof document === "undefined") return;
     const root = document.documentElement;
     root.setAttribute("data-theme", resolved);
     root.classList.toggle("dark", resolved === "dark");
-    localStorage.setItem(STORAGE_KEY, theme);
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch {}
   }, [theme, resolved]);
 
   // React to OS changes when set to "system"
   useEffect(() => {
-    if (theme !== "system") return;
+    if (theme !== "system" || typeof window === "undefined") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {
       const next = mq.matches ? "dark" : "light";
