@@ -29,10 +29,7 @@ function normalizeSchedule(payload) {
  */
 function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
   let remain = Number(totalPaid || 0);
-  let paidP = 0,
-    paidI = 0,
-    paidPN = 0,
-    paidF = 0;
+  let paidP = 0, paidI = 0, paidPN = 0, paidF = 0;
 
   for (const row of schedule) {
     const fee = Number(row.fee ?? row.fees ?? 0);
@@ -41,31 +38,18 @@ function allocatePaidAcrossSchedule(schedule = [], totalPaid = 0) {
     const pri = Number(row.principal ?? 0);
 
     if (remain <= 0) break;
-    const f = Math.min(remain, fee);
-    paidF += f;
-    remain -= f;
+    const f = Math.min(remain, fee); paidF += f; remain -= f;
 
     if (remain <= 0) break;
-    const p = Math.min(remain, pen);
-    paidPN += p;
-    remain -= p;
+    const p = Math.min(remain, pen); paidPN += p; remain -= p;
 
     if (remain <= 0) break;
-    const i = Math.min(remain, int);
-    paidI += i;
-    remain -= i;
+    const i = Math.min(remain, int); paidI += i; remain -= i;
 
     if (remain <= 0) break;
-    const pr = Math.min(remain, pri);
-    paidP += pr;
-    remain -= pr;
+    const pr = Math.min(remain, pri); paidP += pr; remain -= pr;
   }
-  return {
-    paidPrincipal: paidP,
-    paidInterest: paidI,
-    paidPenalty: paidPN,
-    paidFees: paidF,
-  };
+  return { paidPrincipal: paidP, paidInterest: paidI, paidPenalty: paidPN, paidFees: paidF };
 }
 
 /* Compute totals and next due using schedule + repayments */
@@ -73,9 +57,9 @@ function computeTotals(schedule = [], repayments = []) {
   const sum = (arr, k) => arr.reduce((a, b) => a + Number(b?.[k] || 0), 0);
 
   const scheduledPrincipal = sum(schedule, "principal");
-  const scheduledInterest = sum(schedule, "interest");
-  const scheduledPenalty = sum(schedule, "penalty");
-  const scheduledFees = sum(schedule, "fee") + sum(schedule, "fees");
+  const scheduledInterest  = sum(schedule, "interest");
+  const scheduledPenalty   = sum(schedule, "penalty");
+  const scheduledFees      = sum(schedule, "fee") + sum(schedule, "fees");
 
   const scheduledTotal =
     sum(schedule, "total") ||
@@ -85,23 +69,19 @@ function computeTotals(schedule = [], repayments = []) {
 
   // Prefer explicit paid breakdown fields if provided by backend:
   const paidPrincipalExplicit = sum(schedule, "paidPrincipal") || 0;
-  const paidInterestExplicit = sum(schedule, "paidInterest") || 0;
-  const paidPenaltyExplicit = sum(schedule, "paidPenalty") || 0;
-  const paidFeesExplicit =
-    (sum(schedule, "paidFees") || 0) + (sum(schedule, "paidFee") || 0);
+  const paidInterestExplicit  = sum(schedule, "paidInterest")  || 0;
+  const paidPenaltyExplicit   = sum(schedule, "paidPenalty")   || 0;
+  const paidFeesExplicit      = (sum(schedule, "paidFees") || 0) + (sum(schedule, "paidFee") || 0);
   const explicitSum =
-    paidPrincipalExplicit +
-    paidInterestExplicit +
-    paidPenaltyExplicit +
-    paidFeesExplicit;
+    paidPrincipalExplicit + paidInterestExplicit + paidPenaltyExplicit + paidFeesExplicit;
 
   const breakdown =
     explicitSum > 0
       ? {
           paidPrincipal: paidPrincipalExplicit,
           paidInterest: paidInterestExplicit,
-          paidPenalty: paidPenaltyExplicit,
-          paidFees: paidFeesExplicit,
+          paidPenalty:  paidPenaltyExplicit,
+          paidFees:     paidFeesExplicit,
         }
       : allocatePaidAcrossSchedule(schedule, totalPaid);
 
@@ -125,8 +105,8 @@ function computeTotals(schedule = [], repayments = []) {
     outstandingTotal,
     nextDue: next
       ? {
-          idx: next.installment ?? next.period ?? (schedule.indexOf(next) + 1),
-          date: next.dueDate || next.date || null,
+          idx:   next.installment ?? next.period ?? (schedule.indexOf(next) + 1),
+          date:  next.dueDate || next.date || null,
           amount: Number(next.total ?? 0),
         }
       : null,
@@ -187,8 +167,7 @@ function inferFrequency(schedule = []) {
   if (dates.length < 2) return "";
   let monthly = 0;
   for (let i = 1; i < dates.length; i++) {
-    const prev = dates[i - 1],
-      curr = dates[i];
+    const prev = dates[i - 1], curr = dates[i];
     const diffMonths =
       (curr.getFullYear() - prev.getFullYear()) * 12 +
       (curr.getMonth() - prev.getMonth());
@@ -210,6 +189,8 @@ export default function LoanSchedulePage() {
   const [repayments, setRepayments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [auto, setAuto] = useState(true);
+  const [error, setError] = useState("");
+
   const [company, setCompany] = useState({
     name: "MkopoSuite",
     address: "",
@@ -220,28 +201,33 @@ export default function LoanSchedulePage() {
   });
 
   const pollRef = useRef(null);
+  const mountedRef = useRef(false);
 
   /* seed from route param or query string */
   useEffect(() => {
+    mountedRef.current = true;
     const routeId = params.id ? String(params.id) : "";
     const queryId = searchParams.get("id") || "";
     const chosen = routeId || queryId || "";
     if (chosen) {
       setLoanId(chosen);
-      // Auto-load once when we get an id from route/query
       fetchAll(chosen);
     }
+    return () => {
+      mountedRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    fetchCompanyDetails().then(setCompany).catch(() => {});
+    fetchCompanyDetails().then((c) => mountedRef.current && setCompany(c)).catch(() => {});
   }, []);
 
   /* ---------- core fetch ---------- */
   const fetchAll = async (id) => {
     if (!id) return;
     setLoading(true);
+    setError("");
     try {
       // Pull schedule + loan concurrently for speed
       const [schRes, loanRes] = await Promise.all([
@@ -250,13 +236,13 @@ export default function LoanSchedulePage() {
       ]);
 
       const loanData = loanRes.data || null;
+      if (!mountedRef.current) return;
       setLoan(loanData);
 
       const normalized = normalizeSchedule(schRes.data);
       setSchedule(normalized);
 
-      const methodFromSchedule =
-        schRes.data?.interestMethod || schRes.data?.method || "";
+      const methodFromSchedule = schRes.data?.interestMethod || schRes.data?.method || "";
       const methodFromLoan = loanData?.interestMethod || "";
       setMethod(methodFromSchedule || methodFromLoan || "");
 
@@ -271,6 +257,7 @@ export default function LoanSchedulePage() {
         .get(`/repayments/loan/${id}`)
         .then((r) => r.data || [])
         .catch(() => []);
+      if (!mountedRef.current) return;
       setRepayments(rp);
 
       const hasPaid = (rp?.length || 0) > 0;
@@ -279,25 +266,32 @@ export default function LoanSchedulePage() {
         try {
           await api.patch(`/loans/${id}/status`, { status: "active" });
           const lr2 = await api.get(`/loans/${id}`);
-          setLoan(lr2.data || loanData || null);
+          if (mountedRef.current) setLoan(lr2.data || loanData || null);
         } catch {}
       }
 
       window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id } }));
     } catch (e) {
+      if (!mountedRef.current) return;
       setSchedule([]);
       setRepayments([]);
       setLoan(null);
       setMethod("");
+      setError("We couldn’t load this loan or its schedule. Please verify the Loan ID and try again.");
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
   /* ----------- manual load ----------- */
   const onLoad = async (e) => {
     e.preventDefault();
-    await fetchAll(loanId.trim());
+    const id = loanId.trim();
+    if (!id) {
+      setError("Please enter a Loan ID.");
+      return;
+    }
+    await fetchAll(id);
   };
 
   /* ----------- auto refresh & focus refresh ----------- */
@@ -310,7 +304,10 @@ export default function LoanSchedulePage() {
   useEffect(() => {
     if (!loanId || !auto) return;
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(() => fetchAll(loanId.trim()), 10000);
+    // Skip polling when the tab is hidden to reduce noise
+    pollRef.current = setInterval(() => {
+      if (document.visibilityState === "visible") fetchAll(loanId.trim());
+    }, 10000);
     return () => pollRef.current && clearInterval(pollRef.current);
   }, [loanId, auto]);
 
@@ -377,7 +374,7 @@ export default function LoanSchedulePage() {
         Number(r.penalty ?? 0),
         Number(r.fee ?? r.fees ?? 0),
         r.paidPrincipal != null ? Number(r.paidPrincipal) : "",
-        r.paidInterest != null ? Number(r.paidInterest) : "",
+        r.paidInterest  != null ? Number(r.paidInterest)  : "",
         outstanding,
         r.paid || r.settled ? "YES" : "NO",
       ];
@@ -506,7 +503,7 @@ export default function LoanSchedulePage() {
         penalty: fmtMoney(r.penalty || 0, currency),
         fees: fmtMoney(r.fee ?? r.fees ?? 0, currency),
         paidP: r.paidPrincipal != null ? fmtMoney(r.paidPrincipal, currency) : "—",
-        paidI: r.paidInterest != null ? fmtMoney(r.paidInterest, currency) : "—",
+        paidI: r.paidInterest  != null ? fmtMoney(r.paidInterest,  currency) : "—",
         outstanding: fmtMoney(outstanding, currency),
         settled: r.paid || r.settled ? "YES" : "NO",
       };
@@ -523,9 +520,7 @@ export default function LoanSchedulePage() {
       didDrawPage: () => {
         const str = `Page ${doc.internal.getNumberOfPages()}`;
         doc.setFontSize(9);
-        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, {
-          align: "right",
-        });
+        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, { align: "right" });
       },
     });
 
@@ -538,18 +533,15 @@ export default function LoanSchedulePage() {
     doc.setFontSize(10);
     const sumLines = [
       ["Principal (Sched.)", fmtMoney(totals.scheduledPrincipal, currency)],
-      ["Interest (Sched.)", fmtMoney(totals.scheduledInterest, currency)],
-      [
-        "Total P&I (Sched.)",
-        fmtMoney(totals.scheduledPrincipal + totals.scheduledInterest, currency),
-      ],
-      ["Penalty (Sched.)", fmtMoney(totals.scheduledPenalty, currency)],
-      ["Fees (Sched.)", fmtMoney(totals.scheduledFees, currency)],
-      ["Total Payable", fmtMoney(totals.scheduledTotal, currency)],
-      ["Paid Principal", fmtMoney(totals.paidPrincipal, currency)],
-      ["Paid Interest", fmtMoney(totals.paidInterest, currency)],
-      ["Total Paid", fmtMoney(totals.totalPaid, currency)],
-      ["Outstanding", fmtMoney(totals.outstandingTotal, currency)],
+      ["Interest (Sched.)",  fmtMoney(totals.scheduledInterest,  currency)],
+      ["Total P&I (Sched.)", fmtMoney(totals.scheduledPrincipal + totals.scheduledInterest, currency)],
+      ["Penalty (Sched.)",   fmtMoney(totals.scheduledPenalty,   currency)],
+      ["Fees (Sched.)",      fmtMoney(totals.scheduledFees,      currency)],
+      ["Total Payable",      fmtMoney(totals.scheduledTotal,     currency)],
+      ["Paid Principal",     fmtMoney(totals.paidPrincipal,      currency)],
+      ["Paid Interest",      fmtMoney(totals.paidInterest,       currency)],
+      ["Total Paid",         fmtMoney(totals.totalPaid,          currency)],
+      ["Outstanding",        fmtMoney(totals.outstandingTotal,   currency)],
     ];
     sumLines.forEach((row, i) => {
       doc.text(row[0], 40, endY + 16 + i * 14);
@@ -759,10 +751,7 @@ export default function LoanSchedulePage() {
             <p className="text-xs text-gray-700 mt-1">
               <b>Disbursed:</b> {asDate(loan.releaseDate || loan.startDate)}
               {frequency && (
-                <>
-                  {" "}
-                  • <b>Frequency:</b> {frequency}
-                </>
+                <> • <b>Frequency:</b> {frequency}</>
               )}
             </p>
           )}
@@ -820,6 +809,12 @@ export default function LoanSchedulePage() {
           </div>
         )}
       </form>
+
+      {error && (
+        <div className="text-sm text-red-600 border border-red-200 bg-red-50 rounded px-3 py-2">
+          {error}
+        </div>
+      )}
 
       {/* summary */}
       {!!schedule.length && (
@@ -960,7 +955,7 @@ export default function LoanSchedulePage() {
         </div>
       )}
 
-      {!loading && loanId && !schedule.length && (
+      {!loading && loanId && !schedule.length && !error && (
         <p className="text-sm text-gray-600">No schedule found for this loan.</p>
       )}
     </div>
