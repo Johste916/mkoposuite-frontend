@@ -10,6 +10,21 @@ import api from "../api";
 const safeNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const money = (v) => `TZS ${safeNum(v).toLocaleString()}`;
 
+/** Default country code for phone normalisation */
+const DEFAULT_CC = "+255";
+/** Make phone display always start with +country code */
+function formatPhoneWithCC(raw, cc = DEFAULT_CC) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (s.startsWith("+")) return s;
+  if (s.startsWith("00")) return `+${s.slice(2)}`;
+  // local leading 0 → convert to international
+  if (/^0\d{6,}$/.test(s)) return `${cc}${s.slice(1)}`;
+  // plain digits without + (e.g. 2557…)
+  if (/^\d+$/.test(s)) return `+${s}`;
+  return s;
+}
+
 const displayName = (b) =>
   firstFilled(
     b?.name,
@@ -368,10 +383,28 @@ const BorrowerDetails = () => {
     }
   };
 
+  const normalizeSchedule = (arr) => {
+    const items = Array.isArray(arr) ? arr : [];
+    return items.map((it, i) => ({
+      installment: it.installment ?? it.no ?? i + 1,
+      dueDate: it.dueDate ?? it.date ?? it.scheduledDate ?? null,
+      principal: safeNum(it.principal ?? it.principalAmount),
+      interest: safeNum(it.interest ?? it.interestAmount),
+      amount: safeNum(it.amount ?? it.installmentAmount ?? it.total),
+      balance: safeNum(
+        it.balance ??
+          it.remaining ??
+          (safeNum(it.balancePrincipal) + safeNum(it.balanceInterest))
+      ),
+      status: it.status ?? "",
+      paid: safeNum(it.amountPaid ?? it.paid ?? 0),
+    }));
+  };
+
   const handleViewSchedule = async (loanId) => {
     try {
       const data = await tryGET([`/loans/${loanId}/schedule`, `/loan/${loanId}/schedule`]);
-      setSelectedSchedule(Array.isArray(data) ? data : data?.items || []);
+      setSelectedSchedule(normalizeSchedule(Array.isArray(data) ? data : data?.items || []));
       const loan = loans.find((l) => String(l.id) === String(loanId)) || null;
       setSelectedLoan(loan);
       setShowScheduleModal(true);
@@ -508,15 +541,64 @@ const BorrowerDetails = () => {
     }
   };
 
+  // Enrich loans from repayments (derived metrics)
+  const loansEnriched = useMemo(() => {
+    const byLoan = new Map();
+    repayments.forEach((r) => {
+      const k = r.loanId ?? r.loan?.id;
+      if (!k) return;
+      if (!byLoan.has(k)) byLoan.set(k, []);
+      byLoan.get(k).push(r);
+    });
+
+    const today = new Date();
+
+    return (loans || []).map((l) => {
+      const rows = byLoan.get(l.id) || [];
+      const paidTotal = rows.reduce((s, r) => s + safeNum(r.amountPaid ?? r.paidAmount ?? r.amount ?? 0), 0);
+
+      const rawOutstanding =
+        l.outstanding ??
+        l.outstandingTotal ??
+        l.outstandingAmount ??
+        null;
+
+      const outstanding = rawOutstanding != null ? safeNum(rawOutstanding)
+        : Math.max(0, safeNum(l.amount) - paidTotal);
+
+      // next due from repayments table if present
+      const future = rows
+        .filter((r) => r.dueDate && new Date(r.dueDate) >= today)
+        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+      const next = future[0] || null;
+      const nextDueDate = next?.dueDate || l.nextDueDate || l.nextInstallmentDate || null;
+      const nextDueAmount = next
+        ? safeNum((next.amount ?? 0) - (next.amountPaid ?? 0))
+        : (l.nextDueAmount ?? l.nextInstallmentAmount ?? null);
+
+      const missedInstallments = rows.filter((r) => {
+        const due = r.dueDate ? new Date(r.dueDate) : null;
+        const status = String(r.status || "").toLowerCase();
+        const paid = safeNum(r.amountPaid ?? r.paidAmount) >= safeNum(r.amount);
+        return due && due < today && !paid && (status === "overdue" || status === "due" || status === "");
+      }).length;
+
+      const lastPaymentDate = rows
+        .filter((r) => safeNum(r.amountPaid ?? r.paidAmount) > 0)
+        .map((r) => r.date || r.createdAt)
+        .sort((a, b) => new Date(b) - new Date(a))[0];
+
+      return { ...l, paidTotal, outstanding, nextDueDate, nextDueAmount, missedInstallments, lastPaymentDate };
+    });
+  }, [loans, repayments]);
+
   const missedRepayments = useMemo(() => {
     const today = new Date();
     return repayments.filter((r) => {
       const due = r.dueDate ? new Date(r.dueDate) : null;
       const status = String(r.status || "").toLowerCase();
-      const paid = safeNum(r.amountPaid ?? r.paidAmount) > 0;
-      return (
-        due && due < today && !paid && (status === "overdue" || status === "due" || status === "")
-      );
+      const paid = safeNum(r.amountPaid ?? r.paidAmount) >= safeNum(r.amount);
+      return due && due < today && !paid && (status === "overdue" || status === "due" || status === "");
     }).length;
   }, [repayments]);
 
@@ -751,16 +833,18 @@ const BorrowerDetails = () => {
                         value={form.phone ?? ""}
                         onChange={(e) => onChange("phone", e.target.value)}
                         className="w-full text-sm border-2 border-slate-400 rounded-lg px-3 py-2"
-                        placeholder="e.g., 2557xxxxxxx"
+                        placeholder="e.g., +2557xxxxxxx"
                       />
                     ) : (
                       <div className="flex items-center gap-2 flex-wrap">
                         <span>
-                          {firstFilled(
-                            borrower.phone,
-                            borrower.msisdn,
-                            borrower.mobile,
-                            borrower.primaryPhone
+                          {formatPhoneWithCC(
+                            firstFilled(
+                              borrower.phone,
+                              borrower.msisdn,
+                              borrower.mobile,
+                              borrower.primaryPhone
+                            )
                           ) || "—"}
                         </span>
                         {firstFilled(
@@ -773,10 +857,12 @@ const BorrowerDetails = () => {
                             <a
                               className={strongLink}
                               href={tel(
-                                borrower.phone ||
-                                  borrower.msisdn ||
-                                  borrower.mobile ||
-                                  borrower.primaryPhone
+                                formatPhoneWithCC(
+                                  borrower.phone ||
+                                    borrower.msisdn ||
+                                    borrower.mobile ||
+                                    borrower.primaryPhone
+                                )
                               )}
                             >
                               Call
@@ -784,10 +870,12 @@ const BorrowerDetails = () => {
                             <a
                               className={strongLink}
                               href={sms(
-                                borrower.phone ||
-                                  borrower.msisdn ||
-                                  borrower.mobile ||
-                                  borrower.primaryPhone
+                                formatPhoneWithCC(
+                                  borrower.phone ||
+                                    borrower.msisdn ||
+                                    borrower.mobile ||
+                                    borrower.primaryPhone
+                                )
                               )}
                             >
                               SMS
@@ -795,10 +883,12 @@ const BorrowerDetails = () => {
                             <a
                               className={strongLink}
                               href={wa(
-                                borrower.phone ||
-                                  borrower.msisdn ||
-                                  borrower.mobile ||
-                                  borrower.primaryPhone
+                                formatPhoneWithCC(
+                                  borrower.phone ||
+                                    borrower.msisdn ||
+                                    borrower.mobile ||
+                                    borrower.primaryPhone
+                                )
                               )}
                               target="_blank"
                               rel="noreferrer"
@@ -1189,7 +1279,7 @@ const BorrowerDetails = () => {
                           className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                         />
                       ) : (
-                        nextKinPhone
+                        formatPhoneWithCC(nextKinPhone)
                       ),
                     },
                     {
@@ -1243,7 +1333,7 @@ const BorrowerDetails = () => {
               active={activeTab}
               onChange={setActiveTab}
               tabs={[
-                { key: "loans", label: "Loans", count: loans.length },
+                { key: "loans", label: "Loans", count: loansEnriched.length },
                 { key: "repayments", label: "Repayments", count: repayments.length },
                 { key: "savings", label: "Savings", count: filteredSavings.length },
                 { key: "documents", label: "Documents" },
@@ -1258,7 +1348,7 @@ const BorrowerDetails = () => {
                   {errors.loans && (
                     <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.loans}</div>
                   )}
-                  {loans.length === 0 ? (
+                  {loansEnriched.length === 0 ? (
                     <Empty
                       text={
                         <>
@@ -1285,60 +1375,53 @@ const BorrowerDetails = () => {
                         "Next Due",
                         "Actions",
                       ]}
-                      rows={loans.map((l) => {
-                        const outTotal =
-                          l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
-                        const nextDate = l.nextDueDate || l.nextInstallmentDate || null;
-                        const nextAmt = l.nextDueAmount || l.nextInstallmentAmount || null;
-
-                        return [
-                          <Link
-                            to={`/loans/${encodeURIComponent(l.id)}${
-                              borrower?.tenantId
-                                ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
-                                : ""
-                            }`}
-                            className={strongLink}
+                      rows={loansEnriched.map((l) => [
+                        <Link
+                          to={`/loans/${encodeURIComponent(l.id)}${
+                            borrower?.tenantId
+                              ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
+                              : ""
+                          }`}
+                          className={strongLink}
+                        >
+                          {l.id}
+                        </Link>,
+                        l.reference || `L-${l.id}`,
+                        <span className={chip(l.status)}>{String(l.status || "—")}</span>,
+                        <div className="text-right tabular-nums">{money(l.amount)}</div>,
+                        <div className="text-right tabular-nums">
+                          {l.outstanding == null ? "—" : money(l.outstanding)}
+                        </div>,
+                        l.nextDueDate ? (
+                          <div className="text-right">
+                            {new Date(l.nextDueDate).toLocaleDateString()}
+                            {l.nextDueAmount ? (
+                              <span className="ml-1 font-bold">{money(l.nextDueAmount)}</span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "—"
+                        ),
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            className="px-3 py-1.5 rounded-lg border-2 border-slate-400 text-slate-900 hover:bg-slate-50 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                            onClick={() => handleViewSchedule(l.id)}
                           >
-                            {l.id}
-                          </Link>,
-                          l.reference || `L-${l.id}`,
-                          <span className={chip(l.status)}>{String(l.status || "—")}</span>,
-                          <div className="text-right tabular-nums">{money(l.amount)}</div>,
-                          <div className="text-right tabular-nums">
-                            {outTotal == null ? "—" : money(outTotal)}
-                          </div>,
-                          nextDate ? (
-                            <div className="text-right">
-                              {new Date(nextDate).toLocaleDateString()}
-                              {nextAmt ? (
-                                <span className="ml-1 font-bold">{money(nextAmt)}</span>
-                              ) : null}
-                            </div>
-                          ) : (
-                            "—"
-                          ),
-                          <div className="flex gap-2 justify-end">
+                            Schedule
+                          </button>
+                          {String(userRole || "").toLowerCase() === "admin" && (
                             <button
                               className="px-3 py-1.5 rounded-lg border-2 border-slate-400 text-slate-900 hover:bg-slate-50 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                              onClick={() => handleViewSchedule(l.id)}
+                              onClick={() => {
+                                setSelectedLoanForRepayment(l);
+                                setShowRepaymentModal(true);
+                              }}
                             >
-                              Schedule
+                              Repay
                             </button>
-                            {String(userRole || "").toLowerCase() === "admin" && (
-                              <button
-                                className="px-3 py-1.5 rounded-lg border-2 border-slate-400 text-slate-900 hover:bg-slate-50 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                                onClick={() => {
-                                  setSelectedLoanForRepayment(l);
-                                  setShowRepaymentModal(true);
-                                }}
-                              >
-                                Repay
-                              </button>
-                            )}
-                          </div>,
-                        ];
-                      })}
+                          )}
+                        </div>,
+                      ])}
                     />
                   )}
                 </>
@@ -1351,30 +1434,34 @@ const BorrowerDetails = () => {
                     <Empty text="No repayments recorded for this borrower." />
                   ) : (
                     <Table
-                      head={["Date", "Amount", "Loan", "Status"]}
-                      rows={repayments.map((r) => [
-                        r.date
-                          ? new Date(r.date).toLocaleDateString()
-                          : r.createdAt
-                          ? new Date(r.createdAt).toLocaleDateString()
-                          : "—",
-                        <div className="text-right tabular-nums">{money(r.amount)}</div>,
-                        r.loanId ? (
-                          <Link
-                            to={`/loans/${encodeURIComponent(r.loanId)}${
-                              borrower?.tenantId
-                                ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
-                                : ""
-                            }`}
-                            className={strongLink}
-                          >
-                            {r.loanId}
-                          </Link>
-                        ) : (
-                          "—"
-                        ),
-                        <span className={chip(r.status)}>{r.status || "—"}</span>,
-                      ])}
+                      head={["Due Date", "Amount Due", "Paid", "Balance", "Status", "Loan"]}
+                      rows={repayments.map((r) => {
+                        const due = r.dueDate || r.date || r.createdAt || null;
+                        const amt = safeNum(r.amount);
+                        const paid = safeNum(r.amountPaid ?? r.paidAmount);
+                        const bal = Math.max(0, amt - paid);
+                        return [
+                          due ? new Date(due).toLocaleDateString() : "—",
+                          <div className="text-right tabular-nums">{money(amt)}</div>,
+                          <div className="text-right tabular-nums">{money(paid)}</div>,
+                          <div className="text-right tabular-nums">{money(bal)}</div>,
+                          <span className={chip(r.status)}>{r.status || "—"}</span>,
+                          r.loanId ? (
+                            <Link
+                              to={`/loans/${encodeURIComponent(r.loanId)}${
+                                borrower?.tenantId
+                                  ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
+                                  : ""
+                              }`}
+                              className={strongLink}
+                            >
+                              {r.loanId}
+                            </Link>
+                          ) : (
+                            "—"
+                          ),
+                        ];
+                      })}
                     />
                   )}
                 </>
@@ -1452,13 +1539,13 @@ const BorrowerDetails = () => {
               {/* Activity */}
               {activeTab === "activity" && (
                 <ActivityTimeline
-                  loans={loans}
+                  loans={loansEnriched}
                   repayments={repayments}
                   savings={savings}
                   comments={comments}
                   canAddRepayment={String(userRole || "").toLowerCase() === "admin"}
                   onAddRepayment={() => {
-                    const active = loans.find((l) => l.status === "active") || loans[0];
+                    const active = loansEnriched.find((l) => l.status === "active") || loansEnriched[0];
                     if (active) {
                       setSelectedLoanForRepayment(active);
                       setShowRepaymentModal(true);
@@ -1606,14 +1693,14 @@ const ActivityTimeline = ({
     items.push({
       type: "loan",
       date: l.createdAt || l.disbursedAt || l.updatedAt || new Date().toISOString(),
-      text: `Loan ${l.id} • ${String(l.status || "").toUpperCase()}`,
+      text: `Loan ${l.id} • ${String(l.status || "").toUpperCase()} • Outstanding ${money(l.outstanding ?? 0)}`,
     })
   );
   repayments.forEach((r) =>
     items.push({
       type: "repayment",
       date: r.date || r.createdAt || new Date().toISOString(),
-      text: `Repayment • ${money(r.amount)} • Loan ${r.loanId || "—"}`,
+      text: `Repayment • ${money(r.amountPaid ?? r.paidAmount ?? r.amount)} • Loan ${r.loanId || "—"}`,
     })
   );
   savings.forEach((s) =>

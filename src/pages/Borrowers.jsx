@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PlusCircle, Upload, Search, Filter, X, Phone, Building2,
   ChevronLeft, ChevronRight, FileUp, IdCard
@@ -7,6 +7,8 @@ import { useNavigate, Link } from "react-router-dom";
 import api from "../api";
 
 const PAGE_SIZE = 10;
+// Default phone country code (TZS in UI implies Tanzania)
+const PHONE_CC = "+255";
 
 /* ---------- Helpers for resilient APIs ---------- */
 async function tryGET(paths = [], opts = {}) {
@@ -30,6 +32,22 @@ function toArray(maybe) {
   return [];
 }
 
+/* ---------- Phone formatting ---------- */
+export function formatPhoneDisplay(raw, cc = PHONE_CC) {
+  if (!raw) return "—";
+  let s = String(raw).trim();
+  // strip spaces & dashes
+  s = s.replace(/[\s-]/g, "");
+  // already E.164-ish
+  if (s.startsWith("+")) return s;
+  // if starts with country digits, prefix +
+  if (cc && s.startsWith(cc.replace("+", ""))) return `+${s}`;
+  // local leading zero -> country code without that 0
+  if (cc && s.startsWith("0")) return `${cc}${s.slice(1)}`;
+  // else just prefix +
+  return s.startsWith("+") ? s : `+${s}`;
+}
+
 /* ---------- Token-based UI utilities ---------- */
 const ui = {
   container: "p-6 min-h-screen bg-[var(--bg)] text-[var(--fg)]",
@@ -41,7 +59,7 @@ const ui = {
     "hover:bg-[var(--kpi-bg)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
   primary:
     "inline-flex items-center gap-2 px-3 py-2 rounded-md font-semibold " +
-    "bg-indigo-600 text-white hover:bg-indigo-700 " + // brand can stay indigo for emphasis
+    "bg-indigo-600 text-white hover:bg-indigo-700 " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
   input:
     "w-full h-10 rounded-md px-3 py-2 border-2 " +
@@ -49,7 +67,7 @@ const ui = {
     "placeholder:text-[var(--input-placeholder)] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
   table:
-    "min-w-full text-[15px] border-separate border-spacing-0", // we'll control borders per cell
+    "min-w-full text-[15px] border-separate border-spacing-0",
   th:
     "px-3 py-2 text-left text-[13px] uppercase tracking-wide font-semibold " +
     "bg-[var(--table-head-bg)] text-[var(--fg)] " +
@@ -99,6 +117,10 @@ const Borrowers = () => {
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerData, setDrawerData] = useState({ overview: null, loans: [], savings: [], documents: [] });
 
+  // CSV import
+  const fileInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
+
   // Toasts
   const [toasts, setToasts] = useState([]);
   const pushToast = (msg, type = "info") => {
@@ -129,7 +151,6 @@ const Borrowers = () => {
         const bArr = toArray(b);
         const uArr = toArray(u);
 
-        // Normalize minimal fields used in UI
         setBranches(
           bArr
             .map((x) =>
@@ -280,8 +301,37 @@ const Borrowers = () => {
   };
 
   const statusChip = (s) => {
-    // Token-based neutral chip — consistent in dark/light
     return ui.chip;
+  };
+
+  /* ---------- CSV Import ---------- */
+  const onPickCSV = () => fileInputRef.current?.click();
+  const onFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/\.csv$/i.test(file.name)) {
+      pushToast("Please choose a .csv file", "error");
+      return;
+    }
+    try {
+      setImporting(true);
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await api.post("/borrowers/import", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const count = res?.data?.count ?? 0;
+      pushToast(`Imported ${count} borrower${count === 1 ? "" : "s"}.`, "info");
+      // refresh list
+      const ac = new AbortController();
+      fetchList(ac.signal);
+    } catch (err) {
+      const msg = err?.response?.data?.error || "Import failed";
+      pushToast(msg, "error");
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -313,11 +363,20 @@ const Borrowers = () => {
             <PlusCircle className="w-4 h-4" /> Add Borrower
           </button>
           <button
-            onClick={() => pushToast("CSV import coming soon", "info")}
+            onClick={onPickCSV}
             className={ui.btn}
+            disabled={importing}
+            title="Import .csv with columns: name, phone, nationalId (optional)"
           >
-            <Upload className="w-4 h-4" /> Import CSV
+            <Upload className="w-4 h-4" /> {importing ? "Importing…" : "Import CSV"}
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={onFileChange}
+          />
         </div>
       </div>
 
@@ -430,7 +489,7 @@ const Borrowers = () => {
                     className="border-t border-[var(--border)] hover:bg-[var(--kpi-bg)]"
                   >
                     <td className={ui.td}>{displayName(b)}</td>
-                    <td className={ui.td}>{b.phone || "—"}</td>
+                    <td className={ui.td}>{formatPhoneDisplay(b.phone)}</td>
                     <td className={ui.td}>{displayBranch(b)}</td>
                     <td className={ui.td}>{displayOfficer(b)}</td>
                     <td className={ui.td}>{fmtMoney(b.outstanding)}</td>
@@ -491,7 +550,7 @@ const Borrowers = () => {
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                       <div className="flex items-center gap-2">
                         <Phone className={`w-4 h-4 ${ui.muted}`} />
-                        <span>{b.phone || "—"}</span>
+                        <span>{formatPhoneDisplay(b.phone)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Building2 className={`w-4 h-4 ${ui.muted}`} />
@@ -650,7 +709,7 @@ const OverviewTab = ({ data }) => {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <InfoCard label="Full Name" value={name} />
-        <InfoCard label="Phone" value={data.phone || "—"} />
+        <InfoCard label="Phone" value={formatPhoneDisplay(data.phone)} />
         <InfoCard label="Branch" value={branch} />
         <InfoCard label="Loan Officer" value={officer} />
         <InfoCard label="Status" value={data.status || "—"} />
