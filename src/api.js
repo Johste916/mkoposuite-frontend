@@ -1,3 +1,4 @@
+// src/api.js
 import axios from "axios";
 
 /**
@@ -160,8 +161,8 @@ api.interceptors.response.use(
         `Request failed (${status})`;
     }
 
-    // Auto-logout on 401 (token auth)
-    if (status === 401) {
+    // ⛔️ Only redirect on 401 when not explicitly skipped
+    if (status === 401 && !cfg._skip401) {
       console.warn("401 Unauthorized. Redirecting to login…");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
@@ -206,6 +207,12 @@ api.patchJSON = async (url, data, config) =>
   (await api.patch(normalizePath(url), data, config)).data;
 api.deleteJSON = async (url, config) =>
   (await api.delete(normalizePath(url), config)).data;
+
+/** Public helpers (skip 401 redirect) — use these before you have a token */
+api.publicGet  = (url, config = {}) =>
+  api.get(normalizePath(url), { ...config, _skip401: true }).then(r => r.data);
+api.publicPost = (url, data, config = {}) =>
+  api.post(normalizePath(url), data, { ...config, _skip401: true }).then(r => r.data);
 
 /** Form helpers (for photo/KYC uploads, etc.) */
 api.postForm = async (url, formData, config = {}) =>

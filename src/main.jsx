@@ -1,22 +1,12 @@
-// src/main.jsx
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
+import AppBootstrap from "./context/AppBootstrap"; // <-- add
 import ThemeProvider from "./providers/ThemeProvider";
-
-// If you use vendor CSS (bootstrap/flowbite), import them first.
-// import "bootstrap/dist/css/bootstrap.css";
-
-/**
- * IMPORTANT:
- * Only import Tailwind once. Our tailwind entry file already @imports theme tokens.
- * Avoid importing theme.css twice to prevent order flicker.
- */
 import "./styles/tailwind.css";
 
-// Optional impersonation bootstrap
 (function bootstrapImpersonation() {
   try {
     const url = new URL(window.location.href);
@@ -42,10 +32,11 @@ createRoot(rootEl).render(
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <AuthProvider>
-          {/* Bold skin + legacy compat so borders/inputs look crisp everywhere */}
-          <div className="app-theme-bold legacy-compat">
-            <App />
-          </div>
+          <AppBootstrap>
+            <div className="app-theme-bold legacy-compat">
+              <App />
+            </div>
+          </AppBootstrap>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
