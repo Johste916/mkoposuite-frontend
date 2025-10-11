@@ -1,1 +1,0 @@
-import{j as t}from"./index-_x_s48EO.js";import{R as r}from"./ReportShell-9rUEurGL.js";function o(){return t.jsx(r,{title:"All Entries",endpoint:"/reports/all-entries",columns:[]})}export{o as default};

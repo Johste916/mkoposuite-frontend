@@ -1,24 +1,25 @@
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import React, { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 
 const ProtectedRoute = ({ children }) => {
-  const { loading, token } = useAuth();
-  const loc = useLocation();
+  const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen grid place-items-center text-sm text-slate-500">
-        Loading…
-      </div>
-    );
-  }
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem("token");
+      setAuthenticated(!!token);
+      setLoading(false);
+    };
 
-  if (!token) {
-    return <Navigate to="/login" replace state={{ from: loc }} />;
-  }
+    checkAuth();
+    window.addEventListener("storage", checkAuth);
+    return () => window.removeEventListener("storage", checkAuth);
+  }, []);
 
-  return <>{children}</>;
+  if (loading) return <div className="p-6">Loading...</div>;
+
+  return authenticated ? children : <Navigate to="/login" replace />;
 };
 
 export default ProtectedRoute;

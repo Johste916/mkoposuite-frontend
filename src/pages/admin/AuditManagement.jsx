@@ -1,21 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../api";
 
-/* ---------------- Small UI bits ---------------- */
-const BADGE = {
-  slate:   "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-100",
-  blue:    "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-100",
-  indigo:  "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-100",
-  emerald: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100",
-  teal:    "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-100",
-  violet:  "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-100",
-  amber:   "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100",
-};
-const Badge = ({ tone = "slate", children }) => <span className={BADGE[tone] || BADGE.slate}>{children}</span>;
+/* --- Small UI bits --- */
+const Badge = ({ tone="slate", children }) => (
+  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                    bg-${tone}-100 text-${tone}-800 dark:bg-${tone}-900/40 dark:text-${tone}-100`}>
+    {children}
+  </span>
+);
 const tones = { auth:"blue", users:"indigo", loans:"emerald", repayments:"teal", permissions:"violet", system:"slate" };
 const toneFor = (c) => tones[c] || "slate";
 
-/* ---------------- Component ---------------- */
 export default function AuditManagement() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -28,7 +23,7 @@ export default function AuditManagement() {
   const evtRef = useRef(null);
   const [diffRow, setDiffRow] = useState(null);
 
-  const normalize = (p) => (Array.isArray(p) ? p : (p?.items || []));
+  const normalize = (p) => Array.isArray(p) ? p : (p?.items || []);
 
   const load = async () => {
     setLoading(true); setErr("");
@@ -51,74 +46,34 @@ export default function AuditManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, filters.category, filters.action, filters.from, filters.to]);
 
-  // Live tail (SSE)
+  // Live tail via SSE
   useEffect(() => {
     if (!live) { evtRef.current?.close?.(); return; }
-    const base = (api.defaults.baseURL || "").replace(/\/$/, "");
-    const es = new EventSource(`${base}/admin/audit/stream`);
+    const es = new EventSource(api.defaults.baseURL.replace(/\/$/,'') + "/admin/audit/stream");
     evtRef.current = es;
-
-    const push = (items) => setRows(prev => [...items, ...prev].slice(0, 500));
-
-    es.addEventListener("init", (ev) => {
-      try { const data = JSON.parse(ev.data); push(data.items || []); } catch {}
-    });
-    es.addEventListener("append", (ev) => {
-      try { const data = JSON.parse(ev.data); push(data.items || []); } catch {}
-    });
-    es.addEventListener("audit", (ev) => { // legacy single-row event name
-      try { const row = JSON.parse(ev.data); push([row]); } catch {}
+    es.onmessage = () => {}; // keepalive
+    es.addEventListener("audit", (ev) => {
+      try {
+        const row = JSON.parse(ev.data);
+        setRows(prev => [{ ...row }, ...prev].slice(0, 500));
+      } catch {}
     });
     es.onerror = () => {};
     return () => es.close();
   }, [live]);
 
-  // Enhance rows: derive user/branch labels and decode diff info from message JSON (if any)
-  const enhanced = useMemo(() => {
-    const list = normalize(rows);
-    return list.map(r => {
-      const userName   = r?.User?.name || r?.user?.name || r.userName || r.userEmail || r.userId || "-";
-      const branchName = r?.Branch?.name || r.branchName || r.branchId || "-";
-
-      let before, after, meta;
-      try {
-        const m = typeof r.message === "string" ? JSON.parse(r.message) : r.message;
-        if (m && typeof m === "object") {
-          before = m.before ?? m.prev ?? undefined;
-          after  = m.after  ?? m.next ?? undefined;
-          meta   = m.meta   ?? undefined;
-        }
-      } catch { /* ignore non-JSON messages */ }
-
-      return { ...r, userName, branchName, before, after, meta };
-    });
-  }, [rows]);
-
   const filtered = useMemo(() => {
     const term = q.toLowerCase().trim();
-    if (!term) return enhanced;
-    return enhanced.filter((r) =>
-      [r.userName, r.branchName, r.category, r.action, r.message, r.entity, r.entityId]
+    const list = normalize(rows);
+    if (!term) return list;
+    return list.filter((r) =>
+      [r.userName, r.userEmail, r.branchName, r.category, r.action, r.message, r.entity, r.entityId]
         .some(v => String(v || "").toLowerCase().includes(term))
     );
-  }, [enhanced, q]);
+  }, [rows, q]);
 
   const exportCsv = () => {
-    const header = ["time","branch","staff","category","action","message","ip"];
-    const lines = filtered.map(r => [
-      new Date(r.createdAt || Date.now()).toISOString(),
-      r.branchName || "",
-      r.userName || "",
-      r.category || "",
-      r.action || "",
-      (typeof r.message === "string" ? r.message : JSON.stringify(r.message || "")).replace(/"/g,'""'),
-      r.ip || ""
-    ].map(v => `"${String(v)}"`).join(","));
-    const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "audit.csv"; a.click();
-    URL.revokeObjectURL(url);
+    window.location.href = "/api/admin/audit/export.csv";
   };
 
   const Card = ({ label, value }) => (
@@ -132,30 +87,16 @@ export default function AuditManagement() {
     <tr className="border-b last:border-0">
       <td className="py-2 pr-3 whitespace-nowrap">{new Date(r.createdAt || Date.now()).toLocaleString()}</td>
       <td className="py-2 pr-3">{r.branchName || "-"}</td>
-      <td className="py-2 pr-3">{r.userName || "-"}</td>
+      <td className="py-2 pr-3">{r.userName || r.userEmail || r.userId || "-"}</td>
       <td className="py-2 pr-3"><Badge tone={toneFor(r.category)}>{r.category || "—"}</Badge></td>
       <td className="py-2 pr-3"><Badge tone="amber">{r.action || "—"}</Badge></td>
       <td className="py-2 pr-3">{r.entity ? <span className="opacity-80">{r.entity}</span> : "—"} {r.entityId ? <span className="opacity-60">#{r.entityId}</span> : ""}</td>
-      <td className="py-2 pr-3">
-        {(() => {
-          try {
-            const m = typeof r.message === "string" ? JSON.parse(r.message) : r.message;
-            if (m && typeof m === "object") {
-              if (m?.meta?.method && m?.meta?.path) return `${m.meta.method} ${m.meta.path}`;
-              if (m?.body) {
-                const s = JSON.stringify(m.body);
-                return s.length > 120 ? s.slice(0,120) + "…" : s;
-              }
-            }
-            return typeof r.message === "string" ? r.message : JSON.stringify(r.message || "-");
-          } catch { return r.message || "-"; }
-        })()}
-      </td>
+      <td className="py-2 pr-3">{r.message || "-"}</td>
       <td className="py-2 pr-3">{r.ip || "-"}</td>
       <td className="py-2 pr-3">
         {(r.before || r.after || r.meta) ? (
           <button className="px-2 py-1 rounded border bg-white hover:bg-slate-50 dark:bg-slate-900"
-                  onClick={() => setDiffRow(r)}>View</button>
+                  onClick={()=>setDiffRow(r)}>View</button>
         ) : <span className="opacity-50">—</span>}
       </td>
     </tr>
