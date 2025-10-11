@@ -1,117 +1,205 @@
 // src/pages/user-management/Permissions.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "../../api";
 
 const ui = {
   page: "w-full px-4 md:px-6 lg:px-10 py-6 text-slate-900",
   h1: "text-3xl font-extrabold tracking-tight",
   card: "rounded-2xl border-2 border-slate-300 bg-white shadow",
-  th: "bg-slate-100 text-left text-[12px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-2 border-slate-200",
-  td: "px-3 py-2 border-2 border-slate-200 text-sm",
-  field: "h-11 w-full rounded-lg border-2 border-slate-300 bg-white text-sm px-3 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-600",
+  th: "bg-slate-50 text-left text-[12px] uppercase tracking-wide text-slate-700 font-semibold px-3 py-2 border-b border-slate-200",
+  td: "px-3 py-2 border-b border-slate-200 text-sm",
   btn: "inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50 font-semibold",
   btnPrimary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700",
-  btnDanger: "inline-flex items-center rounded-lg bg-rose-600 text-white px-3 py-2 font-semibold hover:bg-rose-700",
 };
 
-export default function Permissions() {
-  const [permissions, setPermissions] = useState([]);
-  const [newPermission, setNewPermission] = useState("");
+export default function PermissionsMatrix() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [catalog, setCatalog] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [matrix, setMatrix] = useState({}); // { [actionKey]: roleName[] }
+  const [q, setQ] = useState("");
 
-  const loadPermissions = async () => {
+  const load = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await api.get("/permissions");
-      setPermissions(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error("Failed to load permissions", err);
-      alert(err?.response?.data?.error || "Failed to load permissions");
+      const { data } = await api.get("/permissions/matrix");
+      setCatalog(Array.isArray(data?.catalog) ? data.catalog : []);
+      setRoles(Array.isArray(data?.roles) ? data.roles : []);
+      setMatrix(typeof data?.matrix === "object" && data?.matrix ? data.matrix : {});
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || "Failed to load permission matrix");
     } finally {
       setLoading(false);
     }
   };
 
-  const addPermission = async () => {
-    const name = newPermission.trim();
-    if (!name) return;
+  useEffect(() => {
+    load();
+  }, []);
+
+  const roleNames = useMemo(() => roles.map(r => r.name), [roles]);
+
+  const filteredCatalog = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return catalog;
+    return catalog
+      .map(g => ({
+        ...g,
+        actions: g.actions.filter(a =>
+          a.key.toLowerCase().includes(needle) || a.label.toLowerCase().includes(needle)
+        ),
+      }))
+      .filter(g => g.actions.length);
+  }, [catalog, q]);
+
+  const toggle = (actionKey, roleName) => {
+    setMatrix(prev => {
+      const current = new Set(prev[actionKey] || []);
+      if (current.has(roleName)) current.delete(roleName);
+      else current.add(roleName);
+      return { ...prev, [actionKey]: Array.from(current) };
+    });
+  };
+
+  const setColumn = (roleName, checked) => {
+    setMatrix(prev => {
+      const next = { ...prev };
+      for (const g of filteredCatalog) {
+        for (const a of g.actions) {
+          const set = new Set(next[a.key] || []);
+          if (checked) set.add(roleName);
+          else set.delete(roleName);
+          next[a.key] = Array.from(set);
+        }
+      }
+      return next;
+    });
+  };
+
+  const saveRole = async (role) => {
+    const actions = [];
+    for (const g of catalog) {
+      for (const a of g.actions) {
+        const allowed = new Set(matrix[a.key] || []);
+        if (allowed.has(role.name)) actions.push(a.key);
+      }
+    }
     setSaving(true);
     try {
-      await api.post("/permissions", { name });
-      setNewPermission("");
-      loadPermissions();
-    } catch (err) {
-      console.error("Failed to add permission", err);
-      alert(err?.response?.data?.error || "Error adding permission");
+      await api.put(`/permissions/role/${role.id}`, { actions, mode: "replace" });
+      alert(`Saved permissions for role: ${role.name}`);
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || "Failed to save");
     } finally {
       setSaving(false);
     }
   };
 
-  const deletePermission = async (id) => {
-    if (!window.confirm("Delete this permission?")) return;
-    try {
-      await api.delete(`/permissions/${id}`);
-      loadPermissions();
-    } catch (err) {
-      console.error("Failed to delete permission", err);
-      alert(err?.response?.data?.error || "Error deleting permission");
-    }
-  };
-
-  useEffect(() => {
-    loadPermissions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return (
     <div className={ui.page}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-        <h1 className={ui.h1}>Permissions</h1>
-        <div className="flex gap-2">
+        <h1 className={ui.h1}>Permission Matrix</h1>
+        <div className="flex items-center gap-2">
           <input
             type="text"
-            className={`${ui.field} w-72 h-10`}
-            placeholder="New permission (e.g., loan.approve)"
-            value={newPermission}
-            onChange={(e) => setNewPermission(e.target.value)}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Filter actions…"
+            className="h-10 w-64 rounded-lg border-2 border-slate-300 bg-white text-sm px-3 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-600"
           />
-          <button onClick={addPermission} className={`${ui.btnPrimary} disabled:opacity-60`} disabled={saving}>
-            {saving ? "Saving…" : "Add"}
-          </button>
+          <button onClick={load} className={ui.btn}>Refresh</button>
         </div>
       </div>
 
-      <div className={`${ui.card} overflow-x-auto`}>
+      <div className={`${ui.card} overflow-auto`}>
         <table className="min-w-full border-separate border-spacing-0">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr>
-              {["ID", "Name", "Actions"].map((h, i) => (
-                <th key={h} className={`${ui.th} ${i === 2 ? "text-right" : ""}`}>{h}</th>
+              <th className={ui.th} style={{ position: "sticky", left: 0, zIndex: 11, background: "white" }}>
+                Feature / Action
+              </th>
+              {roles.map((r) => (
+                <th key={r.id} className={`${ui.th} text-center`}>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="font-bold">{r.name}</div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] opacity-70">
+                        <input
+                          type="checkbox"
+                          onChange={(e) => setColumn(r.name, e.target.checked)}
+                        /> All
+                      </label>
+                      <button
+                        className="text-[11px] underline"
+                        onClick={() => saveRole(r)}
+                        disabled={saving}
+                        title="Save only this role"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </th>
               ))}
             </tr>
           </thead>
+
           <tbody>
             {loading ? (
-              <tr><td colSpan={3} className={`${ui.td} text-center py-8 text-slate-600`}>Loading…</td></tr>
-            ) : permissions.length ? (
-              permissions.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className={ui.td}>{p.id}</td>
-                  <td className={ui.td}>{p.name}</td>
-                  <td className={`${ui.td} text-right`}>
-                    <button onClick={() => deletePermission(p.id)} className={ui.btnDanger}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
+              <tr><td className={ui.td} colSpan={1 + roles.length}>Loading…</td></tr>
+            ) : filteredCatalog.length === 0 ? (
+              <tr><td className={ui.td} colSpan={1 + roles.length}>No actions match your filter.</td></tr>
             ) : (
-              <tr><td colSpan={3} className={`${ui.td} text-center py-8 text-slate-600`}>No permissions found</td></tr>
+              filteredCatalog.map((group) => (
+                <React.Fragment key={group.group}>
+                  <tr>
+                    <td
+                      className={`${ui.td} font-semibold text-slate-700`}
+                      style={{ position: "sticky", left: 0, zIndex: 10, background: "white" }}
+                      colSpan={1 + roles.length}
+                    >
+                      {group.group}
+                    </td>
+                  </tr>
+                  {group.actions.map((a) => (
+                    <tr key={a.key} className="hover:bg-slate-50">
+                      <td
+                        className={ui.td}
+                        style={{ position: "sticky", left: 0, zIndex: 9, background: "white" }}
+                        title={a.key}
+                      >
+                        <div className="font-medium">{a.label}</div>
+                        <div className="text-xs opacity-70">{a.key}</div>
+                      </td>
+                      {roles.map((r) => {
+                        const allowed = new Set(matrix[a.key] || []);
+                        const on = allowed.has(r.name);
+                        return (
+                          <td key={`${a.key}:${r.id}`} className={`${ui.td} text-center`}>
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={() => toggle(a.key, r.name)}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        <span className="text-sm opacity-80">
+          Tip: use the “All” checkbox under each role to toggle the whole column; then click “Save” for that role.
+        </span>
       </div>
     </div>
   );
