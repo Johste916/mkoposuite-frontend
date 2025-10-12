@@ -4,7 +4,6 @@ import api from "../../api";
 
 const emailOk = (v = "") => /.+@.+\..+/.test(v);
 
-/* UI tokens (same feel as Loan Details) */
 const ui = {
   page: "w-full px-4 md:px-6 lg:px-10 py-6 text-slate-900",
   h1: "text-3xl font-extrabold tracking-tight",
@@ -15,6 +14,7 @@ const ui = {
   field: "h-11 w-full rounded-lg border-2 border-slate-300 bg-white text-sm px-3 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-600",
   btn: "inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50 font-semibold",
   btnPrimary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700",
+  btnDanger: "inline-flex items-center rounded-lg border-2 border-rose-300 text-rose-600 px-3 py-2 hover:bg-rose-50 font-semibold",
 };
 
 const Users = () => {
@@ -23,7 +23,7 @@ const Users = () => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", id: null });
+  const [form, setForm] = useState({ name: "", email: "", password: "", id: null });
   const timerRef = useRef();
 
   const fetchUsers = async (query = "") => {
@@ -48,27 +48,41 @@ const Users = () => {
     return () => clearTimeout(timerRef.current);
   }, [q]);
 
-  const openModal = (user = { name: "", email: "", id: null }) => {
+  const openModal = (user = { name: "", email: "", password: "", id: null }) => {
     setForm(user);
     setShowModal(true);
   };
 
   const closeModal = () => {
     if (saving) return;
-    setForm({ name: "", email: "", id: null });
+    setForm({ name: "", email: "", password: "", id: null });
     setShowModal(false);
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim() || !emailOk(form.email)) return alert("Please provide a valid name and email.");
+    if (!form.name.trim() || !emailOk(form.email)) {
+      return alert("Please provide a valid name and email.");
+    }
+
+    if (!form.id && !form.password.trim()) {
+      return alert("Please set an initial password for this user.");
+    }
+
     setSaving(true);
     try {
       if (form.id) {
-        await api.put(`/users/${form.id}`, { name: form.name.trim(), email: form.email.trim() });
-        alert("User updated");
+        await api.put(`/users/${form.id}`, {
+          name: form.name.trim(),
+          email: form.email.trim(),
+        });
+        alert("User updated successfully");
       } else {
-        await api.post("/users", { name: form.name.trim(), email: form.email.trim() });
-        alert("User created");
+        await api.post("/users", {
+          name: form.name.trim(),
+          email: form.email.trim(),
+          password: form.password.trim(),
+        });
+        alert("User created successfully");
       }
       closeModal();
       fetchUsers(q);
@@ -97,7 +111,7 @@ const Users = () => {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-4">
         <div>
           <h1 className={ui.h1}>Users</h1>
-          <p className={ui.sub}>Create, edit, and search users.</p>
+          <p className={ui.sub}>Create, edit, and manage users.</p>
         </div>
         <div className="flex items-end gap-2">
           <div>
@@ -131,7 +145,7 @@ const Users = () => {
               users.map((u, i) => (
                 <tr key={u.id} className="hover:bg-slate-50">
                   <td className={ui.td}>{i + 1}</td>
-                  <td className={ui.td}>{u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim()}</td>
+                  <td className={ui.td}>{u.name}</td>
                   <td className={ui.td}>{u.email}</td>
                   <td className={`${ui.td} text-right`}>
                     <div className="inline-flex gap-2">
@@ -172,7 +186,25 @@ const Users = () => {
                 <div className="text-[12px] text-rose-600 mt-1">Please enter a valid email.</div>
               )}
             </div>
-            <div className="flex justify-end gap-2">
+
+            {/* show password field only when creating */}
+            {!form.id && (
+              <div>
+                <label className="block text-[12px] font-semibold text-slate-600">Initial Password</label>
+                <input
+                  type="password"
+                  placeholder="Enter initial password"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  className={ui.field}
+                />
+                <div className="text-[12px] text-slate-500 mt-1">
+                  Set an initial password (user can reset later)
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-3">
               <button className={ui.btn} onClick={closeModal} disabled={saving}>Cancel</button>
               <button className={`${ui.btnPrimary} disabled:opacity-50`} onClick={handleSubmit} disabled={saving}>
                 {saving ? "Saving…" : form.id ? "Update" : "Create"}
