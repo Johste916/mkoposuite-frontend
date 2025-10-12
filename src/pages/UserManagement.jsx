@@ -14,9 +14,6 @@ const onlyDigits = (v) => String(v || "").replace(/\D+/g, "");
 const cleanString = (v) => { const s = String(v ?? "").trim(); return s.length ? s : null; };
 const pickArrayish = (data) => Array.isArray(data) ? data : (data?.items || data?.rows || data?.data || []);
 
-const getRoleNameById = (roles, id) => roles.find(r => String(r.id) === String(id))?.name || roles.find(r => String(r.id) === String(id))?.title || "";
-const getBranchNameById = (branches, id) => branches.find(b => String(b.id) === String(id))?.name || "";
-
 /* ======== Portal + anchored Actions menu (prevents clipping) ======== */
 function PortalRoot({ children }) {
   if (typeof document === "undefined") return null;
@@ -76,36 +73,16 @@ function ActionMenu({ actions = [] }) {
 
   return (
     <>
-      <button
-        ref={btnRef}
-        className="px-2 py-1 rounded border border-[var(--border)] text-[var(--fg)] hover:bg-[var(--nav-item-hover-bg)]"
-        onClick={() => setOpen(v => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title="Actions"
-      >
-        ⋮
-      </button>
+      <button ref={btnRef} className="px-2 py-1 border rounded hover:bg-gray-50" onClick={() => setOpen(v => !v)} aria-haspopup="menu" aria-expanded={open}>⋮</button>
       {open && (
         <PortalRoot>
           <div className="fixed inset-0 z-50" style={{ background: "transparent" }} onClick={() => setOpen(false)} />
-          <div
-            ref={menuRef}
-            className="fixed z-[60] min-w-[220px] rounded-md border border-[var(--border)] shadow-lg bg-[var(--panel)] text-[var(--fg)]"
-            style={{ top: pos.top, left: pos.left }}
-            onClick={(e) => e.stopPropagation()}
-            role="menu"
-          >
+          <div ref={menuRef} className="fixed z-[60] min-w-[220px] bg-white border shadow-lg rounded-md"
+               style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()} role="menu">
             {actions.map((a, i) => (
-              <button
-                key={i}
-                onClick={() => { if (a.disabled) return; setOpen(false); a.onClick?.(); }}
-                disabled={a.disabled}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--chip-soft)] ${
-                  a.danger ? "text-rose-500" : ""
-                } disabled:opacity-50`}
-                role="menuitem"
-              >
+              <button key={i} onClick={() => { if (a.disabled) return; setOpen(false); a.onClick?.(); }}
+                      disabled={a.disabled}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${a.danger ? "text-red-700" : ""} disabled:opacity-50`}>
                 {a.label}
               </button>
             ))}
@@ -135,10 +112,10 @@ function Modal({ title, children, onClose }) {
   return (
     <PortalRoot>
       <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-        <div className="bg-[var(--panel)] text-[var(--fg)] rounded-xl border border-[var(--border)] shadow p-4 w-full max-w-lg">
+        <div className="bg-white rounded-xl border shadow p-4 w-full max-w-lg">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">{title}</h3>
-            <button onClick={onClose} className="text-sm px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--nav-item-hover-bg)]" aria-label="Close">✕</button>
+            <button onClick={onClose} className="text-sm px-2 py-1 border rounded" aria-label="Close">✕</button>
           </div>
           {children}
         </div>
@@ -159,10 +136,10 @@ function Drawer({ title, children, onClose, wide = false }) {
     <PortalRoot>
       <div className="fixed inset-0 z-50">
         <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-        <div className={`absolute right-0 top-0 h-full w-full ${wide ? "max-w-5xl" : "max-w-3xl"} bg-[var(--panel)] text-[var(--fg)] border-l border-[var(--border)] shadow-xl p-4`}>
+        <div className={`absolute right-0 top-0 h-full w-full ${wide ? "max-w-5xl" : "max-w-3xl"} bg-white border-l shadow-xl p-4`}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">{title}</h3>
-            <button onClick={onClose} className="text-sm px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--nav-item-hover-bg)]">✕</button>
+            <button onClick={onClose} className="text-sm px-2 py-1 border rounded">✕</button>
           </div>
           {children}
         </div>
@@ -186,7 +163,7 @@ function SecondaryButton({ className = "", children, ...props }) {
   return (
     <button {...props} className={[
       "px-3 py-2 rounded-lg text-sm font-medium",
-      "bg-[var(--panel)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--nav-item-hover-bg)]",
+      "bg-white text-slate-800 border border-slate-300 hover:bg-slate-50",
       "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-1",
       "disabled:opacity-60", className].join(" ")}>{children}</button>
   );
@@ -195,8 +172,8 @@ function DangerButton({ className = "", children, ...props }) {
   return (
     <button {...props} className={[
       "px-3 py-2 rounded-lg text-sm font-medium",
-      "bg-rose-600 text-white border border-rose-600 hover:bg-rose-700",
-      "focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 focus-visible:ring-offset-1",
+      "bg-red-600 text-white border border-red-600 hover:bg-red-700",
+      "focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-1",
       "disabled:opacity-60", className].join(" ")}>{children}</button>
   );
 }
@@ -219,9 +196,6 @@ const UserManagement = () => {
   // selections for bulk actions
   const [selected, setSelected] = useState(new Set());
   const allSelected = users.length > 0 && users.every(u => selected.has(u.id));
-
-  // protect from tampering: lock selectors
-  const [lockRoles, setLockRoles] = useState(true);
 
   // profile drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -249,7 +223,7 @@ const UserManagement = () => {
     const d = {};
     ux.forEach(u => {
       d[u.id] = {
-        roleId: u.roleId ?? u.role?.id ?? "", // quick single-role selector
+        roleId: u.roleId ?? u.role?.id ?? "",     // quick single-role selector
         branchId: u.branchId ?? "",
       };
     });
@@ -309,14 +283,14 @@ const UserManagement = () => {
     };
     setSaving(s => ({ ...s, [userId]: true }));
     try {
+      // Prefer your existing endpoint:
       let r = await tryOnePOST(`/users/${userId}/assign`, payload);
-      if (!r.ok) r = await tryOnePUT(`/users/${userId}`, payload);
+      if (!r.ok) {
+        // tolerances: some backends accept put
+        r = await tryOnePUT(`/users/${userId}`, payload);
+      }
       if (!r.ok) throw r.error;
-
-      // reflect on local state for visible chips
-      setUsers(prev => prev.map(x => x.id === userId
-        ? { ...x, roleId: payload.roleId, branchId: payload.branchId, role: payload.roleId ? { id: payload.roleId, name: getRoleNameById(roles, payload.roleId) } : null }
-        : x));
+      setUsers(prev => prev.map(x => x.id === userId ? { ...x, roleId: payload.roleId, branchId: payload.branchId } : x));
       alert("Assigned successfully");
     } catch (err) {
       alert(err?.response?.data?.error || err?.message || "Failed to assign");
@@ -325,7 +299,7 @@ const UserManagement = () => {
     }
   };
 
-  /* ---------- Bulk actions ---------- */
+  /* ---------- Bulk actions (non-breaking additions) ---------- */
   const toggleSelect = (id) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -341,10 +315,14 @@ const UserManagement = () => {
   const bulkAssignRole = async (roleId) => {
     if (!roleId || selected.size === 0) return;
     const ids = [...selected];
+    // tolerant: try batch endpoint; fallback to per-user
     let r = await tryOnePOST(`/users/assign-role`, { userIds: ids, roleId: Number(roleId) });
     if (!r.ok) {
-      for (const id of ids) await tryOnePOST(`/users/${id}/assign`, { roleId: Number(roleId) });
+      for (const id of ids) {
+        await tryOnePOST(`/users/${id}/assign`, { roleId: Number(roleId) });
+      }
     }
+    // update local draft to reflect change (non-breaking)
     setDraft(prev => {
       const next = { ...prev };
       ids.forEach(id => { next[id] = { ...(next[id] || {}), roleId: Number(roleId) }; });
@@ -358,7 +336,9 @@ const UserManagement = () => {
     const ids = [...selected];
     let r = await tryOnePOST(`/users/assign-branch`, { userIds: ids, branchId: Number(branchId) });
     if (!r.ok) {
-      for (const id of ids) await tryOnePOST(`/users/${id}/assign`, { branchId: Number(branchId) });
+      for (const id of ids) {
+        await tryOnePOST(`/users/${id}/assign`, { branchId: Number(branchId) });
+      }
     }
     setDraft(prev => {
       const next = { ...prev };
@@ -472,7 +452,7 @@ const UserManagement = () => {
     setRoleSel(next);
   };
 
-  /* ---------- Profile Drawer behavior ---------- */
+  /* ---------- Profile Drawer behavior (non-breaking) ---------- */
   const openDrawer = (u) => {
     setDrawerUser(u);
     setDrawerTab("profile");
@@ -485,6 +465,7 @@ const UserManagement = () => {
     setDrawerLoading(true);
     try {
       if (tab === "hr") {
+        // contracts / employee info (tolerant)
         let r = await tryOneGET(`/hr/contracts`, { params: { userId: u.id, limit: 50 } });
         if (!r.ok) r = await tryOneGET(`/hr/employees/${u.id}`);
         if (r.ok) setDrawerData(s => ({ ...s, hr: pickArrayish(r.data) }));
@@ -501,6 +482,7 @@ const UserManagement = () => {
         else setDrawerErr(s => ({ ...s, leave: r?.error?.response?.data?.error || r?.error?.message || "Leave endpoint not enabled." }));
       }
       if (tab === "payroll") {
+        // payroll entries for user
         let r = await tryOneGET(`/payroll`, { params: { userId: u.id, limit: 50 } });
         if (!r.ok) r = await tryOneGET(`/payroll/entries`, { params: { userId: u.id, limit: 50 } });
         if (r.ok) setDrawerData(s => ({ ...s, payroll: pickArrayish(r.data) }));
@@ -519,12 +501,6 @@ const UserManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawerTab, drawerOpen, drawerUser]);
 
-  const roleBadge = (name) => (
-    <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border border-[var(--border)] bg-[var(--chip-soft)]">
-      {name || "—"}
-    </span>
-  );
-
   /* ---------- Render ---------- */
   return (
     <div className="p-6 space-y-4">
@@ -536,14 +512,13 @@ const UserManagement = () => {
               placeholder="Search name, email, role…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              className="border border-[var(--border)] rounded px-3 py-1.5 text-sm bg-[var(--panel)] text-[var(--fg)] placeholder:text-[var(--muted)]"
+              className="border rounded px-3 py-1.5 text-sm"
               aria-label="Search users"
             />
           </div>
-
-          {/* role & branch filters */}
+          {/* New: role & branch filters (non-breaking) */}
           <select
-            className="border border-[var(--border)] rounded px-2 py-1 text-sm bg-[var(--panel)] text-[var(--fg)]"
+            className="border rounded px-2 py-1 text-sm"
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
             aria-label="Filter by role"
@@ -552,7 +527,7 @@ const UserManagement = () => {
             {roles.map(r => <option key={r.id} value={r.id}>{r.name || r.title}</option>)}
           </select>
           <select
-            className="border border-[var(--border)] rounded px-2 py-1 text-sm bg-[var(--panel)] text-[var(--fg)]"
+            className="border rounded px-2 py-1 text-sm"
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
             aria-label="Filter by branch"
@@ -560,11 +535,6 @@ const UserManagement = () => {
             <option value="">All branches</option>
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
-
-          <label className="ml-2 inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={lockRoles} onChange={(e) => setLockRoles(e.target.checked)} />
-            Protect roles (lock)
-          </label>
 
           <SecondaryButton onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</SecondaryButton>
           <PrimaryButton onClick={onCreate}>Add Staff</PrimaryButton>
@@ -575,7 +545,7 @@ const UserManagement = () => {
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="opacity-70">Selected: {selected.size}</span>
         <select
-          className="border border-[var(--border)] rounded px-2 py-1 bg-[var(--panel)] text-[var(--fg)]"
+          className="border rounded px-2 py-1"
           onChange={(e) => { const v = e.target.value; if (v) { bulkAssignRole(v); e.target.value=""; } }}
           aria-label="Bulk assign role"
           defaultValue=""
@@ -584,7 +554,7 @@ const UserManagement = () => {
           {roles.map(r => <option key={r.id} value={r.id}>{r.name || r.title}</option>)}
         </select>
         <select
-          className="border border-[var(--border)] rounded px-2 py-1 bg-[var(--panel)] text-[var(--fg)]"
+          className="border rounded px-2 py-1"
           onChange={(e) => { const v = e.target.value; if (v) { bulkAssignBranch(v); e.target.value=""; } }}
           aria-label="Bulk assign branch"
           defaultValue=""
@@ -595,15 +565,15 @@ const UserManagement = () => {
         <SecondaryButton onClick={exportCSV}>Export CSV</SecondaryButton>
       </div>
 
-      {error && <div className="text-sm text-rose-500">{error}</div>}
+      {error && <div className="text-sm text-red-600">{error}</div>}
 
       {loading ? (
         <p>Loading users...</p>
       ) : (
-        <div className="overflow-x-auto border border-[var(--border)] rounded bg-[var(--panel)]">
+        <div className="overflow-x-auto bg-white border rounded">
           <table className="min-w-full">
-            <thead className="text-sm" style={{ background: "var(--table-head-bg)" }}>
-              <tr className="text-[var(--fg)]">
+            <thead className="bg-gray-100 text-sm">
+              <tr>
                 <th className="px-4 py-2 text-left">
                   <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
                 </th>
@@ -616,91 +586,71 @@ const UserManagement = () => {
               </tr>
             </thead>
             <tbody className="text-sm">
-              {users.map((u) => {
-                const currentRoleId = u.roleId ?? u.role?.id ?? "";
-                const currentRoleName = u.role?.name || getRoleNameById(roles, currentRoleId) || (typeof u.role === "string" ? u.role : "");
-                const currentBranchName = getBranchNameById(branches, u.branchId);
-                return (
-                  <tr key={u.id} className="border-t border-[var(--border)]">
-                    <td className="px-4 py-2">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(u.id)}
-                        onChange={() => toggleSelect(u.id)}
-                        aria-label={`Select ${u.name || u.email || u.id}`}
-                      />
-                    </td>
-                    <td className="px-4 py-2">
+              {users.map((u) => (
+                <tr key={u.id} className="border-t">
+                  <td className="px-4 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(u.id)}
+                      onChange={() => toggleSelect(u.id)}
+                      aria-label={`Select ${u.name || u.email || u.id}`}
+                    />
+                  </td>
+                  <td className="px-4 py-2">
+                    <button
+                      className="text-blue-600 hover:underline"
+                      onClick={() => openDrawer(u)}
+                      title="Open staff profile"
+                    >
+                      {u.name || `${u.firstName||''} ${u.lastName||''}`.trim() || "—"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-2">{u.email || "—"}</td>
+                  <td className="px-4 py-2">{u.phone || "—"}</td>
+                  <td className="px-4 py-2">
+                    <select
+                      className="border rounded px-2 py-1 min-w-[180px]"
+                      value={draft[u.id]?.roleId ?? ""}
+                      onChange={(e) => setDraftFor(u.id, { roleId: e.target.value })}
+                    >
+                      <option value="">— Select Role —</option>
+                      {roles.map(r => <option key={r.id} value={r.id}>{r.name || r.title}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-4 py-2">
+                    <select
+                      className="border rounded px-2 py-1 min-w-[180px]"
+                      value={draft[u.id]?.branchId ?? ""}
+                      onChange={(e) => setDraftFor(u.id, { branchId: e.target.value })}
+                    >
+                      <option value="">— Select Branch —</option>
+                      {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <div className="flex items-center justify-end gap-2">
                       <button
-                        className="text-blue-500 hover:underline"
-                        onClick={() => openDrawer(u)}
-                        title="Open staff profile"
+                        className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                        disabled={!hasChanged(u) || saving[u.id]}
+                        onClick={() => handleSaveInline(u)}
                       >
-                        {u.name || `${u.firstName||''} ${u.lastName||''}`.trim() || "—"}
+                        {saving[u.id] ? "Saving…" : "Save"}
                       </button>
-                    </td>
-                    <td className="px-4 py-2">{u.email || "—"}</td>
-                    <td className="px-4 py-2">{u.phone || "—"}</td>
-
-                    {/* ROLE cell: chip (saved) + protected selector */}
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {roleBadge(currentRoleName || "—")}
-                        <select
-                          className="border border-[var(--border)] rounded px-2 py-1 min-w-[180px] bg-[var(--panel)] text-[var(--fg)]"
-                          value={draft[u.id]?.roleId ?? ""}
-                          onChange={(e) => setDraftFor(u.id, { roleId: e.target.value })}
-                          disabled={lockRoles}
-                          title={lockRoles ? "Protected (unlock to change)" : "Change role (unsaved until Save)"}
-                        >
-                          <option value="">— Select Role —</option>
-                          {roles.map(r => <option key={r.id} value={r.id}>{r.name || r.title}</option>)}
-                        </select>
-                      </div>
-                    </td>
-
-                    {/* BRANCH cell: chip (saved) + selector */}
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {currentBranchName ? roleBadge(currentBranchName) : roleBadge("—")}
-                        <select
-                          className="border border-[var(--border)] rounded px-2 py-1 min-w-[180px] bg-[var(--panel)] text-[var(--fg)]"
-                          value={draft[u.id]?.branchId ?? ""}
-                          onChange={(e) => setDraftFor(u.id, { branchId: e.target.value })}
-                          title="Change branch (unsaved until Save)"
-                        >
-                          <option value="">— Select Branch —</option>
-                          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                        </select>
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-2 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50"
-                          disabled={!hasChanged(u) || saving[u.id]}
-                          onClick={() => handleSaveInline(u)}
-                          title="Save role/branch changes"
-                        >
-                          {saving[u.id] ? "Saving…" : "Save"}
-                        </button>
-                        <ActionMenu
-                          actions={[
-                            { label: "Edit", onClick: () => onEdit(u) },
-                            { label: "Manage Roles (multi)", onClick: () => onRoles(u) },
-                            { label: "Set/Reset Password", onClick: () => onPassword(u) },
-                            { label: "Disable", onClick: () => onDisable(u), danger: true },
-                            { label: "Delete (hard)", onClick: () => onDelete(u), danger: true },
-                          ]}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <ActionMenu
+                        actions={[
+                          { label: "Edit", onClick: () => onEdit(u) },
+                          { label: "Manage Roles (multi)", onClick: () => onRoles(u) },
+                          { label: "Set/Reset Password", onClick: () => onPassword(u) },
+                          { label: "Disable", onClick: () => onDisable(u), danger: true },
+                          { label: "Delete (hard)", onClick: () => onDelete(u), danger: true },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
               {users.length === 0 && (
-                <tr><td className="px-4 py-6 text-center opacity-70" colSpan={7}>No users found.</td></tr>
+                <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={7}>No users found.</td></tr>
               )}
             </tbody>
           </table>
@@ -713,9 +663,9 @@ const UserManagement = () => {
           <div className="grid gap-2">
             {["name", "email", "phone", "password"].map((k) => (
               <div key={k}>
-                <label className="block text-xs opacity-70 capitalize">{k}</label>
+                <label className="block text-xs text-gray-500 capitalize">{k}</label>
                 <input
-                  className="border border-[var(--border)] rounded px-2 py-1 text-sm w-full bg-[var(--panel)] text-[var(--fg)]"
+                  className="border rounded px-2 py-1 text-sm w-full"
                   type={k === "password" ? "password" : "text"}
                   value={model?.[k] ?? ""}
                   onChange={(e) => setModel((s) => ({ ...s, [k]: e.target.value }))}
@@ -726,9 +676,9 @@ const UserManagement = () => {
 
             {/* Optional inline assignment on create */}
             <div>
-              <label className="block text-xs opacity-70">Role (optional)</label>
+              <label className="block text-xs text-gray-500">Role (optional)</label>
               <select
-                className="border border-[var(--border)] rounded px-2 py-1 text-sm w-full bg-[var(--panel)] text-[var(--fg)]"
+                className="border rounded px-2 py-1 text-sm w-full"
                 value={model?.roleId ?? ""}
                 onChange={(e) => setModel((s) => ({ ...s, roleId: e.target.value }))}
               >
@@ -737,9 +687,9 @@ const UserManagement = () => {
               </select>
             </div>
             <div>
-              <label className="block text-xs opacity-70">Branch (optional)</label>
+              <label className="block text-xs text-gray-500">Branch (optional)</label>
               <select
-                className="border border-[var(--border)] rounded px-2 py-1 text-sm w-full bg-[var(--panel)] text-[var(--fg)]"
+                className="border rounded px-2 py-1 text-sm w-full"
                 value={model?.branchId ?? ""}
                 onChange={(e) => setModel((s) => ({ ...s, branchId: e.target.value }))}
               >
@@ -760,9 +710,9 @@ const UserManagement = () => {
           <div className="grid gap-2">
             {["name", "email", "phone"].map((k) => (
               <div key={k}>
-                <label className="block text-xs opacity-70 capitalize">{k}</label>
+                <label className="block text-xs text-gray-500 capitalize">{k}</label>
                 <input
-                  className="border border-[var(--border)] rounded px-2 py-1 text-sm w-full bg-[var(--panel)] text-[var(--fg)]"
+                  className="border rounded px-2 py-1 text-sm w-full"
                   value={model?.[k] ?? ""}
                   onChange={(e) => setModel((s) => ({ ...s, [k]: e.target.value }))}
                   placeholder={k === "phone" ? "digits only" : ""}
@@ -780,10 +730,10 @@ const UserManagement = () => {
       {pwdOpen && (
         <Modal title="Set/Reset Password" onClose={() => setPwdOpen(false)}>
           <div className="grid gap-2">
-            <label className="block text-xs opacity-70">New Password</label>
+            <label className="block text-xs text-gray-500">New Password</label>
             <input
               type="password"
-              className="border border-[var(--border)] rounded px-2 py-1 text-sm w-full bg-[var(--panel)] text-[var(--fg)]"
+              className="border rounded px-2 py-1 text-sm w-full"
               value={model?.password ?? ""}
               onChange={(e) => setModel((s) => ({ ...s, password: e.target.value }))}
             />
@@ -797,15 +747,15 @@ const UserManagement = () => {
 
       {rolesOpen && (
         <Modal title={`Manage Roles • ${model?.name || model?.email || ""}`} onClose={() => setRolesOpen(false)}>
-          <div className="max-h-[50vh] overflow-auto border border-[var(--border)] rounded p-2 bg-[var(--panel)]">
+          <div className="max-h-[50vh] overflow-auto border rounded p-2">
             {roles.length === 0 ? (
-              <div className="text-sm opacity-70">No roles found.</div>
+              <div className="text-sm text-gray-500">No roles found.</div>
             ) : roles.map((r) => {
               const id = r.id ?? r.roleId ?? r.RoleId;
               const name = r.name || r.title || `#${id}`;
               const checked = roleSel.has(id);
               return (
-                <label key={id} className="flex items-center gap-2 py-1 px-1 rounded hover:bg-[var(--nav-item-hover-bg)]">
+                <label key={id} className="flex items-center gap-2 py-1 px-1 rounded hover:bg-gray-50">
                   <input type="checkbox" checked={checked} onChange={() => toggleRole(id)} />
                   <span className="text-sm">{name}</span>
                 </label>
@@ -822,14 +772,12 @@ const UserManagement = () => {
       {/* -------- Profile Drawer (tabs) -------- */}
       {drawerOpen && drawerUser && (
         <Drawer title={`Staff • ${drawerUser.name || drawerUser.email || ""}`} onClose={() => setDrawerOpen(false)} wide>
-          <div className="border-b border-[var(--border)] mb-3">
+          <div className="border-b mb-3">
             <div className="flex gap-2">
               {["profile","hr","attendance","leave","payroll"].map(t => (
                 <button
                   key={t}
-                  className={`px-3 py-1.5 text-sm rounded-t ${
-                    drawerTab===t ? "bg-blue-600 text-white" : "border border-b-0 border-[var(--border)] bg-[var(--panel)] hover:bg-[var(--nav-item-hover-bg)]"
-                  }`}
+                  className={`px-3 py-1.5 text-sm rounded-t ${drawerTab===t ? "bg-blue-600 text-white" : "bg-slate-100 hover:bg-slate-200"}`}
                   onClick={() => setDrawerTab(t)}
                 >
                   {t[0].toUpperCase()+t.slice(1)}
@@ -840,19 +788,17 @@ const UserManagement = () => {
 
           {drawerTab === "profile" && (
             <div className="grid md:grid-cols-2 gap-3">
-              <div className="rounded border border-[var(--border)] bg-[var(--panel)] p-3">
-                <div className="text-xs opacity-70 mb-1">Basics</div>
+              <div className="bg-white border rounded p-3">
+                <div className="text-xs text-gray-500 mb-1">Basics</div>
                 <div className="text-sm"><b>Name:</b> {drawerUser.name || `${drawerUser.firstName||""} ${drawerUser.lastName||""}`.trim() || "—"}</div>
                 <div className="text-sm"><b>Email:</b> {drawerUser.email || "—"}</div>
                 <div className="text-sm"><b>Phone:</b> {drawerUser.phone || "—"}</div>
-                <div className="text-sm">
-                  <b>Role:</b> {roleBadge(drawerUser.role?.name || drawerUser.role || getRoleNameById(roles, drawerUser.roleId))}
-                </div>
-                <div className="text-sm"><b>Branch:</b> {getBranchNameById(branches, drawerUser.branchId) || "—"}</div>
+                <div className="text-sm"><b>Role:</b> {drawerUser.role?.name || drawerUser.role || "—"}</div>
+                <div className="text-sm"><b>Branch:</b> {branches.find(b => String(b.id)===String(drawerUser.branchId))?.name || "—"}</div>
                 <div className="text-sm"><b>User ID:</b> {drawerUser.id}</div>
               </div>
-              <div className="rounded border border-[var(--border)] bg-[var(--panel)] p-3">
-                <div className="text-xs opacity-70 mb-1">Quick Actions</div>
+              <div className="bg-white border rounded p-3">
+                <div className="text-xs text-gray-500 mb-1">Quick Actions</div>
                 <div className="flex gap-2">
                   <SecondaryButton onClick={() => onEdit(drawerUser)}>Edit</SecondaryButton>
                   <SecondaryButton onClick={() => onRoles(drawerUser)}>Roles</SecondaryButton>
@@ -862,96 +808,120 @@ const UserManagement = () => {
             </div>
           )}
 
-          {drawerTab !== "profile" && drawerLoading && <div className="text-sm opacity-70">Loading…</div>}
+          {drawerTab !== "profile" && drawerLoading && <div className="text-sm text-gray-500">Loading…</div>}
 
           {drawerTab === "hr" && !drawerLoading && (
-            <div className="rounded border border-[var(--border)] bg-[var(--panel)] p-3">
-              <div className="text-xs opacity-70 mb-2">HR • Contracts/Employee Info</div>
-              {(!drawerData.hr || drawerData.hr.length === 0) ? (
-                <div className="text-sm opacity-70">No HR records.</div>
+            <div>
+              {drawerErr.hr ? (
+                <div className="text-sm text-amber-700">{drawerErr.hr}</div>
               ) : (
-                <table className="min-w-full text-sm">
-                  <thead><tr className="text-left border-b border-[var(--border)]"><th className="py-1 px-2">Title</th><th className="py-1 px-2">Start</th><th className="py-1 px-2">End</th><th className="py-1 px-2">Status</th></tr></thead>
-                  <tbody>
-                    {drawerData.hr.map((x, i) => (
-                      <tr key={i} className="border-b border-[var(--border)]">
-                        <td className="py-1 px-2">{x.title || x.position || "—"}</td>
-                        <td className="py-1 px-2">{(x.startDate || x.start)?.slice(0,10) || "—"}</td>
-                        <td className="py-1 px-2">{(x.endDate || x.end)?.slice(0,10) || "—"}</td>
-                        <td className="py-1 px-2">{x.status || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs text-gray-500 mb-2">HR • Contracts/Employee Info</div>
+                  {(!drawerData.hr || drawerData.hr.length === 0) ? (
+                    <div className="text-sm text-gray-500">No HR records.</div>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead><tr className="text-left border-b"><th className="py-1 px-2">Title</th><th className="py-1 px-2">Start</th><th className="py-1 px-2">End</th><th className="py-1 px-2">Status</th></tr></thead>
+                      <tbody>
+                        {drawerData.hr.map((x, i) => (
+                          <tr key={i} className="border-b">
+                            <td className="py-1 px-2">{x.title || x.position || "—"}</td>
+                            <td className="py-1 px-2">{(x.startDate || x.start)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{(x.endDate || x.end)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{x.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
 
           {drawerTab === "attendance" && !drawerLoading && (
-            <div className="rounded border border-[var(--border)] bg-[var(--panel)] p-3">
-              <div className="text-xs opacity-70 mb-2">Attendance (latest 100)</div>
-              {(!drawerData.attendance || drawerData.attendance.length === 0) ? (
-                <div className="text-sm opacity-70">No attendance records.</div>
+            <div>
+              {drawerErr.attendance ? (
+                <div className="text-sm text-amber-700">{drawerErr.attendance}</div>
               ) : (
-                <table className="min-w-full text-sm">
-                  <thead><tr className="text-left border-b border-[var(--border)]"><th className="py-1 px-2">Date</th><th className="py-1 px-2">In</th><th className="py-1 px-2">Out</th><th className="py-1 px-2">Status</th></tr></thead>
-                  <tbody>
-                    {drawerData.attendance.map((x, i) => (
-                      <tr key={i} className="border-b border-[var(--border)]">
-                        <td className="py-1 px-2">{(x.date || x.day || x.createdAt)?.slice(0,10) || "—"}</td>
-                        <td className="py-1 px-2">{x.clockIn || x.in || "—"}</td>
-                        <td className="py-1 px-2">{x.clockOut || x.out || "—"}</td>
-                        <td className="py-1 px-2">{x.status || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs text-gray-500 mb-2">Attendance (latest 100)</div>
+                  {(!drawerData.attendance || drawerData.attendance.length === 0) ? (
+                    <div className="text-sm text-gray-500">No attendance records.</div>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead><tr className="text-left border-b"><th className="py-1 px-2">Date</th><th className="py-1 px-2">In</th><th className="py-1 px-2">Out</th><th className="py-1 px-2">Status</th></tr></thead>
+                      <tbody>
+                        {drawerData.attendance.map((x, i) => (
+                          <tr key={i} className="border-b">
+                            <td className="py-1 px-2">{(x.date || x.day || x.createdAt)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{x.clockIn || x.in || "—"}</td>
+                            <td className="py-1 px-2">{x.clockOut || x.out || "—"}</td>
+                            <td className="py-1 px-2">{x.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
 
           {drawerTab === "leave" && !drawerLoading && (
-            <div className="rounded border border-[var(--border)] bg-[var(--panel)] p-3">
-              <div className="text-xs opacity-70 mb-2">Leave Requests</div>
-              {(!drawerData.leave || drawerData.leave.length === 0) ? (
-                <div className="text-sm opacity-70">No leave records.</div>
+            <div>
+              {drawerErr.leave ? (
+                <div className="text-sm text-amber-700">{drawerErr.leave}</div>
               ) : (
-                <table className="min-w-full text-sm">
-                  <thead><tr className="text-left border-b border-[var(--border)]"><th className="py-1 px-2">Type</th><th className="py-1 px-2">From</th><th className="py-1 px-2">To</th><th className="py-1 px-2">Status</th></tr></thead>
-                  <tbody>
-                    {drawerData.leave.map((x, i) => (
-                      <tr key={i} className="border-b border-[var(--border)]">
-                        <td className="py-1 px-2">{x.type || "—"}</td>
-                        <td className="py-1 px-2">{(x.from || x.startDate)?.slice(0,10) || "—"}</td>
-                        <td className="py-1 px-2">{(x.to || x.endDate)?.slice(0,10) || "—"}</td>
-                        <td className="py-1 px-2">{x.status || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs text-gray-500 mb-2">Leave Requests</div>
+                  {(!drawerData.leave || drawerData.leave.length === 0) ? (
+                    <div className="text-sm text-gray-500">No leave records.</div>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead><tr className="text-left border-b"><th className="py-1 px-2">Type</th><th className="py-1 px-2">From</th><th className="py-1 px-2">To</th><th className="py-1 px-2">Status</th></tr></thead>
+                      <tbody>
+                        {drawerData.leave.map((x, i) => (
+                          <tr key={i} className="border-b">
+                            <td className="py-1 px-2">{x.type || "—"}</td>
+                            <td className="py-1 px-2">{(x.from || x.startDate)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{(x.to || x.endDate)?.slice(0,10) || "—"}</td>
+                            <td className="py-1 px-2">{x.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
 
           {drawerTab === "payroll" && !drawerLoading && (
-            <div className="rounded border border-[var(--border)] bg-[var(--panel)] p-3">
-              <div className="text-xs opacity-70 mb-2">Payroll Entries</div>
-              {(!drawerData.payroll || drawerData.payroll.length === 0) ? (
-                <div className="text-sm opacity-70">No payroll entries.</div>
+            <div>
+              {drawerErr.payroll ? (
+                <div className="text-sm text-amber-700">{drawerErr.payroll}</div>
               ) : (
-                <table className="min-w-full text-sm">
-                  <thead><tr className="text-left border-b border-[var(--border)]"><th className="py-1 px-2">Period</th><th className="py-1 px-2">Gross</th><th className="py-1 px-2">Net</th><th className="py-1 px-2">Status</th></tr></thead>
-                  <tbody>
-                    {drawerData.payroll.map((x, i) => (
-                      <tr key={i} className="border-b border-[var(--border)]">
-                        <td className="py-1 px-2">{x.period || `${(x.month||"").toString().padStart?.(2,"0")}/${x.year||""}`}</td>
-                        <td className="py-1 px-2">{x.gross != null ? Number(x.gross).toLocaleString() : "—"}</td>
-                        <td className="py-1 px-2">{x.net != null ? Number(x.net).toLocaleString() : "—"}</td>
-                        <td className="py-1 px-2">{x.status || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="bg-white border rounded p-3">
+                  <div className="text-xs text-gray-500 mb-2">Payroll Entries</div>
+                  {(!drawerData.payroll || drawerData.payroll.length === 0) ? (
+                    <div className="text-sm text-gray-500">No payroll entries.</div>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead><tr className="text-left border-b"><th className="py-1 px-2">Period</th><th className="py-1 px-2">Gross</th><th className="py-1 px-2">Net</th><th className="py-1 px-2">Status</th></tr></thead>
+                      <tbody>
+                        {drawerData.payroll.map((x, i) => (
+                          <tr key={i} className="border-b">
+                            <td className="py-1 px-2">{x.period || `${(x.month||"").toString().padStart?.(2,"0")}/${x.year||""}`}</td>
+                            <td className="py-1 px-2">{x.gross != null ? Number(x.gross).toLocaleString() : "—"}</td>
+                            <td className="py-1 px-2">{x.net != null ? Number(x.net).toLocaleString() : "—"}</td>
+                            <td className="py-1 px-2">{x.status || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
