@@ -4,6 +4,7 @@ import axios from "axios";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FiMail, FiUnlock, FiEye, FiEyeOff, FiLoader } from "react-icons/fi";
 import BrandMark from "../components/BrandMark";
+import { setPermissions, clearPermissions } from "../utils/permissions"; // ✅ NEW
 
 /* Backend URL */
 const ORIGIN =
@@ -49,8 +50,12 @@ export default function Login() {
     try {
       const payload = { email: email.trim(), password };
       const { data } = await axios.post(LOGIN_URL, payload);
-      const { token, user, tenantId } = data || {};
+      const { token, user, tenantId, permissions } = data || {};
       if (!token) throw new Error("No token received from server");
+
+      // ✅ Store permissions (from backend)
+      if (Array.isArray(permissions)) setPermissions(permissions);
+      else clearPermissions();
 
       if (remember) localStorage.setItem("lastLoginEmail", payload.email);
       else localStorage.removeItem("lastLoginEmail");
@@ -68,6 +73,7 @@ export default function Login() {
 
       nav("/");
     } catch (err) {
+      clearPermissions(); // ✅ Clear any leftover permissions
       const message =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
@@ -82,7 +88,7 @@ export default function Login() {
   return (
     <div
       className="min-h-screen relative overflow-hidden app-theme-bold"
-      style={{ background: "var(--bg, #F7FAFF)" }} // soft, welcoming fallback
+      style={{ background: "var(--bg, #F7FAFF)" }}
     >
       {/* Soft brand background accents */}
       <div className="pointer-events-none absolute inset-0">

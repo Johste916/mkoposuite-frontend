@@ -39,6 +39,7 @@ import {
 } from "../context/FeatureConfigContext";
 import { useTheme } from "../providers/ThemeProvider";
 import BrandMark from "../components/BrandMark";
+import { can, getPermissions } from "../utils/permissions"; // ✅ permission helpers
 
 /* -------------------------------- helpers --------------------------------- */
 const isUuid = (v) =>
@@ -70,7 +71,7 @@ const isAbort = (err) =>
 
 /* ------------------------------- NAV CONFIG -------------------------------- */
 const NAV = () => [
-  { label: "Dashboard", icon: <FiHome />, to: "/" },
+  { label: "Dashboard", icon: <FiHome />, to: "/" }, // keep visible; gate widgets inside page with `can(...)`
   {
     label: "Borrowers",
     icon: <FiUsers />,
@@ -126,7 +127,7 @@ const NAV = () => [
       { label: "Approve Repayments", to: "/repayments/approve" },
     ],
   },
-  { label: "Collateral Register", icon: <FiBriefcase />, to: "/collateral" },
+  { label: "Collateral Register", icon: <FiBriefcase />, to: "/collateral", perm: ["collateral.view", "collateral.read"] }, // ✅ permission-gated
   {
     label: "Collection Sheets",
     icon: <FiCreditCard />,
@@ -247,7 +248,7 @@ const NAV = () => [
       { label: "Permissions", to: "/user-management/permissions" },
     ],
   },
-  { label: "Branches", icon: <FiDatabase />, to: "/branches" },
+  { label: "Branches", icon: <FiDatabase />, to: "/branches", perm: ["branches.view", "branch.view"] }, // ✅ permission-gated
   {
     label: "Reports",
     icon: <FiBarChart2 />,
@@ -581,7 +582,6 @@ const HeaderGlobalSearch = ({ branchId }) => {
 };
 
 /* ------------------------------- Section item ------------------------------ */
-/* ------------------------------- Section item ------------------------------ */
 const Section = memo(({ item, currentPath, onNavigate }) => {
   const hasChildren = !!item.children?.length;
   const isActiveSection = pathIsIn(currentPath, item.to);
@@ -607,13 +607,16 @@ const Section = memo(({ item, currentPath, onNavigate }) => {
   }
 
   const panelId = `nav-${item.to.replace(/[^\w-]/g, "_")}`;
-  const toggle = useCallback(() => setOpen(v => !v), []);
-  const onKeyDown = useCallback((e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggle();
-    }
-  }, [toggle]);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const onKeyDown = useCallback(
+    (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    },
+    [toggle]
+  );
 
   return (
     <div>
@@ -854,6 +857,8 @@ const SidebarLayout = () => {
 
       const roleNames = (() => {
         const primary = (user?.role || "").toString().toLowerCase();
+        the: {
+        }
         const extras = Array.isArray(user?.roles)
           ? user.roles.map((r) => (r?.name || r || "").toString().toLowerCase())
           : Array.isArray(user?.Roles)
@@ -962,7 +967,39 @@ const SidebarLayout = () => {
 
   const computedNav = useMemo(() => {
     const base = NAV();
-    return filterNavByFeatures(base, features, userRole, featureCtx);
+    const featureFiltered = filterNavByFeatures(base, features, userRole, featureCtx);
+
+    // 🔐 Permission-aware filtering (supports string OR string[])
+    const isSuper =
+      ["system_admin", "super_admin", "admin", "director", "developer"].includes(userRole);
+
+    if (isSuper) return featureFiltered;
+
+    let perms = [];
+    try {
+      perms = getPermissions ? getPermissions() : [];
+    } catch {
+      perms = [];
+    }
+    const hasPerm = (p) => {
+      if (!p) return true;
+      const keys = Array.isArray(p) ? p : [p];
+      try {
+        if (typeof can === "function") return keys.some((k) => !!can(k));
+      } catch {}
+      if (Array.isArray(perms)) return keys.some((k) => perms.includes(k));
+      return true;
+    };
+
+    const filterByPerm = (items) =>
+      items
+        .filter((i) => !i.perm || hasPerm(i.perm))
+        .map((i) =>
+          i.children ? { ...i, children: filterByPerm(i.children) } : i
+        )
+        .filter((i) => !i.children || i.children.length > 0);
+
+    return filterByPerm(featureFiltered);
   }, [features, userRole, featureCtx]);
 
   useEffect(() => {
@@ -1008,7 +1045,7 @@ const SidebarLayout = () => {
             <div className="flex items-center gap-2">
               <select
                 className="hidden md:block px-2 py-1 rounded text-sm border bg-[var(--input-bg)] border-[var(--border)] text-[var(--input-fg)]"
-                value={activeBranchId}
+                value={activeBranchId || ""} // avoid controlled/uncontrolled warning
                 onChange={(e) => setActiveBranchId(e.target.value)}
                 aria-label="Active branch"
               >
