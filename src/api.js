@@ -87,6 +87,15 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
+  // Adopt ?tenantId=... from URL if no override yet (so FIRST request has tenant)
+  try {
+    if (typeof window !== "undefined" && !overrideTenantId) {
+      const u = new URL(window.location.href);
+      const t = u.searchParams.get("tenantId");
+      if (t) overrideTenantId = t;
+    }
+  } catch {}
+
   // Tenant header (override > activeTenantId > user.tenantId-ish)
   let tenantId = overrideTenantId;
   if (!tenantId) {

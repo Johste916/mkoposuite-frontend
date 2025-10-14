@@ -108,6 +108,16 @@ const Borrowers = () => {
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
 
+  // Fast ID → name maps
+  const branchMap = useMemo(
+    () => new Map(branches.map((b) => [String(b.id), b.name])),
+    [branches]
+  );
+  const officerMap = useMemo(
+    () => new Map(officers.map((o) => [String(o.id), o.name || o.email])),
+    [officers]
+  );
+
   // UI
   const [loading, setLoading] = useState(true);
 
@@ -143,7 +153,14 @@ const Borrowers = () => {
         const [b, u] = await Promise.all([
           tryGET(["/branches", "/org/branches", "/api/branches"], { signal: ac.signal }).catch(() => []),
           tryGET(
-            ["/users?role=loan_officer", "/staff?role=loan_officer", "/api/users?role=loan_officer"],
+            [
+              "/users?role=loan_officer",
+              "/staff?role=loan_officer",
+              "/api/users?role=loan_officer",
+              "/users?role=officer",
+              "/officers",
+              "/users/loan-officers",
+            ],
             { signal: ac.signal }
           ).catch(() => []),
         ]);
@@ -289,8 +306,22 @@ const Borrowers = () => {
   const pageTo = useMemo(() => Math.min(page * PAGE_SIZE, total), [page, total]);
 
   const displayName = (b) => b?.name || `${b?.firstName || ""} ${b?.lastName || ""}`.trim() || "—";
-  const displayBranch = (b) => b?.branchName || b?.Branch?.name || b?.branch?.name || "—";
-  const displayOfficer = (b) => b?.officerName || b?.officer?.name || b?.loanOfficer?.name || "—";
+
+  const displayBranch = (b) =>
+    b?.branchName ||
+    b?.Branch?.name ||
+    b?.branch?.name ||
+    branchMap.get(String(b?.branchId ?? b?.branch?.id ?? "")) ||
+    "—";
+
+  const displayOfficer = (b) =>
+    b?.officerName ||
+    b?.officer?.name ||
+    b?.loanOfficer?.name ||
+    officerMap.get(
+      String(b?.officerId ?? b?.loanOfficerId ?? b?.officer?.id ?? b?.loanOfficer?.id ?? "")
+    ) ||
+    "—";
 
   const getInitials = (full) => {
     const s = (full || "").trim();

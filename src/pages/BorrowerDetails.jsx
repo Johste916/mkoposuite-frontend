@@ -1,14 +1,27 @@
 // BorrowerDetails.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { getUserRole } from "../utils/auth";
 import LoanScheduleModal from "../components/LoanScheduleModal";
 import RepaymentModal from "../components/RepaymentModal";
 import api from "../api";
 
 /* ---------------- Utilities ---------------- */
-const safeNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
-const money = (v) => `TZS ${safeNum(v).toLocaleString()}`;
+const parseNum = (v) => {
+  if (v === null || v === undefined) return NaN;
+  const n = Number(String(v).replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : NaN;
+};
+const safeNum = (v, d = 0) => {
+  const n = parseNum(v);
+  return Number.isFinite(n) ? n : d;
+};
+
+const money = (v) =>
+  `TZS ${safeNum(v).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 
 /** Default country code for phone normalisation */
 const DEFAULT_CC = "+255";
@@ -47,10 +60,19 @@ const initials = (nameLike) => {
   return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || s[0].toUpperCase();
 };
 
+/** Status/type chip styling for both borrower/loan statuses & savings tx types */
 const chip = (status) => {
   const base =
     "px-2 py-0.5 text-[11px] font-bold uppercase rounded-full border-2 ring-1 ring-inset shadow-sm";
   const s = String(status || "").toLowerCase();
+
+  // Savings transaction types
+  if (s === "deposit") return `${base} bg-emerald-100 border-emerald-300 ring-emerald-200 text-emerald-900`;
+  if (s === "withdrawal") return `${base} bg-orange-100 border-orange-300 ring-orange-200 text-orange-900`;
+  if (s === "charge") return `${base} bg-rose-100 border-rose-300 ring-rose-200 text-rose-900`;
+  if (s === "interest") return `${base} bg-indigo-100 border-indigo-300 ring-indigo-200 text-indigo-900`;
+
+  // Loan/borrower statuses
   switch (s) {
     case "pending":
     case "pending_kyc":
@@ -61,10 +83,22 @@ const chip = (status) => {
       return `${base} bg-rose-100 border-rose-300 ring-rose-200 text-rose-900`;
     case "active":
       return `${base} bg-blue-100 border-blue-300 ring-blue-200 text-blue-900`;
+    case "inactive":
+      return `${base} bg-slate-100 border-slate-300 ring-slate-200 text-slate-900`;
     case "disabled":
       return `${base} bg-slate-100 border-slate-300 ring-slate-200 text-slate-900`;
     case "blacklisted":
       return `${base} bg-red-100 border-red-300 ring-red-200 text-red-900`;
+    case "due":
+      return `${base} bg-amber-100 border-amber-300 ring-amber-200 text-amber-900`;
+    case "overdue":
+      return `${base} bg-rose-100 border-rose-300 ring-rose-200 text-rose-900`;
+    case "paid":
+    case "settled":
+      return `${base} bg-emerald-100 border-emerald-300 ring-emerald-200 text-emerald-900`;
+    case "disbursed":
+    case "pending_disbursement":
+      return `${base} bg-cyan-100 border-cyan-300 ring-cyan-200 text-cyan-900`;
     case "closed":
       return `${base} bg-gray-100 border-gray-300 ring-gray-200 text-gray-900`;
     default:
@@ -72,7 +106,7 @@ const chip = (status) => {
   }
 };
 
-/* GET with graceful fallbacks */
+/* GET with graceful fallbacks (supports AbortSignal) */
 const tryGET = async (paths = [], opts = {}) => {
   let lastErr;
   for (const p of paths) {
@@ -81,12 +115,15 @@ const tryGET = async (paths = [], opts = {}) => {
       return res?.data;
     } catch (e) {
       lastErr = e;
+      // If aborted, stop trying
+      if (e?.name === "CanceledError" || e?.message === "canceled") throw e;
     }
   }
   throw lastErr || new Error(`All endpoints failed: ${paths.join(", ")}`);
 };
 
-const withTenant = (tenantId) => (tenantId ? { headers: { "X-Tenant-Id": tenantId } } : {});
+const withTenant = (tenantId, extra = {}) =>
+  tenantId ? { ...extra, headers: { ...(extra.headers || {}), "x-tenant-id": tenantId } } : extra;
 
 /* Small visual helpers */
 const strongLink =
@@ -177,7 +214,7 @@ function isEmpty(v) {
   const val = firstFilled(v);
   return val === "" || (Array.isArray(val) && val.length === 0);
 }
-const dmy = (v) => (v ? new Date(v).toLocaleDateString() : "—");
+const fmtDate = (v) => (v ? new Date(v).toLocaleDateString() : "—");
 function isoDateOnly(v) {
   try {
     const d = new Date(v);
@@ -190,12 +227,27 @@ function isoDateOnly(v) {
     return "";
   }
 }
+// ⬇️ helpers used by saveUpdates
+const toNull = (v) => (v === "" || v === undefined ? null : v);
+const trim = (v) => (typeof v === "string" ? v.trim() : v);
+const asISO = (v) => (v ? isoDateOnly(v) : null);
+const normalizePhone = (v) => formatPhoneWithCC(v || "");
+
+const branchNameById = (id, list) => list.find((b) => String(b.id) === String(id))?.name || "";
+const officerNameById = (id, list) => list.find((o) => String(o.id) === String(id))?.name || "";
 
 /* ---------- Component ---------- */
 const BorrowerDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
+  const tenantFromURL = search.get("tenantId") || undefined;
   const userRole = getUserRole();
+
+  // Pin tenant from URL immediately so the first request includes it
+  useEffect(() => {
+    if (tenantFromURL) api.setTenantId(tenantFromURL);
+  }, [tenantFromURL]);
 
   const [borrower, setBorrower] = useState(null);
   const [loans, setLoans] = useState([]);
@@ -227,91 +279,128 @@ const BorrowerDetails = () => {
 
   const [showAllComments, setShowAllComments] = useState(false);
 
-  const mapBorrowerToForm = (b) => ({
-    id: b?.id,
-    name: firstFilled(b?.name, b?.fullName),
-    phone: firstFilled(b?.phone, b?.msisdn, b?.mobile, b?.primaryPhone),
-    email: firstFilled(b?.email, b?.mail),
-    addressLine: firstFilled(
-      b?.addressLine,
-      [b?.street, b?.houseNumber, b?.ward, b?.district, b?.city].filter(Boolean).join(", "),
-      [b?.address, b?.town, b?.region, b?.country].filter(Boolean).join(", ")
-    ),
-    gender: firstFilled(b?.gender, b?.sex),
-    birthDate: firstFilled(b?.birthDate, b?.dateOfBirth, b?.dob),
-    employmentStatus: firstFilled(b?.employmentStatus, b?.employment, b?.employmentType),
-    occupation: firstFilled(b?.occupation, b?.businessType, b?.jobTitle, b?.sector),
-    idType: firstFilled(b?.idType, b?.identificationType),
-    nationalId: firstFilled(b?.nationalId, b?.nid, b?.idNumber),
-    idIssuedDate: firstFilled(b?.idIssuedDate, b?.idIssueDate, b?.idDateIssued),
-    idExpiryDate: firstFilled(b?.idExpiryDate, b?.idExpireDate, b?.idDateExpiry),
-    nextKinName: firstFilled(b?.nextKinName, b?.nextOfKinName, b?.kinName, b?.emergencyContactName),
-    nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone),
-    nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship),
-    branchId: b?.branchId ?? b?.Branch?.id ?? b?.branch?.id ?? "",
-    officerId: b?.officerId ?? b?.loanOfficerId ?? b?.officer?.id ?? b?.loanOfficer?.id ?? "",
-    status: b?.status ?? "active",
-    maritalStatus: firstFilled(b?.maritalStatus, b?.marriageStatus),
-    educationLevel: firstFilled(b?.educationLevel, b?.education, b?.educationStatus),
-    customerNumber: firstFilled(b?.customerNumber, b?.accountNumber, b?.clientNumber),
-    tin: firstFilled(b?.tin, b?.TIN, b?.taxId),
-    nationality: firstFilled(b?.nationality, b?.country),
-    groupId: firstFilled(b?.groupId, b?.group, b?.groupCode),
-    loanType: firstFilled(b?.loanType, b?.productType, "individual"),
-    regDate: firstFilled(b?.regDate, b?.registrationDate),
-  });
+  const mapBorrowerToForm = useCallback(
+    (b) => ({
+      id: b?.id,
+      name: firstFilled(b?.name, b?.fullName),
+      phone: firstFilled(b?.phone, b?.msisdn, b?.mobile, b?.primaryPhone),
+      email: firstFilled(b?.email, b?.mail),
+      addressLine: firstFilled(
+        b?.addressLine,
+        [b?.street, b?.houseNumber, b?.ward, b?.district, b?.city].filter(Boolean).join(", "),
+        [b?.address, b?.town, b?.region, b?.country].filter(Boolean).join(", ")
+      ),
+      gender: firstFilled(b?.gender, b?.sex),
+      birthDate: firstFilled(b?.birthDate, b?.dateOfBirth, b?.dob, b?.birth_date),
+      employmentStatus: firstFilled(b?.employmentStatus, b?.employment, b?.employmentType, b?.employment_status),
+      idType: firstFilled(b?.idType, b?.identificationType, b?.id_type),
+      nationalId: firstFilled(b?.nationalId, b?.nid, b?.idNumber, b?.national_id),
+      idIssuedDate: firstFilled(b?.idIssuedDate, b?.idIssueDate, b?.idDateIssued, b?.id_issued_date),
+      idExpiryDate: firstFilled(b?.idExpiryDate, b?.idExpireDate, b?.idDateExpiry, b?.id_expiry_date),
+      nextKinName: firstFilled(b?.nextKinName, b?.nextOfKinName, b?.kinName, b?.emergencyContactName, b?.next_of_kin_name),
+      nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone, b?.next_of_kin_phone),
+      nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship, b?.next_of_kin_relationship),
+      maritalStatus: firstFilled(b?.maritalStatus, b?.marriageStatus, b?.marital_status),
+      educationLevel: firstFilled(b?.educationLevel, b?.education, b?.educationStatus, b?.education_level),
+      customerNumber: firstFilled(b?.customerNumber, b?.accountNumber, b?.clientNumber, b?.customer_number),
+      groupId: firstFilled(b?.groupId, b?.group, b?.groupCode, b?.group_id),
+      loanType: firstFilled(b?.loanType, b?.productType, b?.loan_type, "individual"),
+      regDate: firstFilled(b?.regDate, b?.registrationDate, b?.reg_date),
+    }),
+    []
+  );
 
-  const fetchBorrowerBundle = async () => {
-    setErrors({ loans: null, savings: null });
-    try {
-      const b = await tryGET([`/borrowers/${id}`]);
-      setBorrower(b);
-      setForm(mapBorrowerToForm(b));
+  // Fetch borrower + bundle (abortable)
+  const fetchBorrowerBundle = useCallback(
+    async (signal) => {
+      setErrors({ loans: null, savings: null });
+      try {
+        const initialTenant = tenantFromURL || api.getTenantId();
+        const b = await tryGET(
+          [
+            initialTenant
+              ? `/borrowers/${id}?tenantId=${encodeURIComponent(initialTenant)}`
+              : `/borrowers/${id}`,
+            `/borrowers/${id}`,
+          ],
+          withTenant(initialTenant, { signal })
+        );
+        setBorrower(b);
+        setForm(mapBorrowerToForm(b));
 
-      const qTenant = b?.tenantId ? `&tenantId=${encodeURIComponent(b.tenantId)}` : "";
+        const qTenant = b?.tenantId ? `&tenantId=${encodeURIComponent(b.tenantId)}` : "";
 
-      const [loanData, repayData, commentData, savingsData] = await Promise.all([
-        tryGET([`/loans?borrowerId=${id}${qTenant}`, `/borrowers/${id}/loans`, `/loans/borrower/${id}`]).catch(
-          () => {
+        const [loanData, repayData, commentData, savingsData] = await Promise.all([
+          tryGET(
+            [`/loans?borrowerId=${id}${qTenant}`, `/borrowers/${id}/loans`, `/loans/borrower/${id}`],
+            { signal, ...withTenant(b?.tenantId) }
+          ).catch(() => {
             setErrors((x) => ({ ...x, loans: "Couldn’t load loans." }));
             return [];
-          }
-        ),
-        tryGET([
-          `/repayments?borrowerId=${id}${qTenant}`,
-          `/borrowers/${id}/repayments`,
-          `/repayments/borrower/${id}`,
-        ]).catch(() => []),
-        tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
-        tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`]).catch(() => {
-          setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
-          return {};
-        }),
-      ]);
+          }),
+          tryGET(
+            [
+              `/repayments?borrowerId=${id}${qTenant}`,
+              `/borrowers/${id}/repayments`,
+              `/repayments/borrower/${id}`,
+            ],
+            { signal, ...withTenant(b?.tenantId) }
+          ).catch(() => []),
+          tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`], {
+            signal,
+            ...withTenant(b?.tenantId),
+          }).catch(() => []),
+          tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`], {
+            signal,
+            ...withTenant(b?.tenantId),
+          }).catch(() => {
+            setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
+            return {};
+          }),
+        ]);
 
-      setLoans(Array.isArray(loanData) ? loanData : loanData?.items || []);
-      setRepayments(Array.isArray(repayData) ? repayData : repayData?.items || []);
-      setComments(Array.isArray(commentData) ? commentData : commentData?.items || []);
+        setLoans(Array.isArray(loanData) ? loanData : loanData?.items || []);
+        setRepayments(Array.isArray(repayData) ? repayData : repayData?.items || []);
+        setComments(Array.isArray(commentData) ? commentData : commentData?.items || []);
 
-      const txs = Array.isArray(savingsData?.transactions)
-        ? savingsData.transactions
-        : Array.isArray(savingsData)
-        ? savingsData
-        : [];
-      setSavings(txs);
-      setFilteredSavings(txs);
-    } catch (err) {
-      console.error("Fetch borrower bundle failed:", err?.message || err);
-    }
-  };
+        const txs = Array.isArray(savingsData?.transactions)
+          ? savingsData.transactions
+          : Array.isArray(savingsData)
+          ? savingsData
+          : [];
+
+        // sort savings newest first; normalize amounts to number
+        const sorted = [...txs].sort((a, b) => {
+          const da = new Date(a.date || a.createdAt || 0).getTime();
+          const db = new Date(b.date || b.createdAt || 0).getTime();
+          return db - da;
+        });
+        setSavings(sorted);
+        setFilteredSavings(sorted);
+      } catch (err) {
+        if (err?.name === "CanceledError" || err?.message === "canceled") return;
+        console.error("Fetch borrower bundle failed:", err?.message || err);
+      }
+    },
+    [id, mapBorrowerToForm, tenantFromURL]
+  );
 
   // load dropdown options (branches, officers)
-  const fetchOptionLists = async (tenantId) => {
+  const fetchOptionLists = useCallback(async (tenantId, signal) => {
     try {
-      const opt = withTenant(tenantId);
+      const opt = withTenant(tenantId, { signal });
       const [branchRes, officerRes] = await Promise.all([
         tryGET(["/branches", "/org/branches", "/branch"], opt).catch(() => []),
-        tryGET(["/users?role=officer", "/officers", "/users/loan-officers"], opt).catch(() => []),
+        tryGET(
+          [
+            "/users?role=officer",
+            "/users?role=loan_officer",
+            "/officers",
+            "/users/loan-officers",
+            "/staff?role=loan_officer",
+          ],
+          opt
+        ).catch(() => []),
       ]);
 
       const brs = Array.isArray(branchRes?.items)
@@ -333,27 +422,33 @@ const BorrowerDetails = () => {
       );
       setOfficers(
         (Array.isArray(ofs) ? ofs : []).map((u) => ({
-          id: firstFilled(u.id, u._id, u.userId),
-          name: firstFilled(u.name, [u.firstName, u.lastName].filter(Boolean).join(" "), u.email) || "—",
+          id: firstFilled(u.id, u._id, u.userId, u.email),
+          name:
+            firstFilled(u.name, [u.firstName, u.lastName].filter(Boolean).join(" "), u.email) ||
+            "—",
         }))
       );
     } catch (e) {
+      if (e?.name === "CanceledError" || e?.message === "canceled") return;
       console.warn("Option list fetch failed", e?.message || e);
     }
-  };
+  }, []);
 
+  // initial + id-change fetch, with abort
   useEffect(() => {
-    fetchBorrowerBundle();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    const ctrl = new AbortController();
+    fetchBorrowerBundle(ctrl.signal);
+    return () => ctrl.abort();
+  }, [id, fetchBorrowerBundle]);
 
   // refresh option lists when borrower (tenant) known
   useEffect(() => {
     if (borrower?.tenantId !== undefined) {
-      fetchOptionLists(borrower?.tenantId);
+      const ctrl = new AbortController();
+      fetchOptionLists(borrower?.tenantId, ctrl.signal);
+      return () => ctrl.abort();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [borrower?.tenantId]);
+  }, [borrower?.tenantId, fetchOptionLists]);
 
   // auto-refresh on broadcast
   useEffect(() => {
@@ -364,12 +459,14 @@ const BorrowerDetails = () => {
       window.removeEventListener("loan:updated", onUpdated);
       window.removeEventListener("borrower:updated", onUpdated);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, fetchBorrowerBundle]);
 
   useEffect(() => {
     if (filterType === "all") setFilteredSavings(savings);
-    else setFilteredSavings(savings.filter((tx) => tx.type === filterType));
+    else
+      setFilteredSavings(
+        savings.filter((tx) => String(tx.type || "").toLowerCase() === filterType)
+      );
   }, [filterType, savings]);
 
   const handleAddComment = async (textRaw) => {
@@ -392,9 +489,7 @@ const BorrowerDetails = () => {
       interest: safeNum(it.interest ?? it.interestAmount),
       amount: safeNum(it.amount ?? it.installmentAmount ?? it.total),
       balance: safeNum(
-        it.balance ??
-          it.remaining ??
-          (safeNum(it.balancePrincipal) + safeNum(it.balanceInterest))
+        it.balance ?? it.remaining ?? safeNum(it.balancePrincipal) + safeNum(it.balanceInterest)
       ),
       status: it.status ?? "",
       paid: safeNum(it.amountPaid ?? it.paid ?? 0),
@@ -403,7 +498,10 @@ const BorrowerDetails = () => {
 
   const handleViewSchedule = async (loanId) => {
     try {
-      const data = await tryGET([`/loans/${loanId}/schedule`, `/loan/${loanId}/schedule`]);
+      const data = await tryGET(
+        [`/loans/${loanId}/schedule`, `/loan/${loanId}/schedule`],
+        withTenant(borrower?.tenantId)
+      );
       setSelectedSchedule(normalizeSchedule(Array.isArray(data) ? data : data?.items || []));
       const loan = loans.find((l) => String(l.id) === String(loanId)) || null;
       setSelectedLoan(loan);
@@ -415,12 +513,15 @@ const BorrowerDetails = () => {
 
   const handleRepaymentSaved = async () => {
     try {
-      const repay = await tryGET([
-        `/repayments?borrowerId=${id}${
-          borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-        }`,
-        `/borrowers/${id}/repayments`,
-      ]);
+      const repay = await tryGET(
+        [
+          `/repayments?borrowerId=${id}${
+            borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+          }`,
+          `/borrowers/${id}/repayments`,
+        ],
+        withTenant(borrower?.tenantId)
+      );
       setRepayments(Array.isArray(repay) ? repay : repay?.items || []);
     } catch {}
     await fetchBorrowerBundle();
@@ -434,52 +535,188 @@ const BorrowerDetails = () => {
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const saveUpdates = async () => {
-    if (!form?.id) return;
-    setSaving(true);
-    try {
-      const payload = {
-        name: form.name,
-        phone: form.phone,
-        email: form.email,
-        address: form.addressLine,
-        status: form.status,
-        nationalId: form.nationalId,
-        branchId: form.branchId || null,
-        officerId: form.officerId || null,
-        loanOfficerId: form.officerId || null,
-        idType: form.idType,
-        idIssuedDate: form.idIssuedDate || null,
-        idExpiryDate: form.idExpiryDate || null,
-        nextKinName: form.nextKinName,
-        nextKinPhone: form.nextKinPhone,
-        nextOfKinRelationship: form.nextOfKinRelationship,
-        employmentStatus: form.employmentStatus,
-        occupation: form.occupation,
-        birthDate: form.birthDate || null,
-        gender: form.gender,
-        maritalStatus: form.maritalStatus || null,
-        educationLevel: form.educationLevel || null,
-        customerNumber: form.customerNumber || null,
-        tin: form.tin || null,
-        nationality: form.nationality || null,
-        groupId: form.groupId || null,
-        loanType: form.loanType || null,
-        regDate: form.regDate || null,
-      };
+  if (!form?.id) return;
+  setSaving(true);
 
-      await api.patch(`/borrowers/${form.id}`, payload, withTenant(borrower?.tenantId));
+  // base (camelCase)
+  const base = {
+    name: trim(form.name),
+    phone: normalizePhone(trim(form.phone || "")),
+    email: trim(form.email),
 
-      await fetchBorrowerBundle();
-      setIsEditing(false);
+    // send both to satisfy old/new backends
+    addressLine: trim(form.addressLine),
+    address: trim(form.addressLine),
 
-      window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id: form.id } }));
-    } catch (e) {
-      alert("Couldn’t update borrower.");
-      console.error(e);
-    } finally {
-      setSaving(false);
-    }
+    status: trim(form.status),
+    nationalId: trim(form.nationalId),
+
+    branchId: toNull(form.branchId),
+    officerId: toNull(form.officerId),
+    loanOfficerId: toNull(form.officerId),
+
+    idType: trim(form.idType),
+    idIssuedDate: asISO(form.idIssuedDate),
+    idExpiryDate: asISO(form.idExpiryDate),
+
+    nextKinName: trim(form.nextKinName),
+    nextKinPhone: normalizePhone(form.nextKinPhone),
+    nextOfKinRelationship: trim(form.nextOfKinRelationship),
+
+    employmentStatus: trim(form.employmentStatus),
+    occupation: trim(form.occupation),
+    birthDate: asISO(form.birthDate),
+    gender: trim(form.gender),
+    maritalStatus: trim(form.maritalStatus),
+    educationLevel: trim(form.educationLevel),
+    customerNumber: trim(form.customerNumber),
+    tin: trim(form.tin),
+    nationality: trim(form.nationality),
+    groupId: trim(form.groupId),
+    loanType: trim(form.loanType),
+    regDate: asISO(form.regDate),
   };
+
+  // snake_case aliases (for stricter APIs)
+  const snake = {
+    branch_id: base.branchId,
+    officer_id: base.officerId,
+    loan_officer_id: base.officerId,
+    address_line: base.addressLine,
+    id_type: base.idType,
+    id_issued_date: base.idIssuedDate,
+    id_expiry_date: base.idExpiryDate,
+    national_id: base.nationalId,
+    next_of_kin_name: base.nextKinName,
+    next_of_kin_phone: base.nextKinPhone,
+    next_of_kin_relationship: base.nextOfKinRelationship,
+    employment_status: base.employmentStatus,
+    birth_date: base.birthDate,
+    marital_status: base.maritalStatus,   // ✅ fixed
+    education_level: base.educationLevel,
+    customer_number: base.customerNumber,
+    reg_date: base.regDate,               // ✅ fixed
+    loan_type: base.loanType,
+    group_id: base.groupId,
+  };
+
+  // drop undefined (keep nulls to explicitly clear)
+  const payload = Object.fromEntries(
+    Object.entries({ ...base, ...snake }).filter(([, v]) => v !== undefined)
+  );
+
+  // Compute branch change intent
+  const prevBranchId = firstFilled(
+    borrower?.branchId,
+    borrower?.Branch?.id,
+    borrower?.branch?.id,
+    null
+  );
+  const newBranchId = base.branchId; // may be null to CLEAR
+
+  try {
+    const opt = withTenant(borrower?.tenantId);
+
+    // If changing or clearing branch, unassign first (DELETE) as the API requires.
+    if (
+      prevBranchId != null &&
+      (newBranchId == null || String(newBranchId) !== String(prevBranchId))
+    ) {
+      try {
+        // server hinted DELETE /borrowers/:id/branch
+        await api.deleteFirst(
+          [`/borrowers/${form.id}/branch`, `/borrowers/${form.id}/branch/${prevBranchId}`],
+          opt
+        );
+      } catch (e) {
+        // allow 404 (already unassigned), rethrow others
+        if (e?.response?.status !== 404) throw e;
+      }
+    }
+
+    // Build the payload we actually PATCH with:
+    // If we JUST unassigned (newBranchId == null), do not send branchId=null again in PATCH.
+    const payloadToSend =
+      prevBranchId != null && newBranchId == null
+        ? (() => {
+            const p = { ...payload };
+            delete p.branchId;
+            delete p.branch_id;
+            return p;
+          })()
+        : payload;
+
+    // optimistic local update so UI shows labels immediately
+    setBorrower((b) => ({
+      ...b,
+      ...payloadToSend,
+      phone: base.phone,
+      email: base.email,
+      address: base.address,
+      addressLine: base.addressLine,
+      ...(newBranchId != null
+        ? {
+            branchId: newBranchId,
+            Branch: { ...(b?.Branch || {}), id: newBranchId, name: branchNameById(newBranchId, branches) },
+            branchName: branchNameById(newBranchId, branches) || b?.branchName,
+          }
+        : {
+            // cleared
+            branchId: null,
+            Branch: null,
+            branchName: undefined,
+          }),
+      officerId: base.officerId,
+      loanOfficerId: base.officerId,
+      ...(base.officerId != null
+        ? {
+            officer: { ...(b?.officer || {}), id: base.officerId, name: officerNameById(base.officerId, officers) },
+            loanOfficer: { ...(b?.loanOfficer || {}), id: base.officerId, name: officerNameById(base.officerId, officers) },
+            officerName: officerNameById(base.officerId, officers) || b?.officerName,
+          }
+        : {}),
+    }));
+
+    // persist (PATCH → fallback to PUT), with a 409-safe retry that honors server hint
+    const doPatch = async () => {
+      try {
+        await api.patch(`/borrowers/${form.id}`, payloadToSend, opt);
+      } catch (e) {
+        if (e?.response?.status === 409 && e?.response?.data?.unassignUrl) {
+          // backend insists we unassign first — do it now then retry once
+          try {
+            await api.delete(e.response.data.unassignUrl, opt);
+          } catch {}
+          await api.patch(`/borrowers/${form.id}`, payloadToSend, opt);
+        } else {
+          // try PUT only if not a strict-409 case
+          if (e?.response?.status !== 409) {
+            await api.put(`/borrowers/${form.id}`, payloadToSend, opt);
+          } else {
+            throw e;
+          }
+        }
+      }
+    };
+
+    await doPatch();
+
+    await fetchBorrowerBundle();
+    setIsEditing(false);
+    window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id: form.id } }));
+  } catch (e) {
+    console.error(e);
+    alert(
+      e?.response?.data?.error ||
+        e?.response?.data?.message ||
+        e?.normalizedMessage ||
+        "Couldn’t update borrower."
+    );
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   // Admin actions
   const handleDisable = async () => {
@@ -555,16 +792,16 @@ const BorrowerDetails = () => {
 
     return (loans || []).map((l) => {
       const rows = byLoan.get(l.id) || [];
-      const paidTotal = rows.reduce((s, r) => s + safeNum(r.amountPaid ?? r.paidAmount ?? r.amount ?? 0), 0);
+      const paidTotal = rows.reduce(
+        (s, r) => s + safeNum(r.amountPaid ?? r.paidAmount ?? r.amount ?? 0),
+        0
+      );
 
       const rawOutstanding =
-        l.outstanding ??
-        l.outstandingTotal ??
-        l.outstandingAmount ??
-        null;
+        l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
 
-      const outstanding = rawOutstanding != null ? safeNum(rawOutstanding)
-        : Math.max(0, safeNum(l.amount) - paidTotal);
+      const outstanding =
+        rawOutstanding != null ? safeNum(rawOutstanding) : Math.max(0, safeNum(l.amount) - paidTotal);
 
       // next due from repayments table if present
       const future = rows
@@ -573,14 +810,16 @@ const BorrowerDetails = () => {
       const next = future[0] || null;
       const nextDueDate = next?.dueDate || l.nextDueDate || l.nextInstallmentDate || null;
       const nextDueAmount = next
-        ? safeNum((next.amount ?? 0) - (next.amountPaid ?? 0))
-        : (l.nextDueAmount ?? l.nextInstallmentAmount ?? null);
+        ? Math.max(0, safeNum(next.amount) - safeNum(next.amountPaid))
+        : l.nextDueAmount ?? l.nextInstallmentAmount ?? null;
 
       const missedInstallments = rows.filter((r) => {
         const due = r.dueDate ? new Date(r.dueDate) : null;
         const status = String(r.status || "").toLowerCase();
         const paid = safeNum(r.amountPaid ?? r.paidAmount) >= safeNum(r.amount);
-        return due && due < today && !paid && (status === "overdue" || status === "due" || status === "");
+        return (
+          due && due < today && !paid && (status === "overdue" || status === "due" || status === "")
+        );
       }).length;
 
       const lastPaymentDate = rows
@@ -588,7 +827,15 @@ const BorrowerDetails = () => {
         .map((r) => r.date || r.createdAt)
         .sort((a, b) => new Date(b) - new Date(a))[0];
 
-      return { ...l, paidTotal, outstanding, nextDueDate, nextDueAmount, missedInstallments, lastPaymentDate };
+      return {
+        ...l,
+        paidTotal,
+        outstanding,
+        nextDueDate,
+        nextDueAmount,
+        missedInstallments,
+        lastPaymentDate,
+      };
     });
   }, [loans, repayments]);
 
@@ -598,12 +845,43 @@ const BorrowerDetails = () => {
       const due = r.dueDate ? new Date(r.dueDate) : null;
       const status = String(r.status || "").toLowerCase();
       const paid = safeNum(r.amountPaid ?? r.paidAmount) >= safeNum(r.amount);
-      return due && due < today && !paid && (status === "overdue" || status === "due" || status === "");
+      return (
+        due && due < today && !paid && (status === "overdue" || status === "due" || status === "")
+      );
     }).length;
   }, [repayments]);
 
+  // Savings aggregates (memoized)
+  const { deposits, withdrawals, charges, interest, net } = useMemo(() => {
+    const agg = { deposits: 0, withdrawals: 0, charges: 0, interest: 0 };
+    for (const t of savings) {
+      const amt = safeNum(t.amount);
+      switch (String(t.type || "").toLowerCase()) {
+        case "deposit":
+          agg.deposits += amt;
+          break;
+        case "withdrawal":
+          agg.withdrawals += amt;
+          break;
+        case "charge":
+          agg.charges += amt;
+          break;
+        case "interest":
+          agg.interest += amt;
+          break;
+        default:
+          break;
+      }
+    }
+    return { ...agg, net: agg.deposits + agg.interest - agg.withdrawals - agg.charges };
+  }, [savings]);
+
   if (!borrower || !form) {
-    return <div className="w-full px-6 py-6 min-h-screen bg-white text-slate-900">Loading...</div>;
+    return (
+      <div className="w-full px-6 py-6 min-h-screen bg-white text-slate-900">
+        Loading…
+      </div>
+    );
   }
 
   const bName = displayName(borrower);
@@ -613,16 +891,7 @@ const BorrowerDetails = () => {
   const tel = (p) => (p ? `tel:${p}` : undefined);
   const sms = (p) => (p ? `sms:${p}` : undefined);
   const wa = (p) => (p ? `https://wa.me/${String(p).replace(/[^\d]/g, "")}` : undefined);
-  const mail = (e) => (e ? `mailto:${e}` : undefined);
-
-  // Savings aggregates
-  const deposits = savings.reduce((s, t) => (t.type === "deposit" ? s + safeNum(t.amount) : s), 0);
-  const withdrawals = savings.reduce(
-    (s, t) => (t.type === "withdrawal" ? s + safeNum(t.amount) : s),
-    0
-  );
-  const charges = savings.reduce((s, t) => (t.type === "charge" ? s + safeNum(t.amount) : s), 0);
-  const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
+  const mail = (e) => (e ? `mailto:${encodeURIComponent(e)}` : undefined);
 
   const addr = firstFilled(
     borrower.addressLine,
@@ -821,9 +1090,7 @@ const BorrowerDetails = () => {
                     <h1 className="text-3xl font-extrabold tracking-tight truncate">{bName}</h1>
                   )}
                   <span className="text-xs text-slate-700">ID: {borrower.id}</span>
-                  <span className="text-xs text-slate-700">
-                    Tenant: {borrower.tenantId || "—"}
-                  </span>
+                  <span className="text-xs text-slate-700">Tenant: {borrower.tenantId || "—"}</span>
                 </div>
 
                 <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -973,7 +1240,7 @@ const BorrowerDetails = () => {
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
                     ) : (
-                      dmy(dob)
+                      fmtDate(dob)
                     ),
                   },
                   {
@@ -1120,7 +1387,7 @@ const BorrowerDetails = () => {
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
                         ) : (
-                          dmy(idIssued)
+                          fmtDate(idIssued)
                         ),
                       },
                       {
@@ -1133,7 +1400,7 @@ const BorrowerDetails = () => {
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
                         ) : (
-                          dmy(idExpiry)
+                          fmtDate(idExpiry)
                         ),
                       },
                       {
@@ -1246,7 +1513,7 @@ const BorrowerDetails = () => {
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
                         ) : (
-                          dmy(registrationDate)
+                          fmtDate(registrationDate)
                         ),
                       },
                     ]}
@@ -1320,9 +1587,7 @@ const BorrowerDetails = () => {
                 <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-900">
                   {c.k}
                 </div>
-                <div className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">
-                  {c.v}
-                </div>
+                <div className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{c.v}</div>
               </div>
             ))}
           </div>
@@ -1354,9 +1619,11 @@ const BorrowerDetails = () => {
                         <>
                           No loans for this borrower.
                           <Link
-                            to={`/loans/applications?borrowerId=${encodeURIComponent(
-                              borrower.id
-                            )}${borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""}`}
+                            to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
+                              borrower?.tenantId
+                                ? `&tenantId=${encodeURIComponent(borrower.tenantId)}`
+                                : ""
+                            }`}
                             className={`ml-1 ${strongLink}`}
                           >
                             Create loan
@@ -1455,7 +1722,7 @@ const BorrowerDetails = () => {
                               }`}
                               className={strongLink}
                             >
-                              {r.loanId}
+                              {firstFilled(r.loan?.reference, `L-${r.loanId}`)}
                             </Link>
                           ) : (
                             "—"
@@ -1474,147 +1741,223 @@ const BorrowerDetails = () => {
                     <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.savings}</div>
                   )}
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
-                    <BadgeCard label="Deposits" value={money(deposits)} tone="emerald" />
-                    <BadgeCard label="Withdrawals" value={money(withdrawals)} tone="amber" />
-                    <BadgeCard label="Interest" value={money(interest)} tone="sky" />
-                    <BadgeCard label="Charges" value={money(charges)} tone="rose" />
-                  </div>
-
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-900">Filter:</span>
-                      <label className="relative z-50">
-                        <select
-                          value={filterType}
-                          onChange={(e) => setFilterType(e.target.value)}
-                          className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div className="flex gap-2">
+                      {[
+                        { key: "all", label: "All" },
+                        { key: "deposit", label: "Deposits" },
+                        { key: "withdrawal", label: "Withdrawals" },
+                        { key: "charge", label: "Charges" },
+                        { key: "interest", label: "Interest" },
+                      ].map((f) => (
+                        <button
+                          key={f.key}
+                          onClick={() => setFilterType(f.key)}
+                          className={`px-3 py-1.5 rounded-full border-2 font-semibold ${
+                            filterType === f.key
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-white text-slate-900 border-slate-400 hover:bg-slate-50"
+                          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400`}
                         >
-                          <option value="all">All</option>
-                          <option value="deposit">Deposits</option>
-                          <option value="withdrawal">Withdrawals</option>
-                          <option value="interest">Interest</option>
-                          <option value="charge">Charges</option>
-                        </select>
-                      </label>
+                          {f.label}
+                        </button>
+                      ))}
                     </div>
-                    <Link
-                      to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(
-                        borrower.id
-                      )}`}
-                      className={`${strongLink} text-sm`}
-                    >
-                      View savings accounts
-                    </Link>
+
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 w-full md:w-auto">
+                      {[
+                        { k: "Deposits", v: money(deposits) },
+                        { k: "Withdrawals", v: money(withdrawals) },
+                        { k: "Charges", v: money(charges) },
+                        { k: "Interest", v: money(interest) },
+                        {
+                          k: "Net",
+                          v: money(net),
+                        },
+                      ].map((c, i) => (
+                        <div
+                          key={i}
+                          className="rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-right"
+                        >
+                          <div className="text-[11px] font-semibold uppercase text-slate-700">
+                            {c.k}
+                          </div>
+                          <div className="text-[15px] font-extrabold tabular-nums">{c.v}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {filteredSavings.length === 0 ? (
-                    <Empty text="No savings transactions for this borrower." />
+                    <Empty text="No savings transactions found." />
                   ) : (
                     <Table
-                      head={["Date", "Type", "Amount", "Notes"]}
-                      rows={filteredSavings.map((tx) => [
-                        tx.date ? new Date(tx.date).toLocaleDateString() : "—",
-                        <span className="capitalize">{tx.type}</span>,
-                        <div className="text-right tabular-nums">{money(tx.amount)}</div>,
-                        tx.notes || "—",
+                      head={["Date", "Type", "Amount", "Note/Ref"]}
+                      rows={filteredSavings.map((t) => [
+                        t.date || t.createdAt
+                          ? new Date(t.date || t.createdAt).toLocaleDateString()
+                          : "—",
+                        <span className={chip(t.type)}>{t.type || "—"}</span>,
+                        <div className="text-right tabular-nums">{money(t.amount)}</div>,
+                        firstFilled(t.note, t.reference, t.ref, t.narration, "—"),
                       ])}
                     />
                   )}
                 </>
               )}
 
-              {/* Documents */}
+              {/* Documents (placeholder) */}
               {activeTab === "documents" && (
-                <div className="text-sm">
-                  <Link
-                    to={`/borrowers/${encodeURIComponent(borrower.id)}/documents${tenantQuery}`}
-                    className={strongLink}
-                  >
-                    Manage KYC documents
-                  </Link>
-                </div>
+                <Empty
+                  text={
+                    <>
+                      No documents yet.
+                      <Link
+                        to={`/borrowers/${encodeURIComponent(borrower.id)}/documents${
+                          borrower?.tenantId
+                            ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
+                            : ""
+                        }`}
+                        className={`ml-1 ${strongLink}`}
+                      >
+                        Manage documents
+                      </Link>
+                    </>
+                  }
+                />
               )}
 
-              {/* Activity */}
+              {/* Activity / Comments */}
               {activeTab === "activity" && (
-                <ActivityTimeline
-                  loans={loansEnriched}
-                  repayments={repayments}
-                  savings={savings}
-                  comments={comments}
-                  canAddRepayment={String(userRole || "").toLowerCase() === "admin"}
-                  onAddRepayment={() => {
-                    const active = loansEnriched.find((l) => l.status === "active") || loansEnriched[0];
-                    if (active) {
-                      setSelectedLoanForRepayment(active);
-                      setShowRepaymentModal(true);
-                    }
-                  }}
-                />
+                <div className="space-y-4">
+                  <Card title="Add a note">
+                    <AddComment onSubmit={handleAddComment} />
+                  </Card>
+
+                  <Card title="Recent notes">
+                    {comments.length === 0 ? (
+                      <Empty text="No notes yet." />
+                    ) : (
+                      <>
+                        <ul className="space-y-3">
+                          {visibleComments.map((c, i) => (
+                            <li
+                              key={i}
+                              className="rounded-xl border-2 border-slate-300 bg-white p-3 shadow-sm"
+                            >
+                              <div className="text-sm">{c.content}</div>
+                              <div className="mt-1 text-[11px] text-slate-600">
+                                {c.createdAt ? new Date(c.createdAt).toLocaleString() : "—"}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                        {comments.length > 3 && (
+                          <div className="mt-3">
+                            <button
+                              onClick={() => setShowAllComments((x) => !x)}
+                              className="px-3 py-1.5 rounded-lg border-2 border-slate-400 text-slate-900 hover:bg-slate-50 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                            >
+                              {showAllComments ? "Show less" : "Show all"}
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </Card>
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* NOTES SIDEBAR */}
-        <aside className="lg:col-span-1 space-y-6">
-          <Card title="Notes">
-            <input
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleAddComment(e.currentTarget.value);
-                  e.currentTarget.value = "";
-                }
-              }}
-              placeholder="Add a note and press Enter…"
-              className="w-full text-sm mb-3 border-2 border-slate-400 rounded-lg px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            />
-            {comments.length === 0 ? (
-              <div className="text-xs text-slate-900">No notes yet.</div>
-            ) : (
-              <>
-                <ul className="space-y-2">
-                  {visibleComments.map((c, i) => (
-                    <li
-                      key={`${i}-${c.createdAt}`}
-                      className="p-2 text-xs rounded-lg border-2 border-slate-400 bg-white"
-                    >
-                      <div className="text-slate-900 break-words">{c.content}</div>
-                      <div className="text-[10px] text-slate-700 mt-1">
-                        {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                {comments.length > 3 && (
-                  <button
-                    onClick={() => setShowAllComments((s) => !s)}
-                    className="mt-3 w-full text-xs px-3 py-1.5 rounded-lg border-2 border-slate-400 text-slate-900 hover:bg-slate-50 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                  >
-                    {showAllComments ? "Show less" : `Show all (${comments.length})`}
-                  </button>
-                )}
-              </>
-            )}
+        {/* SIDEBAR */}
+        <div className="space-y-6">
+          <Card title="Account Summary">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-xl border-2 border-slate-300 p-3">
+                <div className="text-[11px] font-semibold uppercase text-slate-700">Loans</div>
+                <div className="text-2xl font-extrabold">{loans.length}</div>
+              </div>
+              <div className="rounded-xl border-2 border-slate-300 p-3">
+                <div className="text-[11px] font-semibold uppercase text-slate-700">Outstanding</div>
+                <div className="text-2xl font-extrabold tabular-nums">
+                  {money(
+                    loansEnriched.reduce(
+                      (s, l) => s + (Number.isFinite(l.outstanding) ? l.outstanding : 0),
+                      0
+                    )
+                  )}
+                </div>
+              </div>
+              <div className="rounded-xl border-2 border-slate-300 p-3">
+                <div className="text-[11px] font-semibold uppercase text-slate-700">Deposits</div>
+                <div className="text-2xl font-extrabold tabular-nums">{money(deposits)}</div>
+              </div>
+              <div className="rounded-xl border-2 border-slate-300 p-3">
+                <div className="text-[11px] font-semibold uppercase text-slate-700">Net Savings</div>
+                <div className="text-2xl font-extrabold tabular-nums">{money(net)}</div>
+              </div>
+            </div>
           </Card>
-        </aside>
+
+          <Card title="Branch & Officer">
+            <DlGrid
+              cols={1}
+              items={[
+                { label: "Branch", value: displayBranch(borrower) },
+                { label: "Loan Officer", value: displayOfficer(borrower) },
+                {
+                  label: "Customer No.",
+                  value: customerNumber || "—",
+                },
+              ]}
+            />
+          </Card>
+
+          <Card title="Quick Actions">
+            <div className="flex flex-col gap-2">
+              <Link
+                to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
+                  borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+                }`}
+                className="px-3 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-center hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 shadow-sm"
+              >
+                New Loan
+              </Link>
+              <a
+                href={tel(formatPhoneWithCC(borrower.phone || borrower.msisdn || borrower.mobile))}
+                className="px-3 py-2 rounded-lg border-2 border-slate-400 text-slate-900 font-semibold text-center hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                Call Borrower
+              </a>
+              <a
+                href={sms(formatPhoneWithCC(borrower.phone || borrower.msisdn || borrower.mobile))}
+                className="px-3 py-2 rounded-lg border-2 border-slate-400 text-slate-900 font-semibold text-center hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                Send SMS
+              </a>
+            </div>
+          </Card>
+        </div>
       </div>
 
       {/* Modals */}
-      {showScheduleModal && selectedLoan && (
+      {showScheduleModal && (
         <LoanScheduleModal
-          loan={selectedLoan}
-          schedule={selectedSchedule}
+          open={showScheduleModal}
           onClose={() => setShowScheduleModal(false)}
+          schedule={selectedSchedule}
+          loan={selectedLoan}
         />
       )}
 
       {showRepaymentModal && selectedLoanForRepayment && (
         <RepaymentModal
-          isOpen={showRepaymentModal}
+          open={showRepaymentModal}
           onClose={() => setShowRepaymentModal(false)}
           loan={selectedLoanForRepayment}
+          borrower={borrower}
           onSaved={handleRepaymentSaved}
         />
       )}
@@ -1622,25 +1965,20 @@ const BorrowerDetails = () => {
   );
 };
 
-/* ---------- Support UI pieces ---------- */
+/* -------- Small primitives used above -------- */
 const Empty = ({ text }) => (
-  <div className="p-6 text-sm rounded-2xl border-2 border-dashed border-slate-400 text-slate-900 bg-white">
+  <div className="p-6 rounded-xl border-2 border-slate-300 bg-slate-50 text-slate-700 text-sm">
     {text}
   </div>
 );
 
 const Table = ({ head = [], rows = [] }) => (
-  <div className="overflow-x-auto rounded-xl border-2 border-slate-400 bg-white">
-    <table className="min-w-full table-fixed text-[15px]">
-      <thead className="bg-slate-100 text-slate-900">
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm">
+      <thead>
         <tr className="text-left">
           {head.map((h, i) => (
-            <th
-              key={i}
-              className={`px-3 py-2 font-bold border border-slate-400 ${
-                i === head.length - 1 ? "text-right" : ""
-              }`}
-            >
+            <th key={i} className="px-3 py-2 border-b-2 border-slate-300 font-bold">
               {h}
             </th>
           ))}
@@ -1648,14 +1986,9 @@ const Table = ({ head = [], rows = [] }) => (
       </thead>
       <tbody>
         {rows.map((r, i) => (
-          <tr key={i} className={i % 2 ? "bg-slate-50" : "bg-white"}>
-            {r.map((c, j) => (
-              <td
-                key={j}
-                className={`px-3 py-2 align-top border border-slate-300 break-words ${
-                  j === head.length - 1 ? "text-right" : ""
-                }`}
-              >
+          <tr key={i} className="align-top">
+            {(Array.isArray(r) ? r : [r]).map((c, j) => (
+              <td key={j} className="px-3 py-2 border-b border-slate-200">
                 {c}
               </td>
             ))}
@@ -1666,83 +1999,32 @@ const Table = ({ head = [], rows = [] }) => (
   </div>
 );
 
-const BadgeCard = ({ label, value, tone = "emerald" }) => {
-  const toneMap = {
-    emerald: "bg-emerald-50 text-emerald-900 border-2 border-emerald-200",
-    amber: "bg-amber-50 text-amber-900 border-2 border-amber-200",
-    sky: "bg-sky-50 text-sky-900 border-2 border-sky-200",
-    rose: "bg-rose-50 text-rose-900 border-2 border-rose-200",
-  };
+const AddComment = ({ onSubmit }) => {
+  const [val, setVal] = useState("");
   return (
-    <div className={`p-3 rounded-xl text-sm ${toneMap[tone]} shadow-sm`}>
-      {label}: <strong>{value}</strong>
-    </div>
-  );
-};
-
-const ActivityTimeline = ({
-  loans,
-  repayments,
-  savings,
-  comments,
-  canAddRepayment,
-  onAddRepayment,
-}) => {
-  const items = [];
-  loans.forEach((l) =>
-    items.push({
-      type: "loan",
-      date: l.createdAt || l.disbursedAt || l.updatedAt || new Date().toISOString(),
-      text: `Loan ${l.id} • ${String(l.status || "").toUpperCase()} • Outstanding ${money(l.outstanding ?? 0)}`,
-    })
-  );
-  repayments.forEach((r) =>
-    items.push({
-      type: "repayment",
-      date: r.date || r.createdAt || new Date().toISOString(),
-      text: `Repayment • ${money(r.amountPaid ?? r.paidAmount ?? r.amount)} • Loan ${r.loanId || "—"}`,
-    })
-  );
-  savings.forEach((s) =>
-    items.push({
-      type: "savings",
-      date: s.date || s.createdAt || new Date().toISOString(),
-      text: `${s.type} • ${money(s.amount)}`,
-    })
-  );
-  comments.forEach((c) =>
-    items.push({
-      type: "comment",
-      date: c.createdAt || new Date().toISOString(),
-      text: `Note: ${c.content}`,
-    })
-  );
-  items.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="font-extrabold text-slate-900">📜 Activity Timeline</h4>
-        {canAddRepayment && (
-          <button
-            onClick={onAddRepayment}
-            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 shadow-sm"
-          >
-            Record Repayment
-          </button>
-        )}
-      </div>
-      <ul className="space-y-2 text-sm">
-        {items.map((item, i) => (
-          <li key={i} className="border-l-4 pl-3 border-slate-400 text-slate-900">
-            <span className="text-slate-700">
-              {item.date ? new Date(item.date).toLocaleDateString() : "—"}
-            </span>{" "}
-            – {item.text}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const v = val.trim();
+        if (!v) return;
+        onSubmit?.(v);
+        setVal("");
+      }}
+      className="flex gap-2"
+    >
+      <textarea
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        placeholder="Write a quick note..."
+        className="flex-1 min-h-[70px] rounded-lg border-2 border-slate-400 px-3 py-2"
+      />
+      <button
+        type="submit"
+        className="self-start px-3 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 shadow-sm"
+      >
+        Add
+      </button>
+    </form>
   );
 };
 
