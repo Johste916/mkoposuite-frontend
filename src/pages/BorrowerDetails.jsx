@@ -1,6 +1,6 @@
-// BorrowerDetails.jsx (auto-assign friendly: branch/officer are display-only)
+// BorrowerDetails.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { getUserRole } from "../utils/auth";
 import LoanScheduleModal from "../components/LoanScheduleModal";
 import RepaymentModal from "../components/RepaymentModal";
@@ -190,7 +190,6 @@ function isoDateOnly(v) {
   }
 }
 
-// Split a "Full Name" into first/last for APIs that require them
 function splitNameParts(full) {
   const s = String(full || "").trim();
   if (!s) return { firstName: "", lastName: "" };
@@ -204,20 +203,17 @@ const BorrowerDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const userRole = getUserRole();
+  const [searchParams] = useSearchParams();
+  const tenantIdParam = searchParams.get("tenantId") || undefined;
 
   const [borrower, setBorrower] = useState(null);
   const [loans, setLoans] = useState([]);
   const [repayments, setRepayments] = useState([]);
   const [comments, setComments] = useState([]);
 
-  // Inline edit state
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
-
-  // (removed) option lists used to edit branch/officer — now display-only
-  // const [branches, setBranches] = useState([]);
-  // const [officers, setOfficers] = useState([]);
 
   const [showRepaymentModal, setShowRepaymentModal] = useState(false);
   const [selectedLoanForRepayment, setSelectedLoanForRepayment] = useState(null);
@@ -255,18 +251,8 @@ const BorrowerDetails = () => {
     idIssuedDate: firstFilled(b?.idIssuedDate, b?.idIssueDate, b?.idDateIssued),
     idExpiryDate: firstFilled(b?.idExpiryDate, b?.idExpireDate, b?.idDateExpiry),
     nextKinName: firstFilled(b?.nextKinName, b?.nextOfKinName, b?.kinName, b?.emergencyContactName),
-    nextKinPhone: firstFilled(
-      b?.nextKinPhone,
-      b?.nextOfKinPhone,
-      b?.kinPhone,
-      b?.emergencyContactPhone
-    ),
-    nextOfKinRelationship: firstFilled(
-      b?.nextOfKinRelationship,
-      b?.kinRelationship,
-      b?.relationship
-    ),
-    // removed editable branch/officer
+    nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone),
+    nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship),
     status: b?.status ?? "active",
     maritalStatus: firstFilled(b?.maritalStatus, b?.marriageStatus),
     educationLevel: firstFilled(b?.educationLevel, b?.education, b?.educationStatus),
@@ -282,27 +268,40 @@ const BorrowerDetails = () => {
   const fetchBorrowerBundle = async () => {
     setErrors({ loans: null, savings: null });
     try {
-      const opt = withTenant(borrower?.tenantId);
-      const b = await tryGET([`/borrowers/${id}`], opt);
+      // Use tenant from URL for the VERY FIRST GET, then fall back to plain
+      const firstOpt = withTenant(tenantIdParam);
+      const firstQuery = tenantIdParam ? `?tenantId=${encodeURIComponent(tenantIdParam)}` : "";
+      let b = null;
+      try {
+        b = await tryGET([`/borrowers/${id}${firstQuery}`], firstOpt);
+      } catch {
+        b = await tryGET([`/borrowers/${id}`]); // fallback without tenant header/query
+      }
+
       setBorrower(b);
       setForm(mapBorrowerToForm(b));
 
-      const qTenant = b?.tenantId ? `&tenantId=${encodeURIComponent(b.tenantId)}` : "";
+      const effectiveTenantId = b?.tenantId || tenantIdParam || undefined;
+      const qTenant = effectiveTenantId ? `&tenantId=${encodeURIComponent(effectiveTenantId)}` : "";
+      const opt = withTenant(effectiveTenantId);
 
       const [loanData, repayData, commentData, savingsData] = await Promise.all([
-        tryGET([`/loans?borrowerId=${id}${qTenant}`, `/borrowers/${id}/loans`, `/loans/borrower/${id}`]).catch(
+        tryGET([`/loans?borrowerId=${id}${qTenant}`, `/borrowers/${id}/loans`, `/loans/borrower/${id}`], opt).catch(
           () => {
             setErrors((x) => ({ ...x, loans: "Couldn’t load loans." }));
             return [];
           }
         ),
-        tryGET([
-          `/repayments?borrowerId=${id}${qTenant}`,
-          `/borrowers/${id}/repayments`,
-          `/repayments/borrower/${id}`,
-        ]).catch(() => []),
-        tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`]).catch(() => []),
-        tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`]).catch(() => {
+        tryGET(
+          [
+            `/repayments?borrowerId=${id}${qTenant}`,
+            `/borrowers/${id}/repayments`,
+            `/repayments/borrower/${id}`,
+          ],
+          opt
+        ).catch(() => []),
+        tryGET([`/borrowers/${id}/comments`, `/comments/borrower/${id}`], opt).catch(() => []),
+        tryGET([`/borrowers/${id}/savings`, `/savings/borrower/${id}`], opt).catch(() => {
           setErrors((x) => ({ ...x, savings: "Couldn’t load savings." }));
           return {};
         }),
@@ -327,7 +326,7 @@ const BorrowerDetails = () => {
   useEffect(() => {
     fetchBorrowerBundle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, tenantIdParam]);
 
   useEffect(() => {
     const onUpdated = () => fetchBorrowerBundle();
@@ -338,7 +337,7 @@ const BorrowerDetails = () => {
       window.removeEventListener("borrower:updated", onUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, tenantIdParam]);
 
   useEffect(() => {
     if (filterType === "all") setFilteredSavings(savings);
@@ -365,7 +364,7 @@ const BorrowerDetails = () => {
       interest: safeNum(it.interest ?? it.interestAmount),
       amount: safeNum(it.amount ?? it.installmentAmount ?? it.total),
       balance: safeNum(
-        it.balance ?? it.remaining ?? safeNum(it.balancePrincipal) + safeNum(it.balanceInterest)
+        it.balance ?? it.remaining ?? (safeNum(it.balancePrincipal) + safeNum(it.balanceInterest))
       ),
       status: it.status ?? "",
       paid: safeNum(it.amountPaid ?? it.paid ?? 0),
@@ -374,7 +373,11 @@ const BorrowerDetails = () => {
 
   const handleViewSchedule = async (loanId) => {
     try {
-      const data = await tryGET([`/loans/${loanId}/schedule`, `/loan/${loanId}/schedule`]);
+      const opt = withTenant(borrower?.tenantId);
+      const data = await tryGET(
+        [`/loans/${loanId}/schedule`, `/loan/${loanId}/schedule`],
+        opt
+      );
       setSelectedSchedule(normalizeSchedule(Array.isArray(data) ? data : data?.items || []));
       const loan = loans.find((l) => String(l.id) === String(loanId)) || null;
       setSelectedLoan(loan);
@@ -386,12 +389,16 @@ const BorrowerDetails = () => {
 
   const handleRepaymentSaved = async () => {
     try {
-      const repay = await tryGET([
-        `/repayments?borrowerId=${id}${
-          borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
-        }`,
-        `/borrowers/${id}/repayments`,
-      ]);
+      const opt = withTenant(borrower?.tenantId);
+      const repay = await tryGET(
+        [
+          `/repayments?borrowerId=${id}${
+            borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
+          }`,
+          `/borrowers/${id}/repayments`,
+        ],
+        opt
+      );
       setRepayments(Array.isArray(repay) ? repay : repay?.items || []);
     } catch {}
     await fetchBorrowerBundle();
@@ -401,46 +408,28 @@ const BorrowerDetails = () => {
     window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
   };
 
-  // Inline edit handlers
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const buildUpdatePayload = (f) => {
     const { firstName, lastName } = splitNameParts(f.name);
     return {
-      // core identity
       name: f.name || `${firstName} ${lastName}`.trim(),
       firstName: firstName || null,
       lastName: lastName || null,
-
-      // phones (cover both keys some APIs use)
       phone: f.phone || null,
       msisdn: f.phone || null,
-
       email: f.email || null,
-
-      // address (cover both variants)
       addressLine: f.addressLine || null,
       address: f.addressLine || null,
-
       status: f.status,
-
-      // ID document – send both key names for compatibility
       nationalId: f.nationalId || f.idNumber || null,
       idNumber: f.idNumber || f.nationalId || null,
       idType: f.idType || null,
       idIssuedDate: f.idIssuedDate || null,
       idExpiryDate: f.idExpiryDate || null,
-
-      // ⛔ assignment fields removed from generic update
-      // branchId: (no generic editing here)
-      // officerId / loanOfficerId: (no generic editing here)
-
-      // next of kin
       nextKinName: f.nextKinName || null,
       nextKinPhone: f.nextKinPhone || null,
       nextOfKinRelationship: f.nextOfKinRelationship || null,
-
-      // misc profile
       employmentStatus: f.employmentStatus || null,
       occupation: f.occupation || null,
       birthDate: f.birthDate || null,
@@ -450,12 +439,8 @@ const BorrowerDetails = () => {
       customerNumber: f.customerNumber || null,
       tin: f.tin || null,
       nationality: f.nationality || null,
-
-      // grouping
       groupId: f.groupId || null,
       loanType: f.loanType || null,
-
-      // dates
       regDate: f.regDate || null,
     };
   };
@@ -466,10 +451,8 @@ const BorrowerDetails = () => {
     try {
       const payload = buildUpdatePayload(form);
       await api.patch(`/borrowers/${form.id}`, payload, withTenant(borrower?.tenantId));
-
       await fetchBorrowerBundle();
       setIsEditing(false);
-
       window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id: form.id } }));
       alert("Borrower updated.");
     } catch (e) {
@@ -480,14 +463,8 @@ const BorrowerDetails = () => {
     }
   };
 
-  // Admin actions
   const handleDisable = async () => {
-    if (
-      !window.confirm(
-        "Disable this borrower? They will not be able to apply or receive disbursements."
-      )
-    )
-      return;
+    if (!window.confirm("Disable this borrower? They will not be able to apply or receive disbursements.")) return;
     try {
       await api.post(`/borrowers/${id}/disable`, {}, withTenant(borrower?.tenantId));
       setBorrower((b) => ({ ...b, status: "disabled" }));
@@ -511,11 +488,7 @@ const BorrowerDetails = () => {
       window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
     } catch {
       try {
-        await api.patch(
-          `/borrowers/${id}`,
-          { status: "blacklisted" },
-          withTenant(borrower?.tenantId)
-        );
+        await api.patch(`/borrowers/${id}`, { status: "blacklisted" }, withTenant(borrower?.tenantId));
         setBorrower((b) => ({ ...b, status: "blacklisted" }));
         window.dispatchEvent(new CustomEvent("borrower:updated", { detail: { id } }));
       } catch {
@@ -525,12 +498,7 @@ const BorrowerDetails = () => {
   };
 
   const handleDelete = async () => {
-    if (
-      !window.confirm(
-        "Permanently delete this borrower and their client profile? This cannot be undone."
-      )
-    )
-      return;
+    if (!window.confirm("Permanently delete this borrower and their client profile? This cannot be undone.")) return;
     try {
       await api.delete(`/borrowers/${id}`, withTenant(borrower?.tenantId));
       navigate("/borrowers");
@@ -540,7 +508,6 @@ const BorrowerDetails = () => {
     }
   };
 
-  // Enrich loans from repayments (derived metrics)
   const loansEnriched = useMemo(() => {
     const byLoan = new Map();
     repayments.forEach((r) => {
@@ -554,15 +521,16 @@ const BorrowerDetails = () => {
 
     return (loans || []).map((l) => {
       const rows = byLoan.get(l.id) || [];
-      const paidTotal = rows.reduce(
-        (s, r) => s + safeNum(r.amountPaid ?? r.paidAmount ?? r.amount ?? 0),
-        0
-      );
+      const paidTotal = rows.reduce((s, r) => s + safeNum(r.amountPaid ?? r.paidAmount ?? r.amount ?? 0), 0);
 
-      const rawOutstanding = l.outstanding ?? l.outstandingTotal ?? l.outstandingAmount ?? null;
+      const rawOutstanding =
+        l.outstanding ??
+        l.outstandingTotal ??
+        l.outstandingAmount ??
+        null;
 
-      const outstanding =
-        rawOutstanding != null ? safeNum(rawOutstanding) : Math.max(0, safeNum(l.amount) - paidTotal);
+      const outstanding = rawOutstanding != null ? safeNum(rawOutstanding)
+        : Math.max(0, safeNum(l.amount) - paidTotal);
 
       const future = rows
         .filter((r) => r.dueDate && new Date(r.dueDate) >= today)
@@ -571,15 +539,13 @@ const BorrowerDetails = () => {
       const nextDueDate = next?.dueDate || l.nextDueDate || l.nextInstallmentDate || null;
       const nextDueAmount = next
         ? safeNum((next.amount ?? 0) - (next.amountPaid ?? 0))
-        : l.nextDueAmount ?? l.nextInstallmentAmount ?? null;
+        : (l.nextDueAmount ?? l.nextInstallmentAmount ?? null);
 
       const missedInstallments = rows.filter((r) => {
         const due = r.dueDate ? new Date(r.dueDate) : null;
         const status = String(r.status || "").toLowerCase();
         const paid = safeNum(r.amountPaid ?? r.paidAmount) >= safeNum(r.amount);
-        return (
-          due && due < today && !paid && (status === "overdue" || status === "due" || status === "")
-        );
+        return due && due < today && !paid && (status === "overdue" || status === "due" || status === "");
       }).length;
 
       const lastPaymentDate = rows
@@ -587,15 +553,7 @@ const BorrowerDetails = () => {
         .map((r) => r.date || r.createdAt)
         .sort((a, b) => new Date(b) - new Date(a))[0];
 
-      return {
-        ...l,
-        paidTotal,
-        outstanding,
-        nextDueDate,
-        nextDueAmount,
-        missedInstallments,
-        lastPaymentDate,
-      };
+      return { ...l, paidTotal, outstanding, nextDueDate, nextDueAmount, missedInstallments, lastPaymentDate };
     });
   }, [loans, repayments]);
 
@@ -622,80 +580,38 @@ const BorrowerDetails = () => {
   const wa = (p) => (p ? `https://wa.me/${String(p).replace(/[^\d]/g, "")}` : undefined);
   const mail = (e) => (e ? `mailto:${e}` : undefined);
 
-  // Savings aggregates
   const deposits = savings.reduce((s, t) => (t.type === "deposit" ? s + safeNum(t.amount) : s), 0);
-  const withdrawals = savings.reduce(
-    (s, t) => (t.type === "withdrawal" ? s + safeNum(t.amount) : s),
-    0
-  );
+  const withdrawals = savings.reduce((s, t) => (t.type === "withdrawal" ? s + safeNum(t.amount) : s), 0);
   const charges = savings.reduce((s, t) => (t.type === "charge" ? s + safeNum(t.amount) : s), 0);
   const interest = savings.reduce((s, t) => (t.type === "interest" ? s + safeNum(t.amount) : s), 0);
 
   const addr = firstFilled(
     borrower.addressLine,
-    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city]
-      .filter(Boolean)
-      .join(", "),
+    [borrower.street, borrower.houseNumber, borrower.ward, borrower.district, borrower.city].filter(Boolean).join(", "),
     [borrower.address, borrower.town, borrower.region, borrower.country].filter(Boolean).join(", "),
     borrower.location
   );
 
   const businessName = firstFilled(borrower.businessName, borrower.tradeName, borrower.shopName);
-  const occupation = firstFilled(
-    borrower.occupation,
-    borrower.businessType,
-    borrower.jobTitle,
-    borrower.sector
-  );
-  const employmentStatus = firstFilled(
-    borrower.employmentStatus,
-    borrower.employment,
-    borrower.employmentType
-  );
+  const occupation = firstFilled(borrower.occupation, borrower.businessType, borrower.jobTitle, borrower.sector);
+  const employmentStatus = firstFilled(borrower.employmentStatus, borrower.employment, borrower.employmentType);
   const nationalId = firstFilled(borrower.nationalId, borrower.nid, borrower.idNumber);
   const idType = firstFilled(borrower.idType, borrower.identificationType);
   const idIssued = firstFilled(borrower.idIssuedDate, borrower.idIssueDate, borrower.idDateIssued);
   const idExpiry = firstFilled(borrower.idExpiryDate, borrower.idExpireDate, borrower.idDateExpiry);
   const maritalStatus = firstFilled(borrower.maritalStatus, borrower.marriageStatus);
-  const educationLevel = firstFilled(
-    borrower.educationLevel,
-    borrower.education,
-    borrower.educationStatus
-  );
-  const customerNumber = firstFilled(
-    borrower.customerNumber,
-    borrower.accountNumber,
-    borrower.clientNumber
-  );
+  const educationLevel = firstFilled(borrower.educationLevel, borrower.education, borrower.educationStatus);
+  const customerNumber = firstFilled(borrower.customerNumber, borrower.accountNumber, borrower.clientNumber);
   const tin = firstFilled(borrower.tin, borrower.TIN, borrower.taxId);
   const nationality = firstFilled(borrower.nationality, borrower.country);
   const dob = firstFilled(borrower.birthDate, borrower.dateOfBirth, borrower.dob);
 
-  const nextKinName = firstFilled(
-    borrower.nextKinName,
-    borrower.nextOfKinName,
-    borrower.kinName,
-    borrower.emergencyContactName
-  );
-  const nextKinPhone = firstFilled(
-    borrower.nextKinPhone,
-    borrower.nextOfKinPhone,
-    borrower.kinPhone,
-    borrower.emergencyContactPhone
-  );
-  const nextKinRel = firstFilled(
-    borrower.nextOfKinRelationship,
-    borrower.kinRelationship,
-    borrower.relationship
-  );
+  const nextKinName = firstFilled(borrower.nextKinName, borrower.nextOfKinName, borrower.kinName, borrower.emergencyContactName);
+  const nextKinPhone = firstFilled(borrower.nextKinPhone, borrower.nextOfKinPhone, borrower.kinPhone, borrower.emergencyContactPhone);
+  const nextKinRel = firstFilled(borrower.nextOfKinRelationship, borrower.kinRelationship, borrower.relationship);
 
-  const registrationDate = firstFilled(
-    borrower.regDate,
-    borrower.registrationDate,
-    borrower.createdAt
-  );
+  const registrationDate = firstFilled(borrower.regDate, borrower.registrationDate, borrower.createdAt);
 
-  // options for static selects
   const GENDER_OPTS = [
     { v: "", t: "—" },
     { v: "male", t: "Male" },
@@ -749,7 +665,7 @@ const BorrowerDetails = () => {
               <button
                 onClick={() => {
                   setIsEditing(false);
-                  setForm(mapBorrowerToForm(borrower)); // reset
+                  setForm(mapBorrowerToForm(borrower));
                 }}
                 className="text-slate-900 border-2 border-slate-400 hover:bg-slate-50 px-3 py-1.5 rounded-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
@@ -796,14 +712,9 @@ const BorrowerDetails = () => {
           {/* Profile */}
           <Card>
             <div className="flex gap-5">
-              {/* Avatar */}
               <div className="relative shrink-0">
                 {borrower.photoUrl ? (
-                  <img
-                    src={borrower.photoUrl}
-                    alt={bName}
-                    className="w-24 h-24 rounded-2xl object-cover border-2 border-slate-400"
-                  />
+                  <img src={borrower.photoUrl} alt={bName} className="w-24 h-24 rounded-2xl object-cover border-2 border-slate-400" />
                 ) : (
                   <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center text-2xl font-extrabold">
                     {initials(bName)}
@@ -814,7 +725,6 @@ const BorrowerDetails = () => {
                 </span>
               </div>
 
-              {/* Name + quick contact */}
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   {isEditing ? (
@@ -828,9 +738,7 @@ const BorrowerDetails = () => {
                     <h1 className="text-3xl font-extrabold tracking-tight truncate">{bName}</h1>
                   )}
                   <span className="text-xs text-slate-700">ID: {borrower.id}</span>
-                  <span className="text-xs text-slate-700">
-                    Tenant: {borrower.tenantId || "—"}
-                  </span>
+                  <span className="text-xs text-slate-700">Tenant: {borrower.tenantId || "—"}</span>
                 </div>
 
                 <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -854,54 +762,11 @@ const BorrowerDetails = () => {
                             )
                           ) || "—"}
                         </span>
-                        {firstFilled(
-                          borrower.phone,
-                          borrower.msisdn,
-                          borrower.mobile,
-                          borrower.primaryPhone
-                        ) && (
+                        {firstFilled(borrower.phone, borrower.msisdn, borrower.mobile, borrower.primaryPhone) && (
                           <>
-                            <a
-                              className={strongLink}
-                              href={tel(
-                                formatPhoneWithCC(
-                                  borrower.phone ||
-                                    borrower.msisdn ||
-                                    borrower.mobile ||
-                                    borrower.primaryPhone
-                                )
-                              )}
-                            >
-                              Call
-                            </a>
-                            <a
-                              className={strongLink}
-                              href={sms(
-                                formatPhoneWithCC(
-                                  borrower.phone ||
-                                    borrower.msisdn ||
-                                    borrower.mobile ||
-                                    borrower.primaryPhone
-                                )
-                              )}
-                            >
-                              SMS
-                            </a>
-                            <a
-                              className={strongLink}
-                              href={wa(
-                                formatPhoneWithCC(
-                                  borrower.phone ||
-                                    borrower.msisdn ||
-                                    borrower.mobile ||
-                                    borrower.primaryPhone
-                                )
-                              )}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              WhatsApp
-                            </a>
+                            <a className={strongLink} href={tel(formatPhoneWithCC(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone))}>Call</a>
+                            <a className={strongLink} href={sms(formatPhoneWithCC(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone))}>SMS</a>
+                            <a className={strongLink} href={wa(formatPhoneWithCC(borrower.phone || borrower.msisdn || borrower.mobile || borrower.primaryPhone))} target="_blank" rel="noreferrer">WhatsApp</a>
                           </>
                         )}
                       </div>
@@ -920,9 +785,7 @@ const BorrowerDetails = () => {
                       <div className="flex items-center gap-2">
                         <span>{firstFilled(borrower.email, borrower.mail) || "—"}</span>
                         {firstFilled(borrower.email, borrower.mail) && (
-                          <a className={strongLink} href={mail(borrower.email || borrower.mail)}>
-                            Email
-                          </a>
+                          <a className={strongLink} href={mail(borrower.email || borrower.mail)}>Email</a>
                         )}
                       </div>
                     )}
@@ -944,10 +807,8 @@ const BorrowerDetails = () => {
               </div>
             </div>
 
-            {/* Divider */}
             <hr className="my-4 border-2 border-slate-300" />
 
-            {/* Identity mirrors Add Borrower */}
             <div className="grid gap-5">
               <DlGrid
                 cols={3}
@@ -960,15 +821,9 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("gender", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       >
-                        {GENDER_OPTS.map((o) => (
-                          <option key={o.v} value={o.v}>
-                            {o.t}
-                          </option>
-                        ))}
+                        {GENDER_OPTS.map((o) => (<option key={o.v} value={o.v}>{o.t}</option>))}
                       </select>
-                    ) : (
-                      firstFilled(borrower.gender, borrower.sex)
-                    ),
+                    ) : (firstFilled(borrower.gender, borrower.sex)),
                   },
                   {
                     label: "Birth Date",
@@ -979,9 +834,7 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("birthDate", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
-                    ) : (
-                      dmy(dob)
-                    ),
+                    ) : (dmy(dob)),
                   },
                   {
                     label: "Business / Occupation",
@@ -991,9 +844,7 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("occupation", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
-                    ) : (
-                      firstFilled(occupation, businessName)
-                    ),
+                    ) : (firstFilled(occupation, businessName)),
                   },
                   {
                     label: "Employment Status",
@@ -1003,15 +854,9 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("employmentStatus", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       >
-                        {EMPLOYMENT_OPTS.map((o) => (
-                          <option key={o.v} value={o.v}>
-                            {o.t}
-                          </option>
-                        ))}
+                        {EMPLOYMENT_OPTS.map((o) => (<option key={o.v} value={o.v}>{o.t}</option>))}
                       </select>
-                    ) : (
-                      employmentStatus
-                    ),
+                    ) : (employmentStatus),
                   },
                   {
                     label: "Customer No.",
@@ -1021,9 +866,7 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("customerNumber", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
-                    ) : (
-                      customerNumber
-                    ),
+                    ) : (customerNumber),
                   },
                   {
                     label: "Nationality",
@@ -1033,9 +876,7 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("nationality", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
-                    ) : (
-                      nationality
-                    ),
+                    ) : (nationality),
                   },
                   {
                     label: "Marital Status",
@@ -1045,9 +886,7 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("maritalStatus", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
-                    ) : (
-                      maritalStatus
-                    ),
+                    ) : (maritalStatus),
                   },
                   {
                     label: "Education Level",
@@ -1057,9 +896,7 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("educationLevel", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       />
-                    ) : (
-                      educationLevel
-                    ),
+                    ) : (educationLevel),
                   },
                   {
                     label: "Status",
@@ -1069,15 +906,9 @@ const BorrowerDetails = () => {
                         onChange={(e) => onChange("status", e.target.value)}
                         className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                       >
-                        {STATUS_OPTS.map((o) => (
-                          <option key={o.v} value={o.v}>
-                            {o.t}
-                          </option>
-                        ))}
+                        {STATUS_OPTS.map((o) => (<option key={o.v} value={o.v}>{o.t}</option>))}
                       </select>
-                    ) : (
-                      <span className={chip(borrower.status)}>{borrower.status || "—"}</span>
-                    ),
+                    ) : (<span className={chip(borrower.status)}>{borrower.status || "—"}</span>),
                   },
                 ]}
               />
@@ -1095,15 +926,9 @@ const BorrowerDetails = () => {
                             onChange={(e) => onChange("idType", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           >
-                            {IDTYPE_OPTS.map((o) => (
-                              <option key={o.v} value={o.v}>
-                                {o.t}
-                              </option>
-                            ))}
+                            {IDTYPE_OPTS.map((o) => (<option key={o.v} value={o.v}>{o.t}</option>))}
                           </select>
-                        ) : (
-                          idType
-                        ),
+                        ) : (idType),
                       },
                       {
                         label: "ID Number",
@@ -1113,9 +938,7 @@ const BorrowerDetails = () => {
                             onChange={(e) => onChange("nationalId", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : (
-                          nationalId || borrower.idNumber
-                        ),
+                        ) : (nationalId || borrower.idNumber),
                       },
                       {
                         label: "Issued On",
@@ -1126,9 +949,7 @@ const BorrowerDetails = () => {
                             onChange={(e) => onChange("idIssuedDate", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : (
-                          dmy(idIssued)
-                        ),
+                        ) : (dmy(idIssued)),
                       },
                       {
                         label: "Expiry Date",
@@ -1139,9 +960,7 @@ const BorrowerDetails = () => {
                             onChange={(e) => onChange("idExpiryDate", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : (
-                          dmy(idExpiry)
-                        ),
+                        ) : (dmy(idExpiry)),
                       },
                       {
                         label: "TIN",
@@ -1151,9 +970,7 @@ const BorrowerDetails = () => {
                             onChange={(e) => onChange("tin", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : (
-                          tin
-                        ),
+                        ) : (tin),
                       },
                     ]}
                   />
@@ -1163,16 +980,8 @@ const BorrowerDetails = () => {
                   <DlGrid
                     cols={2}
                     items={[
-                      {
-                        label: "Branch",
-                        // 🔒 display-only (auto-assigned in backend)
-                        value: displayBranch(borrower),
-                      },
-                      {
-                        label: "Loan Officer",
-                        // 🔒 display-only (auto-assigned in backend)
-                        value: displayOfficer(borrower),
-                      },
+                      { label: "Branch", value: displayBranch(borrower) }, // display-only
+                      { label: "Loan Officer", value: displayOfficer(borrower) }, // display-only
                       {
                         label: "Loan Type",
                         value: isEditing ? (
@@ -1181,9 +990,7 @@ const BorrowerDetails = () => {
                             onChange={(e) => onChange("loanType", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : (
-                          firstFilled(borrower.loanType, borrower.productType, "individual")
-                        ),
+                        ) : (firstFilled(borrower.loanType, borrower.productType, "individual")),
                       },
                       {
                         label: "Group ID",
@@ -1193,9 +1000,7 @@ const BorrowerDetails = () => {
                             onChange={(e) => onChange("groupId", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : (
-                          firstFilled(borrower.groupId, borrower.group, borrower.groupCode)
-                        ),
+                        ) : (firstFilled(borrower.groupId, borrower.group, borrower.groupCode)),
                       },
                       {
                         label: "Registration Date",
@@ -1206,9 +1011,7 @@ const BorrowerDetails = () => {
                             onChange={(e) => onChange("regDate", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                           />
-                        ) : (
-                          dmy(registrationDate)
-                        ),
+                        ) : (dmy(registrationDate)),
                       },
                     ]}
                   />
@@ -1227,9 +1030,7 @@ const BorrowerDetails = () => {
                           onChange={(e) => onChange("nextKinName", e.target.value)}
                           className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                         />
-                      ) : (
-                        nextKinName
-                      ),
+                      ) : (nextKinName),
                     },
                     {
                       label: "Phone",
@@ -1239,9 +1040,7 @@ const BorrowerDetails = () => {
                           onChange={(e) => onChange("nextKinPhone", e.target.value)}
                           className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                         />
-                      ) : (
-                        formatPhoneWithCC(nextKinPhone)
-                      ),
+                      ) : (formatPhoneWithCC(nextKinPhone)),
                     },
                     {
                       label: "Relationship",
@@ -1251,9 +1050,7 @@ const BorrowerDetails = () => {
                           onChange={(e) => onChange("nextOfKinRelationship", e.target.value)}
                           className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
                         />
-                      ) : (
-                        nextKinRel
-                      ),
+                      ) : (nextKinRel),
                     },
                   ]}
                 />
@@ -1266,24 +1063,15 @@ const BorrowerDetails = () => {
             {[
               {
                 k: "PAR %",
-                v: Number.isFinite(Number(borrower.parPercent))
-                  ? `${Number(borrower.parPercent).toFixed(2)}%`
-                  : "0%",
+                v: Number.isFinite(Number(borrower.parPercent)) ? `${Number(borrower.parPercent).toFixed(2)}%` : "0%",
               },
-              {
-                k: "Overdue Amount",
-                v: money(firstFilled(borrower.overdueAmount, borrower.pastDueAmount, 0)),
-              },
+              { k: "Overdue Amount", v: money(firstFilled(borrower.overdueAmount, borrower.pastDueAmount, 0)) },
               { k: "Missed Repayments", v: missedRepayments },
               { k: "Net Savings", v: money(firstFilled(borrower.netSavings, borrower.savingsNet, 0)) },
             ].map((c, i) => (
               <div key={i} className="rounded-2xl p-4 border-2 bg-white border-slate-400 shadow-sm">
-                <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-900">
-                  {c.k}
-                </div>
-                <div className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">
-                  {c.v}
-                </div>
+                <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-900">{c.k}</div>
+                <div className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{c.v}</div>
               </div>
             ))}
           </div>
@@ -1303,24 +1091,17 @@ const BorrowerDetails = () => {
             />
 
             <div className="p-4 md:p-5">
-              {/* Loans */}
               {activeTab === "loans" && (
                 <>
-                  {errors.loans && (
-                    <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.loans}</div>
-                  )}
+                  {errors.loans && <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.loans}</div>}
                   {loansEnriched.length === 0 ? (
                     <Empty
                       text={
                         <>
                           No loans for this borrower.
                           <Link
-                            to={`/loans/applications?borrowerId=${encodeURIComponent(
-                              borrower.id
-                            )}${
-                              borrower?.tenantId
-                                ? `&tenantId=${encodeURIComponent(borrower.tenantId)}`
-                                : ""
+                            to={`/loans/applications?borrowerId=${encodeURIComponent(borrower.id)}${
+                              borrower?.tenantId ? `&tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                             }`}
                             className={`ml-1 ${strongLink}`}
                           >
@@ -1331,21 +1112,11 @@ const BorrowerDetails = () => {
                     />
                   ) : (
                     <Table
-                      head={[
-                        "Loan",
-                        "Reference",
-                        "Status",
-                        "Amount",
-                        "Outstanding",
-                        "Next Due",
-                        "Actions",
-                      ]}
+                      head={["Loan", "Reference", "Status", "Amount", "Outstanding", "Next Due", "Actions"]}
                       rows={loansEnriched.map((l) => [
                         <Link
                           to={`/loans/${encodeURIComponent(l.id)}${
-                            borrower?.tenantId
-                              ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
-                              : ""
+                            borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                           }`}
                           className={strongLink}
                         >
@@ -1354,15 +1125,11 @@ const BorrowerDetails = () => {
                         l.reference || `L-${l.id}`,
                         <span className={chip(l.status)}>{String(l.status || "—")}</span>,
                         <div className="text-right tabular-nums">{money(l.amount)}</div>,
-                        <div className="text-right tabular-nums">
-                          {l.outstanding == null ? "—" : money(l.outstanding)}
-                        </div>,
+                        <div className="text-right tabular-nums">{l.outstanding == null ? "—" : money(l.outstanding)}</div>,
                         l.nextDueDate ? (
                           <div className="text-right">
                             {new Date(l.nextDueDate).toLocaleDateString()}
-                            {l.nextDueAmount ? (
-                              <span className="ml-1 font-bold">{money(l.nextDueAmount)}</span>
-                            ) : null}
+                            {l.nextDueAmount ? <span className="ml-1 font-bold">{money(l.nextDueAmount)}</span> : null}
                           </div>
                         ) : (
                           "—"
@@ -1392,7 +1159,6 @@ const BorrowerDetails = () => {
                 </>
               )}
 
-              {/* Repayments */}
               {activeTab === "repayments" && (
                 <>
                   {repayments.length === 0 ? (
@@ -1414,9 +1180,7 @@ const BorrowerDetails = () => {
                           r.loanId ? (
                             <Link
                               to={`/loans/${encodeURIComponent(r.loanId)}${
-                                borrower?.tenantId
-                                  ? `?tenantId=${encodeURIComponent(borrower.tenantId)}`
-                                  : ""
+                                borrower?.tenantId ? `?tenantId=${encodeURIComponent(borrower.tenantId)}` : ""
                               }`}
                               className={strongLink}
                             >
@@ -1432,12 +1196,9 @@ const BorrowerDetails = () => {
                 </>
               )}
 
-              {/* Savings */}
               {activeTab === "savings" && (
                 <>
-                  {errors.savings && (
-                    <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.savings}</div>
-                  )}
+                  {errors.savings && <div className="mb-3 text-sm text-rose-700 font-semibold">{errors.savings}</div>}
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-3 text-sm">
                     <BadgeCard label="Deposits" value={money(deposits)} tone="emerald" />
@@ -1464,9 +1225,7 @@ const BorrowerDetails = () => {
                       </label>
                     </div>
                     <Link
-                      to={`/savings${tenantQuery}${
-                        tenantQuery ? "&" : "?"
-                      }borrowerId=${encodeURIComponent(borrower.id)}`}
+                      to={`/savings${tenantQuery}${tenantQuery ? "&" : "?"}borrowerId=${encodeURIComponent(borrower.id)}`}
                       className={`${strongLink} text-sm`}
                     >
                       View savings accounts
@@ -1489,7 +1248,6 @@ const BorrowerDetails = () => {
                 </>
               )}
 
-              {/* Documents */}
               {activeTab === "documents" && (
                 <div className="text-sm">
                   <Link
@@ -1501,7 +1259,6 @@ const BorrowerDetails = () => {
                 </div>
               )}
 
-              {/* Activity */}
               {activeTab === "activity" && (
                 <ActivityTimeline
                   loans={loansEnriched}
@@ -1510,8 +1267,7 @@ const BorrowerDetails = () => {
                   comments={comments}
                   canAddRepayment={String(userRole || "").toLowerCase() === "admin"}
                   onAddRepayment={() => {
-                    const active =
-                      loansEnriched.find((l) => l.status === "active") || loansEnriched[0];
+                    const active = loansEnriched.find((l) => l.status === "active") || loansEnriched[0];
                     if (active) {
                       setSelectedLoanForRepayment(active);
                       setShowRepaymentModal(true);
@@ -1542,10 +1298,7 @@ const BorrowerDetails = () => {
               <>
                 <ul className="space-y-2">
                   {visibleComments.map((c, i) => (
-                    <li
-                      key={`${i}-${c.createdAt}`}
-                      className="p-2 text-xs rounded-lg border-2 border-slate-400 bg-white"
-                    >
+                    <li key={`${i}-${c.createdAt}`} className="p-2 text-xs rounded-lg border-2 border-slate-400 bg-white">
                       <div className="text-slate-900 break-words">{c.content}</div>
                       <div className="text-[10px] text-slate-700 mt-1">
                         {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
@@ -1603,9 +1356,7 @@ const Table = ({ head = [], rows = [] }) => (
           {head.map((h, i) => (
             <th
               key={i}
-              className={`px-3 py-2 font-bold border border-slate-400 ${
-                i === head.length - 1 ? "text-right" : ""
-              }`}
+              className={`px-3 py-2 font-bold border border-slate-400 ${i === head.length - 1 ? "text-right" : ""}`}
             >
               {h}
             </th>
@@ -1618,9 +1369,7 @@ const Table = ({ head = [], rows = [] }) => (
             {r.map((c, j) => (
               <td
                 key={j}
-                className={`px-3 py-2 align-top border border-slate-300 break-words ${
-                  j === head.length - 1 ? "text-right" : ""
-                }`}
+                className={`px-3 py-2 align-top border border-slate-300 break-words ${j === head.length - 1 ? "text-right" : ""}`}
               >
                 {c}
               </td>
@@ -1646,31 +1395,20 @@ const BadgeCard = ({ label, value, tone = "emerald" }) => {
   );
 };
 
-const ActivityTimeline = ({
-  loans,
-  repayments,
-  savings,
-  comments,
-  canAddRepayment,
-  onAddRepayment,
-}) => {
+const ActivityTimeline = ({ loans, repayments, savings, comments, canAddRepayment, onAddRepayment }) => {
   const items = [];
   loans.forEach((l) =>
     items.push({
       type: "loan",
       date: l.createdAt || l.disbursedAt || l.updatedAt || new Date().toISOString(),
-      text: `Loan ${l.id} • ${String(l.status || "").toUpperCase()} • Outstanding ${money(
-        l.outstanding ?? 0
-      )}`,
+      text: `Loan ${l.id} • ${String(l.status || "").toUpperCase()} • Outstanding ${money(l.outstanding ?? 0)}`,
     })
   );
   repayments.forEach((r) =>
     items.push({
       type: "repayment",
       date: r.date || r.createdAt || new Date().toISOString(),
-      text: `Repayment • ${money(r.amountPaid ?? r.paidAmount ?? r.amount)} • Loan ${
-        r.loanId || "—"
-      }`,
+      text: `Repayment • ${money(r.amountPaid ?? r.paidAmount ?? r.amount)} • Loan ${r.loanId || "—"}`,
     })
   );
   savings.forEach((s) =>
@@ -1705,9 +1443,7 @@ const ActivityTimeline = ({
       <ul className="space-y-2 text-sm">
         {items.map((item, i) => (
           <li key={i} className="border-l-4 pl-3 border-slate-400 text-slate-900">
-            <span className="text-slate-700">
-              {item.date ? new Date(item.date).toLocaleDateString() : "—"}
-            </span>{" "}
+            <span className="text-slate-700">{item.date ? new Date(item.date).toLocaleDateString() : "—"}</span>{" "}
             – {item.text}
           </li>
         ))}

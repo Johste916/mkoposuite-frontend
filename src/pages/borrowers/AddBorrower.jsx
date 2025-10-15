@@ -107,8 +107,6 @@ export default function AddBorrower() {
     regDate: today(),
   });
 
-  // no branches/officers fetch needed
-
   const onPickFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -128,7 +126,6 @@ export default function AddBorrower() {
       return alert("First & last name are required"), false;
     if (!form.phone.trim()) return alert("Primary phone is required"), false;
     if (!form.gender) return alert("Gender is required"), false;
-    // ⛔ removed: branchId required
     return true;
   };
 
@@ -149,22 +146,13 @@ export default function AddBorrower() {
         occupation: form.occupation,
         gender: form.gender,
         birthDate: form.birthDate || null,
-        addressLine: [
-          form.addressLine,
-          form.street,
-          form.houseNumber,
-          form.ward,
-          form.district,
-          form.city,
-        ]
-          .filter(Boolean)
-          .join(", "),
+        addressLine: [form.addressLine, form.street, form.houseNumber, form.ward, form.district, form.city]
+          .filter(Boolean).join(", "),
         employmentStatus: form.employmentStatus,
         idType: form.idType,
         idNumber: form.idNumber,
         idIssuedDate: form.idIssuedDate || null,
         idExpiryDate: form.idExpiryDate || null,
-        // ⛔ omit loanOfficerId, branchId so server auto-assigns
         loanType: form.loanType,
         groupId: form.loanType === "group" ? form.groupId || null : null,
         nextKinName: form.nextKinName,
@@ -174,16 +162,21 @@ export default function AddBorrower() {
       Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ""));
       if (photoFile) fd.append("photo", photoFile);
 
-      const res = await api.post("/borrowers", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // Let Axios set the multipart boundary automatically
+      const res = await api.post("/borrowers", fd);
 
       alert("Borrower saved successfully");
-      // go to details
-      const id = res.data?.id || "";
-      const tenantId = res.data?.tenantId;
-      const suffix = tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : "";
-      navigate(`/borrowers/${id}${suffix}`);
+
+      // handle both plain and nested payloads
+      const newBorrower = res?.data?.borrower || res?.data || {};
+      const id = newBorrower?.id;
+      const tenantId = newBorrower?.tenantId;
+      if (id) {
+        const suffix = tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : "";
+        navigate(`/borrowers/${encodeURIComponent(id)}${suffix}`);
+      } else {
+        navigate("/borrowers");
+      }
     } catch (e) {
       console.error(e);
       alert("Failed to save borrower");
@@ -199,13 +192,10 @@ export default function AddBorrower() {
         <div className="min-w-0">
           <h1 className="text-3xl font-extrabold tracking-tight">Add Borrower</h1>
           <p className={`text-sm ${ui.muted}`}>
-            Fill out KYC. <strong>Branch &amp; Loan Officer will be auto-assigned</strong> from
-            your current branch and available officers.
+            Fill out KYC. <strong>Branch &amp; Loan Officer will be auto-assigned</strong> from your current branch and available officers.
           </p>
         </div>
-        <Link to="/borrowers" className={ui.link}>
-          ← Back to Borrowers
-        </Link>
+        <Link to="/borrowers" className={ui.link}>← Back to Borrowers</Link>
       </div>
 
       {/* Form */}
@@ -221,27 +211,14 @@ export default function AddBorrower() {
             <div className="flex items-center gap-4">
               <div className="w-28 h-28 rounded-2xl overflow-hidden border-2 border-[var(--border-strong)] bg-[var(--card)] flex items-center justify-center">
                 {photoPreview ? (
-                  <img
-                    src={photoPreview}
-                    alt="Profile preview"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <User className="h-10 w-10 text-[var(--muted)]" />
-                )}
+                  <img src={photoPreview} alt="Profile preview" className="w-full h-full object-cover" />
+                ) : (<User className="h-10 w-10 text-[var(--muted)]" />)}
               </div>
               <div className="flex flex-wrap gap-2">
                 <label className={`${ui.btn} cursor-pointer`}>
                   <Upload className="h-4 w-4" />
                   <span>Upload</span>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={onPickFile}
-                  />
+                  <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPickFile} />
                 </label>
                 {photoFile && (
                   <button type="button" onClick={removePhoto} className={ui.btn}>
@@ -260,91 +237,37 @@ export default function AddBorrower() {
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <Field label="First Name">
-                <input
-                  className={ui.input}
-                  value={form.firstName}
-                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                  required
-                />
+                <input className={ui.input} value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
               </Field>
               <Field label="Last Name">
-                <input
-                  className={ui.input}
-                  value={form.lastName}
-                  onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                  required
-                />
+                <input className={ui.input} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
               </Field>
               <Field label={<LabelWithIcon Icon={Phone} text="Phone" />}>
-                <input
-                  className={ui.input}
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="e.g. +2557…"
-                  required
-                />
+                <input className={ui.input} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="e.g. +2557…" required />
               </Field>
               <Field label="Secondary #">
-                <input
-                  className={ui.input}
-                  value={form.secondaryPhone}
-                  onChange={(e) => setForm({ ...form, secondaryPhone: e.target.value })}
-                  placeholder="Optional"
-                />
+                <input className={ui.input} value={form.secondaryPhone} onChange={(e) => setForm({ ...form, secondaryPhone: e.target.value })} placeholder="Optional" />
               </Field>
               <Field label="Email">
-                <input
-                  type="email"
-                  className={ui.input}
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="name@email.com"
-                />
+                <input type="email" className={ui.input} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@email.com" />
               </Field>
               <Field label="Business / Occupation">
-                <input
-                  className={ui.input}
-                  value={form.occupation}
-                  onChange={(e) => setForm({ ...form, occupation: e.target.value })}
-                  placeholder="e.g. Retail shop"
-                />
+                <input className={ui.input} value={form.occupation} onChange={(e) => setForm({ ...form, occupation: e.target.value })} placeholder="e.g. Retail shop" />
               </Field>
               <Field label="Gender">
-                <select
-                  className={ui.input}
-                  value={form.gender}
-                  onChange={(e) => setForm({ ...form, gender: e.target.value })}
-                  required
-                >
+                <select className={ui.input} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} required>
                   <option value="">Select…</option>
-                  {genderOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
+                  {genderOptions.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                 </select>
               </Field>
               <Field label={<LabelWithIcon Icon={Calendar} text="Birth date" />}>
-                <input
-                  type="date"
-                  className={ui.input}
-                  value={form.birthDate}
-                  onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
-                />
+                <input type="date" className={ui.input} value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
               </Field>
               <div className="md:col-span-2">
                 <Field label="Employment / Working Status">
-                  <select
-                    className={ui.input}
-                    value={form.employmentStatus}
-                    onChange={(e) => setForm({ ...form, employmentStatus: e.target.value })}
-                  >
+                  <select className={ui.input} value={form.employmentStatus} onChange={(e) => setForm({ ...form, employmentStatus: e.target.value })}>
                     <option value="">Select…</option>
-                    {employmentOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
+                    {employmentOptions.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                   </select>
                 </Field>
               </div>
@@ -360,48 +283,14 @@ export default function AddBorrower() {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <Field label="Address Line">
-                  <input
-                    className={ui.input}
-                    value={form.addressLine}
-                    onChange={(e) => setForm({ ...form, addressLine: e.target.value })}
-                  />
+                  <input className={ui.input} value={form.addressLine} onChange={(e) => setForm({ ...form, addressLine: e.target.value })} />
                 </Field>
               </div>
-              <Field label="City">
-                <input
-                  className={ui.input}
-                  value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
-                />
-              </Field>
-              <Field label="District">
-                <input
-                  className={ui.input}
-                  value={form.district}
-                  onChange={(e) => setForm({ ...form, district: e.target.value })}
-                />
-              </Field>
-              <Field label="Ward">
-                <input
-                  className={ui.input}
-                  value={form.ward}
-                  onChange={(e) => setForm({ ...form, ward: e.target.value })}
-                />
-              </Field>
-              <Field label="Street">
-                <input
-                  className={ui.input}
-                  value={form.street}
-                  onChange={(e) => setForm({ ...form, street: e.target.value })}
-                />
-              </Field>
-              <Field label="House #">
-                <input
-                  className={ui.input}
-                  value={form.houseNumber}
-                  onChange={(e) => setForm({ ...form, houseNumber: e.target.value })}
-                />
-              </Field>
+              <Field label="City"><input className={ui.input} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+              <Field label="District"><input className={ui.input} value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field>
+              <Field label="Ward"><input className={ui.input} value={form.ward} onChange={(e) => setForm({ ...form, ward: e.target.value })} /></Field>
+              <Field label="Street"><input className={ui.input} value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} /></Field>
+              <Field label="House #"><input className={ui.input} value={form.houseNumber} onChange={(e) => setForm({ ...form, houseNumber: e.target.value })} /></Field>
             </div>
           </section>
 
@@ -413,41 +302,19 @@ export default function AddBorrower() {
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <Field label="ID Type">
-                <select
-                  className={ui.input}
-                  value={form.idType}
-                  onChange={(e) => setForm({ ...form, idType: e.target.value })}
-                >
+                <select className={ui.input} value={form.idType} onChange={(e) => setForm({ ...form, idType: e.target.value })}>
                   <option value="">Select…</option>
-                  {idTypeOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
+                  {idTypeOptions.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                 </select>
               </Field>
               <Field label="ID Number">
-                <input
-                  className={ui.input}
-                  value={form.idNumber}
-                  onChange={(e) => setForm({ ...form, idNumber: e.target.value })}
-                />
+                <input className={ui.input} value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} />
               </Field>
               <Field label="Issued on">
-                <input
-                  type="date"
-                  className={ui.input}
-                  value={form.idIssuedDate}
-                  onChange={(e) => setForm({ ...form, idIssuedDate: e.target.value })}
-                />
+                <input type="date" className={ui.input} value={form.idIssuedDate} onChange={(e) => setForm({ ...form, idIssuedDate: e.target.value })} />
               </Field>
               <Field label="Expiry date">
-                <input
-                  type="date"
-                  className={ui.input}
-                  value={form.idExpiryDate}
-                  onChange={(e) => setForm({ ...form, idExpiryDate: e.target.value })}
-                />
+                <input type="date" className={ui.input} value={form.idExpiryDate} onChange={(e) => setForm({ ...form, idExpiryDate: e.target.value })} />
               </Field>
             </div>
           </section>
@@ -460,18 +327,10 @@ export default function AddBorrower() {
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <Field label="Full Name">
-                <input
-                  className={ui.input}
-                  value={form.nextKinName}
-                  onChange={(e) => setForm({ ...form, nextKinName: e.target.value })}
-                />
+                <input className={ui.input} value={form.nextKinName} onChange={(e) => setForm({ ...form, nextKinName: e.target.value })} />
               </Field>
               <Field label="Phone">
-                <input
-                  className={ui.input}
-                  value={form.nextKinPhone}
-                  onChange={(e) => setForm({ ...form, nextKinPhone: e.target.value })}
-                />
+                <input className={ui.input} value={form.nextKinPhone} onChange={(e) => setForm({ ...form, nextKinPhone: e.target.value })} />
               </Field>
             </div>
           </section>
@@ -485,39 +344,20 @@ export default function AddBorrower() {
             </div>
             <div className="grid gap-4">
               <Field label="Loan Type">
-                <select
-                  className={ui.input}
-                  value={form.loanType}
-                  onChange={(e) => setForm({ ...form, loanType: e.target.value })}
-                >
-                  {loanTypeOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
+                <select className={ui.input} value={form.loanType} onChange={(e) => setForm({ ...form, loanType: e.target.value })}>
+                  {loanTypeOptions.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                 </select>
               </Field>
               {form.loanType === "group" && (
                 <Field label="Group ID">
-                  <input
-                    className={ui.input}
-                    value={form.groupId}
-                    onChange={(e) => setForm({ ...form, groupId: e.target.value })}
-                    placeholder="Enter group identifier"
-                  />
+                  <input className={ui.input} value={form.groupId} onChange={(e) => setForm({ ...form, groupId: e.target.value })} placeholder="Enter group identifier" />
                 </Field>
               )}
               <Field label={<LabelWithIcon Icon={Calendar} text="Registration Date" />}>
-                <input
-                  type="date"
-                  className={ui.input}
-                  value={form.regDate}
-                  onChange={(e) => setForm({ ...form, regDate: e.target.value })}
-                />
+                <input type="date" className={ui.input} value={form.regDate} onChange={(e) => setForm({ ...form, regDate: e.target.value })} />
               </Field>
               <div className="rounded-lg border-2 border-[var(--border-strong)] p-3 text-[13px] text-[var(--muted)]">
-                Branch & Loan Officer will be selected automatically using your current branch and
-                the least-loaded officer.
+                Branch & Loan Officer will be selected automatically using your current branch and the least-loaded officer.
               </div>
             </div>
           </section>
@@ -525,14 +365,9 @@ export default function AddBorrower() {
 
         {/* Sticky bottom action bar */}
         <div className="col-span-full">
-          <div
-            className="sticky bottom-0 inset-x-0 z-20 border-t-2 backdrop-blur"
-            style={{ borderColor: "var(--border-strong)", background: "var(--card)" }}
-          >
+          <div className="sticky bottom-0 inset-x-0 z-20 border-t-2 backdrop-blur" style={{ borderColor: "var(--border-strong)", background: "var(--card)" }}>
             <div className="max-w-screen-2xl mx-auto px-4 py-3 flex justify-end gap-3">
-              <Link to="/borrowers" className={ui.btn}>
-                Cancel
-              </Link>
+              <Link to="/borrowers" className={ui.btn}>Cancel</Link>
               <button disabled={submitting} type="submit" className={ui.primary}>
                 <Save className="h-4 w-4" /> {submitting ? "Saving…" : "Save"}
               </button>
