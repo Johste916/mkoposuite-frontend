@@ -118,7 +118,7 @@ api.interceptors.request.use((config) => {
   }
   if (tenantId) config.headers["x-tenant-id"] = tenantId;
 
-  // Branch header
+  // Branch header (🔑 backend uses this to auto-assign branch & least-loaded officer)
   const activeBranchId = localStorage.getItem("activeBranchId");
   if (activeBranchId) config.headers["x-branch-id"] = activeBranchId;
 

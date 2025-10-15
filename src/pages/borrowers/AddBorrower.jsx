@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+// AddBorrower.jsx
+import React, { useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../../api";
 import {
@@ -11,7 +12,6 @@ import {
   Phone,
   Calendar,
   MapPin,
-  Building2,
   UserPlus,
 } from "lucide-react";
 
@@ -20,7 +20,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 /* ---------- Token-based UI (shares language with dashboard/sidebar) ---------- */
 const ui = {
   page: "w-full px-4 md:px-6 lg:px-8 py-6 min-h-screen bg-[var(--bg)] text-[var(--fg)]",
-  section: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4 md:p-6",
+  section:
+    "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4 md:p-6",
   input:
     "w-full text-sm rounded-lg px-3 py-2 border-2 " +
     "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
@@ -72,8 +73,6 @@ export default function AddBorrower() {
     { value: "group", label: "Group" },
   ];
 
-  const [branches, setBranches] = useState([]);
-  const [officers, setOfficers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
   const [photoFile, setPhotoFile] = useState(null);
@@ -100,8 +99,7 @@ export default function AddBorrower() {
     idNumber: "",
     idIssuedDate: "",
     idExpiryDate: "",
-    loanOfficerId: "",
-    branchId: "",
+    // ⛔ removed: loanOfficerId, branchId (server will auto-assign)
     loanType: "individual",
     groupId: "",
     nextKinName: "",
@@ -109,22 +107,7 @@ export default function AddBorrower() {
     regDate: today(),
   });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [b, u] = await Promise.all([
-          api.get("/branches"),
-          api.get("/users", { params: { role: "loan_officer" } }).catch(() => ({ data: [] })),
-        ]);
-        setBranches(Array.isArray(b.data) ? b.data : []);
-        setOfficers(Array.isArray(u.data) ? u.data : []);
-      } catch (e) {
-        console.warn("Failed to fetch branches/officers", e);
-        setBranches([]);
-        setOfficers([]);
-      }
-    })();
-  }, []);
+  // no branches/officers fetch needed
 
   const onPickFile = (e) => {
     const f = e.target.files?.[0];
@@ -145,7 +128,7 @@ export default function AddBorrower() {
       return alert("First & last name are required"), false;
     if (!form.phone.trim()) return alert("Primary phone is required"), false;
     if (!form.gender) return alert("Gender is required"), false;
-    if (!form.branchId) return alert("Branch is required"), false;
+    // ⛔ removed: branchId required
     return true;
   };
 
@@ -166,19 +149,22 @@ export default function AddBorrower() {
         occupation: form.occupation,
         gender: form.gender,
         birthDate: form.birthDate || null,
-        addressLine: form.addressLine,
-        city: form.city,
-        district: form.district,
-        ward: form.ward,
-        street: form.street,
-        houseNumber: form.houseNumber,
+        addressLine: [
+          form.addressLine,
+          form.street,
+          form.houseNumber,
+          form.ward,
+          form.district,
+          form.city,
+        ]
+          .filter(Boolean)
+          .join(", "),
         employmentStatus: form.employmentStatus,
         idType: form.idType,
         idNumber: form.idNumber,
         idIssuedDate: form.idIssuedDate || null,
         idExpiryDate: form.idExpiryDate || null,
-        loanOfficerId: form.loanOfficerId || null,
-        branchId: form.branchId,
+        // ⛔ omit loanOfficerId, branchId so server auto-assigns
         loanType: form.loanType,
         groupId: form.loanType === "group" ? form.groupId || null : null,
         nextKinName: form.nextKinName,
@@ -193,7 +179,11 @@ export default function AddBorrower() {
       });
 
       alert("Borrower saved successfully");
-      navigate(`/borrowers/${res.data?.id || ""}`);
+      // go to details
+      const id = res.data?.id || "";
+      const tenantId = res.data?.tenantId;
+      const suffix = tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : "";
+      navigate(`/borrowers/${id}${suffix}`);
     } catch (e) {
       console.error(e);
       alert("Failed to save borrower");
@@ -209,7 +199,8 @@ export default function AddBorrower() {
         <div className="min-w-0">
           <h1 className="text-3xl font-extrabold tracking-tight">Add Borrower</h1>
           <p className={`text-sm ${ui.muted}`}>
-            Capture full KYC and assign the borrower to a branch/officer.
+            Fill out KYC. <strong>Branch &amp; Loan Officer will be auto-assigned</strong> from
+            your current branch and available officers.
           </p>
         </div>
         <Link to="/borrowers" className={ui.link}>
@@ -218,14 +209,10 @@ export default function AddBorrower() {
       </div>
 
       {/* Form */}
-      <form
-        onSubmit={onSubmit}
-        className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative"
-        noValidate
-      >
+      <form onSubmit={onSubmit} className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative" noValidate>
         {/* LEFT: identity + address + ID + kin */}
         <div className="xl:col-span-2 space-y-6 min-w-0">
-          {/* Profile photo */}
+          {/* Photo */}
           <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
               <Camera className={ui.iconAccent} />
@@ -257,13 +244,8 @@ export default function AddBorrower() {
                   />
                 </label>
                 {photoFile && (
-                  <button
-                    type="button"
-                    onClick={removePhoto}
-                    className={ui.btn}
-                  >
-                    <X className="h-4 w-4" />
-                    Remove
+                  <button type="button" onClick={removePhoto} className={ui.btn}>
+                    <X className="h-4 w-4" /> Remove
                   </button>
                 )}
               </div>
@@ -423,7 +405,7 @@ export default function AddBorrower() {
             </div>
           </section>
 
-          {/* Identity docs */}
+          {/* ID docs */}
           <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
               <IdCard className={ui.iconAccent} />
@@ -495,45 +477,13 @@ export default function AddBorrower() {
           </section>
         </div>
 
-        {/* RIGHT: assignment */}
+        {/* RIGHT: type + registration (branch/officer are auto) */}
         <div className="space-y-6 min-w-0">
           <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
-              <Building2 className={ui.iconAccent} />
-              <h2 className="font-extrabold text-lg tracking-tight">Assignment & Loan Type</h2>
+              <h2 className="font-extrabold text-lg tracking-tight">Loan Type & Registration</h2>
             </div>
             <div className="grid gap-4">
-              <Field label="Branch">
-                <select
-                  className={ui.input}
-                  value={form.branchId}
-                  onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                  required
-                >
-                  <option value="">Select branch…</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Loan Officer">
-                <select
-                  className={ui.input}
-                  value={form.loanOfficerId}
-                  onChange={(e) => setForm({ ...form, loanOfficerId: e.target.value })}
-                >
-                  <option value="">Select officer… (optional)</option>
-                  {officers.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name || `${o.firstName || ""} ${o.lastName || ""}`}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
               <Field label="Loan Type">
                 <select
                   className={ui.input}
@@ -547,7 +497,6 @@ export default function AddBorrower() {
                   ))}
                 </select>
               </Field>
-
               {form.loanType === "group" && (
                 <Field label="Group ID">
                   <input
@@ -558,7 +507,6 @@ export default function AddBorrower() {
                   />
                 </Field>
               )}
-
               <Field label={<LabelWithIcon Icon={Calendar} text="Registration Date" />}>
                 <input
                   type="date"
@@ -567,6 +515,10 @@ export default function AddBorrower() {
                   onChange={(e) => setForm({ ...form, regDate: e.target.value })}
                 />
               </Field>
+              <div className="rounded-lg border-2 border-[var(--border-strong)] p-3 text-[13px] text-[var(--muted)]">
+                Branch & Loan Officer will be selected automatically using your current branch and
+                the least-loaded officer.
+              </div>
             </div>
           </section>
         </div>
@@ -582,8 +534,7 @@ export default function AddBorrower() {
                 Cancel
               </Link>
               <button disabled={submitting} type="submit" className={ui.primary}>
-                <Save className="h-4 w-4" />
-                {submitting ? "Saving…" : "Save"}
+                <Save className="h-4 w-4" /> {submitting ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
