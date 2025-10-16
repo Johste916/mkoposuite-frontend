@@ -640,6 +640,10 @@ const BorrowerDetails = () => {
     { v: "driver_license", t: "Driver’s License" },
     { v: "voter_id", t: "Voter ID" },
   ];
+  const LOANTYPE_OPTS = [
+    { v: "individual", t: "Individual" },
+    { v: "group", t: "Group" },
+  ];
 
   return (
     <div className="w-full px-4 md:px-6 py-6 min-h-screen bg-white text-slate-900">
@@ -985,11 +989,13 @@ const BorrowerDetails = () => {
                       {
                         label: "Loan Type",
                         value: isEditing ? (
-                          <input
-                            value={form.loanType ?? ""}
+                          <select
+                            value={form.loanType ?? "individual"}
                             onChange={(e) => onChange("loanType", e.target.value)}
                             className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
-                          />
+                          >
+                            {LOANTYPE_OPTS.map((o) => (<option key={o.v} value={o.v}>{o.t}</option>))}
+                          </select>
                         ) : (firstFilled(borrower.loanType, borrower.productType, "individual")),
                       },
                       {

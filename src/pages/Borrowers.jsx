@@ -125,7 +125,12 @@ const Borrowers = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState("overview");
   const [drawerLoading, setDrawerLoading] = useState(false);
-  const [drawerData, setDrawerData] = useState({ overview: null, loans: [], savings: [], documents: [] });
+  const [drawerData, setDrawerData] = useState({
+    overview: null,
+    loans: [],
+    savings: null,      // now supports object payload
+    documents: [],
+  });
 
   // CSV import
   const fileInputRef = useRef(null);
@@ -268,11 +273,20 @@ const Borrowers = () => {
           const res = await api.get(`/borrowers/${borrowerId}/loans`, { signal });
           setDrawerData((d) => ({ ...d, loans: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
         } else if (tab === "savings") {
-          const res = await api.get(`/borrowers/${borrowerId}/savings`, { signal });
-          setDrawerData((d) => ({ ...d, savings: Array.isArray(res.data) ? res.data : res.data?.items || [] }));
+          const data = await tryGET(
+            [`/borrowers/${borrowerId}/savings`, `/savings/borrower/${borrowerId}`],
+            { signal }
+          );
+          setDrawerData((d) => ({
+            ...d,
+            savings: data || { balance: 0, totals: {}, transactions: [] },
+          }));
         } else if (tab === "documents") {
-          const res = await api.get(`/borrowers/${borrowerId}/documents`, { signal }).catch(() => ({ data: [] }));
-          setDrawerData((d) => ({ ...d, documents: Array.isArray(res?.data) ? res.data : res?.data?.items || [] }));
+          const data = await tryGET(
+            [`/borrowers/${borrowerId}/kyc`, `/borrowers/${borrowerId}/documents`],
+            { signal }
+          ).catch(() => ({ items: [] }));
+          setDrawerData((d) => ({ ...d, documents: toArray(data) }));
         }
       } catch (e) {
         pushToast("Failed to load borrower details", "error");
@@ -332,7 +346,16 @@ const Borrowers = () => {
   };
 
   const statusChip = (s) => {
-    return ui.chip;
+    const base = "inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border-2";
+    const k = String(s || "").toLowerCase();
+    switch (k) {
+      case "active":        return `${base} bg-blue-100  border-blue-200  text-blue-900`;
+      case "pending_kyc":   return `${base} bg-amber-100 border-amber-200 text-amber-900`;
+      case "inactive":      return `${base} bg-gray-100 border-gray-200 text-gray-900`;
+      case "blacklisted":   return `${base} bg-red-100  border-red-200  text-red-900`;
+      case "disabled":      return `${base} bg-slate-100 border-slate-200 text-slate-900`;
+      default:              return `${base} bg-gray-100 border-gray-200 text-gray-900`;
+    }
   };
 
   /* ---------- CSV Import ---------- */
@@ -514,37 +537,44 @@ const Borrowers = () => {
                   <td colSpan={7} className={`px-4 py-10 text-center ${ui.muted}`}>No borrowers.</td>
                 </tr>
               ) : (
-                rows.map((b) => (
-                  <tr
-                    key={b.id}
-                    className="border-t border-[var(--border)] hover:bg-[var(--kpi-bg)]"
-                  >
-                    <td className={ui.td}>{displayName(b)}</td>
-                    <td className={ui.td}>{formatPhoneDisplay(b.phone)}</td>
-                    <td className={ui.td}>{displayBranch(b)}</td>
-                    <td className={ui.td}>{displayOfficer(b)}</td>
-                    <td className={ui.td}>{fmtMoney(b.outstanding)}</td>
-                    <td className={ui.td}>
-                      <span className={statusChip(b.status)}>{b.status || "—"}</span>
-                    </td>
-                    <td className={`${ui.td} text-right`}>
-                      <div className="flex gap-3 justify-end">
-                        <Link
-                          to={`/borrowers/${encodeURIComponent(b.id)}`}
-                          className={strongLink}
-                        >
-                          View
-                        </Link>
-                        <Link
-                          to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
-                          className={strongLink}
-                        >
-                          New Loan
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                rows.map((b) => {
+                  const out =
+                    b.outstanding ??
+                    b.outstandingAmount ??
+                    b.outstandingTotal ??
+                    null;
+                  return (
+                    <tr
+                      key={b.id}
+                      className="border-t border-[var(--border)] hover:bg-[var(--kpi-bg)]"
+                    >
+                      <td className={ui.td}>{displayName(b)}</td>
+                      <td className={ui.td}>{formatPhoneDisplay(b.phone)}</td>
+                      <td className={ui.td}>{displayBranch(b)}</td>
+                      <td className={ui.td}>{displayOfficer(b)}</td>
+                      <td className={ui.td}>{out == null ? "—" : fmtMoney(out)}</td>
+                      <td className={ui.td}>
+                        <span className={statusChip(b.status)}>{b.status || "—"}</span>
+                      </td>
+                      <td className={`${ui.td} text-right`}>
+                        <div className="flex gap-3 justify-end">
+                          <Link
+                            to={`/borrowers/${encodeURIComponent(b.id)}`}
+                            className={strongLink}
+                          >
+                            View
+                          </Link>
+                          <Link
+                            to={`/loans/applications?borrowerId=${encodeURIComponent(b.id)}`}
+                            className={strongLink}
+                          >
+                            New Loan
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -558,6 +588,11 @@ const Borrowers = () => {
             ) : (
               rows.map((b) => {
                 const name = displayName(b);
+                const out =
+                  b.outstanding ??
+                  b.outstandingAmount ??
+                  b.outstandingTotal ??
+                  null;
                 return (
                   <div key={b.id} className="rounded-xl border-2 border-[var(--border-strong)] bg-[var(--card)] p-4 hover:shadow-md transition-shadow">
                     {/* Header */}
@@ -589,7 +624,7 @@ const Borrowers = () => {
                       </div>
                       <div className="col-span-2">
                         <span className={`text-xs ${ui.muted}`}>Outstanding</span>
-                        <div className="text-sm font-medium">{fmtMoney(b.outstanding)}</div>
+                        <div className="text-sm font-medium">{out == null ? "—" : fmtMoney(out)}</div>
                       </div>
                     </div>
 
@@ -747,20 +782,20 @@ const OverviewTab = ({ data }) => {
         <InfoCard label="National ID" value={data.nationalId || "—"} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Stat label="Outstanding Loan" value={fmt("outstandingLoan", data)} />
-        <Stat label="Outstanding Interest" value={fmt("outstandingInterest", data)} />
-        <Stat label="Net Savings" value={fmt("netSavings", data)} />
+        <Stat label="Net Savings" value={`TZS ${Number(data?.netSavings || 0).toLocaleString()}`} />
+        <Stat label="Overdue Amount" value={`TZS ${Number(data?.overdueAmount || 0).toLocaleString()}`} />
+        <Stat label="PAR %" value={`${Number(data?.parPercent || 0).toFixed(2)}%`} />
       </div>
     </div>
   );
 };
 
-const fmt = (k, data) => `TZS ${Number(data?.[k] || 0).toLocaleString()}`;
-
 const LoansTab = ({ items }) => {
-  if (!Array.isArray(items) || items.length === 0) {
+  const list = Array.isArray(items) ? items : [];
+  if (list.length === 0) {
     return <p className={`${ui.muted} text-sm`}>No loans.</p>;
   }
+  const m = (n) => `TZS ${Number(n || 0).toLocaleString()}`;
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
@@ -768,21 +803,24 @@ const LoansTab = ({ items }) => {
           <tr>
             <th className={ui.th}>Loan #</th>
             <th className={ui.th}>Product</th>
-            <th className={ui.th}>Disbursed</th>
+            <th className={ui.th}>Amount</th>
             <th className={ui.th}>Outstanding</th>
             <th className={ui.th}>Status</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((l) => (
-            <tr key={l.id} className="border-t border-[var(--border)]">
-              <td className={ui.td}>{l.id}</td>
-              <td className={ui.td}>{l.product || "—"}</td>
-              <td className={ui.td}>{`TZS ${Number(l.disbursed || 0).toLocaleString()}`}</td>
-              <td className={ui.td}>{`TZS ${Number(l.outstanding || 0).toLocaleString()}`}</td>
-              <td className={ui.td}>{l.status || "—"}</td>
-            </tr>
-          ))}
+          {list.map((l) => {
+            const out = l.outstanding ?? l.outstandingAmount ?? l.outstandingTotal ?? null;
+            return (
+              <tr key={l.id} className="border-t border-[var(--border)]">
+                <td className={ui.td}>{l.id}</td>
+                <td className={ui.td}>{l.productName || l.product || l.loanType || "—"}</td>
+                <td className={ui.td}>{m(l.amount)}</td>
+                <td className={ui.td}>{out == null ? "—" : m(out)}</td>
+                <td className={ui.td}>{l.status || "—"}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -790,7 +828,48 @@ const LoansTab = ({ items }) => {
 };
 
 const SavingsTab = ({ items }) => {
-  if (!Array.isArray(items) || items.length === 0) {
+  // supports either an object payload or an array
+  const payload = items && !Array.isArray(items) ? items : null;
+  if (payload) {
+    const txs = Array.isArray(payload.transactions) ? payload.transactions : [];
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <Stat label="Balance" value={`TZS ${Number(payload.balance || 0).toLocaleString()}`} />
+          <Stat label="Deposits" value={`TZS ${Number(payload.totals?.deposits || 0).toLocaleString()}`} />
+          <Stat label="Withdrawals" value={`TZS ${Number(payload.totals?.withdrawals || 0).toLocaleString()}`} />
+          <Stat label="Interest" value={`TZS ${Number(payload.totals?.interest || 0).toLocaleString()}`} />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr>
+                <th className={ui.th}>Date</th>
+                <th className={ui.th}>Type</th>
+                <th className={ui.th}>Amount</th>
+                <th className={ui.th}>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {txs.length === 0 ? (
+                <tr><td colSpan={4} className={`px-4 py-6 ${ui.muted}`}>No transactions.</td></tr>
+              ) : txs.map((t) => (
+                <tr key={t.id} className="border-t border-[var(--border)]">
+                  <td className={ui.td}>{t.date ? new Date(t.date).toLocaleDateString() : "—"}</td>
+                  <td className={ui.td} style={{ textTransform: "capitalize" }}>{t.type || "—"}</td>
+                  <td className={ui.td}>{`TZS ${Number(t.amount || 0).toLocaleString()}`}</td>
+                  <td className={ui.td}>{t.notes || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+  // legacy: array of accounts
+  const list = Array.isArray(items) ? items : [];
+  if (list.length === 0) {
     return <p className={`${ui.muted} text-sm`}>No savings accounts.</p>;
   }
   return (
@@ -804,7 +883,7 @@ const SavingsTab = ({ items }) => {
           </tr>
         </thead>
         <tbody>
-          {items.map((s) => (
+          {list.map((s) => (
             <tr key={s.id} className="border-t border-[var(--border)]">
               <td className={ui.td}>{s.id}</td>
               <td className={ui.td}>{`TZS ${Number(s.balance || 0).toLocaleString()}`}</td>
