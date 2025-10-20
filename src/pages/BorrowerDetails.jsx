@@ -30,14 +30,35 @@ const displayName = (b) =>
     b?.businessName
   ) || "—";
 
-const displayBranch = (b) =>
-  firstFilled(b?.branchName, b?.Branch?.name, b?.branch?.name, b?.branch) || "—";
+const displayBranch = (b, list = []) =>
+  firstFilled(
+    b?.branchName,
+    b?.Branch?.name,
+    b?.branch?.name,
+    b?.branch,
+    list.find((x) => eqId(x.id, b?.branchId))?.name,
+    b?.branchId
+  ) || "—";
 
-const displayOfficer = (b) =>
-  firstFilled(b?.officerName, b?.officer?.name, b?.loanOfficer?.name, b?.loanOfficer) || "—";
+const displayOfficer = (b, list = []) =>
+  firstFilled(
+    b?.officerName,
+    b?.loanOfficerName,
+    b?.officer?.name,
+    b?.loanOfficer?.name,
+    b?.loanOfficer,
+    list.find((x) => eqId(x.id, officerIdFromBorrower(b)))?.name
+  ) || "—";
 
-const displayGroup = (b) =>
-  firstFilled(b?.groupName, b?.group?.name, b?.Group?.name, b?.groupTitle) || "";
+const displayGroup = (b, list = []) =>
+  firstFilled(
+    b?.groupName,
+    b?.group?.name,
+    b?.Group?.name,
+    b?.groupTitle,
+    list.find((x) => eqId(x.id, b?.groupId))?.name,
+    b?.groupId
+  ) || "—";
 
 const initials = (nameLike) => {
   const s = String(nameLike || "").trim();
@@ -83,7 +104,10 @@ const effectiveTenantId = (borrowerTenant, urlTenant) =>
 
 const eqId = (a, b) => String(a ?? "") === String(b ?? "");
 const officerIdFromBorrower = (b) =>
-  firstFilled(b?.loanOfficerId, b?.officerId, b?.loanOfficer?.id, b?.officer?.id, "");
+  firstFilled(b?.loanOfficerId, b?.officerId, b?.loanOfficer?.id,b?.assignedOfficerId,b?.loanOfficerUserId, b?.officer?.id, b?.loanOfficer?.userId,"");
+
+const branchIdFromBorrower = (b) =>
+  firstFilled(b?.branchId, b?.branch?.id, b?.Branch?.id, b?.branchCode, "");
 
 /* Small visual helpers */
 const strongLink =
@@ -201,8 +225,10 @@ function splitNameParts(full) {
 /* ---------------- Per-tenant caches ---------------- */
 const _tenantCache = {
   officers: new Map(), // tenantId -> [{id, name, email}]
-  groups: new Map(), // tenantId -> [{id, name}]
+  groups: new Map(),   // tenantId -> [{id, name}]
+  branches: new Map(), // tenantId -> [{id, name}]
 };
+
 
 /* tiny label helper */
 const placeholderFrom = (status, okText, emptyText = "No options") => {
@@ -260,50 +286,46 @@ const BorrowerDetails = () => {
   const [groupsStatus, setGroupsStatus] = useState("loading"); // loading | ok | empty | error
   const [reloadOfficersKey, setReloadOfficersKey] = useState(0);
   const [reloadGroupsKey, setReloadGroupsKey] = useState(0);
+  const [branches, setBranches] = useState([]);
+  const [branchesStatus, setBranchesStatus] = useState("loading"); // loading | ok | empty | error
+  const [reloadBranchesKey, setReloadBranchesKey] = useState(0);
 
-  const mapBorrowerToForm = (b) => ({
-    id: b?.id,
-    name: firstFilled(b?.name, b?.fullName),
-    phone: firstFilled(b?.phone, b?.msisdn, b?.mobile, b?.primaryPhone),
-    email: firstFilled(b?.email, b?.mail),
-    addressLine: firstFilled(
-      b?.addressLine,
-      [b?.street, b?.houseNumber, b?.ward, b?.district, b?.city].filter(Boolean).join(", "),
-      [b?.address, b?.town, b?.region, b?.country].filter(Boolean).join(", ")
-    ),
-    gender: firstFilled(b?.gender, b?.sex),
-    birthDate: firstFilled(b?.birthDate, b?.dateOfBirth, b?.dob),
-    employmentStatus: firstFilled(b?.employmentStatus, b?.employment, b?.employmentType),
-    occupation: firstFilled(b?.occupation, b?.businessType, b?.jobTitle, b?.sector),
-    idType: firstFilled(b?.idType, b?.identificationType),
-    nationalId: firstFilled(b?.nationalId, b?.nid, b?.idNumber),
-    idNumber: firstFilled(b?.idNumber, b?.nationalId, b?.nid),
-    idIssuedDate: firstFilled(b?.idIssuedDate, b?.idIssueDate, b?.idDateIssued),
-    idExpiryDate: firstFilled(b?.idExpiryDate, b?.idExpireDate, b?.idDateExpiry),
-    nextKinName: firstFilled(b?.nextKinName, b?.nextOfKinName, b?.kinName, b?.emergencyContactName),
-    nextKinPhone: firstFilled(
-      b?.nextKinPhone,
-      b?.nextOfKinPhone,
-      b?.kinPhone,
-      b?.emergencyContactPhone
-    ),
-    nextOfKinRelationship: firstFilled(
-      b?.nextOfKinRelationship,
-      b?.kinRelationship,
-      b?.relationship
-    ),
-    status: b?.status ?? "active",
-    maritalStatus: firstFilled(b?.maritalStatus, b?.marriageStatus),
-    educationLevel: firstFilled(b?.educationLevel, b?.education, b?.educationStatus),
-    customerNumber: firstFilled(b?.customerNumber, b?.accountNumber, b?.clientNumber),
-    tin: firstFilled(b?.tin, b?.TIN, b?.taxId),
-    nationality: firstFilled(b?.nationality, b?.country),
-    groupId: firstFilled(b?.groupId, b?.group?.id, b?.Group?.id, b?.group, b?.groupCode),
-    loanType: firstFilled(b?.loanType, b?.productType, "individual"),
-    regDate: firstFilled(b?.regDate, b?.registrationDate),
-    tenantId: b?.tenantId,
-    loanOfficerId: officerIdFromBorrower(b),
-  });
+
+const mapBorrowerToForm = (b) => ({
+  id: b?.id,
+  name: firstFilled(b?.name, b?.fullName),
+  phone: firstFilled(b?.phone, b?.msisdn, b?.mobile, b?.primaryPhone),
+  email: firstFilled(b?.email, b?.mail),
+  addressLine: firstFilled(
+    b?.addressLine,
+    [b?.street, b?.houseNumber, b?.ward, b?.district, b?.city].filter(Boolean).join(", "),
+    [b?.address, b?.town, b?.region, b?.country].filter(Boolean).join(", ")
+  ),
+  gender: firstFilled(b?.gender, b?.sex),
+  birthDate: firstFilled(b?.birthDate, b?.dateOfBirth, b?.dob),
+  employmentStatus: firstFilled(b?.employmentStatus, b?.employment, b?.employmentType),
+  occupation: firstFilled(b?.occupation, b?.businessType, b?.jobTitle, b?.sector),
+  idType: firstFilled(b?.idType, b?.identificationType),
+  nationalId: firstFilled(b?.nationalId, b?.nid, b?.idNumber),
+  idNumber: firstFilled(b?.idNumber, b?.nationalId, b?.nid),
+  idIssuedDate: firstFilled(b?.idIssuedDate, b?.idIssueDate, b?.idDateIssued),
+  idExpiryDate: firstFilled(b?.idExpiryDate, b?.idExpireDate, b?.idDateExpiry),
+  nextKinName: firstFilled(b?.nextKinName, b?.nextOfKinName, b?.kinName, b?.emergencyContactName),
+  nextKinPhone: firstFilled(b?.nextKinPhone, b?.nextOfKinPhone, b?.kinPhone, b?.emergencyContactPhone),
+  nextOfKinRelationship: firstFilled(b?.nextOfKinRelationship, b?.kinRelationship, b?.relationship),
+  status: b?.status ?? "active",
+  maritalStatus: firstFilled(b?.maritalStatus, b?.marriageStatus),
+  educationLevel: firstFilled(b?.educationLevel, b?.education, b?.educationStatus),
+  customerNumber: firstFilled(b?.customerNumber, b?.accountNumber, b?.clientNumber),
+  tin: firstFilled(b?.tin, b?.TIN, b?.taxId),
+  nationality: firstFilled(b?.nationality, b?.country),
+  groupId: firstFilled(b?.groupId, b?.group?.id, b?.Group?.id, b?.group, b?.groupCode),
+  loanType: firstFilled(b?.loanType, b?.productType, "individual"),
+  regDate: firstFilled(b?.regDate, b?.registrationDate),
+  tenantId: b?.tenantId,
+  loanOfficerId: officerIdFromBorrower(b),
+  branchId: branchIdFromBorrower(b),            // <-- add this line
+});
 
   const fetchBorrowerBundle = async () => {
     setErrors({ loans: null, savings: null });
@@ -421,118 +443,134 @@ const BorrowerDetails = () => {
   }, [filterType, savings]);
 
   /* -------- Loan officers: statusful, tenant-aware, cached -------- */
-  useEffect(() => {
-    const t = effectiveTenantId(borrower?.tenantId, tenantIdParam);
-    if (!t) {
-      setOfficersStatus("error");
-      return;
-    }
+ /* -------- Branches: statusful, tenant-aware, cached -------- */
+useEffect(() => {
+  const t = effectiveTenantId(borrower?.tenantId, tenantIdParam);
+  if (!t) {
+    setBranchesStatus("error");
+    return;
+  }
 
-    const cached = _tenantCache.officers.get(t);
-    if (cached) {
-      setOfficers(cached);
-      setOfficersStatus(cached.length ? "ok" : "empty");
-      // Legacy preselect fix if we had stored email previously
-      if (form?.loanOfficerId && !cached.some((o) => eqId(o.id, form.loanOfficerId))) {
-        const candidate = cached.find((o) => o.email && String(o.email) === String(form.loanOfficerId));
-        if (candidate) setForm((f) => ({ ...f, loanOfficerId: candidate.id }));
+  const cached = _tenantCache.branches.get(t);
+  if (cached) {
+    setBranches(cached);
+    setBranchesStatus(cached.length ? "ok" : "empty");
+    return;
+  }
+
+  let ignore = false;
+  setBranchesStatus("loading");
+  (async () => {
+    try {
+      const opt = withTenant(t);
+      const data = await tryGET(
+        [
+          "/branches",
+          "/v1/branches",
+          "/loan-branches",
+          "/v1/loan-branches",
+          `/tenants/${t}/branches`,
+          `/v1/tenants/${t}/branches`,
+        ],
+        opt
+      );
+
+      const arr = Array.isArray(data) ? data : data?.items || data?.data || data?.rows || [];
+      const mapped =
+        arr.map((br) => ({
+          id: br.id ?? br.code ?? br.uuid ?? br.branchId ?? br.slug,
+          name: br.name ?? br.branchName ?? br.title ?? (br.code ? String(br.code) : "—"),
+        })) || [];
+
+      if (!ignore) {
+        setBranches(mapped);
+        setBranchesStatus(mapped.length ? "ok" : "empty");
+        _tenantCache.branches.set(t, mapped);
       }
-      return;
-    }
-
-    let ignore = false;
-    setOfficersStatus("loading");
-    (async () => {
-      try {
-        const opt = withTenant(t);
-        const data = await tryGET(
-          [
-            "/users?role=loan_officer",
-            "/users?role=loan-officer",
-            "/v1/users?role=loan_officer",
-            "/v1/users?role=loan-officer",
-            "/users/loan-officers",
-            "/borrowers/loan-officers",
-            "/loan-officers",
-            "/v1/users/loan-officers",
-            "/v1/borrowers/loan-officers",
-            "/v1/loan-officers",
-            `/tenants/${t}/loan-officers`,
-            `/v1/tenants/${t}/loan-officers`,
-          ],
-          opt
-        );
-
-        const arr = Array.isArray(data?.items)
-          ? data.items
-          : Array.isArray(data?.data)
-          ? data.data
-          : Array.isArray(data?.rows)
-          ? data.rows
-          : Array.isArray(data?.officers)
-          ? data.officers
-          : Array.isArray(data)
-          ? data
-          : [];
-
-        const prettyName = (o) => {
-          const n =
-            firstFilled(
-              o.name,
-              o.fullName,
-              [o.firstName, o.lastName].filter(Boolean).join(" "),
-              o.username
-            ) ||
-            (o.email ? String(o.email).split("@")[0] : "");
-          return n || (o.id != null ? `User ${o.id}` : "User");
-        };
-
-        const mapped = arr
-          .map((o) => ({
-            // IMPORTANT: never use email as the identifier
-            id:
-              firstFilled(
-                o.id,
-                o.userId,
-                o.user_id,
-                o.uuid,
-                o.staffId,
-                o.employeeId,
-                o.code,
-                o.slug
-              ) || null,
-            name: prettyName(o),
-            email: o.email ?? null,
-          }))
-          .filter((o) => o.id != null)
-          .sort((a, b) => String(a.name).localeCompare(String(b.name)));
-
-        if (!ignore) {
-          setOfficers(mapped);
-          setOfficersStatus(mapped.length ? "ok" : "empty");
-          _tenantCache.officers.set(t, mapped);
-
-          // Legacy preselect fix: if form has email, map it to the new id so the select is prefilled
-          if (form?.loanOfficerId && !mapped.some((o) => eqId(o.id, form.loanOfficerId))) {
-            const candidate = mapped.find(
-              (o) => o.email && String(o.email) === String(form.loanOfficerId)
-            );
-            if (candidate) setForm((f) => ({ ...f, loanOfficerId: candidate.id }));
-          }
-        }
-      } catch (e) {
-        if (!ignore) {
-          setOfficers([]);
-          setOfficersStatus("error");
-        }
+    } catch (e) {
+      if (!ignore) {
+        setBranches([]);
+        setBranchesStatus("error");
       }
-    })();
+    }
+  })();
 
-    return () => {
-      ignore = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [borrower?.tenantId, tenantIdParam, reloadOfficersKey]);
+  return () => {
+    ignore = true;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [borrower?.tenantId, tenantIdParam, reloadBranchesKey]);
+
+/* -------- Officers: statusful, tenant-aware, cached -------- */
+useEffect(() => {
+  // Try with tenant if we have it; otherwise fetch without a tenant header.
+  const t = effectiveTenantId(borrower?.tenantId, tenantIdParam);
+  const cacheKey = t || "__no_tenant__";
+
+  const cached = _tenantCache.officers.get(cacheKey);
+  if (cached) {
+    setOfficers(cached);
+    setOfficersStatus(cached.length ? "ok" : "empty");
+    return;
+  }
+
+  let ignore = false;
+  setOfficersStatus("loading");
+
+  (async () => {
+    try {
+      const opt = withTenant(t); // {} when no tenant
+      const paths = [
+        "/officers",
+        "/loan-officers",
+        "/v1/officers",
+        t ? `/tenants/${t}/officers` : null,
+        "/users?role=officer",
+        "/users?role=loan_officer",
+        "/v1/users?role=officer",
+      ].filter(Boolean);
+
+      const data = await tryGET(paths, opt);
+
+      const arr =
+        (Array.isArray(data) && data) ||
+        data?.items ||
+        data?.data ||
+        data?.rows ||
+        data?.results ||
+        [];
+
+      const mapped = (arr || []).map((o) => ({
+        id: o.id ?? o.userId ?? o.uuid ?? o.code ?? o.employeeId,
+        // use helper to avoid ?? / || precedence issue and blank strings
+        name: firstFilled(
+          o.name,
+          o.fullName,
+          [o.firstName, o.lastName].filter(Boolean).join(" "),
+          o.email,
+          String(o.id)
+        ),
+      }));
+
+      if (!ignore) {
+        setOfficers(mapped);
+        setOfficersStatus(mapped.length ? "ok" : "empty");
+        _tenantCache.officers.set(cacheKey, mapped);
+      }
+    } catch (e) {
+      console.error("[officers] load failed:", e);
+      if (!ignore) {
+        setOfficers([]);
+        setOfficersStatus("error");
+      }
+    }
+  })();
+
+  return () => {
+    ignore = true;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [borrower?.tenantId, tenantIdParam, reloadOfficersKey]);
 
   /* -------- Groups: statusful, tenant-aware, cached -------- */
   useEffect(() => {
@@ -691,6 +729,7 @@ const BorrowerDetails = () => {
       groupId: f.groupId || null,
       loanType: f.loanType || null,
       regDate: f.regDate || null,
+      branchId: f.branchId || null,
     };
   };
 
@@ -728,6 +767,28 @@ const BorrowerDetails = () => {
         }
       } catch (err) {
         console.warn("Officer assign/unassign failed:", err?.response?.data || err);
+      }
+      // Assign / unassign branch if changed (with fallbacks)
+      try {
+        const prevBranchId = branchIdFromBorrower(borrower);
+        if (!eqId(form.branchId, prevBranchId)) {
+          const opt = withTenant(borrower?.tenantId);
+          if (form.branchId) {
+            await api
+              .post(`/borrowers/${form.id}/branch`, { branchId: form.branchId }, opt)
+              .catch(() =>
+                api.post(`/borrowers/${form.id}/assign-branch`, { branchId: form.branchId }, opt)
+              )
+              .catch(() => api.patch(`/borrowers/${form.id}`, { branchId: form.branchId }, opt));
+          } else {
+            await api
+              .delete(`/borrowers/${form.id}/branch`, opt)
+              .catch(() => api.post(`/borrowers/${form.id}/unassign-branch`, {}, opt))
+              .catch(() => api.patch(`/borrowers/${form.id}`, { branchId: null }, opt));
+          }
+        }
+      } catch (err) {
+        console.warn("Branch assign/unassign failed:", err?.response?.data || err);
       }
 
       await fetchBorrowerBundle();
@@ -1003,9 +1064,12 @@ const BorrowerDetails = () => {
     "No officers"
   );
   const groupPlaceholder = placeholderFrom(groupsStatus, "Select group…", "No groups");
+  const branchPlaceholder = placeholderFrom(branchesStatus, "Select branch…", "No branches");
 
   const canRetryOfficers = officersStatus === "error";
   const canRetryGroups = groupsStatus === "error";
+  const canRetryBranches = branchesStatus === "error";
+
 
   return (
     <div className="w-full px-4 md:px-6 py-6 min-h-screen bg-white text-slate-900">
@@ -1467,7 +1531,26 @@ const BorrowerDetails = () => {
                   <DlGrid
                     cols={2}
                     items={[
-                      { label: "Branch", value: displayBranch(borrower) },
+                      {
+  label: "Branch",
+  value: isEditing ? (
+    <select
+      value={form.branchId ?? ""}
+      onChange={(e) => onChange("branchId", e.target.value || null)}
+      className="text-sm border-2 border-slate-400 rounded-lg px-2 py-1"
+    >
+      <option value="">{branchPlaceholder}</option>
+      {branches.map((br) => (
+        <option key={br.id} value={br.id}>
+          {br.name} ({br.id})
+        </option>
+      ))}
+    </select>
+  ) : (
+    displayBranch(borrower,branches)
+  ),
+},                
+                      
                       {
                         label: "Loan Officer",
                         value: isEditing ? (
@@ -1484,7 +1567,7 @@ const BorrowerDetails = () => {
                             ))}
                           </select>
                         ) : (
-                          displayOfficer(borrower) || "—"
+                          displayOfficer(borrower,officers) || "—"
                         ),
                       },
                       {
@@ -1520,8 +1603,8 @@ const BorrowerDetails = () => {
                               </option>
                             ))}
                           </select>
-                        ) : displayGroup(borrower) ? (
-                          `${displayGroup(borrower)}${
+                        ) : displayGroup(borrower,groups) ? (
+                          `${displayGroup(borrower,groups)}${
                             borrower.groupId ? ` (${borrower.groupId})` : ""
                           }`
                         ) : (
