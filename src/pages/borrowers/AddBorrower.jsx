@@ -1,27 +1,14 @@
-// AddBorrower.jsx
-import React, { useRef, useState } from "react";
+// src/pages/borrowers/AddBorrower.jsx
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../../api";
-import {
-  Camera,
-  Upload,
-  Save,
-  X,
-  User,
-  IdCard,
-  Phone,
-  Calendar,
-  MapPin,
-  UserPlus,
-} from "lucide-react";
+import { Camera, Upload, Save, X, User, IdCard, Phone, Calendar, MapPin, UserPlus } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-/* ---------- Token-based UI (shares language with dashboard/sidebar) ---------- */
 const ui = {
   page: "w-full px-4 md:px-6 lg:px-8 py-6 min-h-screen bg-[var(--bg)] text-[var(--fg)]",
-  section:
-    "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4 md:p-6",
+  section: "rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow p-4 md:p-6",
   input:
     "w-full text-sm rounded-lg px-3 py-2 border-2 " +
     "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
@@ -74,10 +61,12 @@ export default function AddBorrower() {
   ];
 
   const [submitting, setSubmitting] = useState(false);
-
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const fileRef = useRef(null);
+
+  // Available groups (loaded lazily)
+  const [groups, setGroups] = useState([]);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -99,13 +88,30 @@ export default function AddBorrower() {
     idNumber: "",
     idIssuedDate: "",
     idExpiryDate: "",
-    // ⛔ removed: loanOfficerId, branchId (server will auto-assign)
     loanType: "individual",
     groupId: "",
     nextKinName: "",
     nextKinPhone: "",
     regDate: today(),
   });
+
+  // 🔁 Load groups only when loanType === "group" (prevents 404 spam to /groups)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (form.loanType !== "group" || groups.length) return;
+      try {
+        const res = await api.get("/borrowers/groups"); // ✅ use working endpoint
+        const raw = Array.isArray(res?.data) ? res.data : res?.data?.items || res?.data?.data || [];
+        if (!cancelled) {
+          setGroups(raw.map((g) => ({ id: g.id ?? g.code, name: g.name ?? g.title ?? g.code })));
+        }
+      } catch {
+        if (!cancelled) setGroups([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [form.loanType, groups.length]);
 
   const onPickFile = (e) => {
     const f = e.target.files?.[0];
@@ -126,6 +132,8 @@ export default function AddBorrower() {
       return alert("First & last name are required"), false;
     if (!form.phone.trim()) return alert("Primary phone is required"), false;
     if (!form.gender) return alert("Gender is required"), false;
+    if (form.loanType === "group" && !form.groupId)
+      return alert("Please select a group."), false;
     return true;
   };
 
@@ -162,12 +170,9 @@ export default function AddBorrower() {
       Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ""));
       if (photoFile) fd.append("photo", photoFile);
 
-      // Let Axios set the multipart boundary automatically
-      const res = await api.post("/borrowers", fd);
+      const res = await api.post("/borrowers", fd); // axios sets multipart boundary automatically
 
       alert("Borrower saved successfully");
-
-      // handle both plain and nested payloads
       const newBorrower = res?.data?.borrower || res?.data || {};
       const id = newBorrower?.id;
       const tenantId = newBorrower?.tenantId;
@@ -187,7 +192,6 @@ export default function AddBorrower() {
 
   return (
     <div className={ui.page}>
-      {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div className="min-w-0">
           <h1 className="text-3xl font-extrabold tracking-tight">Add Borrower</h1>
@@ -198,9 +202,8 @@ export default function AddBorrower() {
         <Link to="/borrowers" className={ui.link}>← Back to Borrowers</Link>
       </div>
 
-      {/* Form */}
       <form onSubmit={onSubmit} className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative" noValidate>
-        {/* LEFT: identity + address + ID + kin */}
+        {/* LEFT */}
         <div className="xl:col-span-2 space-y-6 min-w-0">
           {/* Photo */}
           <section className={ui.section}>
@@ -336,7 +339,7 @@ export default function AddBorrower() {
           </section>
         </div>
 
-        {/* RIGHT: type + registration (branch/officer are auto) */}
+        {/* RIGHT */}
         <div className="space-y-6 min-w-0">
           <section className={ui.section}>
             <div className="flex items-center gap-2 mb-4">
@@ -348,11 +351,25 @@ export default function AddBorrower() {
                   {loanTypeOptions.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                 </select>
               </Field>
+
               {form.loanType === "group" && (
-                <Field label="Group ID">
-                  <input className={ui.input} value={form.groupId} onChange={(e) => setForm({ ...form, groupId: e.target.value })} placeholder="Enter group identifier" />
+                <Field label="Group">
+                  <select
+                    className={ui.input}
+                    value={form.groupId}
+                    onChange={(e) => setForm({ ...form, groupId: e.target.value })}
+                    required
+                  >
+                    <option value="">{groups.length ? "Select group…" : "Loading groups..."}</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} ({g.id})
+                      </option>
+                    ))}
+                  </select>
                 </Field>
               )}
+
               <Field label={<LabelWithIcon Icon={Calendar} text="Registration Date" />}>
                 <input type="date" className={ui.input} value={form.regDate} onChange={(e) => setForm({ ...form, regDate: e.target.value })} />
               </Field>
@@ -363,7 +380,7 @@ export default function AddBorrower() {
           </section>
         </div>
 
-        {/* Sticky bottom action bar */}
+        {/* Sticky actions */}
         <div className="col-span-full">
           <div className="sticky bottom-0 inset-x-0 z-20 border-t-2 backdrop-blur" style={{ borderColor: "var(--border-strong)", background: "var(--card)" }}>
             <div className="max-w-screen-2xl mx-auto px-4 py-3 flex justify-end gap-3">
@@ -379,7 +396,6 @@ export default function AddBorrower() {
   );
 }
 
-/* ---------- Tiny helpers for consistent labels ---------- */
 function Field({ label, children }) {
   return (
     <div className="min-w-0">
@@ -388,7 +404,6 @@ function Field({ label, children }) {
     </div>
   );
 }
-
 function LabelWithIcon({ Icon, text }) {
   return (
     <span className="inline-flex items-center gap-1">

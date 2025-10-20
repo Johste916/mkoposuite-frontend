@@ -1,1 +1,0 @@
-import{j as t}from"./index-CF8R0B4H.js";import{R as r}from"./ReportShell-DlizopJR.js";function o(){return t.jsx(r,{title:"All Entries",endpoint:"/reports/all-entries",columns:[]})}export{o as default};

@@ -3,18 +3,9 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api";
 
-/** Try a list of endpoints until one works */
+/** Try a list of endpoints using api.getFirst (handles /api variants) */
 async function tryGET(paths = [], opts = {}) {
-  let lastErr;
-  for (const p of paths) {
-    try {
-      const res = await api.get(p, opts);
-      return res?.data;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error("No endpoint succeeded");
+  return api.getFirst(paths, opts);
 }
 
 /** Normalize group list from various backend shapes */
@@ -60,15 +51,23 @@ const BorrowerGroups = () => {
     (async () => {
       try {
         setLoading(true);
-        const data = await tryGET(
-          [
-            "/borrowers/groups?include=members",
-            "/groups?include=members",
-            "/borrower-groups?include=members",
-            "/api/borrowers/groups?include=members",
-          ],
-          { signal: ac.signal }
-        );
+        const tenantId = localStorage.getItem("activeTenantId") || null;
+        const opt = {
+          signal: ac.signal,
+          ...(tenantId ? { headers: { "x-tenant-id": tenantId } } : {}),
+        };
+        const endpoints = [
+          "/borrowers/groups?include=members",
+          "/groups?include=members",
+          "/borrower-groups?include=members",
+          "/v1/borrowers/groups?include=members",
+          "/v1/groups?include=members",
+          "/v1/borrower-groups?include=members",
+          tenantId && `/tenants/${tenantId}/groups?include=members`,
+          tenantId && `/v1/tenants/${tenantId}/groups?include=members`,
+        ].filter(Boolean);
+
+        const data = await tryGET(endpoints, opt);
         setRows(toGroupRows(data));
         setError("");
       } catch {

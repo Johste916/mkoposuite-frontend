@@ -1,67 +1,55 @@
+// src/api/index.js
 import axios from "axios";
 
-/* ---------- Base URL (Vite/Node/browser safe) ---------- */
-const fromVite =
-  (typeof import.meta !== "undefined" &&
-    import.meta.env &&
-    (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE)) ||
-  "";
+/* ----------------------------- Base URL resolution ---------------------------- */
+/** Grab Vite env safely; never touch bare `process` in the browser */
+const IME = (typeof import.meta !== "undefined" && import.meta.env) || {};
 
-const fromNode =
-  (typeof globalThis !== "undefined" &&
-    globalThis.process &&
-    globalThis.process.env &&
-    (globalThis.process.env.REACT_APP_API_BASE_URL ||
-      globalThis.process.env.REACT_APP_API_URL)) ||
-  "";
+const envBaseRaw = String(
+  // Prefer explicit vite vars
+  IME.VITE_API_BASE_URL ||
+  IME.VITE_API_BASE ||
+  // optional: allow a runtime global override (handy in docker/nginx)
+  (typeof window !== "undefined" && window.__API_BASE_URL__) ||
+  // last resort: empty string -> will fall back to origin below
+  ""
+);
 
-const origin =
-  (typeof window !== "undefined" && window.location && window.location.origin) ||
-  "http://localhost:10000";
+const trimmed = envBaseRaw.replace(/\/+$/, "");
+const fallbackOrigin =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:10000";
 
-const rawBase = String(fromVite || fromNode || origin).replace(/\/+$/, "");
-const baseURL = /\/api$/i.test(rawBase) ? rawBase : `${rawBase}/api`;
+const rawBase = trimmed || fallbackOrigin;
+const base = rawBase.replace(/\/+$/, "");
+// canonical: ensure it ends with /api, but avoid /api/api
+const baseURL = /\/api$/i.test(base) ? base : `${base}/api`;
 
-/* ---------- Optional knobs via env ---------- */
-const WITH_CREDENTIALS =
-  String(
-    (typeof import.meta !== "undefined" &&
-      import.meta.env &&
-      import.meta.env.VITE_API_WITH_CREDENTIALS) ?? "0"
-  ) === "1";
+/* ----------------------------- Optional switches ----------------------------- */
+const WITH_CREDENTIALS = String(IME.VITE_API_WITH_CREDENTIALS ?? "0") === "1";
+const TIMEOUT_MS = Number(IME.VITE_API_TIMEOUT ?? 30000) || 30000;
+const MAX_GET_RETRIES = Number(IME.VITE_API_RETRIES ?? 0) || 0;
+const SEND_TZ_HEADERS = String(IME.VITE_SEND_TZ_HEADERS ?? "1") !== "0";
 
-const TIMEOUT =
-  Number(
-    (typeof import.meta !== "undefined" &&
-      import.meta.env &&
-      import.meta.env.VITE_API_TIMEOUT) ?? 30000
-  ) || 30000;
-
-const MAX_GET_RETRIES =
-  Number(
-    (typeof import.meta !== "undefined" &&
-      import.meta.env &&
-      import.meta.env.VITE_API_RETRIES) ?? 0
-  ) || 0;
-
-/* ---------- Axios instance ---------- */
+/* --------------------------------- Instance --------------------------------- */
 const api = axios.create({
   baseURL,
   withCredentials: WITH_CREDENTIALS,
-  timeout: TIMEOUT,
+  timeout: TIMEOUT_MS,
   headers: { Accept: "application/json" },
 });
 
-/* ---------- Path helpers ---------- */
+/* --------------------------------- Helpers ---------------------------------- */
+const TOKEN_KEYS = ["access_token", "accessToken", "token", "authToken", "jwt"];
 const BASE_HAS_API = /\/api$/i.test(baseURL);
 
-function normalizePath(url) {
-  if (!url) return "/";
-  if (/^https?:\/\//i.test(url)) return url;
-  let u = String(url).trim();
-  if (!u.startsWith("/")) u = `/${u}`;
-  if (BASE_HAS_API && u.startsWith("/api/")) u = u.slice(4); // avoid /api/api
-  return u.replace(/\/{2,}/g, "/");
+function normalizePath(input) {
+  if (!input) return "/";
+  if (/^https?:\/\//i.test(input)) return input;
+  let url = String(input).trim();
+  if (!url.startsWith("/")) url = `/${url}`;
+  if (BASE_HAS_API && url.startsWith("/api/")) url = url.slice(4); // avoid /api/api
+  url = url.replace(/\/{2,}/g, "/");
+  return url;
 }
 function variantsFor(p) {
   const clean = normalizePath(p);
@@ -69,7 +57,6 @@ function variantsFor(p) {
   const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
   return Array.from(new Set([noApi, withApi]));
 }
-
 function isFormData(v) {
   return typeof FormData !== "undefined" && v instanceof FormData;
 }
@@ -82,49 +69,59 @@ function reqId() {
 
 let tenantOverride = null;
 
-/* ---------- Request interceptor ---------- */
+/* ----------------------------- Request interceptor --------------------------- */
 api.interceptors.request.use((config) => {
+  // Normalize relative URL
   if (config.url && !/^https?:\/\//i.test(config.url)) {
     config.url = normalizePath(config.url);
   }
 
-  // Auth
-  const token =
-    localStorage.getItem("token") ||
-    localStorage.getItem("jwt") ||
-    localStorage.getItem("access_token") ||
-    localStorage.getItem("authToken") ||
-    localStorage.getItem("accessToken");
-  if (token) config.headers.Authorization = `Bearer ${String(token).replace(/^Bearer\s+/i, "")}`;
+  // Authorization
+  let token = null;
+  for (const k of TOKEN_KEYS) {
+    const v = typeof localStorage !== "undefined" ? localStorage.getItem(k) : null;
+    if (v) {
+      token = String(v).replace(/^Bearer\s+/i, "");
+      break;
+    }
+  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
 
-  // Tenant
-  const tenantId =
+  // Capture tenantId from URL once (first request) if not set
+  try {
+    if (typeof window !== "undefined" && !tenantOverride) {
+      const u = new URL(window.location.href);
+      const t = u.searchParams.get("tenantId");
+      if (t) tenantOverride = t;
+    }
+  } catch {}
+
+  // Tenant header (override > activeTenantId > user.tenantId)
+  let tenantId =
     tenantOverride ||
-    localStorage.getItem("activeTenantId") ||
-    (() => {
-      try {
-        const u = JSON.parse(localStorage.getItem("user") || "{}");
-        return u?.tenantId || u?.tenant?.id || u?.orgId || u?.companyId || null;
-      } catch {
-        return null;
-      }
-    })() ||
-    localStorage.getItem("tenantId") ||
-    localStorage.getItem("x-tenant-id");
+    (typeof localStorage !== "undefined" && (localStorage.getItem("activeTenantId") || localStorage.getItem("x-tenant-id")));
+  if (!tenantId && typeof localStorage !== "undefined") {
+    try {
+      const u = JSON.parse(localStorage.getItem("user") || "{}");
+      tenantId = u?.tenantId || u?.tenant?.id || u?.orgId || u?.companyId || null;
+    } catch {}
+  }
   if (tenantId) config.headers["x-tenant-id"] = tenantId;
 
-  // Branch
-  const branchId = localStorage.getItem("activeBranchId");
+  // Branch header
+  const branchId = typeof localStorage !== "undefined" ? localStorage.getItem("activeBranchId") : null;
   if (branchId) config.headers["x-branch-id"] = branchId;
 
   // Timezone hints
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz) config.headers["x-timezone"] = tz;
-  } catch {}
-  try {
-    config.headers["x-tz-offset"] = String(new Date().getTimezoneOffset());
-  } catch {}
+  if (SEND_TZ_HEADERS) {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) config.headers["x-timezone"] = tz;
+    } catch {}
+    try {
+      config.headers["x-tz-offset"] = String(new Date().getTimezoneOffset());
+    } catch {}
+  }
 
   // Content headers + request id
   if (isFormData(config.data)) {
@@ -139,7 +136,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/* ---------- Response interceptor ---------- */
+/* ----------------------------- Response interceptor -------------------------- */
+let redirectingOn401 = false;
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
@@ -157,40 +156,41 @@ api.interceptors.response.use(
         err?.message ||
         `Request failed (${status})`;
 
-    // Hard 401: purge + redirect
+    // 401: purge & one-time redirect
     if (status === 401) {
       try {
         [
-          "token",
-          "jwt",
-          "authToken",
-          "accessToken",
-          "access_token",
+          ...TOKEN_KEYS,
           "user",
           "tenant",
           "tenantId",
           "tenantName",
+          "activeTenantId",
           "activeBranchId",
         ].forEach((k) => {
           try {
-            localStorage.removeItem(k);
-            sessionStorage.removeItem(k);
+            if (typeof localStorage !== "undefined") localStorage.removeItem(k);
+            if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(k);
           } catch {}
         });
         delete api.defaults.headers.common.Authorization;
         delete api.defaults.headers.common["x-tenant-id"];
         delete api.defaults.headers.common["x-branch-id"];
       } catch {}
-      if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
-        window.location.replace("/login");
+      if (!redirectingOn401 && typeof window !== "undefined") {
+        redirectingOn401 = true;
+        if (!/\/login$/.test(window.location.pathname)) {
+          window.location.replace("/login");
+        }
       }
       return Promise.reject(err);
     }
 
-    // Optional GET retries on transient errors
+    // Optional: safe GET retries on transient errors
     const transient = status && [429, 502, 503, 504].includes(status);
     const isGet = (cfg.method || "get").toLowerCase() === "get";
     cfg.__retryCount = cfg.__retryCount || 0;
+
     if (MAX_GET_RETRIES > 0 && isGet && transient && cfg.__retryCount < MAX_GET_RETRIES) {
       cfg.__retryCount += 1;
       const backoff = Math.min(1000 * 2 ** (cfg.__retryCount - 1), 4000);
@@ -198,7 +198,7 @@ api.interceptors.response.use(
       return api.request(cfg);
     }
 
-    if (import.meta?.env?.MODE !== "production") {
+    if (IME.MODE !== "production") {
       // eslint-disable-next-line no-console
       console.error("API error:", err.normalizedMessage, err?.response || err);
     }
@@ -206,14 +206,13 @@ api.interceptors.response.use(
   }
 );
 
-/* ---------- Convenience JSON helpers ---------- */
+/* ------------------------------- Sugar methods ------------------------------- */
 api.getJSON = async (url, config) => (await api.get(normalizePath(url), config)).data;
 api.postJSON = async (url, data, config) => (await api.post(normalizePath(url), data, config)).data;
 api.putJSON = async (url, data, config) => (await api.put(normalizePath(url), data, config)).data;
 api.patchJSON = async (url, data, config) => (await api.patch(normalizePath(url), data, config)).data;
 api.deleteJSON = async (url, config) => (await api.delete(normalizePath(url), config)).data;
 
-/* ---------- “First endpoint that works” helpers ---------- */
 async function __firstOk(method, paths, payload, config) {
   const list = Array.isArray(paths) ? paths : [paths];
   const candidates = Array.from(new Set(list.flatMap((p) => variantsFor(p))));
@@ -233,20 +232,23 @@ async function __firstOk(method, paths, payload, config) {
   throw lastErr || new Error("No endpoint succeeded");
 }
 
-// Attach (polyfill-safe)
-api.getFirst    = api.getFirst    || ((paths, config)       => __firstOk("get", paths, undefined, config));
-api.postFirst   = api.postFirst   || ((paths, data, config) => __firstOk("post", paths, data, config));
-api.putFirst    = api.putFirst    || ((paths, data, config) => __firstOk("put", paths, data, config));
-api.patchFirst  = api.patchFirst  || ((paths, data, config) => __firstOk("patch", paths, data, config));
-api.deleteFirst = api.deleteFirst || ((paths, config)       => __firstOk("delete", paths, undefined, config));
+api.getFirst    = (paths, config)       => __firstOk("get", paths, undefined, config);
+api.postFirst   = (paths, data, config) => __firstOk("post", paths, data, config);
+api.putFirst    = (paths, data, config) => __firstOk("put", paths, data, config);
+api.patchFirst  = (paths, data, config) => __firstOk("patch", paths, data, config);
+api.deleteFirst = (paths, config)       => __firstOk("delete", paths, undefined, config);
 
-/* ---------- Misc helpers ---------- */
 api.setTenantId = (id) => { tenantOverride = id || null; };
 api.clearTenantId = () => { tenantOverride = null; };
+api.getTenantId = () =>
+  tenantOverride ||
+  (typeof localStorage !== "undefined" ? localStorage.getItem("activeTenantId") : null) ||
+  null;
+
 api.path = normalizePath;
 api.withAbort = () => { const ac = new AbortController(); return { signal: ac.signal, cancel: () => ac.abort() }; };
 
-// Also expose normalized verb wrappers if you want to opt-in
+// Normalized verb mirrors (opt-in)
 ["get", "post", "put", "patch", "delete"].forEach((m) => {
   api[`_${m}`] = (url, ...rest) => api[m](normalizePath(url), ...rest);
 });

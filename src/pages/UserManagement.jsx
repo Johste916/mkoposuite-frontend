@@ -1,4 +1,3 @@
-// src/pages/UserManagement.jsx
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import api from "../api";
@@ -8,6 +7,16 @@ async function tryOneGET(path, opts = {}) { try { const res = await api.get(path
 async function tryOnePOST(path, body = {}, opts = {}) { try { const res = await api.post(path, body, opts); return { ok: true, data: res?.data }; } catch (e) { return { ok: false, error: e }; } }
 async function tryOnePUT(path, body = {}, opts = {}) { try { const res = await api.put(path, body, opts); return { ok: true, data: res?.data }; } catch (e) { return { ok: false, error: e }; } }
 async function tryOneDELETE(path, opts = {}) { try { const res = await api.delete(path, opts); return { ok: true, data: res?.data }; } catch (e) { return { ok: false, error: e }; } }
+
+// NEW: tolerant multi-endpoint GET that returns {ok,data|error}
+async function tryFirstGET(paths = [], opts = {}) {
+  try {
+    const data = await api.getFirst(paths, opts); // uses api.js firstOk + /api variants
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+}
 
 /* ---------------- small helpers -------------------- */
 const onlyDigits = (v) => String(v || "").replace(/\D+/g, "");
@@ -239,9 +248,9 @@ const UserManagement = () => {
       if (branchFilter) params.branchId = branchFilter;
 
       const [usersRes, rolesRes, branchesRes] = await Promise.all([
-        tryOneGET("/users", { params }),
-        tryOneGET("/roles", { params: { limit: 1000 } }),
-        tryOneGET("/branches", { params: { limit: 1000 } }),
+        tryFirstGET(["/users", "/v1/users"], { params }),
+        tryFirstGET(["/roles", "/v1/roles", "/auth/roles", "/iam/roles"], { params: { limit: 1000 } }),
+        tryFirstGET(["/branches", "/v1/branches", "/org/branches"], { params: { limit: 1000 } }),
       ]);
       if (!usersRes.ok) throw usersRes.error;
       if (!rolesRes.ok) throw rolesRes.error;
@@ -388,7 +397,7 @@ const UserManagement = () => {
     const selected = new Set((u.roles || u.Roles || []).map(r => r?.id ?? r?.roleId ?? r?.RoleId).filter(x => x != null));
     setRoleSel(selected);
     if (roles.length === 0) {
-      const r = await tryOneGET("/roles", { params: { limit: 1000 } });
+      const r = await tryFirstGET(["/roles", "/v1/roles", "/auth/roles", "/iam/roles"], { params: { limit: 1000 } });
       if (r.ok) setRoles(pickArrayish(r.data));
     }
     setRolesOpen(true);
