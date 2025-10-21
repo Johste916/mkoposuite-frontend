@@ -5,6 +5,14 @@ import LoanScheduleModal from "../components/LoanScheduleModal";
 import RepaymentModal from "../components/RepaymentModal";
 import api from "../api";
 
+// ---- tenant helpers (normalize bogus / empty IDs) ----
+const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
+const normTenant = (t) => {
+  const s = String(t ?? "").trim().toLowerCase();
+  if (!s || s === "null" || s === "undefined" || s === ZERO_UUID) return null;
+  return t;
+};
+
 /* ---------------- Utilities ---------------- */
 const safeNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const money = (v) => `TZS ${safeNum(v).toLocaleString()}`;
@@ -442,7 +450,6 @@ const mapBorrowerToForm = (b) => ({
     else setFilteredSavings(savings.filter((tx) => tx.type === filterType));
   }, [filterType, savings]);
 
-  /* -------- Loan officers: statusful, tenant-aware, cached -------- */
  /* -------- Branches: statusful, tenant-aware, cached -------- */
 useEffect(() => {
   const t = effectiveTenantId(borrower?.tenantId, tenantIdParam);
@@ -503,59 +510,69 @@ useEffect(() => {
 
 /* -------- Officers: statusful, tenant-aware, cached -------- */
 useEffect(() => {
-  // Try with tenant if we have it; otherwise fetch without a tenant header.
   const t = effectiveTenantId(borrower?.tenantId, tenantIdParam);
   const cacheKey = t || "__no_tenant__";
 
+  // If we have a non-empty cache and the user isn’t explicitly retrying, use it
   const cached = _tenantCache.officers.get(cacheKey);
-  if (cached) {
+  if (cached && cached.length && reloadOfficersKey === 0) {
     setOfficers(cached);
-    setOfficersStatus(cached.length ? "ok" : "empty");
+    setOfficersStatus("ok");
     return;
   }
+  // Drop any previously cached empty array (from older code)
+  if (cached && !cached.length) _tenantCache.officers.delete(cacheKey);
 
   let ignore = false;
   setOfficersStatus("loading");
 
   (async () => {
     try {
-      const opt = withTenant(t); // {} when no tenant
+      const opt = withTenant(t);
+
+      // Try tenant-specific first, then the rest
       const paths = [
+        t ? `/tenants/${t}/officers` : null,
+        "/v1/officers",
         "/officers",
         "/loan-officers",
-        "/v1/officers",
-        t ? `/tenants/${t}/officers` : null,
-        "/users?role=officer",
         "/users?role=loan_officer",
+        "/users?role=officer",
         "/v1/users?role=officer",
       ].filter(Boolean);
 
-      const data = await tryGET(paths, opt);
+      const pickList = (d) =>
+        (Array.isArray(d) && d) ||
+        d?.items || d?.data || d?.rows || d?.results || d?.officers || d?.users || [];
 
-      const arr =
-        (Array.isArray(data) && data) ||
-        data?.items ||
-        data?.data ||
-        data?.rows ||
-        data?.results ||
-        [];
+      // IMPORTANT: keep trying until we get a NON-EMPTY list
+      let arr = [];
+      for (const p of paths) {
+        const d = await tryGET([p], opt).catch(() => null);
+        const list = pickList(d);
+        if (list && list.length) {
+          arr = list;
+          break;
+        }
+      }
 
       const mapped = (arr || []).map((o) => ({
-        id: o.id ?? o.userId ?? o.uuid ?? o.code ?? o.employeeId,
-        // use helper to avoid ?? / || precedence issue and blank strings
+        // Prefer the officer entity id if present
+        id: o.loanOfficerId ?? o.id ?? o.userId ?? o.uuid ?? o.code ?? o.employeeId,
         name: firstFilled(
           o.name,
           o.fullName,
           [o.firstName, o.lastName].filter(Boolean).join(" "),
           o.email,
-          String(o.id)
+          String(o.id ?? o.userId ?? "")
         ),
       }));
 
       if (!ignore) {
         setOfficers(mapped);
         setOfficersStatus(mapped.length ? "ok" : "empty");
-        _tenantCache.officers.set(cacheKey, mapped);
+        // Do NOT cache empties
+        if (mapped.length) _tenantCache.officers.set(cacheKey, mapped);
       }
     } catch (e) {
       console.error("[officers] load failed:", e);
@@ -569,7 +586,7 @@ useEffect(() => {
   return () => {
     ignore = true;
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [borrower?.tenantId, tenantIdParam, reloadOfficersKey]);
 
   /* -------- Groups: statusful, tenant-aware, cached -------- */
