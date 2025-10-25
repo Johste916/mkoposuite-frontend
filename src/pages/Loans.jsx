@@ -21,9 +21,9 @@ const ui = {
     "border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
   primary:
-    "inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold " +
-    "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
+  "inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold " +
+  "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-0",
   tableWrap:
     "overflow-x-auto rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)]",
   th:

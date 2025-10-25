@@ -35,9 +35,9 @@ const ui = {
     "border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
   primary:
-    "inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-semibold " +
-    "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:opacity-60",
+  "inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-semibold " +
+  "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-0 disabled:opacity-60",
   input:
     "w-full rounded-lg border-2 px-3 py-2 outline-none " +
     "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
@@ -311,6 +311,33 @@ export default function LoanDetails() {
       setActing(false);
     }
   }
+
+async function disburseLoan() {
+  setActing(true);
+  try {
+    // 1) Preferred: dedicated endpoint if your API exposes it
+    try {
+      await api.post(`/loans/${id}/disburse`);
+    } catch (e1) {
+      // 2) Fallback: status-change via PATCH
+      try {
+        await api.patch(`/loans/${id}/status`, { status: "disbursed" });
+      } catch (e2) {
+        // 3) Fallback: PUT (if your backend used PUT before)
+        await api.put(`/loans/${id}/status`, { status: "disbursed" });
+      }
+    }
+
+    await loadLoan();
+    window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id } }));
+    alert("Loan disbursed.");
+  } catch (e) {
+    console.error(e);
+    alert(e?.response?.data?.error || "Failed to disburse loan.");
+  } finally {
+    setActing(false);
+  }
+}
 
   async function saveSuggestion() {
     if (!suggestedAmount || Number(suggestedAmount) <= 0) {
@@ -754,9 +781,9 @@ export default function LoanDetails() {
           {showDisburse && (
             <div className="flex items-center justify-between">
               <p className="text-sm">This loan is approved. Proceed to disbursement to finalize payout.</p>
-              <Link to={`/loans/${id}/disburse`} className={ui.primary}>
-                Disburse
-              </Link>
+              <button onClick={disburseLoan} className={ui.primary} disabled={acting}>
+                {acting ? "Working…" : "Disburse"}
+              </button>
             </div>
           )}
         </SectionCard>

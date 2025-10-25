@@ -12,7 +12,7 @@ const startCase = (s) =>
     .trim()
     .replace(/^./, (c) => c.toUpperCase());
 
-const fmtTZS = (v) => `TZS ${Number(v || 0).toLocaleString()}`;
+const fmtTZS = (v, c = "TZS") => `${c} ${Number(v || 0).toLocaleString()}`;
 const fmtPercent = (v) =>
   typeof v === "number" ? `${(v > 1 ? v : v * 100).toFixed(2)}%` : String(v ?? "");
 
@@ -45,15 +45,16 @@ function toCSV(rows) {
   return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
 }
 
-/** Prefer server columns when available. Accepts:
- *  - raw.columns = [{key,label,fmt?}] or string[]
- *  - raw.table.columns = same
- */
+/** Prefer server columns when available. Accepts raw.columns or raw.table.columns */
 function extractServerColumns(raw) {
   const srvCols = raw?.columns || raw?.table?.columns;
   if (!srvCols) return null;
   if (Array.isArray(srvCols)) {
-    return srvCols.map((c) => (typeof c === "string" ? { key: c, label: startCase(c) } : c));
+    return srvCols.map((c) =>
+      typeof c === "string"
+        ? { key: c, label: startCase(c) }
+        : { key: c.key, label: c.label ?? startCase(c.key), currency: !!c.currency, percent: !!c.percent, fmt: c.fmt }
+    );
   }
   return null;
 }
@@ -98,14 +99,7 @@ function rowsFromCards(cards = []) {
   };
 }
 
-/** Normalize API payloads into { rows, columns, meta }
- *  Priority:
- *    1) table.rows (+ table.columns)
- *    2) cards      → expand to {metric,value}
- *    3) summary    → expand to {metric,value}
- *    4) rows/items/buckets
- *    5) object     → collapse to [{metric,value}] excluding non-row keys
- */
+/** Normalize API payloads into { rows, columns, meta } */
 function normalizeData(raw, columnsProp) {
   let rows = [];
   let meta = {};
@@ -118,30 +112,27 @@ function normalizeData(raw, columnsProp) {
   const scope = raw?.table?.scope ?? raw?.scope;
   const welcome = raw?.table?.welcome ?? raw?.welcome;
   const asOf = raw?.table?.asOf ?? raw?.asOf;
-  meta = { ...raw, period, scope, welcome, asOf };
+  const totals = raw?.table?.totals ?? raw?.totals;
+  meta = { ...raw, period, scope, welcome, asOf, totals };
 
-  // 1) Standard table
+  // Priority: table.rows → cards → summary → rows/items/buckets → collapse object
   if (Array.isArray(raw?.table?.rows)) {
     rows = raw.table.rows;
-  }
-  // 2) At-a-Glance cards
-  else if (Array.isArray(raw?.cards)) {
+  } else if (Array.isArray(raw?.cards)) {
     const out = rowsFromCards(raw.cards);
     rows = out.rows;
     if (!columns.length) columns = out.columns;
-  }
-  // 3) summary -> expand to metric/value rows
-  else if (isPlainObject(raw?.summary)) {
+  } else if (isPlainObject(raw?.summary)) {
     const out = rowsFromSummary(raw.summary);
     rows = out.rows;
     if (!columns.length) columns = out.columns;
-  }
-  // 4) Common containers
-  else if (Array.isArray(raw?.rows)) rows = raw.rows;
-  else if (Array.isArray(raw?.items)) rows = raw.items;
-  else if (Array.isArray(raw?.buckets)) rows = raw.buckets;
-  // 5) Collapse object (excluding known non-row keys)
-  else if (raw && typeof raw === "object") {
+  } else if (Array.isArray(raw?.rows)) {
+    rows = raw.rows;
+  } else if (Array.isArray(raw?.items)) {
+    rows = raw.items;
+  } else if (Array.isArray(raw?.buckets)) {
+    rows = raw.buckets;
+  } else if (raw && typeof raw === "object") {
     const EXCLUDE = new Set([
       "rows", "items", "buckets", "table", "columns",
       "summary", "period", "scope", "welcome", "asOf",
@@ -192,7 +183,7 @@ function composeScopeLabel(params, meta) {
 export default function ReportShell({
   title = "Report",
   endpoint,              // e.g. "/reports/disbursements/summary"
-  columns = [],          // optional: [{key,label,fmt?}]
+  columns = [],          // optional: [{key,label,fmt?,currency?,percent?}]
   exportCsvPath = "",    // optional server CSV path; fallback to client CSV
   mode = "auto",         // "auto" | "snapshot" (hides filter block)
   filters = {            // toggle filter controls per page
@@ -297,26 +288,44 @@ export default function ReportShell({
   /** Cell renderer with currency/percent hints support */
   const renderCell = (c, r) => {
     const val = r?.[c.key];
-    // Metric tables often have flags on each row
-    const isCurrency = r?.currency && (c.key === "value" || /amount|total|balance|olp/i.test(c.key));
-    const isPercent  = r?.percent  && (c.key === "value" || /par|ratio|yield|efficiency|achievement/i.test(c.key));
+
+    // Column-level hints from server or prop
+    const colCurrency = !!c.currency;
+    const colPercent  = !!c.percent;
+
+    // Row-level hints (used by summary/cards → value column)
+    const rowCurrency = r?.currency && (c.key === "value");
+    const rowPercent  = r?.percent  && (c.key === "value");
 
     if (c.fmt) return c.fmt(val, r);
-    if (isPercent) return fmtPercent(Number(val || 0));
-    if (isCurrency && typeof val === "number") return fmtTZS(val);
 
-    // Generic: avoid [object Object]
+    if ((colPercent || rowPercent) && typeof val === "number") return fmtPercent(val);
+    if ((colCurrency || rowCurrency) && typeof val === "number") {
+      const cur = r?.currencyCode || r?.currency || "TZS";
+      return fmtTZS(val, cur);
+    }
+
     return stringifyMaybe(val);
   };
 
   /** Export CSV
-   *  - If exportCsvPath provided → open server exporter (tenanted)
+   *  - If exportCsvPath provided → open server exporter with current filters + tenantId
    *  - Else → build from normalized rows
    */
   const doExportCSV = () => {
     if (exportCsvPath) {
-      const base = import.meta.env.VITE_API_BASE_URL || "";
-      const url = `${base}${exportCsvPath}`;
+      const tenantId = api.getTenantId?.() || "";
+      const q = new URLSearchParams({
+        ...(params.startDate ? { startDate: params.startDate } : {}),
+        ...(params.endDate ? { endDate: params.endDate } : {}),
+        ...(params.branchId ? { branchId: params.branchId } : {}),
+        ...(params.officerId ? { officerId: params.officerId } : {}),
+        ...(params.borrowerId ? { borrowerId: params.borrowerId } : {}),
+        ...(tenantId ? { tenantId } : {}), // let server read tenant from query when headers aren't available
+      });
+      const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+      const path = exportCsvPath.startsWith("/") ? exportCsvPath : `/${exportCsvPath}`;
+      const url = `${base}${path}?${q.toString()}`;
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
@@ -492,6 +501,24 @@ export default function ReportShell({
               </div>
             )}
           </div>
+
+          {/* Small apply/clear row even if borrower search hidden */}
+          {!filters.borrower && (
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                onClick={() => load()}
+                className="h-9 px-3 rounded bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Apply
+              </button>
+              <button
+                onClick={clearFilters}
+                className="h-9 px-3 rounded border hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -529,6 +556,29 @@ export default function ReportShell({
                   </tr>
                 ))}
               </tbody>
+              {isPlainObject(meta?.totals) && (
+                <tfoot>
+                  <tr>
+                    {cols.map((c, idx) => {
+                      const v = meta.totals[c.key];
+                      const isNum = typeof v === "number";
+                      const render =
+                        v == null
+                          ? ""
+                          : (c.percent && isNum)
+                          ? fmtPercent(v)
+                          : (c.currency && isNum)
+                          ? fmtTZS(v)
+                          : stringifyMaybe(v);
+                      return (
+                        <td key={c.key} className={`px-3 py-2 font-semibold ${idx === 0 ? "" : "text-right"}`}>
+                          {idx === 0 ? "Totals" : render}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}

@@ -1,5 +1,6 @@
 // src/pages/Disbursements.jsx
 import React, { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../api';
 import { getUserRole } from '../utils/auth';
 import { format } from 'date-fns';
@@ -33,7 +34,9 @@ const chip = (status) => {
 };
 
 const Disbursements = () => {
+  const navigate = useNavigate();
   const userRole = getUserRole();
+
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -84,11 +87,29 @@ const Disbursements = () => {
   const updateLoanStatus = async (loanId, status) => {
     try {
       setActionLoading(true);
-      await api.put(`/loans/${loanId}/status`, { status });
+
+      // Try PATCH first (most APIs)
+      try {
+        await api.patch(`/loans/${loanId}/status`, { status });
+      } catch (ePatch) {
+        // If disbursing and there is a dedicated endpoint, prefer it
+        if (status === 'disbursed') {
+          try {
+            await api.post(`/loans/${loanId}/disburse`);
+          } catch (ePost) {
+            // Old code path: some builds used PUT
+            await api.put(`/loans/${loanId}/status`, { status });
+          }
+        } else {
+          // For non-disburse statuses, fall back to PUT
+          await api.put(`/loans/${loanId}/status`, { status });
+        }
+      }
+
       await fetchLoans();
     } catch (err) {
       console.error('Status update error:', err);
-      alert('Failed to update loan status');
+      alert(err?.response?.data?.error || 'Failed to update loan status');
     } finally {
       setActionLoading(false);
     }
@@ -133,6 +154,7 @@ const Disbursements = () => {
               <option value="disbursed">Disbursed</option>
             </select>
             <button className={cls.btn} onClick={fetchLoans}>Apply</button>
+            <button className={cls.btn} onClick={fetchLoans}>Refresh</button>
             <CSVLink
               data={loans}
               headers={headers}
@@ -156,6 +178,8 @@ const Disbursements = () => {
             <table className={cls.table}>
               <thead>
                 <tr>
+                  {/* You can prepend a "Ref" column here if you track it: */}
+                  {/* <th className={cls.th}>Ref</th> */}
                   <th className={cls.th}>Borrower</th>
                   <th className={cls.th}>Amount</th>
                   <th className={cls.th}>Currency</th>
@@ -178,11 +202,14 @@ const Disbursements = () => {
                 ) : (
                   paginatedLoans.map((loan) => (
                     <tr key={loan.id}>
+                      {/* <td className={cls.td}>{loan.ref || loan.reference || `LN-${loan.id}`}</td> */}
                       <td className={cls.td}>{loan.borrower?.name || 'Unknown'}</td>
                       <td className={cls.td}>{Number(loan.amount || 0).toLocaleString()}</td>
                       <td className={cls.td}>{loan.currency}</td>
                       <td className={cls.td}>
-                        <span className={chip(loan.status)}>{String(loan.status || '').toUpperCase()}</span>
+                        <span className={chip(loan.status)}>
+                          {String(loan.status || '').toUpperCase()}
+                        </span>
                       </td>
                       <td className={cls.td}>
                         {loan.startDate ? format(new Date(loan.startDate), 'yyyy-MM-dd') : '-'}
@@ -195,24 +222,39 @@ const Disbursements = () => {
                       <td className={cls.td}>{loan.initiator?.name || '-'}</td>
                       <td className={cls.td}>
                         <div className="flex flex-wrap gap-2">
+                          {/* View works for everyone */}
+                          <button
+                            onClick={() => navigate(`/loans/${loan.id}`)}
+                            className={cls.btn}
+                          >
+                            View
+                          </button>
+
+                          {/* Approve (manager-level) */}
                           {loan.status === 'pending' && canApprove && (
                             <button
                               onClick={() => updateLoanStatus(loan.id, 'approved')}
                               className={cls.warn}
                               disabled={actionLoading}
+                              title="Approve loan for disbursement"
                             >
-                              Approve
+                              {actionLoading ? 'Working…' : 'Approve'}
                             </button>
                           )}
+
+                          {/* Disburse (accountant/admin) */}
                           {loan.status === 'approved' && canDisburse && (
                             <button
                               onClick={() => updateLoanStatus(loan.id, 'disbursed')}
                               className={cls.good}
                               disabled={actionLoading}
+                              title="Mark as disbursed"
                             >
-                              Disburse
+                              {actionLoading ? 'Working…' : 'Disburse'}
                             </button>
                           )}
+
+                          {/* Read-only state */}
                           {!['pending', 'approved'].includes(String(loan.status || '')) && (
                             <span className="text-slate-500">Done</span>
                           )}

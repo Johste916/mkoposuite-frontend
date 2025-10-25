@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import {
   format,
@@ -79,8 +79,8 @@ function normalizeLoanSummaryPayload(data) {
     outstandingBalance: Number(get("Outstanding Balance")),
     arrearsCount: Number(get("Arrears Count") || 0),
     arrearsAmount: Number(get("Arrears Amount") || 0),
-    period: data?.table?.period || data?.period || "",
-    scope: data?.table?.scope || data?.scope || "",
+    period: data?.period || data?.table?.period || "",
+    scope: data?.scope || data?.table?.scope || "",
   };
 
   return { top, flat };
@@ -95,9 +95,9 @@ const ui = {
   td: "px-3 py-2 border-2 border-slate-200 text-sm",
   statTitle: "text-[11px] uppercase tracking-wide text-slate-600 font-semibold",
   statNum: "text-2xl md:text-3xl font-extrabold tabular-nums",
-  btn: "inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50 font-semibold",
-  btnPrimary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700",
-  btnDanger: "inline-flex items-center rounded-lg bg-rose-600 text-white px-3 py-2 font-semibold hover:bg-rose-700",
+  btn: "inline-flex items-center rounded-lg border-2 border-slate-300 px-3 py-2 hover:bg-slate-50 font-semibold disabled:opacity-50 disabled:cursor-not-allowed",
+  btnPrimary: "inline-flex items-center rounded-lg bg-indigo-600 text-white px-3 py-2 font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed",
+  btnDanger: "inline-flex items-center rounded-lg bg-rose-600 text-white px-3 py-2 font-semibold hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed",
   fieldBase:
     "h-11 w-full rounded-lg border-2 border-slate-300 bg-white text-sm outline-none " +
     "focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-600 transition",
@@ -127,10 +127,12 @@ const Reports = () => {
   const [branches, setBranches] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [borrowers, setBorrowers] = useState([]);
+  const [products, setProducts] = useState([]);
 
   const [branchId, setBranchId] = useState("");
   const [officerId, setOfficerId] = useState("");
   const [borrowerId, setBorrowerId] = useState("");
+  const [productId, setProductId] = useState("");
 
   const [timeRange, setTimeRange] = useState(""); // '', today, week, month, quarter, semiAnnual, annual, custom
   const [startDate, setStartDate] = useState("");
@@ -139,6 +141,12 @@ const Reports = () => {
   // loan summary (scoped)
   const [loanSummary, setLoanSummary] = useState(null);
   const [loadingLoanSummary, setLoadingLoanSummary] = useState(true);
+  const [error, setError] = useState("");
+
+  // abort controllers (avoid race conditions)
+  const filtersAbortRef = useRef(null);
+  const summaryAbortRef = useRef(null);
+  const trendsAbortRef = useRef(null);
 
   // ---------- load base data ----------
   useEffect(() => {
@@ -161,35 +169,49 @@ const Reports = () => {
   useEffect(() => {
     fetchLoanSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, officerId, borrowerId, timeRange, startDate, endDate]);
+  }, [branchId, officerId, borrowerId, productId, timeRange, startDate, endDate]);
 
-  const fetchFilters = async () => {
+  const fetchFilters = useCallback(async () => {
+    filtersAbortRef.current?.abort?.();
+    const controller = new AbortController();
+    filtersAbortRef.current = controller;
+
     try {
-      const res = await api.get("/reports/filters"); // -> {branches, officers, borrowers, products}
+      const res = await api.get("/reports/filters", { signal: controller.signal }); // -> {branches, officers, borrowers, products}
       setBranches(res.data?.branches || []);
       setOfficers(res.data?.officers || []);
       setBorrowers(res.data?.borrowers || []);
+      setProducts(res.data?.products || []);
     } catch (err) {
-      console.error("Error loading filters:", err);
+      if (err?.name !== "CanceledError" && err?.name !== "AbortError") {
+        console.error("Error loading filters:", err);
+      }
     }
-  };
+  }, []);
 
-  // Summary cards come from the same endpoint as the table
-  const fetchSummary = async () => {
+  // Summary cards come from the same endpoint as the table (unscoped)
+  const fetchSummary = useCallback(async () => {
+    summaryAbortRef.current?.abort?.();
+    const controller = new AbortController();
+    summaryAbortRef.current = controller;
+
     try {
-      const res = await api.get("/reports/borrowers/loan-summary");
+      const res = await api.get("/reports/borrowers/loan-summary", { signal: controller.signal });
       const norm = normalizeLoanSummaryPayload(res.data);
       if (norm) setSummary(norm.top);
     } catch (err) {
-      console.error("Error loading summary:", err);
+      if (err?.name !== "CanceledError" && err?.name !== "AbortError") {
+        console.error("Error loading summary:", err);
+      }
     }
-  };
+  }, []);
 
-  const makeParams = () => {
+  const makeParams = useCallback(() => {
     const p = {
       branchId: branchId || undefined,
       officerId: officerId || undefined,
       borrowerId: borrowerId || undefined,
+      productId: productId || undefined,
     };
     if (timeRange === "custom") {
       if (startDate) p.startDate = startDate;
@@ -200,70 +222,106 @@ const Reports = () => {
       if (e) p.endDate = e;
     }
     return p;
-  };
+  }, [branchId, officerId, borrowerId, productId, timeRange, startDate, endDate]);
 
-  const fetchLoanSummary = async () => {
+  const fetchLoanSummary = useCallback(async () => {
     setLoadingLoanSummary(true);
+    setError("");
+    summaryAbortRef.current?.abort?.();
+    const controller = new AbortController();
+    summaryAbortRef.current = controller;
+
     try {
-      const res = await api.get("/reports/borrowers/loan-summary", { params: makeParams() });
+      const res = await api.get("/reports/borrowers/loan-summary", {
+        params: makeParams(),
+        signal: controller.signal,
+      });
       const norm = normalizeLoanSummaryPayload(res.data);
       setLoanSummary(norm?.flat || null);
       if (norm?.top) setSummary(norm.top); // keep top cards in sync
     } catch (err) {
+      if (err?.name === "CanceledError" || err?.name === "AbortError") return;
       console.error("Error loading loan summary:", err);
+      setError("Failed to load report. Please adjust filters and try again.");
       setLoanSummary(null);
     } finally {
       setLoadingLoanSummary(false);
     }
-  };
+  }, [makeParams]);
 
-  const fetchTrends = async () => {
+  const fetchTrends = useCallback(async () => {
+    trendsAbortRef.current?.abort?.();
+    const controller = new AbortController();
+    trendsAbortRef.current = controller;
+
     try {
-      const res = await api.get(`/reports/loans/trends`, { params: { year } });
-      setTrends(res.data || []);
+      const res = await api.get(`/reports/loans/trends`, { params: { year }, signal: controller.signal });
+      setTrends(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error("Error loading trends:", err);
+      if (err?.name !== "CanceledError" && err?.name !== "AbortError") {
+        console.error("Error loading trends:", err);
+      }
     }
-  };
+  }, [year]);
 
   const exportCSV = () => {
     const base = import.meta.env.VITE_API_BASE_URL || "";
     const qs = new URLSearchParams(makeParams()).toString();
-    window.open(`${base}/reports/loans/export/csv${qs ? `?${qs}` : ""}`, "_blank");
+    window.open(`${base}/reports/loans/export/csv${qs ? `?${qs}` : ""}`, "_blank", "noopener,noreferrer");
   };
   const exportPDF = () => {
     const base = import.meta.env.VITE_API_BASE_URL || "";
     const qs = new URLSearchParams(makeParams()).toString();
-    window.open(`${base}/reports/loans/export/pdf${qs ? `?${qs}` : ""}`, "_blank");
+    window.open(`${base}/reports/loans/export/pdf${qs ? `?${qs}` : ""}`, "_blank", "noopener,noreferrer");
   };
 
-  const chartData = useMemo(
-    () => ({
-      labels: trends.map((d) => format(new Date(year, (d.month || 1) - 1, 1), "MMM")),
+  const chartData = useMemo(() => {
+    const safeMonth = (m) => {
+      const n = Number(m || 0);
+      // expect 1..12 from API; clamp to 1..12 to avoid invalid dates
+      const clamped = Math.min(12, Math.max(1, n || 1));
+      return clamped - 1; // Date month
+    };
+    return {
+      labels: trends.map((d) => format(new Date(year, safeMonth(d.month), 1), "MMM")),
       datasets: [
         {
           label: "Loan Disbursed",
-          data: trends.map((d) => d.loans),
+          data: trends.map((d) => Number(d?.loans || 0)),
           borderColor: "rgba(75,192,192,1)",
+          borderWidth: 2,
+          pointRadius: 2,
           fill: false,
+          tension: 0.25,
         },
         {
           label: "Repayments Received",
-          data: trends.map((d) => d.repayments),
+          data: trends.map((d) => Number(d?.repayments || 0)),
           borderColor: "rgba(153,102,255,1)",
+          borderWidth: 2,
+          pointRadius: 2,
           fill: false,
+          tension: 0.25,
         },
       ],
-    }),
-    [trends, year]
-  );
+    };
+  }, [trends, year]);
 
-  const showCustomDates = timeRange === "custom";
+  const chartOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "top" }, tooltip: { mode: "index", intersect: false } },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString() } } },
+    }),
+    []
+  );
 
   const resetFilters = () => {
     setBranchId("");
     setOfficerId("");
     setBorrowerId("");
+    setProductId("");
     setTimeRange("");
     setStartDate("");
     setEndDate("");
@@ -284,10 +342,10 @@ const Reports = () => {
           <h1 className={ui.h1}>Borrowers Report</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={exportCSV} className={ui.btn}>
+          <button onClick={exportCSV} className={ui.btn} disabled={loadingLoanSummary}>
             <Download className="w-4 h-4 mr-2" /> Export CSV
           </button>
-          <button onClick={exportPDF} className={ui.btn}>
+          <button onClick={exportPDF} className={ui.btn} disabled={loadingLoanSummary}>
             <Download className="w-4 h-4 mr-2" /> Export PDF
           </button>
         </div>
@@ -309,21 +367,21 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* Filters (clean + parallel) */}
+      {/* Filters */}
       <div className={`${ui.card} p-4 mb-6`}>
         <div className="flex items-center justify-between mb-3">
           <div className="inline-flex items-center gap-2 text-slate-800 font-semibold">
             <Filter className="w-4 h-4" /> Filters
           </div>
           <div className="flex gap-2">
-            <button onClick={resetFilters} className={ui.btn}>
+            <button onClick={resetFilters} className={ui.btn} disabled={loadingLoanSummary}>
               Reset
             </button>
           </div>
         </div>
 
         {/* one tidy row on xl, responsive stack on small */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-8 gap-3">
           <SelectField value={branchId} onChange={(e) => setBranchId(e.target.value)} className="xl:col-span-2">
             <option value="">All Branches</option>
             {branches.map((b) => (
@@ -351,7 +409,16 @@ const Reports = () => {
             ))}
           </SelectField>
 
-          <SelectField value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
+          <SelectField value={productId} onChange={(e) => setProductId(e.target.value)} className="xl:col-span-2">
+            <option value="">All Products</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name || `#${p.id}`}
+              </option>
+            ))}
+          </SelectField>
+
+          <SelectField value={timeRange} onChange={(e) => setTimeRange(e.target.value)} className="xl:col-span-2">
             <option value="">All Time</option>
             <option value="today">Today</option>
             <option value="week">This Week</option>
@@ -371,7 +438,7 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* Loan Summary Report (crisp full grid) */}
+      {/* Loan Summary Report */}
       <div className={`${ui.card} p-4 mb-6`}>
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-xl font-bold tracking-tight">Loan Summary Report</h2>
@@ -405,6 +472,8 @@ const Reports = () => {
 
         {loadingLoanSummary ? (
           <p className="text-slate-600">Loading…</p>
+        ) : error ? (
+          <p className="text-rose-600">{error}</p>
         ) : loanSummary ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -456,17 +525,17 @@ const Reports = () => {
       </div>
 
       {/* Trend Chart */}
-      <div className={`${ui.card} p-4 mb-6`}>
+      <div className={`${ui.card} p-4 mb-6`} style={{ height: 360 }}>
         <h2 className="text-xl font-bold tracking-tight mb-2">Monthly Trend – {year}</h2>
-        <Line data={chartData} />
+        <Line data={chartData} options={chartOptions} />
       </div>
 
       {/* Exports */}
       <div className="flex flex-wrap gap-3">
-        <button onClick={exportCSV} className={ui.btnPrimary}>
+        <button onClick={exportCSV} className={ui.btnPrimary} disabled={loadingLoanSummary}>
           <Download className="w-4 h-4 mr-2" /> Export Full CSV
         </button>
-        <button onClick={exportPDF} className={ui.btnDanger}>
+        <button onClick={exportPDF} className={ui.btnDanger} disabled={loadingLoanSummary}>
           <Download className="w-4 h-4 mr-2" /> Export Full PDF
         </button>
       </div>
