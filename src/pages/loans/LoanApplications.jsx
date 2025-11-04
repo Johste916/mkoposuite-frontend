@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api";
 import {
-  Save, PlusCircle, X, Calendar, User, FileUp, Upload, Building2, Landmark, Wallet, ShieldCheck,
+  Save, PlusCircle, X, Calendar, User, FileUp, Upload, Building2, Landmark, Wallet, ShieldCheck, BadgeCheck
 } from "lucide-react";
 
 /* ---------------- helpers ---------------- */
@@ -113,15 +113,6 @@ const MOBILE_PROVIDERS = [
 
 const STATUS_LABELS = ["new loan", "open", "top-up", "defaulted"];
 
-const MARITAL_STATUSES = [
-  { value: "single", label: "Single" },
-  { value: "married", label: "Married" },
-  { value: "divorced", label: "Divorced" },
-  { value: "widow", label: "Widow" },
-  { value: "widower", label: "Widower" },
-  { value: "not_specified", label: "Not specified" },
-];
-
 /* ---------------- page ---------------- */
 export default function LoanApplications() {
   const navigate = useNavigate();
@@ -130,6 +121,11 @@ export default function LoanApplications() {
   const [products, setProducts] = useState([]);
   const [borrowers, setBorrowers] = useState([]);
   const [banks, setBanks] = useState([]);
+
+  // NEW: officers/branches + current user
+  const [officers, setOfficers] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [me, setMe] = useState(null);
 
   // ui
   const [submitting, setSubmitting] = useState(false);
@@ -168,30 +164,50 @@ export default function LoanApplications() {
     spousePhone: "",
     attachmentsMeta: [],
     guarantors: [],
+    // NEW: officer/branch assignment
+    officerId: "",
+    branchId: "",
   });
 
   // files store; key -> File
   const filesRef = useRef({}); // {fileKey: File}
 
-  /* ----------- fetch dropdowns ----------- */
+  /* ----------- fetch dropdowns + current user ----------- */
   useEffect(() => {
     (async () => {
       try {
-        const [p, bws] = await Promise.all([
+        // current user
+        const meRes = await api.get("/me").catch(() => api.get("/auth/me"));
+        const meData = meRes?.data || null;
+        setMe(meData || null);
+
+        // parallel fetches
+        const [p, bws, banksRes, officersRes, branchesRes] = await Promise.all([
           api.get("/loan-products"),
           api.get("/borrowers", { params: { page: 1, pageSize: 500 } }).catch(() => ({ data: { items: [] } })),
+          api.get("/banks").catch(() => ({ data: { items: [] } })),
+          api.get("/users", { params: { role: "loan_officer", pageSize: 500 } }).catch(() => ({ data: { items: [] } })),
+          api.get("/branches", { params: { pageSize: 500 } }).catch(() => ({ data: { items: [] } })),
         ]);
+
         setProducts(toArray(p.data));
         setBorrowers(toArray(bws.data));
+        setBanks(toArray(banksRes.data));
+        setOfficers(toArray(officersRes.data));
+        setBranches(toArray(branchesRes.data));
+
+        // default officer/branch from current user if not already selected
+        setForm((f) => ({
+          ...f,
+          officerId: f.officerId || meData?.id || "",
+          branchId: f.branchId || meData?.branchId || "",
+        }));
       } catch {
         setProducts([]);
         setBorrowers([]);
-      }
-      try {
-        const r = await api.get("/banks");
-        setBanks(toArray(r.data));
-      } catch {
         setBanks([]);
+        setOfficers([]);
+        setBranches([]);
       }
     })();
   }, []);
@@ -393,6 +409,10 @@ export default function LoanApplications() {
             : undefined,
         status: "pending",
         statusLabel: form.statusLabel,
+
+        // NEW: officer & branch (backend will also default from req.user)
+        officerId: form.officerId || undefined,
+        branchId: form.branchId || undefined,
       };
 
       // Determine if any files are attached
@@ -401,19 +421,16 @@ export default function LoanApplications() {
         .filter(Boolean);
 
       if (files.length === 0) {
-        // Plain JSON is friendliest for most backends
         const res = await api.post("/loans", payload);
         alert("Loan application submitted");
         navigate(`/loans/${res.data?.id || ""}`);
       } else {
-        // Multipart only when there are files
         const fd = new FormData();
-        fd.append("payload", JSON.stringify(payload)); // if your API expects plain fields, we can unfold
+        fd.append("payload", JSON.stringify(payload));
         for (const meta of form.attachmentsMeta) {
           const file = filesRef.current[meta.fileKey];
           if (file) {
             fd.append("files", file, file.name);
-            // If your API expects filesMeta[] as an array, use this key:
             fd.append("filesMeta[]", JSON.stringify({ type: meta.type, note: meta.note, name: file.name }));
           }
         }
@@ -424,7 +441,6 @@ export default function LoanApplications() {
         navigate(`/loans/${res.data?.id || ""}`);
       }
     } catch (err) {
-      // surface backend message if available
       const msg =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
@@ -473,6 +489,49 @@ export default function LoanApplications() {
 
       {/* single-column guided form */}
       <form onSubmit={onSubmit} className="max-w-6xl mx-auto space-y-5 md:space-y-6">
+        {/* 0) Assignment (Officer & Branch) */}
+        <section className={ui.card}>
+          <div className={ui.sectionHeader}>
+            <BadgeCheck className={ui.icon} />
+            <h2 className="font-bold text-lg">0) Assignment</h2>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className={ui.label}>Loan Officer</label>
+              <select
+                className={ui.input}
+                value={form.officerId}
+                onChange={(e) => setForm({ ...form, officerId: e.target.value })}
+              >
+                <option value="">(Auto) Current user {me?.name ? `— ${me.name}` : ""}</option>
+                {officers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name || o.email || `User #${o.id}`}
+                  </option>
+                ))}
+              </select>
+              <p className={ui.note}>Defaults to the logged-in user if left blank.</p>
+            </div>
+
+            <div>
+              <label className={ui.label}>Branch</label>
+              <select
+                className={ui.input}
+                value={form.branchId}
+                onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+              >
+                <option value="">(Auto) Your branch {me?.branch?.name ? `— ${me.branch.name}` : ""}</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name || b.code || `Branch #${b.id}`}
+                  </option>
+                ))}
+              </select>
+              <p className={ui.note}>Defaults to the logged-in user’s branch if left blank.</p>
+            </div>
+          </div>
+        </section>
+
         {/* 1) Borrower & Product */}
         <section className={ui.card}>
           <div className={ui.sectionHeader}>
@@ -523,6 +582,7 @@ export default function LoanApplications() {
               <label className={ui.label}>Loan # (auto)</label>
               <input className={ui.input} value={loadingCounts ? "…" : form.loanNumber || "—"} readOnly />
             </div>
+            <div className="hidden md:block" />
           </div>
         </section>
 
@@ -810,8 +870,7 @@ export default function LoanApplications() {
                     <button
                       type="button"
                       onClick={() =>
-                        setForm((f) => ({ ...f, guarantors: f.guarantors.filter((_, idx) => idx !== i) }))
-                      }
+                        setForm((f) => ({ ...f, guarantors: f.guarantors.filter((_, idx) => idx !== i) }))}
                       className={ui.btnIcon}
                       aria-label="Remove guarantor"
                     >
@@ -1033,7 +1092,7 @@ export default function LoanApplications() {
               </div>
             </div>
           )}
-          <p className="text-xs mt-2">Accepted images/PDFs as supported by your backend.</p>
+          <p className={ui.note}>Accepted images/PDFs as supported by your backend.</p>
         </section>
 
         {/* 8) Disbursement */}
@@ -1185,8 +1244,8 @@ export default function LoanApplications() {
                 value={form.maritalStatus}
                 onChange={(e) => setForm({ ...form, maritalStatus: e.target.value })}
               >
-                {MARITAL_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
+                {["single","married","divorced","widow","widower","not_specified"].map((v) => (
+                  <option key={v} value={v}>{v.replace("_"," ")}</option>
                 ))}
               </select>
             </div>
@@ -1229,45 +1288,7 @@ export default function LoanApplications() {
                       + Add consent upload
                     </button>
                   </div>
-                  {(() => {
-                    const idx = findSpouseConsentMetaIndex();
-                    if (idx === -1) {
-                      return <p className={ui.note}>Click “Add consent upload” to attach the signed declaration.</p>;
-                    }
-                    const meta = form.attachmentsMeta[idx];
-                    return (
-                      <div className={`${ui.rowShell} grid-cols-[2fr_1fr_40px] p-0`}>
-                        <div className="grid gap-2 p-3">
-                          <input className={ui.input} value={meta.type} readOnly />
-                          <input
-                            className={ui.input}
-                            placeholder="Note (optional)"
-                            value={meta.note}
-                            onChange={(e) => updateAttachment(idx, { note: e.target.value })}
-                          />
-                        </div>
-                        <div className="p-3">
-                          <input
-                            type="file"
-                            accept="application/pdf,image/*"
-                            className={ui.input}
-                            onChange={(e) => setFile(meta.fileKey, e.target.files?.[0])}
-                          />
-                        </div>
-                        <div className="p-3">
-                          <button
-                            type="button"
-                            onClick={() => removeAttachment(idx)}
-                            className={ui.btnIcon}
-                            aria-label="Remove spouse consent"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <p className={ui.note}>This replaces the old text field. Upload the signed consent form here.</p>
+                  <p className={ui.note}>Upload the signed consent form here.</p>
                 </div>
               </>
             )}

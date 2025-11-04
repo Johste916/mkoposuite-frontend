@@ -35,9 +35,9 @@ const ui = {
     "border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)] hover:bg-[var(--chip-soft)] " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]",
   primary:
-  "inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-semibold " +
-  "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-0 disabled:opacity-60",
+    "inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg font-semibold " +
+    "bg-[var(--primary)] text-[var(--primary-contrast)] hover:opacity-90 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-0 disabled:opacity-60",
   input:
     "w-full rounded-lg border-2 px-3 py-2 outline-none " +
     "bg-[var(--input-bg)] text-[var(--input-fg)] border-[var(--input-border)] " +
@@ -57,7 +57,8 @@ const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
       <div className={ui.cardHead}>
         <div className="min-w-0">
           {title && <h3 className="text-xl md:text-2xl font-extrabold tracking-tight">{title}</h3>}
-          {subtitle && <p className={ui.sub}>{subtitle}</p>}
+          {/* use div (not <p>) so we can pass elements safely */}
+          {subtitle && <div className={ui.sub}>{subtitle}</div>}
         </div>
         {right}
       </div>
@@ -92,6 +93,86 @@ function deriveStageFromStatus(status) {
   return "";
 }
 
+/* Status tone helper for the chip */
+function statusTone(s = "") {
+  const k = String(s).toLowerCase();
+  if (["approved", "disbursed", "active"].includes(k)) return "bg-emerald-600 text-white ring-0";
+  if (["pending", "submitted"].includes(k)) return "bg-amber-500 text-white ring-0";
+  if (["rejected"].includes(k)) return "bg-rose-600 text-white ring-0";
+  if (["closed"].includes(k)) return "bg-slate-700 text-white ring-0";
+  return "";
+}
+
+/* ---------------- helpers for safe ownership updates ---------------- */
+function normalizeId(v) {
+  if (v === "" || v == null) return undefined;
+  if (typeof v === "number") return v;
+  const s = String(v).trim();
+  return /^\d+$/.test(s) ? Number(s) : s;
+}
+
+function isoDateOrEmpty(v) {
+  if (!v) return "";
+  const s = typeof v === "string" ? v : new Date(v).toISOString();
+  const mm = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return mm ? mm[1] : new Date(s).toISOString().slice(0, 10);
+}
+
+function cleanNumber(n) {
+  if (n === "" || n == null) return undefined;
+  const x = Number(n);
+  return Number.isFinite(x) ? x : undefined;
+}
+
+/** Send both canonical and alias keys (server whitelists real cols anyway) */
+function buildLoanUpdatePayload(editForm) {
+  const amount = cleanNumber(editForm.amount);
+  const interestRate = cleanNumber(editForm.interestRate);
+  const termMonths = cleanNumber(editForm.termMonths);
+  const startDate = isoDateOrEmpty(editForm.startDate);
+
+  const canonical = {
+    ...(amount !== undefined ? { amount } : {}),
+    ...(interestRate !== undefined ? { interestRate } : {}),
+    ...(termMonths !== undefined ? { termMonths } : {}),
+    ...(startDate ? { startDate } : {}),
+  };
+
+  const aliases = {
+    ...(amount !== undefined ? { principal: amount } : {}),
+    ...(termMonths !== undefined ? { durationMonths: termMonths } : {}),
+    ...(startDate ? { releaseDate: startDate } : {}),
+  };
+
+  return { ...aliases, ...canonical };
+}
+
+function extractApiError(err) {
+  const d = err?.response?.data;
+  if (!d) return err?.message || "Request failed.";
+  if (typeof d === "string") return d;
+  if (d.error) return d.error;
+  if (d.message) return d.message;
+  if (d.detail) return d.detail;
+  try { return JSON.stringify(d); } catch { return String(d); }
+}
+
+// Only use the canonical endpoint and only send changed fields.
+async function patchLoanOwnership({ id, payload }) {
+  const body = {};
+  if (payload.officerId !== undefined) body.loanOfficerId = normalizeId(payload.officerId);
+  if (payload.branchId !== undefined) body.branchId = normalizeId(payload.branchId);
+  if (payload.borrowerId !== undefined) body.borrowerId = normalizeId(payload.borrowerId);
+
+  for (const k of Object.keys(body)) {
+    if (body[k] === undefined) delete body[k];
+  }
+  if (!Object.keys(body).length) return;
+
+  await api.patch(`/loans/${id}`, body);
+}
+/* ------------------------------------------------------------------- */
+
 export default function LoanDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -101,6 +182,20 @@ export default function LoanDetails() {
   const [repayments, setRepayments] = useState([]);
   const [comments, setComments] = useState([]);
   const [schedule, setSchedule] = useState(null);
+
+  // people/ownership data
+  const [borrower, setBorrower] = useState(null);
+  const [officer, setOfficer] = useState(null);
+  const [officers, setOfficers] = useState([]);
+  const [branches, setBranches] = useState([]);
+
+  // edit officer/branch
+  const [editOwnership, setEditOwnership] = useState(false);
+  const [ownershipForm, setOwnershipForm] = useState({
+    officerId: "",
+    branchId: "",
+  });
+  const [savingOwnership, setSavingOwnership] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [loadingRepayments, setLoadingRepayments] = useState(true);
@@ -150,7 +245,7 @@ export default function LoanDetails() {
   const [savingReschedule, setSavingReschedule] = useState(false);
 
   const currency = loan?.currency || "TZS";
-  const statusBadge = ui.chip; // neutral, tokenized badge
+  const statusBadge = ui.chip;
 
   const role = roleOf();
   const canBM = isBM(role);
@@ -182,6 +277,23 @@ export default function LoanDetails() {
   /* ---------- load ---------- */
   const lastLoadedId = useRef(null);
 
+  const loadAuxLists = async () => {
+    try {
+      const rOff = await api.get("/users", { params: { role: "loan_officer", pageSize: 500 } });
+      const offItems = Array.isArray(rOff.data) ? rOff.data : rOff.data?.items || [];
+      setOfficers(offItems);
+    } catch {
+      setOfficers([]);
+    }
+    try {
+      const rBr = await api.get("/branches", { params: { pageSize: 500 } });
+      const brItems = Array.isArray(rBr.data) ? rBr.data : rBr.data?.items || [];
+      setBranches(brItems);
+    } catch {
+      setBranches([]);
+    }
+  };
+
   const loadLoan = async () => {
     setLoading(true);
     setErrs(null);
@@ -190,6 +302,39 @@ export default function LoanDetails() {
       setLoan(l);
       setSuggestedAmount(String(l?.amount ?? ""));
 
+      // borrower
+      const bId = l?.borrowerId ?? l?.Borrower?.id ?? l?.borrower?.id;
+      if (bId) {
+        try {
+          const rb = await api.get(`/borrowers/${bId}`);
+          setBorrower(rb.data || null);
+        } catch {
+          setBorrower(null);
+        }
+      } else {
+        setBorrower(null);
+      }
+
+      // officer
+      const oId =
+        l?.officerId ??
+        l?.loanOfficerId ??
+        l?.assignedOfficerId ??
+        l?.disbursedBy ??
+        l?.disbursed_by ??
+        l?.officer?.id;
+      if (oId) {
+        try {
+          const ro = await api.get(`/users/${oId}`);
+          setOfficer(ro.data || null);
+        } catch {
+          setOfficer(null);
+        }
+      } else {
+        setOfficer(null);
+      }
+
+      // parallel fetches
       const tasks = [
         api
           .get(`/repayments/loan/${id}`)
@@ -223,6 +368,11 @@ export default function LoanDetails() {
       );
 
       await Promise.all(tasks);
+
+      setOwnershipForm({
+        officerId: oId ? String(oId) : "",
+        branchId: l?.branchId ? String(l.branchId) : "",
+      });
     } catch (e) {
       console.error(e);
       setErrs("Failed to fetch loan.");
@@ -240,6 +390,8 @@ export default function LoanDetails() {
     setNewComment("");
     setLoadingRepayments(true);
     setLoadingComments(true);
+
+    loadAuxLists();
     loadLoan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -312,32 +464,28 @@ export default function LoanDetails() {
     }
   }
 
-async function disburseLoan() {
-  setActing(true);
-  try {
-    // 1) Preferred: dedicated endpoint if your API exposes it
+  async function disburseLoan() {
+    setActing(true);
     try {
-      await api.post(`/loans/${id}/disburse`);
-    } catch (e1) {
-      // 2) Fallback: status-change via PATCH
       try {
-        await api.patch(`/loans/${id}/status`, { status: "disbursed" });
-      } catch (e2) {
-        // 3) Fallback: PUT (if your backend used PUT before)
-        await api.put(`/loans/${id}/status`, { status: "disbursed" });
+        await api.post(`/loans/${id}/disburse`);
+      } catch {
+        try {
+          await api.patch(`/loans/${id}/status`, { status: "disbursed" });
+        } catch {
+          await api.put(`/loans/${id}/status`, { status: "disbursed" });
+        }
       }
+      await loadLoan();
+      window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id } }));
+      alert("Loan disbursed.");
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || "Failed to disburse loan.");
+    } finally {
+      setActing(false);
     }
-
-    await loadLoan();
-    window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id } }));
-    alert("Loan disbursed.");
-  } catch (e) {
-    console.error(e);
-    alert(e?.response?.data?.error || "Failed to disburse loan.");
-  } finally {
-    setActing(false);
   }
-}
 
   async function saveSuggestion() {
     if (!suggestedAmount || Number(suggestedAmount) <= 0) {
@@ -512,6 +660,45 @@ async function disburseLoan() {
     }
   };
 
+  // save officer/branch ownership — robust & type-safe
+  const saveOwnership = async () => {
+    const currentOfficerId =
+      loan?.officerId ??
+      loan?.loanOfficerId ??
+      loan?.assignedOfficerId ??
+      loan?.disbursedBy ??
+      loan?.disbursed_by ??
+      loan?.officer?.id ??
+      "";
+
+    const payload = {};
+    if (ownershipForm.officerId !== "" && String(ownershipForm.officerId) !== String(currentOfficerId)) {
+      payload.officerId = ownershipForm.officerId;
+    }
+    if (ownershipForm.branchId !== "" && String(ownershipForm.branchId) !== String(loan?.branchId ?? "")) {
+      payload.branchId = ownershipForm.branchId;
+    }
+
+    if (!Object.keys(payload).length) {
+      setEditOwnership(false);
+      return;
+    }
+
+    setSavingOwnership(true);
+    try {
+      await patchLoanOwnership({ id, payload });
+      setEditOwnership(false);
+      await loadLoan();
+      window.dispatchEvent(new CustomEvent("loan:updated", { detail: { id } }));
+      alert("Assignment saved.");
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.error || e?.message || "Failed to save assignment.");
+    } finally {
+      setSavingOwnership(false);
+    }
+  };
+
   const reissueLoan = async () => {
     if (!window.confirm("Reissue creates a new pending loan cloned from this one. Continue?"))
       return;
@@ -547,6 +734,65 @@ async function disburseLoan() {
 
   const canPostRepayment = loan?.status !== "closed" && Number(outstanding || 0) > 0;
 
+  /* ---------- compact identity helpers ---------- */
+  const officersById = useMemo(() => {
+    const map = {};
+    for (const o of officers || []) {
+      const label = o.name || o.email || o.phone || "";
+      if (label) map[String(o.id)] = { name: label, phone: o.phone || "", email: o.email || "" };
+    }
+    return map;
+  }, [officers]);
+
+  const branchesById = useMemo(() => {
+    const map = {};
+    for (const b of branches || []) {
+      map[String(b.id)] = b.name || b.code || `Branch ${b.id}`;
+    }
+    return map;
+  }, [branches]);
+
+  // Resolve officer
+  const resolvedOfficerId =
+    loan?.officerId ??
+    loan?.loanOfficerId ??
+    loan?.assignedOfficerId ??
+    loan?.disbursedBy ??
+    loan?.disbursed_by ??
+    loan?.officer?.id ??
+    "";
+
+  const officerNameDirect =
+    loan?.officer?.name ||
+    loan?.officerName ||
+    loan?.loanOfficerName ||
+    loan?.disbursedByName ||
+    loan?.disbursed_by_name ||
+    "";
+
+  const officerFromList = resolvedOfficerId ? officersById[String(resolvedOfficerId)] : null;
+
+  const officerName =
+    officer?.name ||
+    (officerNameDirect && !/^Officer\s*#\s*/i.test(officerNameDirect) ? officerNameDirect : "") ||
+    officerFromList?.name ||
+    "—";
+
+  const officerPhone = officer?.phone || officerFromList?.phone || "";
+  const officerEmail = officer?.email || officerFromList?.email || "";
+
+  // Resolve branch
+  const resolvedBranchId = loan?.branchId ?? loan?.Branch?.id ?? loan?.branch?.id ?? "";
+  const branchName =
+    loan?.branchName ||
+    loan?.Branch?.name ||
+    loan?.branch?.name ||
+    (resolvedBranchId ? branchesById[String(resolvedBranchId)] : "") ||
+    "—";
+
+  const borrowerName =
+    borrower?.name || loan?.Borrower?.name || loan?.borrowerName || "—";
+
   /* ---------- render ---------- */
   if (loading) return <div className="w-full px-6 py-6 text-[var(--fg)]">Loading loan…</div>;
   if (errs) return <div className="w-full px-6 py-6 text-[var(--fg)]">{errs}</div>;
@@ -554,32 +800,175 @@ async function disburseLoan() {
 
   return (
     <div className={ui.page}>
-      {/* HEADER */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h2 className={ui.h1}>Loan Details</h2>
-          <span className={statusBadge}>{loan.status}</span>
-          {workflowStage && <span className={ui.chip}>Stage: {workflowStage.replaceAll("_", " ")}</span>}
-        </div>
-        <button onClick={() => navigate(-1)} className={ui.actionLink}>
-          &larr; Back
-        </button>
+      {/* BREADCRUMB */}
+      <div className="text-xs text-[var(--muted)] mb-1">
+        Loans <span className="opacity-60">›</span> #{id}
       </div>
+
+      {/* HERO SUMMARY — Borrower, Status, Officer, Branch, Contacts (Card) */}
+      <SectionCard
+        title={
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight truncate">
+              {borrowerName}
+            </span>
+            <span
+              className={`${statusBadge} ${statusTone(loan.status)} text-[12px] md:text-[12px]`}
+              aria-label={`status ${loan.status}`}
+            >
+              {loan.status}
+            </span>
+            {workflowStage ? (
+              <span className={`${ui.chip} text-[11px]`} aria-label="workflow stage">
+                Stage: {workflowStage.replaceAll("_", " ")}
+              </span>
+            ) : null}
+          </div>
+        }
+        subtitle={
+          <div className="flex flex-wrap items-center gap-2 text-[13px]">
+            <span className="font-semibold">Loan #{id}</span>
+            {product ? (
+              <>
+                <span className="opacity-50">•</span>
+                <span className="font-semibold">
+                  Product: {product.code || product.name}
+                </span>
+              </>
+            ) : null}
+            {loan.accountNumber ? (
+              <>
+                <span className="opacity-50">•</span>
+                <span className="font-semibold">Acct: {loan.accountNumber}</span>
+              </>
+            ) : null}
+          </div>
+        }
+        right={
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className={ui.actionLink} aria-label="Go back">
+              &larr; Back
+            </button>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Officer */}
+          <div className="space-y-2">
+            <Label>Officer</Label>
+            {!editOwnership ? (
+              <>
+                <div className="text-lg font-extrabold">{officerName}</div>
+                <div className="text-sm space-y-0.5">
+                  {officerPhone ? <div>📞 {officerPhone}</div> : null}
+                  {officerEmail ? <div>✉️ {officerEmail}</div> : null}
+                </div>
+              </>
+            ) : (
+              <select
+                className={ui.input}
+                value={ownershipForm.officerId}
+                onChange={(e) => setOwnershipForm((s) => ({ ...s, officerId: e.target.value }))}
+                aria-label="Select loan officer"
+              >
+                <option value="">— Select Officer —</option>
+                {officers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name || o.email || `Officer #${o.id}`}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Branch */}
+          <div className="space-y-2">
+            <Label>Branch</Label>
+            {!editOwnership ? (
+              <div className="text-lg font-extrabold">{branchName}</div>
+            ) : (
+              <select
+                className={ui.input}
+                value={ownershipForm.branchId}
+                onChange={(e) => setOwnershipForm((s) => ({ ...s, branchId: e.target.value }))}
+                aria-label="Select branch"
+              >
+                <option value="">— Select Branch —</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name || b.code || `Branch #${b.id}`}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Borrower Contacts */}
+          <div className="space-y-2">
+            <Label>Borrower Contacts</Label>
+            <div className="text-base space-y-1">
+              {borrower?.phone ? (
+                <div className="flex items-center gap-4">
+                  <span>📞</span>
+                  <a className="underline underline-offset-4 decoration-1" href={`tel:${borrower.phone}`}>
+                    {borrower.phone}
+                  </a>
+                </div>
+              ) : (
+                <div className="text-sm text-[var(--muted)]">—</div>
+              )}
+              {borrower?.nationalId ? (
+                <div className="flex items-center gap-2">
+                  <span>ID:</span>
+                  <span>{borrower.nationalId}</span>
+                </div>
+              ) : null}
+              {borrower?.email ? (
+                <div className="flex items-center gap-2">
+                  <span>✉️</span>
+                  <a className="underline underline-offset-4 decoration-1 break-all" href={`mailto:${borrower.email}`}>
+                    {borrower.email}
+                  </a>
+                </div>
+              ) : null}
+              {loan.borrowerId ? (
+                <div className="pt-1">
+                  <Link
+                    className={`${ui.actionLink} text`}
+                    to={`/borrowers/${loan.borrowerId}`}
+                    title="BORROWER PROFILE"
+                  >
+                    BORROWER PROFILE <span></span>
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {(canBM || isAdmin(role)) && (
+          <div className="mt-6 flex flex-wrap gap-2">
+            {!editOwnership ? (
+              <button onClick={() => setEditOwnership(true)} className={ui.btn}>
+                Edit Assignment
+              </button>
+            ) : (
+              <>
+                <button onClick={() => setEditOwnership(false)} className={ui.btn}>
+                  Cancel
+                </button>
+                <button onClick={saveOwnership} disabled={savingOwnership} className={ui.primary}>
+                  {savingOwnership ? "Saving…" : "Save Assignment"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </SectionCard>
 
       {/* SUMMARY */}
       <SectionCard>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-          <div className="col-span-2 min-w-0">
-            <Label>Borrower</Label>
-            <Link
-              className={`${ui.actionLink} text-lg md:text-xl truncate`}
-              to={`/borrowers/${loan.borrowerId}`}
-              title={loan.Borrower?.name || loan.borrowerName || "N/A"}
-            >
-              {loan.Borrower?.name || loan.borrowerName || "N/A"} <span>›</span>
-            </Link>
-          </div>
-
           <div>
             <Label>Amount</Label>
             <div className="text-2xl font-extrabold">{fmtMoney(loan.amount, currency)}</div>
@@ -608,6 +997,13 @@ async function disburseLoan() {
           </div>
 
           <div>
+            <Label>Repayment Frequency</Label>
+            <div className="text-base font-semibold capitalize">
+              {loan.repaymentFrequency || loan.frequency || "—"}
+            </div>
+          </div>
+
+          <div>
             <Label>Outstanding</Label>
             <div className="text-2xl font-extrabold">
               {outstanding == null ? "—" : fmtMoney(outstanding, currency)}
@@ -629,7 +1025,7 @@ async function disburseLoan() {
           </div>
 
           {product && (
-            <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
+            <div className="md:col-span-2 lg:col-span-3 xl:col-span-4 min-w-0">
               <Label>Product</Label>
               <div className="text-base">
                 <span className="font-extrabold">
@@ -637,10 +1033,8 @@ async function disburseLoan() {
                   {product.code ? ` (${product.code})` : ""}
                 </span>
                 <div className="text-sm mt-0.5">
-                  Defaults: {product.interestMethod} @{" "}
-                  {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
-                  {fmtMoney(product.minPrincipal, currency)} –{" "}
-                  {fmtMoney(product.maxPrincipal, currency)}, {product.minTermMonths}-
+                  Defaults: {product.interestMethod} @ {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
+                  {fmtMoney(product.minPrincipal, currency)} – {fmtMoney(product.maxPrincipal, currency)}, {product.minTermMonths}-
                   {product.maxTermMonths} months
                 </div>
               </div>
@@ -678,8 +1072,7 @@ async function disburseLoan() {
             <>
               <h3 className="text-lg font-extrabold">Changes Requested</h3>
               <p className="text-sm">
-                Update the application and attach missing documents, then{" "}
-                <strong>Resubmit</strong>. Add a short note if helpful.
+                Update the application and attach missing documents, then <strong>Resubmit</strong>. Add a short note if helpful.
               </p>
               <label className="block text-xs font-semibold">Comment (optional)</label>
               <textarea
@@ -718,9 +1111,7 @@ async function disburseLoan() {
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold">
-                    Suggested Principal
-                  </label>
+                  <label className="block text-xs font-semibold">Suggested Principal</label>
                   <input
                     type="number"
                     className={ui.input}
@@ -789,69 +1180,69 @@ async function disburseLoan() {
         </SectionCard>
       )}
 
-      {/* QUICK ACTIONS */}
-      <div className="flex flex-wrap gap-3">
-        <Link to={`/loans`} className={ui.btn}>
-          Back to Loans
-        </Link>
+      {/* QUICK ACTIONS — sticky toolbar */}
+      <div className="ms-sticky-actions">
+        <div className="flex flex-wrap gap-3">
+          <Link to={`/loans`} className={ui.btn}>
+            Back to Loans
+          </Link>
 
-        <button onClick={() => setOpenSchedule(true)} className={ui.btn}>
-          View Schedule
-        </button>
-
-        <button
-          onClick={() => downloadScheduleCSV({ loan, schedule: schedule || [], currency })}
-          className={ui.btn}
-          disabled={!Array.isArray(schedule) || !schedule.length}
-        >
-          Export CSV
-        </button>
-        <button
-          onClick={() => downloadSchedulePDF({ loan, schedule: schedule || [], currency })}
-          className={ui.btn}
-          disabled={!Array.isArray(schedule) || !schedule.length}
-        >
-          Export PDF
-        </button>
-
-        {canPostRepayment && (
-          <button onClick={() => setOpenRepay(true)} className={ui.btn}>
-            Post Repayment
+          <button onClick={() => setOpenSchedule(true)} className={ui.btn}>
+            View Schedule
           </button>
-        )}
 
-        {canEdit && (
-          <>
-            <button onClick={openEditModal} className={ui.btn}>
-              Edit Loan
-            </button>
-            <button onClick={openRescheduleModal} className={ui.btn}>
-              Reschedule
-            </button>
-          </>
-        )}
-
-        <button onClick={reissueLoan} className={ui.btn}>
-          Reissue
-        </button>
-
-        {canDelete && (
           <button
-            onClick={deleteLoan}
-            className="px-3 md:px-4 py-2 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 shadow-sm"
-          >
-            Delete
-          </button>
-        )}
-
-        {loan.status !== "closed" && (
-          <button
-            onClick={closeLoan}
+            onClick={() => downloadScheduleCSV({ loan, schedule: schedule || [], currency })}
             className={ui.btn}
+            disabled={!Array.isArray(schedule) || !schedule.length}
           >
-            Close Loan
+            Export CSV
           </button>
-        )}
+          <button
+            onClick={() => downloadSchedulePDF({ loan, schedule: schedule || [], currency })}
+            className={ui.btn}
+            disabled={!Array.isArray(schedule) || !schedule.length}
+          >
+            Export PDF
+          </button>
+
+          {canPostRepayment && (
+            <button onClick={() => setOpenRepay(true)} className={ui.btn}>
+              Post Repayment
+            </button>
+          )}
+
+          {canEdit && (
+            <>
+              <button onClick={openEditModal} className={ui.btn}>
+                Edit Loan
+              </button>
+              <button onClick={openRescheduleModal} className={ui.btn}>
+                Reschedule
+              </button>
+            </>
+          )}
+
+          <button onClick={reissueLoan} className={ui.btn}>
+            Reissue
+          </button>
+
+          {canDelete && (
+            <button
+              onClick={deleteLoan}
+              className="px-3 md:px-4 py-2 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 shadow-sm"
+              aria-label="Delete loan"
+            >
+              Delete
+            </button>
+          )}
+
+          {loan.status !== "closed" && (
+            <button onClick={closeLoan} className={ui.btn}>
+              Close Loan
+            </button>
+          )}
+        </div>
       </div>
 
       {/* REPAYMENTS */}
@@ -884,15 +1275,11 @@ async function disburseLoan() {
                 {repayments.map((r, i) => (
                   <tr
                     key={r.id || i}
-                    className={`${
-                      i % 2 === 0 ? "bg-[var(--table-row-even)]" : "bg-[var(--table-row-odd)]"
-                    } hover:bg-[var(--chip-soft)] transition-colors`}
+                    className={`${i % 2 === 0 ? "bg-[var(--table-row-even)]" : "bg-[var(--table-row-odd)]"} hover:bg-[var(--chip-soft)] transition-colors`}
                   >
                     <td className={ui.td}>{i + 1}</td>
-                    <td className={ui.td}>{asDate(r.date)}</td>
-                    <td className={`${ui.td} text-right tabular-nums`}>
-                      {fmtMoney(r.amount, currency)}
-                    </td>
+                    <td className={ui.td}>{asDate(r.paymentDate || r.date || r.createdAt)}</td>
+                    <td className={`${ui.td} text-right tabular-nums`}>{fmtMoney(r.amount, currency)}</td>
                     <td className={ui.td}>
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--badge-bg)] text-[var(--badge-fg)] ring-1 ring-[var(--border)]">
                         {r.method || "—"}
@@ -917,284 +1304,6 @@ async function disburseLoan() {
           </div>
         )}
       </SectionCard>
-
-      {/* COMMENTS */}
-      <SectionCard title="Comments">
-        {loadingComments ? (
-          <p>Loading comments…</p>
-        ) : comments.length === 0 ? (
-          <div className="text-sm">No comments yet.</div>
-        ) : (
-          <div className="space-y-3 max-h-72 overflow-auto pr-1">
-            {comments.map((c, i) => (
-              <div key={c.id || i} className="flex gap-3">
-                <div className="h-8 w-8 rounded-full bg-[var(--badge-bg)] text-[var(--badge-fg)] flex items-center justify-center text-xs font-extrabold select-none">
-                  {(c.author?.name || "U").slice(0, 1).toUpperCase()}
-                </div>
-                <div className="flex-1 border-b-2 border-[var(--border)] pb-2">
-                  <div className="flex justify-between text-xs text-[var(--muted)]">
-                    <span className="font-bold text-[var(--fg)]">{c.author?.name || "User"}</span>
-                    <span>{asDateTime(c.createdAt)}</span>
-                  </div>
-                  <p className="text-sm mt-0.5 break-words">{c.content}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-4 flex items-start gap-2">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            className={`${ui.input} min-h-[44px]`}
-            placeholder="Add a comment"
-          />
-          <button onClick={addComment} className={ui.primary}>
-            Post
-          </button>
-        </div>
-      </SectionCard>
-
-      {/* REPAYMENT MODAL */}
-      {openRepay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="rounded-2xl shadow-2xl w-full max-w-3xl p-6 border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)]">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-2xl font-extrabold">Post Repayment</h4>
-              <button onClick={() => setOpenRepay(false)} className={ui.actionLink}>
-                ✕
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-semibold">Amount</label>
-                <input
-                  type="number"
-                  value={repForm.amount}
-                  onChange={(e) => setRepForm((s) => ({ ...s, amount: e.target.value }))}
-                  className={ui.input}
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold">Date</label>
-                <input
-                  type="date"
-                  value={repForm.date}
-                  onChange={(e) => setRepForm((s) => ({ ...s, date: e.target.value }))}
-                  className={ui.input}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold">Method</label>
-                <select
-                  value={repForm.method}
-                  onChange={(e) => setRepForm((s) => ({ ...s, method: e.target.value }))}
-                  className={ui.input}
-                >
-                  <option value="cash">Cash</option>
-                  <option value="mobile">Mobile Money</option>
-                  <option value="bank">Bank</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold">Notes (optional)</label>
-                <input
-                  type="text"
-                  value={repForm.notes}
-                  onChange={(e) => setRepForm((s) => ({ ...s, notes: e.target.value }))}
-                  className={ui.input}
-                  placeholder="Receipt no., reference, etc."
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenRepay(false)} className={ui.btn}>
-                Cancel
-              </button>
-              <button onClick={handlePostRepayment} disabled={postLoading} className={ui.primary}>
-                {postLoading ? "Posting…" : "Post"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SCHEDULE MODAL */}
-      {openSchedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="rounded-2xl shadow-2xl w-full max-w-6xl p-6 border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)]">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-2xl font-extrabold">Repayment Schedule</h4>
-              <button onClick={() => setOpenSchedule(false)} className={ui.actionLink}>
-                ✕
-              </button>
-            </div>
-
-            {loadingSchedule ? (
-              <p>Loading schedule…</p>
-            ) : !Array.isArray(schedule) || schedule.length === 0 ? (
-              <p>No schedule available.</p>
-            ) : (
-              <>
-                {/* Disbursed/Start & Next due */}
-                <div className="mb-3 text-sm space-y-1">
-                  <div>
-                    <b>Disbursed:</b> {asDate(loan?.releaseDate || loan?.startDate) || "—"}
-                  </div>
-                  <div>
-                    Next installment:&nbsp;
-                    {nextDue ? (
-                      <>
-                        <b>#{nextDue.idx}</b> on {asDate(nextDue.date)} —{" "}
-                        <b>{fmtMoney(nextDue.amount, currency)}</b>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </div>
-                </div>
-
-                <div className="max-h-[75vh] overflow-auto rounded-xl border-2 border-[var(--border-strong)]">
-                  <ScheduleTable schedule={schedule || []} currency={currency} />
-                </div>
-              </>
-            )}
-
-            <div className="mt-4 flex justify-end">
-              <button onClick={() => setOpenSchedule(false)} className={ui.btn}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* EDIT MODAL */}
-      {openEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)]">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-2xl font-extrabold">Edit Loan</h4>
-              <button onClick={() => setOpenEdit(false)} className={ui.actionLink}>
-                ✕
-              </button>
-            </div>
-            <div className="grid gap-3">
-              <div>
-                <label className="block text-sm font-semibold">Amount</label>
-                <input
-                  type="number"
-                  value={editForm.amount}
-                  onChange={(e) => setEditForm((s) => ({ ...s, amount: e.target.value }))}
-                  className={ui.input}
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold">Interest Rate (%)</label>
-                <input
-                  type="number"
-                  value={editForm.interestRate}
-                  onChange={(e) => setEditForm((s) => ({ ...s, interestRate: e.target.value }))}
-                  className={ui.input}
-                  step="0.01"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold">Term (months)</label>
-                <input
-                  type="number"
-                  value={editForm.termMonths}
-                  onChange={(e) => setEditForm((s) => ({ ...s, termMonths: e.target.value }))}
-                  className={ui.input}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold">Start Date</label>
-                <input
-                  type="date"
-                  value={editForm.startDate}
-                  onChange={(e) => setEditForm((s) => ({ ...s, startDate: e.target.value }))}
-                  className={ui.input}
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenEdit(false)} className={ui.btn}>
-                Cancel
-              </button>
-              <button onClick={saveEdit} disabled={savingEdit} className={ui.primary}>
-                {savingEdit ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* RESCHEDULE MODAL */}
-      {openReschedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-[var(--border-strong)] bg-[var(--card)] text-[var(--fg)]">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-2xl font-extrabold">Reschedule Loan</h4>
-              <button onClick={() => setOpenReschedule(false)} className={ui.actionLink}>
-                ✕
-              </button>
-            </div>
-            <div className="grid gap-3">
-              <div>
-                <label className="block text-sm font-semibold">New Term (months)</label>
-                <input
-                  type="number"
-                  value={rescheduleForm.termMonths}
-                  onChange={(e) =>
-                    setRescheduleForm((s) => ({ ...s, termMonths: e.target.value }))
-                  }
-                  className={ui.input}
-                  min="1"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold">New Start Date</label>
-                <input
-                  type="date"
-                  value={rescheduleForm.startDate}
-                  onChange={(e) =>
-                    setRescheduleForm((s) => ({ ...s, startDate: e.target.value }))
-                  }
-                  className={ui.input}
-                />
-              </div>
-              <label className="inline-flex items-center gap-2 text-sm font-semibold">
-                <input
-                  type="checkbox"
-                  checked={rescheduleForm.previewOnly}
-                  onChange={(e) =>
-                    setRescheduleForm((s) => ({ ...s, previewOnly: e.target.checked }))
-                  }
-                />
-                Preview only (don’t save)
-              </label>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setOpenReschedule(false)} className={ui.btn}>
-                Cancel
-              </button>
-              <button
-                onClick={submitReschedule}
-                disabled={savingReschedule}
-                className={ui.primary}
-              >
-                {savingReschedule ? "Working…" : rescheduleForm.previewOnly ? "Preview" : "Reschedule"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

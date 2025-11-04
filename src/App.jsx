@@ -78,6 +78,7 @@ const Loans = lazy(() => import("./pages/Loans"));
 const LoanDetails = lazy(() => import("./pages/LoanDetails"));
 const LoanApplications = lazy(() => import("./pages/loans/LoanApplications"));
 const LoanStatusList = lazy(() => import("./pages/loans/LoanStatusList"));
+const LoanReportList = lazy(() => import("./pages/loans/LoanStatusList")); // NEW
 const DisbursementQueue = lazy(() => import("./pages/loans/DisbursementQueue"));
 const LoanProducts = lazy(() => import("./pages/loans/LoanProducts"));
 const LoanProductForm = lazy(() => import("./pages/loans/LoanProductForm"));
@@ -323,7 +324,10 @@ function App() {
                 <Route path="loans" element={<Loans />} />
                 <Route path="loans/applications" element={<LoanApplications />} />
                 <Route path="loans/add" element={<Navigate to="/loans/applications" replace />} />
+                {/* Core statuses stay on LoanStatusList */}
                 <Route path="loans/status/:status" element={<LoanStatusList />} />
+                {/* NEW: Derived reports have a distinct UI */}
+                <Route path="loans/reports/:scope" element={<LoanReportList />} />
                 <Route
                   path="loans/review-queue"
                   element={
@@ -380,15 +384,25 @@ function App() {
 
                 <Route path="loans/:id" element={<LoanDetails />} />
                 <Route path="loans/:id/disburse" element={<DisburseLoan />} />
-                {/* Loan aliases */}
-                <Route path="loans/due" element={<Navigate to="/loans/status/due" replace />} />
-                <Route path="loans/missed" element={<Navigate to="/loans/status/missed" replace />} />
-                <Route path="loans/arrears" element={<Navigate to="/loans/status/arrears" replace />} />
-                <Route path="loans/no-repayments" element={<Navigate to="/loans/status/no-repayments" replace />} />
-                <Route path="loans/past-maturity" element={<Navigate to="/loans/status/past-maturity" replace />} />
-                <Route path="loans/principal-outstanding" element={<Navigate to="/loans/status/principal-outstanding" replace />} />
-                <Route path="loans/1-month-late" element={<Navigate to="/loans/status/1-month-late" replace />} />
-                <Route path="loans/3-months-late" element={<Navigate to="/loans/status/3-months-late" replace />} />
+
+                {/* Aliases/redirects to NEW reports paths */}
+                <Route path="loans/due" element={<Navigate to="/loans/reports/due" replace />} />
+                <Route path="loans/missed" element={<Navigate to="/loans/reports/missed" replace />} />
+                <Route path="loans/arrears" element={<Navigate to="/loans/reports/arrears" replace />} />
+                <Route path="loans/no-repayments" element={<Navigate to="/loans/reports/no-repayments" replace />} />
+                <Route path="loans/past-maturity" element={<Navigate to="/loans/reports/past-maturity" replace />} />
+                <Route path="loans/principal-outstanding" element={<Navigate to="/loans/reports/principal-outstanding" replace />} />
+                <Route path="loans/1-month-late" element={<Navigate to="/loans/reports/1-month-late" replace />} />
+                <Route path="loans/3-months-late" element={<Navigate to="/loans/reports/3-months-late" replace />} />
+                {/* Back-compat: if someone hits status/<derived>, push to reports */}
+                <Route path="loans/status/due" element={<Navigate to="/loans/reports/due" replace />} />
+                <Route path="loans/status/missed" element={<Navigate to="/loans/reports/missed" replace />} />
+                <Route path="loans/status/arrears" element={<Navigate to="/loans/reports/arrears" replace />} />
+                <Route path="loans/status/no-repayments" element={<Navigate to="/loans/reports/no-repayments" replace />} />
+                <Route path="loans/status/past-maturity" element={<Navigate to="/loans/reports/past-maturity" replace />} />
+                <Route path="loans/status/principal-outstanding" element={<Navigate to="/loans/reports/principal-outstanding" replace />} />
+                <Route path="loans/status/1-month-late" element={<Navigate to="/loans/reports/1-month-late" replace />} />
+                <Route path="loans/status/3-months-late" element={<Navigate to="/loans/reports/3-months-late" replace />} />
 
                 {/* Repayments */}
                 <Route path="repayments" element={<Repayments />} />

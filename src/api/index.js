@@ -1,65 +1,78 @@
 // src/api/index.js
 import axios from "axios";
 
-/* ----------------------------- Base URL resolution ---------------------------- */
-/** Grab Vite env safely; never touch bare `process` in the browser */
+/* ---------------------------------------------------------------------------
+ * Base URL resolution (Vite dev, production, or runtime-injected)
+ * ------------------------------------------------------------------------- */
 const IME = (typeof import.meta !== "undefined" && import.meta.env) || {};
+const RUNTIME_BASE =
+  (typeof window !== "undefined" && window.__API_BASE_URL__) || "";
 
 const envBaseRaw = String(
-  // Prefer explicit vite vars
-  IME.VITE_API_BASE_URL ||
-  IME.VITE_API_BASE ||
-  // optional: allow a runtime global override (handy in docker/nginx)
-  (typeof window !== "undefined" && window.__API_BASE_URL__) ||
-  // last resort: empty string -> will fall back to origin below
-  ""
+  IME.VITE_API_BASE_URL || IME.VITE_API_BASE || RUNTIME_BASE || ""
 );
 
+// trim right slashes, but DO NOT strip path like /api
 const trimmed = envBaseRaw.replace(/\/+$/, "");
 const fallbackOrigin =
-  typeof window !== "undefined" ? window.location.origin : "http://localhost:10000";
+  typeof window !== "undefined"
+    ? window.location.origin
+    : "http://localhost:10000";
 
+// prefer env; else same-origin; then ensure trailing /api exactly once
 const rawBase = trimmed || fallbackOrigin;
 const base = rawBase.replace(/\/+$/, "");
-// canonical: ensure it ends with /api, but avoid /api/api
-const baseURL = /\/api$/i.test(base) ? base : `${base}/api`;
+const baseURL = /\/api(?:\/v\d+)?$/i.test(base) ? base : `${base}/api`;
 
-/* ----------------------------- Optional switches ----------------------------- */
+/* ---------------------------------------------------------------------------
+ * Toggles (sane defaults)
+ * ------------------------------------------------------------------------- */
 const WITH_CREDENTIALS = String(IME.VITE_API_WITH_CREDENTIALS ?? "0") === "1";
 const TIMEOUT_MS = Number(IME.VITE_API_TIMEOUT ?? 30000) || 30000;
 const MAX_GET_RETRIES = Number(IME.VITE_API_RETRIES ?? 0) || 0;
 const SEND_TZ_HEADERS = String(IME.VITE_SEND_TZ_HEADERS ?? "1") !== "0";
 
-/* --------------------------------- Instance --------------------------------- */
+/* ---------------------------------------------------------------------------
+ * Axios instance
+ * ------------------------------------------------------------------------- */
 const api = axios.create({
-  baseURL,
+  baseURL, // no trailing slash
   withCredentials: WITH_CREDENTIALS,
   timeout: TIMEOUT_MS,
   headers: { Accept: "application/json" },
 });
 
-/* --------------------------------- Helpers ---------------------------------- */
+/* ---------------------------------------------------------------------------
+ * Helpers
+ * ------------------------------------------------------------------------- */
 const TOKEN_KEYS = ["access_token", "accessToken", "token", "authToken", "jwt"];
-const BASE_HAS_API = /\/api$/i.test(baseURL);
+const BASE_HAS_API = /\/api/i.test(baseURL);
 
 function normalizePath(input) {
   if (!input) return "/";
-  if (/^https?:\/\//i.test(input)) return input;
+  if (/^https?:\/\//i.test(input)) return input; // absolute URL
   let url = String(input).trim();
-  if (!url.startsWith("/")) url = `/${url}`;
-  if (BASE_HAS_API && url.startsWith("/api/")) url = url.slice(4); // avoid /api/api
-  url = url.replace(/\/{2,}/g, "/");
-  return url;
+
+  // keep query/hash intact
+  const [pathOnly, qsHash = ""] = url.split(/(?=[?#])/);
+  let path = pathOnly;
+  if (!path.startsWith("/")) path = `/${path}`;
+  if (BASE_HAS_API && path.startsWith("/api/")) path = path.slice(4); // avoid /api/api
+  path = path.replace(/\/{2,}/g, "/");
+  return `${path}${qsHash}`;
 }
+
 function variantsFor(p) {
   const clean = normalizePath(p);
   const noApi = clean.replace(/^\/api\//, "/");
   const withApi = noApi.startsWith("/api/") ? noApi : `/api${noApi}`;
   return Array.from(new Set([noApi, withApi]));
 }
+
 function isFormData(v) {
   return typeof FormData !== "undefined" && v instanceof FormData;
 }
+
 function reqId() {
   try {
     if (globalThis?.crypto?.randomUUID) return crypto.randomUUID();
@@ -69,25 +82,29 @@ function reqId() {
 
 let tenantOverride = null;
 
-/* ----------------------------- Request interceptor --------------------------- */
+/* ---------------------------------------------------------------------------
+ * Request interceptor
+ * ------------------------------------------------------------------------- */
 api.interceptors.request.use((config) => {
-  // Normalize relative URL
   if (config.url && !/^https?:\/\//i.test(config.url)) {
     config.url = normalizePath(config.url);
   }
 
-  // Authorization
+  // Bearer token (support multiple keys)
   let token = null;
   for (const k of TOKEN_KEYS) {
-    const v = typeof localStorage !== "undefined" ? localStorage.getItem(k) : null;
-    if (v) {
-      token = String(v).replace(/^Bearer\s+/i, "");
-      break;
-    }
+    try {
+      const v =
+        typeof localStorage !== "undefined" ? localStorage.getItem(k) : null;
+      if (v) {
+        token = String(v).replace(/^Bearer\s+/i, "");
+        break;
+      }
+    } catch {}
   }
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
-  // Capture tenantId from URL once (first request) if not set
+  // Capture ?tenantId= from URL on first run
   try {
     if (typeof window !== "undefined" && !tenantOverride) {
       const u = new URL(window.location.href);
@@ -96,10 +113,13 @@ api.interceptors.request.use((config) => {
     }
   } catch {}
 
-  // Tenant header (override > activeTenantId > user.tenantId)
+  // Tenant header
   let tenantId =
     tenantOverride ||
-    (typeof localStorage !== "undefined" && (localStorage.getItem("activeTenantId") || localStorage.getItem("x-tenant-id")));
+    (typeof localStorage !== "undefined" &&
+      (localStorage.getItem("activeTenantId") ||
+        localStorage.getItem("x-tenant-id")));
+
   if (!tenantId && typeof localStorage !== "undefined") {
     try {
       const u = JSON.parse(localStorage.getItem("user") || "{}");
@@ -109,8 +129,13 @@ api.interceptors.request.use((config) => {
   if (tenantId) config.headers["x-tenant-id"] = tenantId;
 
   // Branch header
-  const branchId = typeof localStorage !== "undefined" ? localStorage.getItem("activeBranchId") : null;
-  if (branchId) config.headers["x-branch-id"] = branchId;
+  try {
+    const branchId =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem("activeBranchId")
+        : null;
+    if (branchId) config.headers["x-branch-id"] = branchId;
+  } catch {}
 
   // Timezone hints
   if (SEND_TZ_HEADERS) {
@@ -123,10 +148,10 @@ api.interceptors.request.use((config) => {
     } catch {}
   }
 
-  // Content headers + request id
+  // Content-Type + x-request-id (skip for FormData)
   if (isFormData(config.data)) {
     if (config.headers && "Content-Type" in config.headers) {
-      delete config.headers["Content-Type"]; // let browser set boundary
+      delete config.headers["Content-Type"];
     }
   } else {
     config.headers["x-request-id"] ||= reqId();
@@ -136,7 +161,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/* ----------------------------- Response interceptor -------------------------- */
+/* ---------------------------------------------------------------------------
+ * Response interceptor
+ * ------------------------------------------------------------------------- */
 let redirectingOn401 = false;
 
 api.interceptors.response.use(
@@ -145,6 +172,7 @@ api.interceptors.response.use(
     const status = err?.response?.status;
     const cfg = err?.config || {};
 
+    // Normalize message
     err.normalizedMessage = !status
       ? err?.message === "Network Error"
         ? "Network error: server unreachable."
@@ -156,7 +184,7 @@ api.interceptors.response.use(
         err?.message ||
         `Request failed (${status})`;
 
-    // 401: purge & one-time redirect
+    // 401: clear auth & go to /login once
     if (status === 401) {
       try {
         [
@@ -167,6 +195,7 @@ api.interceptors.response.use(
           "tenantName",
           "activeTenantId",
           "activeBranchId",
+          "x-tenant-id",
         ].forEach((k) => {
           try {
             if (typeof localStorage !== "undefined") localStorage.removeItem(k);
@@ -177,6 +206,7 @@ api.interceptors.response.use(
         delete api.defaults.headers.common["x-tenant-id"];
         delete api.defaults.headers.common["x-branch-id"];
       } catch {}
+
       if (!redirectingOn401 && typeof window !== "undefined") {
         redirectingOn401 = true;
         if (!/\/login$/.test(window.location.pathname)) {
@@ -186,7 +216,7 @@ api.interceptors.response.use(
       return Promise.reject(err);
     }
 
-    // Optional: safe GET retries on transient errors
+    // Retry safe GETs on transient upstream errors (optional)
     const transient = status && [429, 502, 503, 504].includes(status);
     const isGet = (cfg.method || "get").toLowerCase() === "get";
     cfg.__retryCount = cfg.__retryCount || 0;
@@ -206,12 +236,18 @@ api.interceptors.response.use(
   }
 );
 
-/* ------------------------------- Sugar methods ------------------------------- */
-api.getJSON = async (url, config) => (await api.get(normalizePath(url), config)).data;
-api.postJSON = async (url, data, config) => (await api.post(normalizePath(url), data, config)).data;
-api.putJSON = async (url, data, config) => (await api.put(normalizePath(url), data, config)).data;
-api.patchJSON = async (url, data, config) => (await api.patch(normalizePath(url), data, config)).data;
-api.deleteJSON = async (url, config) => (await api.delete(normalizePath(url), config)).data;
+/* ---------------------------------------------------------------------------
+ * Convenience helpers
+ * ------------------------------------------------------------------------- */
+api.getJSON    = async (url, config)       => (await api.get   (normalizePath(url), config)).data;
+api.postJSON   = async (url, data, config) => (await api.post  (normalizePath(url), data, config)).data;
+api.putJSON    = async (url, data, config) => (await api.put   (normalizePath(url), data, config)).data;
+api.patchJSON  = async (url, data, config) => (await api.patch (normalizePath(url), data, config)).data;
+api.deleteJSON = async (url, config)       => (await api.delete(normalizePath(url), config)).data;
+
+api.postForm   = async (u, f, c) => (await api.post (normalizePath(u), f, c)).data;
+api.putForm    = async (u, f, c) => (await api.put  (normalizePath(u), f, c)).data;
+api.patchForm  = async (u, f, c) => (await api.patch(normalizePath(u), f, c)).data;
 
 async function __firstOk(method, paths, payload, config) {
   const list = Array.isArray(paths) ? paths : [paths];
@@ -225,17 +261,15 @@ async function __firstOk(method, paths, payload, config) {
           ? await api[method](url, config)
           : await api[method](url, payload, config);
       return res.data;
-    } catch (e) {
-      lastErr = e;
-    }
+    } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error("No endpoint succeeded");
 }
 
-api.getFirst    = (paths, config)       => __firstOk("get", paths, undefined, config);
-api.postFirst   = (paths, data, config) => __firstOk("post", paths, data, config);
-api.putFirst    = (paths, data, config) => __firstOk("put", paths, data, config);
-api.patchFirst  = (paths, data, config) => __firstOk("patch", paths, data, config);
+api.getFirst    = (paths, config)       => __firstOk("get",    paths, undefined, config);
+api.postFirst   = (paths, data, config) => __firstOk("post",   paths, data,     config);
+api.putFirst    = (paths, data, config) => __firstOk("put",    paths, data,     config);
+api.patchFirst  = (paths, data, config) => __firstOk("patch",  paths, data,     config);
 api.deleteFirst = (paths, config)       => __firstOk("delete", paths, undefined, config);
 
 api.setTenantId = (id) => { tenantOverride = id || null; };
@@ -247,8 +281,6 @@ api.getTenantId = () =>
 
 api.path = normalizePath;
 api.withAbort = () => { const ac = new AbortController(); return { signal: ac.signal, cancel: () => ac.abort() }; };
-
-// Normalized verb mirrors (opt-in)
 ["get", "post", "put", "patch", "delete"].forEach((m) => {
   api[`_${m}`] = (url, ...rest) => api[m](normalizePath(url), ...rest);
 });
