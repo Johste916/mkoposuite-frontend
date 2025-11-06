@@ -53,16 +53,15 @@ const SelectField = ({ className = "", children, ...props }) => (
 );
 
 /* ---------- Safe helpers ---------- */
-const toDate = (v) => (v ? new Date(v) : null);
 const isSameDay = (a, b) =>
-  a && b &&
+  a &&
+  b &&
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 const isBefore = (a, b) => (a && b ? a.getTime() < b.getTime() : false);
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const lc = (v) => String(v || "").toLowerCase();
-const nonneg = (x) => Math.max(0, num(x));
 
 /* ---------- Nice formatting helpers ---------- */
 const titleCase = (s) =>
@@ -87,14 +86,12 @@ const StatusPill = ({ value }) => {
   );
 };
 
-/* ---------- Detect placeholder officer labels (roles, GUIDs, placeholders) ---------- */
+/* ---------- Detect placeholder officer labels ---------- */
 const looksLikePlaceholderOfficer = (name) => {
   if (!name) return true;
   const token = String(name).trim().toLowerCase();
-
   const roleWords = ["admin", "administrator", "manager", "director", "user", "loan officer", "officer"];
   if (roleWords.includes(token)) return true;
-
   if (/^officer\s*#\s*/i.test(name)) return true;
   if (/^[0-9a-f-]{8,}$/i.test(token)) return true; // GUID-like
   return false;
@@ -111,7 +108,7 @@ const parseDateStrict = (v) => {
   return Number.isFinite(t.getTime()) ? t : null;
 };
 
-/** Add N months, keeping the end-of-month semantics safe (e.g., Jan 31 + 1 month = Feb 28/29). */
+/** Add N months safely (EOM-aware). */
 const addMonthsSafe = (date, months) => {
   if (!date || !Number.isFinite(Number(months))) return null;
   const d = new Date(date.getTime());
@@ -126,7 +123,7 @@ const addMonthsSafe = (date, months) => {
   return d;
 };
 
-/** Calculate maturity (final due) = disbursal/start + tenure months when tenure is known. */
+/** Maturity = disbursal/start + tenure months. */
 const calcMaturityDate = (loan) => {
   const months =
     loan.loanDurationMonths ??
@@ -135,21 +132,17 @@ const calcMaturityDate = (loan) => {
     loan.tenureMonths ??
     loan.periodMonths ??
     null;
-
   if (!Number.isFinite(Number(months)) || Number(months) <= 0) return null;
-
   const base =
     parseDateStrict(loan.disbursementDate || loan.disbursement_date || loan.releaseDate) ||
     parseDateStrict(loan.startDate) ||
     parseDateStrict(loan.createdAt);
-
   if (!base) return null;
-
   const mat = addMonthsSafe(base, Number(months));
   return mat ? mat.toISOString().slice(0, 10) : null;
 };
 
-/** Choose a "next due" using schedule first; if unknown, do not fake it. */
+/** Choose next due using schedule first; otherwise best hint. */
 const pickNextDueDate = (l) => {
   const fromSchedule = (sch) => {
     if (!Array.isArray(sch) || !sch.length) return null;
@@ -194,6 +187,92 @@ const pickNextDueDate = (l) => {
   return (future || candidates[0]).toISOString().slice(0, 10);
 };
 
+/* ---------- Build a proper name from first/last parts ---------- */
+const joinName = (a, b) => {
+  const s = [a, b].filter(Boolean).join(" ").trim();
+  return s || null;
+};
+
+/* ---------- Infer monthly rate (decimal) from any hints ---------- */
+const inferMonthlyRate01 = (l) => {
+  const toNumber = (v) => {
+    if (v == null) return null;
+    if (typeof v === "string") {
+      const cleaned = v.replace(/\s*%$/, "").trim();
+      return Number.isFinite(Number(cleaned)) ? Number(cleaned) : null;
+    }
+    return Number.isFinite(Number(v)) ? Number(v) : null;
+  };
+
+  const months =
+    l.loanDurationMonths ?? l.termMonths ?? l.durationMonths ?? l.tenureMonths ?? l.periodMonths ?? null;
+
+  const rInterest = toNumber(l.interestRate ?? l.rate);
+  const rMonthlyExplicit = [l.monthlyInterestRate, l.interestRateMonth, l.ratePerMonth, l.rate_month]
+    .map(toNumber)
+    .find((x) => x != null);
+  const rAnnualExplicit = [l.annualInterestRate, l.interestRateYear, l.interestRateAnnual, l.ratePerYear, l.rateAnnual]
+    .map(toNumber)
+    .find((x) => x != null);
+
+  const cycle = (l.repaymentCycle || l.repaymentFrequency || l.frequency || l.installmentFrequency || "")
+    .toString()
+    .toLowerCase();
+  const looksMonthly = cycle === "monthly" || (rInterest != null && rInterest <= 12 && Number(months || 0) > 0);
+
+  if (rMonthlyExplicit != null) return rMonthlyExplicit > 1 ? rMonthlyExplicit / 100 : rMonthlyExplicit;
+  if (rAnnualExplicit != null) {
+    const yr01 = rAnnualExplicit > 1 ? rAnnualExplicit / 100 : rAnnualExplicit;
+    return yr01 / 12;
+  }
+  if (rInterest != null) {
+    if (looksMonthly) return rInterest > 1 ? rInterest / 100 : rInterest;
+    const yr01 = rInterest > 1 ? rInterest / 100 : rInterest;
+    return yr01 / 12;
+  }
+  return null;
+};
+
+/* ---------- Derive total interest (fallbacks) ---------- */
+const deriveInterestTotal = (l) => {
+  const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+  // 1) direct fields
+  const direct =
+    l.interestAmount ?? l.totalInterest ?? l.expectedInterest ?? l.interest ?? l.interest_total ?? null;
+  if (Number.isFinite(Number(direct)) && Number(direct) > 0) return Number(direct);
+
+  // 2) sum from schedule if we have it
+  const sch = Array.isArray(l.repaymentSchedule) ? l.repaymentSchedule : Array.isArray(l.schedule) ? l.schedule : null;
+  if (sch && sch.length) {
+    const sum = sch.reduce((acc, it) => {
+      const part =
+        it.interestDue ??
+        it.interest_due ??
+        it.interestAmount ??
+        it.interest_amount ??
+        it.interestComponent ??
+        it.interest_component ??
+        it.interest ??
+        0;
+      return acc + n(part);
+    }, 0);
+    if (sum > 0) return sum;
+  }
+
+  // 3) estimate from principal * monthlyRate * months (flat approximation)
+  const principal = n(l.principalAmount ?? l.amount ?? l.principal ?? l.expectedPrincipal);
+  const months =
+    l.loanDurationMonths ?? l.termMonths ?? l.durationMonths ?? l.tenureMonths ?? l.periodMonths ?? null;
+  const m01 = inferMonthlyRate01(l);
+  if (principal > 0 && Number.isFinite(Number(months)) && months > 0 && m01 != null) {
+    return principal * m01 * Number(months);
+  }
+
+  // 4) no idea
+  return 0;
+};
+
 /* ---------- Scopes & titles ---------- */
 const REPORT_TITLES = {
   due: "Due Loans",
@@ -212,10 +291,14 @@ const derivedFilter = {
   active: (l) => {
     const s = lc(l.status || l.state);
     return ["disbursed", "active"].includes(s) || (s === "closed" && num(l.outstanding) > 0);
-    },
+  },
+  // tightened: do NOT treat pending/new as disbursed even if releaseDate exists
   disbursed: (l) => {
     const s = lc(l.status || l.state);
-    return s === "disbursed" || !!(l.disbursementDate || l.disbursement_date || l.releaseDate);
+    if (["disbursed", "active"].includes(s)) return true;
+    if (["pending", "new", "application", "draft"].includes(s)) return false;
+    // fallback: require explicit disbursement date, not just releaseDate
+    return !!(l.disbursementDate || l.disbursement_date);
   },
   due: (l, ctx) => {
     if (!derivedFilter.active(l)) return false;
@@ -256,11 +339,58 @@ const derivedFilter = {
   "3-months-late": (l) => derivedFilter.active(l) && num(l.dpd || l.daysPastDue) >= 90,
 };
 
-const isDef = (v) => v !== null && v !== undefined;
+/* ---------- Shared officer helper ---------- */
+const resolveOfficerName = (l, ctx) => {
+  const idAny =
+    l.officerId ||
+    l.loanOfficerId ||
+    l.assignedOfficerId ||
+    l.userId ||
+    l.user_id ||
+    l.disbursedBy ||
+    l.disbursed_by ||
+    l.createdById ||
+    l.officer?.id ||
+    l.loanOfficer?.id ||
+    l.LoanOfficer?.id ||
+    l.assignee?.id ||
+    l.createdBy?.id ||
+    l.User?.id ||
+    null;
+
+  const nameCandidates = [
+    // direct names
+    l.officerName,
+    l.loanOfficerName,
+    l.createdByName,
+    l.officer?.name,
+    l.loanOfficer?.name,
+    l.LoanOfficer?.name,
+    l.assignee?.name,
+    l.createdBy?.name,
+    l.User?.name,
+    // full/first/last compositions
+    l.officer?.fullName,
+    l.loanOfficer?.fullName,
+    l.LoanOfficer?.fullName,
+    l.createdBy?.fullName,
+    l.User?.fullName,
+    joinName(l.officer?.firstName, l.officer?.lastName),
+    joinName(l.loanOfficer?.firstName, l.loanOfficer?.lastName),
+    joinName(l.LoanOfficer?.firstName, l.LoanOfficer?.lastName),
+    joinName(l.createdBy?.firstName, l.createdBy?.lastName),
+    joinName(l.User?.firstName, l.User?.lastName),
+    // context map
+    idAny && ctx?.officersById ? ctx.officersById[String(idAny)] : null,
+  ].filter(Boolean);
+
+  const picked = nameCandidates.find((n) => !looksLikePlaceholderOfficer(n));
+  return picked ? titleCase(picked) : "—";
+};
 
 /* ---------- Column definitions ---------- */
 const SCOPE_DEFS = {
-/* ---- Disbursed (officer/branch resolution fixed) ---- */
+/* ---- Disbursed (monthly interest shows real monthly %) ---- */
 disbursed: {
   columns: [
     { key: "disbDate", header: "Date of Dsb" },
@@ -274,7 +404,7 @@ disbursed: {
     { key: "outFee", header: "Outstanding fee", align: "right" },
     { key: "outPen", header: "Outstanding penalty", align: "right" },
     { key: "outstanding", header: "Total outstanding", align: "right" },
-    { key: "rateYear", header: "Interest rate/year %" },
+    { key: "rateMonth", header: "Interest rate/month %" },
     { key: "duration", header: "Loan Duration" },
     { key: "dueDate", header: "Due date" },
     { key: "officer", header: "Loan officer" },
@@ -292,8 +422,8 @@ disbursed: {
     const months =
       l.loanDurationMonths ?? l.termMonths ?? l.durationMonths ?? l.tenureMonths ?? l.periodMonths ?? null;
     const days = l.termDays ?? l.durationDays ?? null;
-    const instCount = l.installmentCount ?? l.numberOfInstallments ?? null;
-    const freqRaw = l.repaymentFrequency || l.frequency || l.installmentFrequency || null;
+    const instCount = l.installmentCount ?? l.numberOfInstallments ?? l.numberOfRepayments ?? null;
+    const freqRaw = l.repaymentCycle || l.repaymentFrequency || l.frequency || l.installmentFrequency || null;
     const freq = typeof freqRaw === "string" ? freqRaw.replace(/_/g, " ") : freqRaw;
 
     let duration = "—";
@@ -304,7 +434,6 @@ disbursed: {
 
     const nextDueFromScheduleOrHints = pickNextDueDate(l);
     const maturityFromTenure = calcMaturityDate(l);
-
     const dueToShow = maturityFromTenure || nextDueFromScheduleOrHints;
 
     const paidPrin = n(l.paidPrincipal ?? l.totalPrincipalPaid);
@@ -312,7 +441,8 @@ disbursed: {
     const paidFee  = n(l.paidFees      ?? l.totalFeesPaid);
     const paidPen  = n(l.paidPenalty   ?? l.totalPenaltyPaid);
 
-    let interestTotal = n(l.interestAmount ?? l.totalInterest ?? l.expectedInterest ?? l.interest);
+    // <-- updated to derived interest
+    let interestTotal = n(deriveInterestTotal(l));
 
     const outPrin = Number.isFinite(Number(l.outstandingPrincipal))
       ? Number(l.outstandingPrincipal)
@@ -334,6 +464,7 @@ disbursed: {
         ? n(l.outstanding)
         : pos(outPrin + outInt + outFee + outPen);
 
+    // ----- Monthly interest inference -----
     const toNumber = (v) => {
       if (v == null) return null;
       if (typeof v === "string") {
@@ -343,56 +474,41 @@ disbursed: {
       return Number.isFinite(Number(v)) ? Number(v) : null;
     };
 
-    const candAnnual = [
-      l.annualInterestRate, l.interestRateYear, l.interestRateAnnual, l.interestRate, l.ratePerYear, l.rateAnnual, l.rate,
-    ].map(toNumber).find((x) => x != null);
-
-    const candMonthly = [
+    const rInterest = toNumber(l.interestRate);
+    const rMonthlyExplicit = [
       l.monthlyInterestRate, l.interestRateMonth, l.ratePerMonth, l.rate_month,
     ].map(toNumber).find((x) => x != null);
 
-    let rateYear01 = null;
-    if (candAnnual != null) rateYear01 = candAnnual > 1 ? candAnnual / 100 : candAnnual;
-    else if (candMonthly != null) rateYear01 = (candMonthly > 1 ? candMonthly / 100 : candMonthly) * 12;
-    else if (principal && months && interestTotal) {
-      const solved = interestTotal / principal / (months / 12);
-      if (Number.isFinite(solved) && solved >= 0) rateYear01 = solved;
+    const rAnnualExplicit = [
+      l.annualInterestRate, l.interestRateYear, l.interestRateAnnual, l.ratePerYear, l.rateAnnual,
+    ].map(toNumber).find((x) => x != null);
+
+    const cycle = (l.repaymentCycle || "").toLowerCase();
+    const looksMonthly =
+      cycle === "monthly" ||
+      (rInterest != null && rInterest <= 12 && Number(months || 0) > 0);
+
+    let rateMonthPct = null;
+
+    if (rMonthlyExplicit != null) {
+      rateMonthPct = rMonthlyExplicit > 1 ? rMonthlyExplicit : rMonthlyExplicit * 100;
+    } else if (rAnnualExplicit != null) {
+      const yr01 = rAnnualExplicit > 1 ? rAnnualExplicit / 100 : rAnnualExplicit;
+      rateMonthPct = (yr01 / 12) * 100;
+    } else if (rInterest != null) {
+      if (looksMonthly) {
+        rateMonthPct = rInterest > 1 ? rInterest : rInterest * 100;
+      } else {
+        const yr01 = rInterest > 1 ? rInterest / 100 : rInterest;
+        rateMonthPct = (yr01 / 12) * 100;
+      }
+    } else if (principal && months && interestTotal) {
+      const monthly01 = interestTotal / principal / months;
+      if (Number.isFinite(monthly01)) rateMonthPct = monthly01 * 100;
     }
-    if (!interestTotal && principal && months && rateYear01 != null) {
-      interestTotal = Math.round(principal * rateYear01 * (months / 12));
-    }
-    const rateYearPct = rateYear01 != null ? rateYear01 * 100 : null;
-
-    // ---------- Officer / Branch ----------
-    const officerIdAny =
-      l.officerId ||
-      l.loanOfficerId ||
-      l.assignedOfficerId ||
-      l.disbursedBy ||
-      l.disbursed_by ||
-      l.createdById ||
-      l.officer?.id ||
-      null;
-
-    const nameFromCtxRaw =
-      officerIdAny && ctx.officersById ? ctx.officersById[String(officerIdAny)] : null;
-    const nameFromCtx = looksLikePlaceholderOfficer(nameFromCtxRaw) ? null : nameFromCtxRaw;
-
-    const officerResolved =
-      (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-      (!looksLikePlaceholderOfficer(l.loanOfficerName) && l.loanOfficerName) ||
-      (!looksLikePlaceholderOfficer(l.disbursedByName) && l.disbursedByName) ||
-      (!looksLikePlaceholderOfficer(l.disbursed_by_name) && l.disbursed_by_name) ||
-      (!looksLikePlaceholderOfficer(l.createdByName) && l.createdByName) ||
-      (!looksLikePlaceholderOfficer(l.officer?.name) && l.officer?.name) ||
-      nameFromCtx ||
-      "—";
 
     const branchIdAny = l.branchId || l.branch_id || l.Branch?.id || l.branch?.id || null;
-
-    const branchFromCtx =
-      branchIdAny && ctx.branchesById ? ctx.branchesById[String(branchIdAny)] : null;
-
+    const branchFromCtx = branchIdAny && ctx.branchesById ? ctx.branchesById[String(branchIdAny)] : null;
     const branchResolved =
       l.branchName || l.Branch?.name || l.branch?.name || branchFromCtx || l.branchCode || "—";
 
@@ -432,340 +548,308 @@ disbursed: {
       outstanding,
       outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
 
-      rateYear: rateYearPct == null ? "—" : `${fmtNum(rateYearPct, 1)}%`,
+      rateMonth: rateMonthPct == null ? "—" : `${fmtNum(rateMonthPct, 2)}%`,
 
       duration,
       dueDate: fmtDate(dueToShow),
 
-      officer: titleCase(officerResolved),
+      officer: resolveOfficerName(l, ctx),
       branch: branchResolved,
-      status: <StatusPill value={(l.status || l.state || "—").toString()} />,
+      status: <StatusPill value={(l.statusLabel || l.status || l.state || "—").toString()} />,
 
       currency,
     };
   },
 },
 
-  /* ---- other scope defs ---- */
-  due: {
-    columns: [
-      { key: "date", header: "Due Date" },
-      { key: "borrower", header: "Borrower" },
-      { key: "loanNumber", header: "Loan #" },
-      { key: "product", header: "Product" },
-      { key: "installment", header: "Inst. #" },
-      { key: "dueAmount", header: "Amount Due", align: "right" },
-      { key: "dpd", header: "DPD", align: "right" },
-      { key: "officer", header: "Officer" },
-    ],
-    totalKeys: ["dueAmount"],
-    rowMap: (l) => {
-      const borrower = l.Borrower || l.borrower || {};
-      const product = l.Product || l.product || {};
-      const currency = l.currency || "TZS";
-      const dd = pickNextDueDate(l);
-      const officer =
-        (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-        (l.officer && l.officer.name) ||
-        "—";
-      return {
-        id: l.id,
-        date: fmtDate(dd),
-        borrower: borrower.name || l.borrowerName || "—",
-        borrowerId: borrower.id,
-        loanNumber: l.loanNumber || l.id,
-        product: product.name || l.productName || "—",
-        installment: num(l.nextInstallment || l.upcomingInstallment || null) || "—",
-        dueAmount: num(l.nextDueAmount || l.upcomingDueAmount || 0),
-        dueAmountFmt:
-          l.nextDueAmount || l.upcomingDueAmount ? fmtC(l.nextDueAmount || l.upcomingDueAmount, currency) : "—",
-        dpd: num(l.dpd || l.daysPastDue || 0),
-        officer: titleCase(officer),
-        currency,
-      };
-    },
+/* ---- other scope defs ---- */
+due: {
+  columns: [
+    { key: "date", header: "Due Date" },
+    { key: "borrower", header: "Borrower" },
+    { key: "loanNumber", header: "Loan #" },
+    { key: "product", header: "Product" },
+    { key: "installment", header: "Inst. #" },
+    { key: "dueAmount", header: "Amount Due", align: "right" },
+    { key: "dpd", header: "DPD", align: "right" },
+    { key: "officer", header: "Officer" },
+  ],
+  totalKeys: ["dueAmount"],
+  rowMap: (l, ctx) => {
+    const borrower = l.Borrower || l.borrower || {};
+    const product = l.Product || l.product || {};
+    const currency = l.currency || "TZS";
+    const dd = pickNextDueDate(l);
+    return {
+      id: l.id,
+      date: fmtDate(dd),
+      borrower: borrower.name || l.borrowerName || "—",
+      borrowerId: borrower.id || l.borrowerId,
+      loanNumber: l.loanNumber || l.id,
+      product: product.name || l.productName || "—",
+      installment: num(l.nextInstallment || l.upcomingInstallment || null) || "—",
+      dueAmount: num(l.nextDueAmount || l.upcomingDueAmount || 0),
+      dueAmountFmt:
+        l.nextDueAmount || l.upcomingDueAmount ? fmtC(l.nextDueAmount || l.upcomingDueAmount, currency) : "—",
+      dpd: num(l.dpd || l.daysPastDue || 0),
+      officer: resolveOfficerName(l, ctx),
+      currency,
+    };
   },
+},
 
-  missed: {
-    columns: [
-      { key: "lastDueDate", header: "Last Due" },
-      { key: "borrower", header: "Borrower" },
-      { key: "loanNumber", header: "Loan #" },
-      { key: "product", header: "Product" },
-      { key: "dpd", header: "DPD", align: "right" },
-      { key: "arrears", header: "Arrears", align: "right" },
-      { key: "outstanding", header: "Outstanding", align: "right" },
-      { key: "officer", header: "Officer" },
-    ],
-    totalKeys: ["arrears", "outstanding"],
-    rowMap: (l) => {
-      const borrower = l.Borrower || l.borrower || {};
-      const product = l.Product || l.product || {};
-      const currency = l.currency || "TZS";
-      const op = num(l.outstandingPrincipal);
-      const oi = num(l.outstandingInterest);
-      const of = num(l.outstandingFees);
-      const ope = num(l.outstandingPenalty);
-      const outstanding = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
-      const officer =
-        (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-        (l.officer && l.officer.name) ||
-        "—";
-      return {
-        id: l.id,
-        lastDueDate: fmtDate(l.lastDueDate || l.nextDueDate),
-        borrower: borrower.name || l.borrowerName || "—",
-        borrowerId: borrower.id,
-        loanNumber: l.loanNumber || l.id,
-        product: product.name || l.productName || "—",
-        dpd: num(l.dpd || l.daysPastDue || 0),
-        arrears: num(l.arrears || l.totalArrears || l.outstandingArrears || 0),
-        outstanding,
-        arrearsFmt: num(l.arrears || l.totalArrears || l.outstandingArrears || 0)
-          ? fmtC(num(l.arrears || l.totalArrears || l.outstandingArrears || 0), currency)
-          : "—",
-        outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
-        officer: titleCase(officer),
-        currency,
-      };
-    },
+missed: {
+  columns: [
+    { key: "lastDueDate", header: "Last Due" },
+    { key: "borrower", header: "Borrower" },
+    { key: "loanNumber", header: "Loan #" },
+    { key: "product", header: "Product" },
+    { key: "dpd", header: "DPD", align: "right" },
+    { key: "arrears", header: "Arrears", align: "right" },
+    { key: "outstanding", header: "Outstanding", align: "right" },
+    { key: "officer", header: "Officer" },
+  ],
+  totalKeys: ["arrears", "outstanding"],
+  rowMap: (l, ctx) => {
+    const borrower = l.Borrower || l.borrower || {};
+    const product = l.Product || l.product || {};
+    const currency = l.currency || "TZS";
+    const op = num(l.outstandingPrincipal);
+    const oi = num(l.outstandingInterest);
+    const of = num(l.outstandingFees);
+    const ope = num(l.outstandingPenalty);
+    const outstanding = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
+    return {
+      id: l.id,
+      lastDueDate: fmtDate(l.lastDueDate || l.nextDueDate),
+      borrower: borrower.name || l.borrowerName || "—",
+      borrowerId: borrower.id || l.borrowerId,
+      loanNumber: l.loanNumber || l.id,
+      product: product.name || l.productName || "—",
+      dpd: num(l.dpd || l.daysPastDue || 0),
+      arrears: num(l.arrears || l.totalArrears || l.outstandingArrears || 0),
+      outstanding,
+      arrearsFmt: num(l.arrears || l.totalArrears || l.outstandingArrears || 0)
+        ? fmtC(num(l.arrears || l.totalArrears || l.outstandingArrears || 0), currency)
+        : "—",
+      outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
+      officer: resolveOfficerName(l, ctx),
+      currency,
+    };
   },
+},
 
-  arrears: {
-    columns: [
-      { key: "borrower", header: "Borrower" },
-      { key: "loanNumber", header: "Loan #" },
-      { key: "product", header: "Product" },
-      { key: "dpd", header: "DPD", align: "right" },
-      { key: "arrears", header: "Arrears", align: "right" },
-      { key: "penalty", header: "Penalty", align: "right" },
-      { key: "outstanding", header: "Outstanding", align: "right" },
-      { key: "officer", header: "Officer" },
-    ],
-    totalKeys: ["arrears", "penalty", "outstanding"],
-    rowMap: (l) => {
-      const borrower = l.Borrower || l.borrower || {};
-      const product = l.Product || l.product || {};
-      const currency = l.currency || "TZS";
-      const op = num(l.outstandingPrincipal);
-      const oi = num(l.outstandingInterest);
-      const of = num(l.outstandingFees);
-      const ope = num(l.outstandingPenalty);
-      const outstanding = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
-      const arr = num(l.arrears || l.totalArrears || l.outstandingArrears || 0);
-      const officer =
-        (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-        (l.officer && l.officer.name) ||
-        "—";
-      return {
-        id: l.id,
-        borrower: borrower.name || l.borrowerName || "—",
-        borrowerId: borrower.id,
-        loanNumber: l.loanNumber || l.id,
-        product: product.name || l.productName || "—",
-        dpd: num(l.dpd || l.daysPastDue || 0),
-        arrears: arr,
-        penalty: ope,
-        outstanding,
-        arrearsFmt: arr ? fmtC(arr, currency) : "—",
-        penaltyFmt: ope ? fmtC(ope, currency) : "—",
-        outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
-        officer: titleCase(officer),
-        currency,
-      };
-    },
+arrears: {
+  columns: [
+    { key: "borrower", header: "Borrower" },
+    { key: "loanNumber", header: "Loan #" },
+    { key: "product", header: "Product" },
+    { key: "dpd", header: "DPD", align: "right" },
+    { key: "arrears", header: "Arrears", align: "right" },
+    { key: "penalty", header: "Penalty", align: "right" },
+    { key: "outstanding", header: "Outstanding", align: "right" },
+    { key: "officer", header: "Officer" },
+  ],
+  totalKeys: ["arrears", "penalty", "outstanding"],
+  rowMap: (l, ctx) => {
+    const borrower = l.Borrower || l.borrower || {};
+    const product = l.Product || l.product || {};
+    const currency = l.currency || "TZS";
+    const op = num(l.outstandingPrincipal);
+    const oi = num(l.outstandingInterest);
+    const of = num(l.outstandingFees);
+    const ope = num(l.outstandingPenalty);
+    const outstanding = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
+    const arr = num(l.arrears || l.totalArrears || l.outstandingArrears || 0);
+    return {
+      id: l.id,
+      borrower: borrower.name || l.borrowerName || "—",
+      borrowerId: borrower.id || l.borrowerId,
+      loanNumber: l.loanNumber || l.id,
+      product: product.name || l.productName || "—",
+      dpd: num(l.dpd || l.daysPastDue || 0),
+      arrears: arr,
+      penalty: ope,
+      outstanding,
+      arrearsFmt: arr ? fmtC(arr, currency) : "—",
+      penaltyFmt: ope ? fmtC(ope, currency) : "—",
+      outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
+      officer: resolveOfficerName(l, ctx),
+      currency,
+    };
   },
+},
 
-  "no-repayments": {
-    columns: [
-      { key: "disbDate", header: "Disbursed" },
-      { key: "borrower", header: "Borrower" },
-      { key: "loanNumber", header: "Loan #" },
-      { key: "product", header: "Product" },
-      { key: "principal", header: "Principal", align: "right" },
-      { key: "firstDue", header: "1st Due" },
-      { key: "officer", header: "Officer" },
-    ],
-    totalKeys: ["principal"],
-    rowMap: (l) => {
-      const borrower = l.Borrower || l.borrower || {};
-      const product = l.Product || l.product || {};
-      const currency = l.currency || "TZS";
-      const p = num(l.amount ?? l.principal ?? 0);
-      const officer =
-        (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-        (l.officer && l.officer.name) ||
-        "—";
-      return {
-        id: l.id,
-        disbDate: fmtDate(l.disbursementDate || l.releaseDate || l.startDate || l.createdAt),
-        borrower: borrower.name || l.borrowerName || "—",
-        borrowerId: borrower.id,
-        loanNumber: l.loanNumber || l.id,
-        product: product.name || l.productName || "—",
-        principal: p,
-        principalFmt: p ? fmtC(p, currency) : "—",
-        firstDue: fmtDate(pickNextDueDate(l)),
-        officer: titleCase(officer),
-        currency,
-      };
-    },
+"no-repayments": {
+  columns: [
+    { key: "disbDate", header: "Disbursed" },
+    { key: "borrower", header: "Borrower" },
+    { key: "loanNumber", header: "Loan #" },
+    { key: "product", header: "Product" },
+    { key: "principal", header: "Principal", align: "right" },
+    { key: "firstDue", header: "1st Due" },
+    { key: "officer", header: "Officer" },
+  ],
+  totalKeys: ["principal"],
+  rowMap: (l, ctx) => {
+    const borrower = l.Borrower || l.borrower || {};
+    const product = l.Product || l.product || {};
+    const currency = l.currency || "TZS";
+    const p = num(l.amount ?? l.principal ?? l.principalAmount ?? 0);
+    return {
+      id: l.id,
+      disbDate: fmtDate(l.disbursementDate || l.disbursement_date || l.releaseDate || l.startDate || l.createdAt),
+      borrower: borrower.name || l.borrowerName || "—",
+      borrowerId: borrower.id || l.borrowerId,
+      loanNumber: l.loanNumber || l.id,
+      product: product.name || l.productName || "—",
+      principal: p,
+      principalFmt: p ? fmtC(p, currency) : "—",
+      firstDue: fmtDate(pickNextDueDate(l)),
+      officer: resolveOfficerName(l, ctx),
+      currency,
+    };
   },
+},
 
-  "past-maturity": {
-    columns: [
-      { key: "maturity", header: "Maturity" },
-      { key: "borrower", header: "Borrower" },
-      { key: "loanNumber", header: "Loan #" },
-      { key: "product", header: "Product" },
-      { key: "outstanding", header: "Outstanding", align: "right" },
-      { key: "dpd", header: "DPD", align: "right" },
-      { key: "officer", header: "Officer" },
-    ],
-    totalKeys: ["outstanding"],
-    rowMap: (l) => {
-      const borrower = l.Borrower || l.borrower || {};
-      const product = l.Product || l.product || {};
-      const currency = l.currency || "TZS";
-      const op = num(l.outstandingPrincipal);
-      const oi = num(l.outstandingInterest);
-      const of = num(l.outstandingFees);
-      const ope = num(l.outstandingPenalty);
-      const outstanding = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
-      const officer =
-        (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-        (l.officer && l.officer.name) ||
-        "—";
-      return {
-        id: l.id,
-        maturity: fmtDate(l.maturityDate || l.endDate || l.expectedMaturityDate || calcMaturityDate(l)),
-        borrower: borrower.name || l.borrowerName || "—",
-        borrowerId: borrower.id,
-        loanNumber: l.loanNumber || l.id,
-        product: product.name || l.productName || "—",
-        outstanding,
-        outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
-        dpd: num(l.dpd || l.daysPastDue || 0),
-        officer: titleCase(officer),
-        currency,
-      };
-    },
+"past-maturity": {
+  columns: [
+    { key: "maturity", header: "Maturity" },
+    { key: "borrower", header: "Borrower" },
+    { key: "loanNumber", header: "Loan #" },
+    { key: "product", header: "Product" },
+    { key: "outstanding", header: "Outstanding", align: "right" },
+    { key: "dpd", header: "DPD", align: "right" },
+    { key: "officer", header: "Officer" },
+  ],
+  totalKeys: ["outstanding"],
+  rowMap: (l, ctx) => {
+    const borrower = l.Borrower || l.borrower || {};
+    const product = l.Product || l.product || {};
+    const currency = l.currency || "TZS";
+    const op = num(l.outstandingPrincipal);
+    const oi = num(l.outstandingInterest);
+    const of = num(l.outstandingFees);
+    const ope = num(l.outstandingPenalty);
+    const outstanding = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
+    return {
+      id: l.id,
+      maturity: fmtDate(l.maturityDate || l.endDate || l.expectedMaturityDate || calcMaturityDate(l)),
+      borrower: borrower.name || l.borrowerName || "—",
+      borrowerId: borrower.id || l.borrowerId,
+      loanNumber: l.loanNumber || l.id,
+      product: product.name || l.productName || "—",
+      outstanding,
+      outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
+      dpd: num(l.dpd || l.daysPastDue || 0),
+      officer: resolveOfficerName(l, ctx),
+      currency,
+    };
   },
+},
 
-  "principal-outstanding": {
-    columns: [
-      { key: "borrower", header: "Borrower" },
-      { key: "loanNumber", header: "Loan #" },
-      { key: "product", header: "Product" },
-      { key: "outPrin", header: "Outstanding Principal", align: "right" },
-      { key: "outstanding", header: "Total Outstanding", align: "right" },
-      { key: "officer", header: "Officer" },
-    ],
-    totalKeys: ["outPrin", "outstanding"],
-    rowMap: (l) => {
-      const borrower = l.Borrower || l.borrower || {};
-      const product = l.Product || l.product || {};
-      const currency = l.currency || "TZS";
-      const op = num(l.outstandingPrincipal);
-      const oi = num(l.outstandingInterest);
-      const of = num(l.outstandingFees);
-      const ope = num(l.outstandingPenalty);
-      const total = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
-      const officer =
-        (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-        (l.officer && l.officer.name) ||
-        "—";
-      return {
-        id: l.id,
-        borrower: borrower.name || l.borrowerName || "—",
-        borrowerId: borrower.id,
-        loanNumber: l.loanNumber || l.id,
-        product: product.name || l.productName || "—",
-        outPrin: op,
-        outstanding: total,
-        outPrinFmt: op ? fmtC(op, currency) : "—",
-        outstandingFmt: total ? fmtC(total, currency) : "—",
-        officer: titleCase(officer),
-        currency,
-      };
-    },
+"principal-outstanding": {
+  columns: [
+    { key: "borrower", header: "Borrower" },
+    { key: "loanNumber", header: "Loan #" },
+    { key: "product", header: "Product" },
+    { key: "outPrin", header: "Outstanding Principal", align: "right" },
+    { key: "outstanding", header: "Total Outstanding", align: "right" },
+    { key: "officer", header: "Officer" },
+  ],
+  totalKeys: ["outPrin", "outstanding"],
+  rowMap: (l, ctx) => {
+    const borrower = l.Borrower || l.borrower || {};
+    const product = l.Product || l.product || {};
+    const currency = l.currency || "TZS";
+    const op = num(l.outstandingPrincipal);
+    const oi = num(l.outstandingInterest);
+    const of = num(l.outstandingFees);
+    const ope = num(l.outstandingPenalty);
+    const total = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
+    return {
+      id: l.id,
+      borrower: borrower.name || l.borrowerName || "—",
+      borrowerId: borrower.id || l.borrowerId,
+      loanNumber: l.loanNumber || l.id,
+      product: product.name || l.productName || "—",
+      outPrin: op,
+      outstanding: total,
+      outPrinFmt: op ? fmtC(op, currency) : "—",
+      outstandingFmt: total ? fmtC(total, currency) : "—",
+      officer: resolveOfficerName(l, ctx),
+      currency,
+    };
   },
+},
 
-  "1-month-late": {
-    columns: [
-      { key: "borrower", header: "Borrower" },
-      { key: "loanNumber", header: "Loan #" },
-      { key: "product", header: "Product" },
-      { key: "dpd", header: "DPD", align: "right" },
-      { key: "arrears", header: "Arrears", align: "right" },
-      { key: "officer", header: "Officer" },
-    ],
-    totalKeys: ["arrears"],
-    rowMap: (l) => {
-      const borrower = l.Borrower || l.borrower || {};
-      const product = l.Product || l.product || {};
-      const currency = l.currency || "TZS";
-      const arr = num(l.arrears || l.totalArrears || l.outstandingArrears || 0);
-      const officer =
-        (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-        (l.officer && l.officer.name) ||
-        "—";
-      return {
-        id: l.id,
-        borrower: borrower.name || l.borrowerName || "—",
-        borrowerId: borrower.id,
-        loanNumber: l.loanNumber || l.id,
-        product: product.name || l.productName || "—",
-        dpd: num(l.dpd || l.daysPastDue || 0),
-        arrears: arr,
-        arrearsFmt: arr ? fmtC(arr, currency) : "—",
-        officer: titleCase(officer),
-        currency,
-      };
-    },
+"1-month-late": {
+  columns: [
+    { key: "borrower", header: "Borrower" },
+    { key: "loanNumber", header: "Loan #" },
+    { key: "product", header: "Product" },
+    { key: "dpd", header: "DPD", align: "right" },
+    { key: "arrears", header: "Arrears", align: "right" },
+    { key: "officer", header: "Officer" },
+  ],
+  totalKeys: ["arrears"],
+  rowMap: (l, ctx) => {
+    const borrower = l.Borrower || l.borrower || {};
+    const product = l.Product || l.product || {};
+    const currency = l.currency || "TZS";
+    const arr = num(l.arrears || l.totalArrears || l.outstandingArrears || 0);
+    return {
+      id: l.id,
+      borrower: borrower.name || l.borrowerName || "—",
+      borrowerId: borrower.id || l.borrowerId,
+      loanNumber: l.loanNumber || l.id,
+      product: product.name || l.productName || "—",
+      dpd: num(l.dpd || l.daysPastDue || 0),
+      arrears: arr,
+      arrearsFmt: arr ? fmtC(arr, currency) : "—",
+      officer: resolveOfficerName(l, ctx),
+      currency,
+    };
   },
+},
 
-  "3-months-late": {
-    columns: [
-      { key: "borrower", header: "Borrower" },
-      { key: "loanNumber", header: "Loan #" },
-      { key: "product", header: "Product" },
-      { key: "dpd", header: "DPD", align: "right" },
-      { key: "arrears", header: "Arrears", align: "right" },
-      { key: "outstanding", header: "Outstanding", align: "right" },
-      { key: "officer", header: "Officer" },
-    ],
-    totalKeys: ["arrears", "outstanding"],
-    rowMap: (l) => {
-      const borrower = l.Borrower || l.borrower || {};
-      const product = l.Product || l.product || {};
-      const currency = l.currency || "TZS";
-      const op = num(l.outstandingPrincipal);
-      const oi = num(l.outstandingInterest);
-      const of = num(l.outstandingFees);
-      const ope = num(l.outstandingPenalty);
-      const outstanding = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
-      const arr = num(l.arrears || l.totalArrears || l.outstandingArrears || 0);
-      const officer =
-        (!looksLikePlaceholderOfficer(l.officerName) && l.officerName) ||
-        (l.officer && l.officer.name) ||
-        "—";
-      return {
-        id: l.id,
-        borrower: borrower.name || l.borrowerName || "—",
-        borrowerId: borrower.id,
-        loanNumber: l.loanNumber || l.id,
-        product: product.name || l.productName || "—",
-        dpd: num(l.dpd || l.daysPastDue || 0),
-        arrears: arr,
-        outstanding,
-        arrearsFmt: arr ? fmtC(arr, currency) : "—",
-        outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
-        officer: titleCase(officer),
-        currency,
-      };
-    },
+"3-months-late": {
+  columns: [
+    { key: "borrower", header: "Borrower" },
+    { key: "loanNumber", header: "Loan #" },
+    { key: "product", header: "Product" },
+    { key: "dpd", header: "DPD", align: "right" },
+    { key: "arrears", header: "Arrears", align: "right" },
+    { key: "outstanding", header: "Outstanding", align: "right" },
+    { key: "officer", header: "Officer" },
+  ],
+  totalKeys: ["arrears", "outstanding"],
+  rowMap: (l, ctx) => {
+    const borrower = l.Borrower || l.borrower || {};
+    const product = l.Product || l.product || {};
+    const currency = l.currency || "TZS";
+    const op = num(l.outstandingPrincipal);
+    const oi = num(l.outstandingInterest);
+    const of = num(l.outstandingFees);
+    const ope = num(l.outstandingPenalty);
+    const outstanding = l.outstanding != null ? num(l.outstanding) : op + oi + of + ope;
+    const arr = num(l.arrears || l.totalArrears || l.outstandingArrears || 0);
+    return {
+      id: l.id,
+      borrower: borrower.name || l.borrowerName || "—",
+      borrowerId: borrower.id || l.borrowerId,
+      loanNumber: l.loanNumber || l.id,
+      product: product.name || l.productName || "—",
+      dpd: num(l.dpd || l.daysPastDue || 0),
+      arrears: arr,
+      outstanding,
+      arrearsFmt: arr ? fmtC(arr, currency) : "—",
+      outstandingFmt: outstanding ? fmtC(outstanding, currency) : "—",
+      officer: resolveOfficerName(l, ctx),
+      currency,
+    };
   },
+},
 };
 
 /* ---------- Component ---------- */
@@ -942,8 +1026,11 @@ export default function LoanStatusList() {
         ? res.data.items
         : [];
 
+      // ------- normalization aligns across all reports -------
       const normalized = base.map((l) => ({
         ...l,
+
+        // Borrower / Product
         borrowerId: l.borrowerId ?? l.Borrower?.id ?? l.borrower?.id ?? l.clientId ?? null,
         borrowerName: l.borrowerName ?? l.Borrower?.name ?? l.borrower?.name ?? l.clientName ?? null,
         borrowerPhone: l.borrowerPhone ?? l.phone ?? l.Borrower?.phone ?? l.borrower?.phone ?? null,
@@ -951,22 +1038,54 @@ export default function LoanStatusList() {
         productId: l.productId ?? l.product_id ?? l.Product?.id ?? l.product?.id ?? null,
         productName: l.productName ?? l.Product?.name ?? l.product?.name ?? null,
 
+        // Officer (many possible sources + compose)
         officerId:
           l.officerId ??
           l.loanOfficerId ??
           l.assignedOfficerId ??
+          l.userId ??
+          l.user_id ??
           l.disbursedBy ??
           l.disbursed_by ??
           l.createdById ??
           l.officer?.id ??
+          l.loanOfficer?.id ??
+          l.LoanOfficer?.id ??
+          l.assignee?.id ??
+          l.createdBy?.id ??
+          l.User?.id ??
           null,
-        officerName: l.officerName ?? l.officer?.name ?? l.createdByName ?? null,
+        officerName:
+          l.officerName ??
+          l.loanOfficerName ??
+          l.officer?.name ??
+          l.loanOfficer?.name ??
+          l.LoanOfficer?.name ??
+          l.assignee?.name ??
+          l.createdByName ??
+          l.createdBy?.name ??
+          l.User?.name ??
+          l.officer?.fullName ??
+          l.loanOfficer?.fullName ??
+          l.LoanOfficer?.fullName ??
+          l.createdBy?.fullName ??
+          l.User?.fullName ??
+          joinName(l.officer?.firstName, l.officer?.lastName) ??
+          joinName(l.loanOfficer?.firstName, l.loanOfficer?.lastName) ??
+          joinName(l.LoanOfficer?.firstName, l.LoanOfficer?.lastName) ??
+          joinName(l.createdBy?.firstName, l.createdBy?.lastName) ??
+          joinName(l.User?.firstName, l.User?.lastName) ??
+          null,
 
-        branchId: l.branchId ?? l.Branch?.id ?? l.branch?.id ?? null,
+        // Branch
+        branchId: l.branchId ?? l.branch_id ?? l.Branch?.id ?? l.branch?.id ?? null,
         branchName: l.branchName ?? l.Branch?.name ?? l.branch?.name ?? null,
 
-        nextDueDate: l.nextDueDate ?? l.firstDueDate ?? l.upcomingDueDate ?? l.dueDate ?? null,
+        // Dates
+        releaseDate: l.releaseDate ?? l.startDate ?? null,
+        disbursementDate: l.disbursementDate ?? l.disbursement_date ?? null,
 
+        // Core amounts
         principalAmount: l.principalAmount ?? l.amount ?? l.principal ?? l.expectedPrincipal ?? null,
         interestAmount: l.interestAmount ?? l.totalInterest ?? l.expectedInterest ?? l.interest ?? null,
         totalOutstanding:
@@ -975,8 +1094,29 @@ export default function LoanStatusList() {
             : l.outstanding != null
             ? l.outstanding
             : null,
+
+        // Interest / Terms from form
+        interestRate: l.interestRate ?? l.rate ?? null,
+        interestMethod: l.interestMethod ?? l.interest_type ?? null,
+        durationMonths:
+          l.durationMonths ??
+          l.loanDurationMonths ??
+          l.termMonths ??
+          l.tenureMonths ??
+          l.periodMonths ??
+          null,
+        repaymentCycle: l.repaymentCycle ?? l.frequency ?? null,
+        numberOfRepayments: l.numberOfRepayments ?? l.installmentCount ?? l.numberOfInstallments ?? null,
+
+        // Status labels
+        status: l.status ?? null,
+        statusLabel: l.statusLabel ?? l.label ?? null,
+
+        // Due hints
+        nextDueDate: l.nextDueDate ?? l.firstDueDate ?? l.upcomingDueDate ?? l.dueDate ?? null,
       }));
 
+      // Deduplicate by id
       const byId = new Map();
       for (const l of normalized) {
         const id = l.id ?? l.loanId ?? l.loan_id;
@@ -985,6 +1125,7 @@ export default function LoanStatusList() {
       }
       const unique = byId.size ? Array.from(byId.values()) : normalized;
 
+      // Scope filter
       const scoped = unique.filter((l) => {
         const fn = derivedFilter[scope];
         return fn ? fn(l, { todayStart }) : true;
@@ -1003,18 +1144,29 @@ export default function LoanStatusList() {
             l.officerId ??
             l.loanOfficerId ??
             l.assignedOfficerId ??
+            l.userId ??
+            l.user_id ??
             l.disbursedBy ??
             l.disbursed_by ??
             l.createdById ??
             l.officer?.id ??
+            l.loanOfficer?.id ??
+            l.LoanOfficer?.id ??
+            l.assignee?.id ??
+            l.createdBy?.id ??
+            l.User?.id ??
             null;
+
           const oname =
             l.officerName ??
             l.loanOfficerName ??
-            l.disbursedByName ??
-            l.disbursed_by_name ??
-            l.createdByName ??
             l.officer?.name ??
+            l.loanOfficer?.name ??
+            l.LoanOfficer?.name ??
+            l.assignee?.name ??
+            l.createdByName ??
+            l.createdBy?.name ??
+            l.User?.name ??
             null;
 
           if (oid != null && oname && !looksLikePlaceholderOfficer(oname)) {
@@ -1045,16 +1197,24 @@ export default function LoanStatusList() {
           );
         });
 
+        // resolve missing officer names by ID
         const unresolvedIds = scoped
           .map(
             (l) =>
-              l.officerId ??
-              l.loanOfficerId ??
-              l.assignedOfficerId ??
-              l.disbursedBy ??
-              l.disbursed_by ??
-              l.createdById ??
-              l.officer?.id
+              l.officerId ||
+              l.loanOfficerId ||
+              l.assignedOfficerId ||
+              l.userId ||
+              l.user_id ||
+              l.disbursedBy ||
+              l.disbursed_by ||
+              l.createdById ||
+              l.officer?.id ||
+              l.loanOfficer?.id ||
+              l.LoanOfficer?.id ||
+              l.assignee?.id ||
+              l.createdBy?.id ||
+              l.User?.id
           )
           .filter(Boolean)
           .map(String)
@@ -1133,12 +1293,23 @@ export default function LoanStatusList() {
         String(l.productId ?? l.product_id ?? l.Product?.id ?? l.product?.id) !== String(productId)
       )
         return false;
+
+      // use normalized officerId
       if (
         officerId &&
-        String(l.officerId || l.loanOfficerId || l.disbursedBy || l.disbursed_by || l.createdById) !==
-          String(officerId)
+        String(
+          l.officerId ||
+            l.loanOfficerId ||
+            l.assignedOfficerId ||
+            l.userId ||
+            l.user_id ||
+            l.disbursedBy ||
+            l.disbursed_by ||
+            l.createdById
+        ) !== String(officerId)
       )
         return false;
+
       if (branchId && String(l.branchId || l.Branch?.id || l.branch?.id) !== String(branchId))
         return false;
 
@@ -1193,10 +1364,9 @@ export default function LoanStatusList() {
 
   /* ---------- pagination ---------- */
   const paged = useMemo(() => {
-    if (totalCount > rows.length) return filtered;
     const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize, rows.length, totalCount]);
+  }, [filtered, page, pageSize]);
 
   /* ---------- table rows ---------- */
   const tableRows = useMemo(() => {
@@ -1236,7 +1406,7 @@ export default function LoanStatusList() {
       "borrower",
       "phone",
       "product",
-      "rateYear",
+      "rateMonth",
       "duration",
       "dueDate",
       "officer",
@@ -1356,7 +1526,7 @@ export default function LoanStatusList() {
         <div>
           <h2 className={ui.h1}>{title}</h2>
           <div className={ui.sub}>
-            Showing {fmtNum(filtered.length)} of {fmtNum(totalCount)}
+            Showing {fmtNum(tableRows.length)} of {fmtNum(totalCount)}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

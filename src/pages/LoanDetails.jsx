@@ -6,7 +6,6 @@ import ScheduleTable from "../components/ScheduleTable";
 import {
   fmtMoney,
   asDate,
-  asDateTime,
   asISO,
   normalizeSchedule,
   computeScheduleTotals,
@@ -50,15 +49,14 @@ const ui = {
   td: "px-3 py-2 border border-[var(--border)] text-sm text-[var(--fg)]",
 };
 
-/* Section shell */
+/* ---------- shared shells ---------- */
 const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
   <div className={ui.card}>
     {(title || subtitle || right) && (
       <div className={ui.cardHead}>
         <div className="min-w-0">
           {title && <h3 className="text-xl md:text-2xl font-extrabold tracking-tight">{title}</h3>}
-          {/* use div (not <p>) so we can pass elements safely */}
-          {subtitle && <div className={ui.sub}>{subtitle}</div>}
+          <div className={ui.sub}>{subtitle}</div>
         </div>
         {right}
       </div>
@@ -69,7 +67,7 @@ const SectionCard = ({ title, subtitle, right, children, dense = false }) => (
 
 const Label = ({ children }) => <div className={ui.label}>{children}</div>;
 
-/* role helpers */
+/* ---------- role helpers ---------- */
 const roleOf = () => {
   try {
     const r = (JSON.parse(localStorage.getItem("user") || "{}").role || "").toLowerCase();
@@ -84,7 +82,9 @@ const isCompliance = (r) => ["compliance", "compliance_officer", "legal"].includ
 const isAccountant = (r) => ["accountant", "finance"].includes(r) || isAdmin(r);
 const isOfficer = (r) => ["loan_officer", "officer"].includes(r) && !isAdmin(r);
 
-/* If backend has no stage, derive a sensible label off status. */
+/* ---------- small utils aligned with LoanStatusList ---------- */
+const lc = (v) => String(v || "").toLowerCase();
+
 function deriveStageFromStatus(status) {
   if (!status) return "";
   const s = String(status).toLowerCase();
@@ -93,7 +93,6 @@ function deriveStageFromStatus(status) {
   return "";
 }
 
-/* Status tone helper for the chip */
 function statusTone(s = "") {
   const k = String(s).toLowerCase();
   if (["approved", "disbursed", "active"].includes(k)) return "bg-emerald-600 text-white ring-0";
@@ -103,7 +102,6 @@ function statusTone(s = "") {
   return "";
 }
 
-/* ---------------- helpers for safe ownership updates ---------------- */
 function normalizeId(v) {
   if (v === "" || v == null) return undefined;
   if (typeof v === "number") return v;
@@ -118,35 +116,6 @@ function isoDateOrEmpty(v) {
   return mm ? mm[1] : new Date(s).toISOString().slice(0, 10);
 }
 
-function cleanNumber(n) {
-  if (n === "" || n == null) return undefined;
-  const x = Number(n);
-  return Number.isFinite(x) ? x : undefined;
-}
-
-/** Send both canonical and alias keys (server whitelists real cols anyway) */
-function buildLoanUpdatePayload(editForm) {
-  const amount = cleanNumber(editForm.amount);
-  const interestRate = cleanNumber(editForm.interestRate);
-  const termMonths = cleanNumber(editForm.termMonths);
-  const startDate = isoDateOrEmpty(editForm.startDate);
-
-  const canonical = {
-    ...(amount !== undefined ? { amount } : {}),
-    ...(interestRate !== undefined ? { interestRate } : {}),
-    ...(termMonths !== undefined ? { termMonths } : {}),
-    ...(startDate ? { startDate } : {}),
-  };
-
-  const aliases = {
-    ...(amount !== undefined ? { principal: amount } : {}),
-    ...(termMonths !== undefined ? { durationMonths: termMonths } : {}),
-    ...(startDate ? { releaseDate: startDate } : {}),
-  };
-
-  return { ...aliases, ...canonical };
-}
-
 function extractApiError(err) {
   const d = err?.response?.data;
   if (!d) return err?.message || "Request failed.";
@@ -157,21 +126,140 @@ function extractApiError(err) {
   try { return JSON.stringify(d); } catch { return String(d); }
 }
 
-// Only use the canonical endpoint and only send changed fields.
+// Canonical ownership patch
 async function patchLoanOwnership({ id, payload }) {
   const body = {};
   if (payload.officerId !== undefined) body.loanOfficerId = normalizeId(payload.officerId);
   if (payload.branchId !== undefined) body.branchId = normalizeId(payload.branchId);
   if (payload.borrowerId !== undefined) body.borrowerId = normalizeId(payload.borrowerId);
 
-  for (const k of Object.keys(body)) {
-    if (body[k] === undefined) delete body[k];
-  }
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
   if (!Object.keys(body).length) return;
-
   await api.patch(`/loans/${id}`, body);
 }
-/* ------------------------------------------------------------------- */
+
+/* ---------- due-date helpers kept consistent ---------- */
+const parseDateStrict = (v) => {
+  if (!v) return null;
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+    const [y, m, d] = v.slice(0, 10).split("-").map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  }
+  const t = new Date(v);
+  return Number.isFinite(t.getTime()) ? new Date(t.getFullYear(), t.getMonth(), t.getDate(), 0, 0, 0, 0) : null;
+};
+
+const pickNextDueDateLoose = (loan, schedule) => {
+  if (Array.isArray(schedule) && schedule.length) {
+    const upcoming = schedule
+      .map((x) => ({ d: parseDateStrict(x?.dueDate || x?.date), status: String(x?.status || "").toUpperCase(), amt: x?.totalDue || x?.amountDue }))
+      .filter((x) => x.d)
+      .sort((a, b) => a.d - b.d);
+
+    const due = upcoming.find((x) => x.status === "DUE") ||
+                upcoming.find((x) => x.status === "PENDING" || x.status === "UPCOMING") ||
+                upcoming[0];
+    if (due?.d) return { date: due.d, amount: Number(due.amt || 0) };
+  }
+
+  const hints = [
+    loan?.nextInstallmentDueDate,
+    loan?.nextDueDate,
+    loan?.upcomingDueDate,
+    loan?.firstDueDate,
+    loan?.dueDate,
+    loan?.firstRepaymentDate,
+    loan?.repaymentStartDate,
+    loan?.expectedFirstRepaymentDate,
+  ].map(parseDateStrict).filter(Boolean).sort((a,b) => a - b);
+
+  if (hints.length) return { date: hints[0], amount: undefined };
+  return null;
+};
+
+/* ---------- interest format helpers (monthly vs annual) ---------- */
+const methodLabel = (m) => {
+  const k = String(m || "").toLowerCase();
+  if (["flat", "fiat"].includes(k)) return "flat"; // guard typo "fiat"
+  if (["reducing", "declining"].includes(k)) return "reducing balance";
+  if (k === "compound") return "compound";
+  return m || "—";
+};
+
+const periodKey = (p) => {
+  const k = String(p || "").toLowerCase().replaceAll(".", "").replaceAll("per_", "");
+  if (["month", "monthly", "mo"].includes(k)) return "month";
+  if (["year", "annual", "yearly", "pa", "p/a", "perannum"].includes(k)) return "year";
+  return ""; // unknown
+};
+
+function trimPct(v) {
+  if (!Number.isFinite(v)) return "";
+  const s = Math.abs(v) >= 1 ? v.toFixed(2) : v.toPrecision(3);
+  return String(Number(s));
+}
+
+/** Determine how to display & use the rate: prefer monthly; convert if needed */
+function getRateInfo(loan, product) {
+  const raw =
+    loan?.interestRate ??
+    loan?.rate ??
+    product?.interestRate ??
+    product?.defaultInterestRate ??
+    null;
+
+  const p =
+    periodKey(loan?.interestPeriod) ||
+    periodKey(loan?.interestRatePeriod) ||
+    periodKey(loan?.ratePeriod) ||
+    periodKey(product?.interestPeriod) ||
+    periodKey(product?.ratePeriod) ||
+    ""; // unknown
+
+  if (raw == null) return { monthly: null, annual: null, period: "unknown", display: "—" };
+
+  let monthly = null, annual = null, period = "unknown";
+  if (p === "month") {
+    monthly = Number(raw);
+    annual = monthly * 12;
+    period = "month";
+  } else if (p === "year") {
+    annual = Number(raw);
+    monthly = annual / 12;
+    period = "year";
+  } else {
+    const freq = String(loan?.repaymentFrequency || loan?.frequency || product?.repaymentFrequency || "").toLowerCase();
+    if (["month", "monthly"].includes(freq)) {
+      monthly = Number(raw);
+      annual = monthly * 12;
+      period = "month";
+    } else {
+      monthly = Number(raw);
+      period = "unknown";
+    }
+  }
+
+  const parts = [];
+  if (Number.isFinite(monthly)) parts.push(`${trimPct(monthly)}% /mo`);
+  if (loan?.interestMethod || product?.interestMethod) {
+    parts.push(methodLabel(loan?.interestMethod || product?.interestMethod));
+  }
+  if (Number.isFinite(annual)) parts.push(`≈${trimPct(annual)}% p.a.`);
+
+  return { monthly, annual, period, display: parts.join(" · ") };
+}
+
+/* ---------- corrected P&I helpers for flat loans ---------- */
+function isFlat(loan, product) {
+  const m = String(loan?.interestMethod || product?.interestMethod || "").toLowerCase();
+  return m === "flat" || m === "fiat";
+}
+function flatMonthlyInstallment({ principal, months, monthlyRatePct }) {
+  const r = monthlyRatePct / 100;
+  return principal / months + principal * r;
+}
+
+/* =================================================================== */
 
 export default function LoanDetails() {
   const { id } = useParams();
@@ -191,10 +279,7 @@ export default function LoanDetails() {
 
   // edit officer/branch
   const [editOwnership, setEditOwnership] = useState(false);
-  const [ownershipForm, setOwnershipForm] = useState({
-    officerId: "",
-    branchId: "",
-  });
+  const [ownershipForm, setOwnershipForm] = useState({ officerId: "", branchId: "" });
   const [savingOwnership, setSavingOwnership] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -209,7 +294,7 @@ export default function LoanDetails() {
   const [suggestedAmount, setSuggestedAmount] = useState("");
   const [acting, setActing] = useState(false);
 
-  // general comments box
+  // comments box
   const [newComment, setNewComment] = useState("");
 
   // repay modal
@@ -272,7 +357,7 @@ export default function LoanDetails() {
 
   const showCOToolbar = canCO && ["compliance", "compliance_review"].includes(workflowStage);
 
-  const showDisburse = canACC && (loan?.status === "approved" || workflowStage === "accounting");
+  const showDisburse = canACC && (lc(loan?.status) === "approved" || workflowStage === "accounting");
 
   /* ---------- load ---------- */
   const lastLoadedId = useRef(null);
@@ -294,13 +379,28 @@ export default function LoanDetails() {
     }
   };
 
+  const pullSchedule = async () => {
+    setLoadingSchedule(true);
+    try {
+      const r = await api.get(`/loans/${id}/schedule`);
+      const raw = Array.isArray(r.data)
+        ? r.data
+        : (r.data?.schedule || r.data?.rows || r.data?.items || []);
+      setSchedule(normalizeSchedule(raw || []));
+    } catch {
+      setSchedule(null);
+    } finally {
+      setLoadingSchedule(false);
+    }
+  };
+
   const loadLoan = async () => {
     setLoading(true);
     setErrs(null);
     try {
       const { data: l } = await api.get(`/loans/${id}`);
       setLoan(l);
-      setSuggestedAmount(String(l?.amount ?? ""));
+      setSuggestedAmount(String(l?.amount ?? l?.principal ?? ""));
 
       // borrower
       const bId = l?.borrowerId ?? l?.Borrower?.id ?? l?.borrower?.id;
@@ -358,16 +458,8 @@ export default function LoanDetails() {
         );
       }
 
-      setLoadingSchedule(true);
-      tasks.push(
-        api
-          .get(`/loans/${id}/schedule`)
-          .then((r) => setSchedule(normalizeSchedule(r.data)))
-          .catch(() => setSchedule(null))
-          .finally(() => setLoadingSchedule(false))
-      );
-
       await Promise.all(tasks);
+      await pullSchedule();
 
       setOwnershipForm({
         officerId: oId ? String(oId) : "",
@@ -378,6 +470,45 @@ export default function LoanDetails() {
       setErrs("Failed to fetch loan.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Explicitly recalc schedule with MONTHLY rate
+  const recalcSchedule = async () => {
+    setLoadingSchedule(true);
+    try {
+      const ri = getRateInfo(loan, product);
+      const months = Number(loan?.termMonths ?? loan?.durationMonths ?? 0) || undefined;
+      const body = {
+        interestRate: Number.isFinite(ri.monthly) ? ri.monthly : undefined,
+        interestRatePeriod: "month",
+        termMonths: months,
+        startDate: asISO(loan?.startDate || loan?.releaseDate),
+        override: true,
+        previewOnly: false,
+      };
+
+      try {
+        await api.post(`/loans/${id}/reschedule`, body);
+      } catch {
+        try {
+          await api.post(`/loans/${id}/schedule`, body);
+        } catch {
+          try {
+            await api.put(`/loans/${id}/schedule`, body);
+          } catch {
+            await api.get(`/loans/${id}/schedule`, { params: { recalc: 1, interestRatePeriod: "month" } });
+          }
+        }
+      }
+
+      await pullSchedule();
+      alert("Schedule recalculated with monthly rate.");
+    } catch (e) {
+      console.error(e);
+      alert(extractApiError(e) || "Failed to recalculate schedule.");
+    } finally {
+      setLoadingSchedule(false);
     }
   };
 
@@ -481,7 +612,7 @@ export default function LoanDetails() {
       alert("Loan disbursed.");
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.error || "Failed to disburse loan.");
+      alert(extractApiError(e) || "Failed to disburse loan.");
     } finally {
       setActing(false);
     }
@@ -510,8 +641,15 @@ export default function LoanDetails() {
   }
 
   // Close loan (legacy)
+  const outstandingFromSchedule = useMemo(() => {
+    const totals = computeScheduleTotals(schedule || [], repayments || []);
+    return lc(loan?.status) === "closed" ? 0 :
+      (Array.isArray(schedule) && schedule.length ? totals.outstanding : loan?.outstanding ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedule, repayments, loan?.status, loan?.outstanding]);
+
   const closeLoan = async () => {
-    const remaining = Number(outstanding || 0);
+    const remaining = Number(outstandingFromSchedule || 0);
     if (remaining > 0 && !window.confirm("Outstanding > 0. Close anyway?")) return;
     try {
       await api.patch(`/loans/${id}/status`, {
@@ -529,10 +667,7 @@ export default function LoanDetails() {
   const addComment = async () => {
     if (!newComment.trim()) return;
     try {
-      const res = await api.post(`/comments`, {
-        loanId: id,
-        content: newComment,
-      });
+      const res = await api.post(`/comments`, { loanId: id, content: newComment });
       setComments((prev) => [res.data, ...prev]);
       setNewComment("");
     } catch (e) {
@@ -549,12 +684,10 @@ export default function LoanDetails() {
     try {
       await api.post(`/repayments`, { loanId: id, ...repForm, amount: amt });
 
-      if (loan?.status && !["active", "closed"].includes(String(loan.status).toLowerCase())) {
+      if (loan?.status && !["active", "closed"].includes(lc(loan.status))) {
         try {
           await api.patch(`/loans/${id}/status`, { status: "active" });
-        } catch {
-          /* ignore */
-        }
+        } catch {}
       }
 
       await loadLoan();
@@ -580,7 +713,7 @@ export default function LoanDetails() {
   /* ---------- Edit / Delete / Reissue / Reschedule ---------- */
   const openEditModal = () => {
     setEditForm({
-      amount: loan?.amount ?? "",
+      amount: loan?.amount ?? loan?.principal ?? "",
       interestRate: loan?.interestRate ?? "",
       termMonths: loan?.termMonths ?? loan?.durationMonths ?? "",
       startDate: asISO(loan?.startDate || loan?.releaseDate),
@@ -606,7 +739,7 @@ export default function LoanDetails() {
       alert("Loan updated.");
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.error || "Failed to update loan.");
+      alert(extractApiError(e) || "Failed to update loan.");
     } finally {
       setSavingEdit(false);
     }
@@ -620,13 +753,13 @@ export default function LoanDetails() {
       navigate("/loans");
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.error || "Failed to delete loan.");
+      alert(extractApiError(e) || "Failed to delete loan.");
     }
   };
 
   const openRescheduleModal = () => {
     setRescheduleForm({
-      termMonths: loan?.termMonths ?? "",
+      termMonths: loan?.termMonths ?? loan?.durationMonths ?? "",
       startDate: asISO(loan?.startDate || loan?.releaseDate),
       previewOnly: false,
     });
@@ -635,8 +768,7 @@ export default function LoanDetails() {
 
   const submitReschedule = async () => {
     const body = {
-      termMonths:
-        rescheduleForm.termMonths === "" ? undefined : Number(rescheduleForm.termMonths),
+      termMonths: rescheduleForm.termMonths === "" ? undefined : Number(rescheduleForm.termMonths),
       startDate: rescheduleForm.startDate || undefined,
       previewOnly: !!rescheduleForm.previewOnly,
     };
@@ -646,21 +778,19 @@ export default function LoanDetails() {
     setSavingReschedule(true);
     try {
       const { data } = await api.post(`/loans/${id}/reschedule`, body);
-      if (Array.isArray(data?.schedule)) {
-        setSchedule(data.schedule);
-      }
+      if (Array.isArray(data?.schedule)) setSchedule(normalizeSchedule(data.schedule));
       setOpenReschedule(false);
       await loadLoan();
       alert(data?.message || "Schedule updated.");
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.error || "Failed to reschedule.");
+      alert(extractApiError(e) || "Failed to reschedule.");
     } finally {
       setSavingReschedule(false);
     }
   };
 
-  // save officer/branch ownership — robust & type-safe
+  // save officer/branch ownership
   const saveOwnership = async () => {
     const currentOfficerId =
       loan?.officerId ??
@@ -693,7 +823,7 @@ export default function LoanDetails() {
       alert("Assignment saved.");
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.error || e?.message || "Failed to save assignment.");
+      alert(extractApiError(e) || "Failed to save assignment.");
     } finally {
       setSavingOwnership(false);
     }
@@ -709,22 +839,25 @@ export default function LoanDetails() {
       if (newId) navigate(`/loans/${newId}`);
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.error || "Failed to reissue loan.");
+      alert(extractApiError(e) || "Failed to reissue loan.");
     }
   };
 
-  /* ---------- quick stats & aggregates ---------- */
+  /* ---------- aggregates ---------- */
   const totals = useMemo(
     () => computeScheduleTotals(schedule || [], repayments || []),
     [schedule, repayments]
   );
-
   const scheduleReady = Array.isArray(schedule) && schedule.length > 0;
 
   const outstanding =
-    loan?.status === "closed" ? 0 : scheduleReady ? totals.outstanding : loan?.outstanding ?? null;
+    lc(loan?.status) === "closed" ? 0 :
+    scheduleReady ? totals.outstanding :
+    loan?.outstanding ?? null;
 
-  const nextDue = scheduleReady ? totals.nextDue : null;
+  const nextDueComputed = scheduleReady ? (totals.nextDue || null) : null;
+  const nextDueFallback = useMemo(() => pickNextDueDateLoose(loan, schedule), [loan, schedule]);
+  const nextDue = nextDueComputed || (nextDueFallback ? { date: nextDueFallback.date, amount: nextDueFallback.amount } : null);
 
   const repayTotals = useMemo(() => {
     const count = repayments.length || 0;
@@ -732,9 +865,9 @@ export default function LoanDetails() {
     return { count, sum };
   }, [repayments]);
 
-  const canPostRepayment = loan?.status !== "closed" && Number(outstanding || 0) > 0;
+  const canPostRepayment = lc(loan?.status) !== "closed" && Number(outstanding || 0) > 0;
 
-  /* ---------- compact identity helpers ---------- */
+  /* ---------- identity helpers ---------- */
   const officersById = useMemo(() => {
     const map = {};
     for (const o of officers || []) {
@@ -746,9 +879,7 @@ export default function LoanDetails() {
 
   const branchesById = useMemo(() => {
     const map = {};
-    for (const b of branches || []) {
-      map[String(b.id)] = b.name || b.code || `Branch ${b.id}`;
-    }
+    for (const b of branches || []) map[String(b.id)] = b.name || b.code || `Branch ${b.id}`;
     return map;
   }, [branches]);
 
@@ -790,8 +921,29 @@ export default function LoanDetails() {
     (resolvedBranchId ? branchesById[String(resolvedBranchId)] : "") ||
     "—";
 
-  const borrowerName =
-    borrower?.name || loan?.Borrower?.name || loan?.borrowerName || "—";
+  const borrowerName = borrower?.name || loan?.Borrower?.name || loan?.borrowerName || "—";
+
+  const rateInfo = getRateInfo(loan, product);
+
+  // ---------- Corrected displays (fix “annual/12” mismatch for flat + 1 month) ----------
+  const principal = Number(loan?.amount ?? loan?.principal ?? 0);
+  const months = Number(loan?.termMonths ?? loan?.durationMonths ?? 0);
+  const flatOneMonth = isFlat(loan, product) && months === 1 && Number.isFinite(rateInfo.monthly) && principal > 0;
+
+  const correctedPI = flatOneMonth
+    ? flatMonthlyInstallment({ principal, months: 1, monthlyRatePct: rateInfo.monthly })
+    : null;
+
+  const nextDueAmountDisplay =
+    correctedPI != null ? correctedPI : (Number(nextDue?.amount || 0) || null);
+
+  const displayScheduledTotal =
+    correctedPI != null ? correctedPI : (scheduleReady ? totals.scheduledTotal : null);
+
+  const displayOutstanding =
+    correctedPI != null
+      ? Math.max(0, correctedPI - (repayTotals?.sum || 0))
+      : (lc(loan?.status) === "closed" ? 0 : (scheduleReady ? totals.outstanding : loan?.outstanding ?? null));
 
   /* ---------- render ---------- */
   if (loading) return <div className="w-full px-6 py-6 text-[var(--fg)]">Loading loan…</div>;
@@ -805,7 +957,7 @@ export default function LoanDetails() {
         Loans <span className="opacity-60">›</span> #{id}
       </div>
 
-      {/* HERO SUMMARY — Borrower, Status, Officer, Branch, Contacts (Card) */}
+      {/* HERO SUMMARY */}
       <SectionCard
         title={
           <div className="flex items-center gap-3 flex-wrap">
@@ -815,6 +967,7 @@ export default function LoanDetails() {
             <span
               className={`${statusBadge} ${statusTone(loan.status)} text-[12px] md:text-[12px]`}
               aria-label={`status ${loan.status}`}
+              title={loan.status}
             >
               {loan.status}
             </span>
@@ -938,7 +1091,7 @@ export default function LoanDetails() {
                     to={`/borrowers/${loan.borrowerId}`}
                     title="BORROWER PROFILE"
                   >
-                    BORROWER PROFILE <span></span>
+                    BORROWER PROFILE
                   </Link>
                 </div>
               ) : null}
@@ -971,21 +1124,21 @@ export default function LoanDetails() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
           <div>
             <Label>Amount</Label>
-            <div className="text-2xl font-extrabold">{fmtMoney(loan.amount, currency)}</div>
+            <div className="text-2xl font-extrabold">{fmtMoney(loan.amount ?? loan.principal, currency)}</div>
           </div>
 
           <div>
             <Label>Interest</Label>
             <div className="text-base">
-              <span className="font-bold">{loan.interestRate}%</span>{" "}
-              <span>· {loan.interestMethod || "—"}</span>
+              {rateInfo.display}
             </div>
           </div>
 
           <div>
             <Label>Term</Label>
             <div className="text-base font-semibold">
-              {loan.termMonths || loan.durationMonths} months
+              {(loan.termMonths || loan.durationMonths)}{" "}
+              {(loan.termMonths || loan.durationMonths) === 1 ? "month" : "months"}
             </div>
           </div>
 
@@ -1006,17 +1159,21 @@ export default function LoanDetails() {
           <div>
             <Label>Outstanding</Label>
             <div className="text-2xl font-extrabold">
-              {outstanding == null ? "—" : fmtMoney(outstanding, currency)}
+              {displayOutstanding == null ? "—" : fmtMoney(displayOutstanding, currency)}
             </div>
           </div>
 
           <div>
             <Label>Next Due</Label>
             <div className="text-base font-semibold">
-              {nextDue ? (
+              {nextDue?.date ? (
                 <>
-                  {asDate(nextDue.date)} ·{" "}
-                  <span className="font-extrabold">{fmtMoney(nextDue.amount, currency)}</span>
+                  {asDate(nextDue.date)}{" "}
+                  {Number(nextDueAmountDisplay || 0) > 0 && (
+                    <>
+                      · <span className="font-extrabold">{fmtMoney(nextDueAmountDisplay, currency)}</span>
+                    </>
+                  )}
                 </>
               ) : (
                 "—"
@@ -1033,7 +1190,7 @@ export default function LoanDetails() {
                   {product.code ? ` (${product.code})` : ""}
                 </span>
                 <div className="text-sm mt-0.5">
-                  Defaults: {product.interestMethod} @ {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
+                  Defaults: {methodLabel(product.interestMethod)} @ {product.interestRate ?? product.defaultInterestRate}% · Limits:{" "}
                   {fmtMoney(product.minPrincipal, currency)} – {fmtMoney(product.maxPrincipal, currency)}, {product.minTermMonths}-
                   {product.maxTermMonths} months
                 </div>
@@ -1050,7 +1207,7 @@ export default function LoanDetails() {
             ["Paid Penalties", totals.paidPenalty],
             ["Paid Fees", totals.paidFees],
             ["Total Paid", totals.totalPaid],
-            ["Total Scheduled", totals.scheduledTotal],
+            ["Total Scheduled", displayScheduledTotal],
           ].map(([label, val]) => (
             <div
               key={label}
@@ -1058,11 +1215,28 @@ export default function LoanDetails() {
             >
               <div className={ui.label}>{label}</div>
               <div className="font-bold text-lg">
-                {scheduleReady ? fmtMoney(val, currency) : "—"}
+                {val == null ? "—" : fmtMoney(val, currency)}
               </div>
             </div>
           ))}
         </div>
+
+        {/* Mismatch / empty schedule banners */}
+        {flatOneMonth && !loadingSchedule && (
+          <div className="mt-4 rounded-xl border-2 border-[var(--border-strong)] p-3 bg-[var(--chip-soft)] text-sm flex flex-wrap items-center gap-3">
+            <span>We detected a mismatch: schedule seems annualized. Showing corrected P&amp;I for display.</span>
+            <button className={ui.primary} onClick={recalcSchedule}>
+              Fix P&amp;I (recalculate with monthly rate)
+            </button>
+          </div>
+        )}
+
+        {!loadingSchedule && (!Array.isArray(schedule) || schedule.length === 0 || (totals?.scheduledTotal ?? 0) === 0) && (
+          <div className="mt-4 rounded-xl border-2 border-[var(--border-strong)] p-3 bg-[var(--chip-soft)] text-sm flex flex-wrap items-center gap-3">
+            <span>The schedule looks empty or not generated.</span>
+            <button className={ui.primary} onClick={recalcSchedule}>Recalculate Schedule</button>
+          </div>
+        )}
       </SectionCard>
 
       {/* REVIEW / DISBURSE TOOLBARS */}
@@ -1237,7 +1411,7 @@ export default function LoanDetails() {
             </button>
           )}
 
-          {loan.status !== "closed" && (
+          {lc(loan.status) !== "closed" && (
             <button onClick={closeLoan} className={ui.btn}>
               Close Loan
             </button>
@@ -1250,7 +1424,7 @@ export default function LoanDetails() {
         title="Repayments"
         right={
           <div className="text-sm font-semibold">
-            {repayTotals.count} record{repayTotals.count === 1 ? "" : "s"} · Total{" "}
+            {repayments.length} record{repayments.length === 1 ? "" : "s"} · Total{" "}
             <span className="font-extrabold">{fmtMoney(repayTotals.sum, currency)}</span>
           </div>
         }
@@ -1304,6 +1478,276 @@ export default function LoanDetails() {
           </div>
         )}
       </SectionCard>
+
+      {/* COMMENTS */}
+      <SectionCard title="Comments">
+        {loadingComments ? (
+          <div>Loading comments…</div>
+        ) : (
+          <>
+            <div className="space-y-3 mb-4">
+              {Array.isArray(comments) && comments.length > 0 ? (
+                comments.map((c) => (
+                  <div
+                    key={c.id}
+                    className="rounded-xl border-2 border-[var(--border-strong)] bg-[var(--card)] p-3"
+                  >
+                    <div className="flex items-center justify-between text-xs text-[var(--muted)]">
+                      <span className="font-semibold">{c.authorName || c.author || "User"}</span>
+                      <span>{asDate(c.createdAt || c.date)}</span>
+                    </div>
+                    <div className="mt-1 text-sm whitespace-pre-wrap">{c.content}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-[var(--muted)]">No comments yet.</div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold">Add a comment</label>
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className={`${ui.input} min-h-[64px]`}
+                placeholder="Write a note for this loan…"
+              />
+              <div className="flex gap-2">
+                <button onClick={addComment} className={ui.primary} disabled={!newComment.trim()}>
+                  Post Comment
+                </button>
+                <button onClick={() => setNewComment("")} className={ui.btn}>
+                  Clear
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </SectionCard>
+
+      {/* ----------- MODALS ----------- */}
+      {/* Schedule Modal */}
+      {openSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpenSchedule(false)} />
+          <div className="relative z-10 w-full max-w-5xl rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow-xl">
+            <div className="px-6 py-4 border-b-2 border-[var(--border)] flex items-center justify-between rounded-t-2xl">
+              <h3 className="text-xl font-extrabold">Repayment Schedule</h3>
+              <div className="flex gap-2">
+                <button
+                  className={ui.btn}
+                  onClick={() => downloadScheduleCSV({ loan, schedule: schedule || [], currency })}
+                  disabled={!Array.isArray(schedule) || !schedule.length}
+                >
+                  Export CSV
+                </button>
+                <button
+                  className={ui.btn}
+                  onClick={() => downloadSchedulePDF({ loan, schedule: schedule || [], currency })}
+                  disabled={!Array.isArray(schedule) || !schedule.length}
+                >
+                  Export PDF
+                </button>
+                <button className={ui.primary} onClick={() => setOpenSchedule(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {loadingSchedule ? (
+                <div>Loading schedule…</div>
+              ) : Array.isArray(schedule) && schedule.length ? (
+                <ScheduleTable rows={schedule} currency={currency} />
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-sm text-[var(--muted)]">No schedule available.</div>
+                  <button className={ui.primary} onClick={recalcSchedule}>Recalculate Schedule</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Repayment Modal */}
+      {openRepay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpenRepay(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow-xl">
+            <div className="px-6 py-4 border-b-2 border-[var(--border)] flex items-center justify-between rounded-t-2xl">
+              <h3 className="text-xl font-extrabold">Post Repayment</h3>
+              <button className={ui.btn} onClick={() => setOpenRepay(false)}>Close</button>
+            </div>
+            <div className="p-6 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold">Amount</label>
+                <input
+                  type="number"
+                  className={ui.input}
+                  value={repForm.amount}
+                  onChange={(e) => setRepForm((s) => ({ ...s, amount: e.target.value }))}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold">Date</label>
+                <input
+                  type="date"
+                  className={ui.input}
+                  value={repForm.date}
+                  onChange={(e) => setRepForm((s) => ({ ...s, date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold">Method</label>
+                <select
+                  className={ui.input}
+                  value={repForm.method}
+                  onChange={(e) => setRepForm((s) => ({ ...s, method: e.target.value }))}
+                >
+                  <option value="cash">Cash</option>
+                  <option value="mobile">Mobile</option>
+                  <option value="bank">Bank</option>
+                  <option value="cheque">Cheque</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold">Notes</label>
+                <textarea
+                  className={`${ui.input} min-h-[64px]`}
+                  value={repForm.notes}
+                  onChange={(e) => setRepForm((s) => ({ ...s, notes: e.target.value }))}
+                />
+              </div>
+              <div className="pt-2 flex gap-2">
+                <button className={ui.primary} onClick={handlePostRepayment} disabled={postLoading}>
+                  {postLoading ? "Posting…" : "Submit"}
+                </button>
+                <button className={ui.btn} onClick={() => setOpenRepay(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {openEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpenEdit(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow-xl">
+            <div className="px-6 py-4 border-b-2 border-[var(--border)] flex items-center justify-between rounded-t-2xl">
+              <h3 className="text-xl font-extrabold">Edit Loan</h3>
+              <button className={ui.btn} onClick={() => setOpenEdit(false)}>Close</button>
+            </div>
+            <div className="p-6 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold">Amount</label>
+                <input
+                  type="number"
+                  className={ui.input}
+                  value={editForm.amount}
+                  onChange={(e) => setEditForm((s) => ({ ...s, amount: e.target.value }))}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold">Interest Rate (%)</label>
+                <input
+                  type="number"
+                  className={ui.input}
+                  value={editForm.interestRate}
+                  onChange={(e) => setEditForm((s) => ({ ...s, interestRate: e.target.value }))}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold">Term (months)</label>
+                <input
+                  type="number"
+                  className={ui.input}
+                  value={editForm.termMonths}
+                  onChange={(e) => setEditForm((s) => ({ ...s, termMonths: e.target.value }))}
+                  min="1"
+                  step="1"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold">Start / Release Date</label>
+                <input
+                  type="date"
+                  className={ui.input}
+                  value={editForm.startDate}
+                  onChange={(e) => setEditForm((s) => ({ ...s, startDate: e.target.value }))}
+                />
+              </div>
+              <div className="pt-2 flex gap-2">
+                <button className={ui.primary} onClick={saveEdit} disabled={savingEdit}>
+                  {savingEdit ? "Saving…" : "Save"}
+                </button>
+                <button className={ui.btn} onClick={() => setOpenEdit(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {openReschedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpenReschedule(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border-2 border-[var(--border-strong)] bg-[var(--card)] shadow-xl">
+            <div className="px-6 py-4 border-b-2 border-[var(--border)] flex items-center justify-between rounded-t-2xl">
+              <h3 className="text-xl font-extrabold">Reschedule Loan</h3>
+              <button className={ui.btn} onClick={() => setOpenReschedule(false)}>Close</button>
+            </div>
+            <div className="p-6 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold">Term (months)</label>
+                <input
+                  type="number"
+                  className={ui.input}
+                  value={rescheduleForm.termMonths}
+                  onChange={(e) => setRescheduleForm((s) => ({ ...s, termMonths: e.target.value }))}
+                  min="1"
+                  step="1"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold">Start Date</label>
+                <input
+                  type="date"
+                  className={ui.input}
+                  value={rescheduleForm.startDate}
+                  onChange={(e) => setRescheduleForm((s) => ({ ...s, startDate: e.target.value }))}
+                />
+              </div>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!rescheduleForm.previewOnly}
+                  onChange={(e) => setRescheduleForm((s) => ({ ...s, previewOnly: e.target.checked }))}
+                />
+                Preview only (don’t persist)
+              </label>
+              <div className="pt-2 flex gap-2">
+                <button className={ui.primary} onClick={submitReschedule} disabled={savingReschedule}>
+                  {savingReschedule ? "Working…" : "Update Schedule"}
+                </button>
+                <button className={ui.btn} onClick={() => setOpenReschedule(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* --------- END MODALS --------- */}
     </div>
   );
 }
